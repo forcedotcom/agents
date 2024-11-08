@@ -24,14 +24,6 @@ test_session*
 # generated docs
 docs
 
-# ignore sfdx-trust files
-*.tgz
-*.sig
-package.json.bak.
-
-
-npm-shrinkwrap.json
-
 # -- CLEAN ALL
 *.tsbuildinfo
 .eslintcache
@@ -44,3 +36,6 @@ node_modules
 # os specific files
 .DS_Store
 .idea
+/Library
+
+.vscode/settings.json

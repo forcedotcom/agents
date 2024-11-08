@@ -5,4 +5,10 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
-export default {};
+export {
+  AgentCreateConfig as AgentConfig,
+  AgentJobSpec,
+  AgentJobSpecCreateConfig as AgentJobSpecConfig,
+  AgentJobSpecCreateResponse as AgentJobSpecResponse,
+  SfAgent,
+} from './types';
