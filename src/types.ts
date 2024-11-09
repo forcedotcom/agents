@@ -6,16 +6,18 @@
  */
 
 /**
- * An agent spec is a list of job titles and descriptions
+ * An agent job spec is a list of job titles and descriptions
  * to be performed by the agent.
  */
-export type AgentJobSpec = [{
-  jobTitle: string;
-  jobDescription: string;
-}];
+export type AgentJobSpec = [
+  {
+    jobTitle: string;
+    jobDescription: string;
+  }
+];
 
 /**
- * The parameters needed to generate an agent spec.
+ * The parameters used to generate an agent spec.
  */
 export type AgentJobSpecCreateConfig = {
   name: string;
@@ -24,24 +26,24 @@ export type AgentJobSpecCreateConfig = {
   companyName: string;
   companyDescription: string;
   companyWebsite?: string;
-}
+};
 
 /**
- * The parameters needed to generate an agent in an org.
- * 
+ * The parameters used to generate an agent in an org.
+ *
  * NOTE: This is likely to change with planned serverside APIs.
  */
 export type AgentCreateConfig = AgentJobSpecCreateConfig & {
-  spec: AgentJobSpec;
-}
+  jobSpecs: AgentJobSpec;
+};
 
 /**
  * An interface for working with Agents.
  */
 export type SfAgent = {
-  create(config: AgentCreateConfig): Promise<void>;
+  create(config: AgentCreateConfig): Promise<AgentCreateResponse>;
   createSpec(config: AgentJobSpecCreateConfig): Promise<AgentJobSpec>;
-}
+};
 
 /**
  * The response from the `agent-job-spec` API.
@@ -50,4 +52,12 @@ export type AgentJobSpecCreateResponse = {
   isSuccess: boolean;
   errorMessage?: string;
   jobSpecs?: AgentJobSpec;
-}
+};
+
+/**
+ * The response from the `attach-agent-topics` API.
+ */
+export type AgentCreateResponse = {
+  isSuccess: boolean;
+  errorMessage?: string;
+};

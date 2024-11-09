@@ -11,7 +11,3 @@ A TypeScript library for working with Salesforce Agents.
 ## Usage
 
 TBD
-
-## Contributing
-
-If you are interested in contributing, please take a look at the [CONTRIBUTING](CONTRIBUTING.md) guide.

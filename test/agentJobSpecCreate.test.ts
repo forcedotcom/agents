@@ -7,10 +7,9 @@
 import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { SfProject } from '@salesforce/core';
-import { Agent } from '../src/agent.js';
+import { Agent } from '../src/agent';
 
 describe('agent job spec create test', () => {
-
   const $$ = new TestContext();
   const testOrg = new MockTestOrgData();
   $$.inProject(true);

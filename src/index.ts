@@ -6,9 +6,10 @@
  */
 
 export {
-  AgentCreateConfig as AgentConfig,
+  AgentCreateConfig,
+  AgentCreateResponse,
   AgentJobSpec,
-  AgentJobSpecCreateConfig as AgentJobSpecConfig,
-  AgentJobSpecCreateResponse as AgentJobSpecResponse,
+  AgentJobSpecCreateConfig,
+  AgentJobSpecCreateResponse,
   SfAgent,
 } from './types';
