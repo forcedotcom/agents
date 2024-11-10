@@ -1,4 +1,13 @@
-# 0.1.0 (2024-11-09)
+## [0.1.1](https://github.com/forcedotcom/agents/compare/0.1.0...0.1.1) (2024-11-10)
+
+
+### Bug Fixes
+
+* export Agent class ([6c42b63](https://github.com/forcedotcom/agents/commit/6c42b63bbe9a5a5cf6fa0cea8f5649d07aaa6adc))
+
+
+
+# [0.1.0](https://github.com/forcedotcom/agents/compare/0c5d8d6ab9e9a8470c7192a56350567882a3017b...0.1.0) (2024-11-09)
 
 
 ### Bug Fixes
