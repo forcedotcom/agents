@@ -13,3 +13,4 @@ export {
   AgentJobSpecCreateResponse,
   SfAgent,
 } from './types';
+export { Agent } from './agent';
