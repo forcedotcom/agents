@@ -1,3 +1,12 @@
+## [0.1.3](https://github.com/forcedotcom/agents/compare/0.1.2...0.1.3) (2024-11-12)
+
+
+### Bug Fixes
+
+* use latest ([92ecbba](https://github.com/forcedotcom/agents/commit/92ecbbabc403fe57bf4069f9928b029d23db7a16))
+
+
+
 ## [0.1.2](https://github.com/forcedotcom/agents/compare/0.1.1...0.1.2) (2024-11-12)
 
 
