@@ -25,7 +25,7 @@ jobs:
     uses: salesforcecli/github-workflows/.github/workflows/npmPublish.yml@main
     needs: [getDistTag]
     with:
-      tag: ${{ needs.getDistTag.outputs.tag || 'preview' }}
+      tag: ${{ needs.getDistTag.outputs.tag || 'latest' }}
       githubTag: ${{ github.event.release.tag_name || inputs.tag }}
 
     secrets: inherit
