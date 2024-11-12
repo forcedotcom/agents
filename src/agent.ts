@@ -52,7 +52,7 @@ export class Agent implements SfAgent {
     let agentSpec: AgentJobSpec;
 
     if (this.mockDir) {
-      const specFileName = `${config.name}Spec.json`;
+      const specFileName = `${config.name}.json`;
       const specFilePath = join(this.mockDir, `${specFileName}`);
       try {
         this.logger.debug(`Using mock directory: ${this.mockDir} for agent job spec creation`);
