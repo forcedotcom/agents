@@ -1,3 +1,12 @@
+## [0.1.2](https://github.com/forcedotcom/agents/compare/0.1.1...0.1.2) (2024-11-12)
+
+
+### Bug Fixes
+
+* publish to preview ([3f5ccb6](https://github.com/forcedotcom/agents/commit/3f5ccb687017186eb29b8b18c7fdce33daee1f70))
+
+
+
 ## [0.1.1](https://github.com/forcedotcom/agents/compare/0.1.0...0.1.1) (2024-11-10)
 
 
