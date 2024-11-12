@@ -1,3 +1,12 @@
+## [0.1.4](https://github.com/forcedotcom/agents/compare/0.1.3...0.1.4) (2024-11-12)
+
+
+### Bug Fixes
+
+* do not append spec in name ([284d5d5](https://github.com/forcedotcom/agents/commit/284d5d56ed99c67b93a65904a00fdb00a2552a0e))
+
+
+
 ## [0.1.3](https://github.com/forcedotcom/agents/compare/0.1.2...0.1.3) (2024-11-12)
 
 
