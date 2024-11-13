@@ -49,7 +49,6 @@ export class Agent implements SfAgent {
 
     let agentSpec: AgentJobSpec;
     const response = await this.maybeMock.request<AgentJobSpecCreateResponse>('GET', this.buildAgentJobSpecUrl(config));
-
     if (response.isSuccess && response.jobSpecs) {
       agentSpec = response.jobSpecs;
     } else {

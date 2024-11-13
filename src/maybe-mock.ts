@@ -128,21 +128,20 @@ export class MaybeMock {
     if (this.mockDir) {
       this.logger.debug(`Mocking ${method} request to ${url} using ${this.mockDir}`);
       const responses = await readResponses<T>(this.mockDir, url, this.logger);
-      if (!this.scopes.has(url)) {
-        const scope = nock(this.connection.baseUrl());
-        this.scopes.set(url, scope);
-        switch (method) {
-          case 'GET':
-            for (const response of responses) {
-              scope.get(url).reply(200, response);
-            }
-            break;
-          case 'POST':
-            for (const response of responses) {
-              scope.post(url, body).reply(200, response);
-            }
-            break;
-        }
+      const baseUrl = this.connection.baseUrl();
+      const scope = this.scopes.get(baseUrl) ?? nock(baseUrl);
+      this.scopes.set(baseUrl, scope);
+      switch (method) {
+        case 'GET':
+          for (const response of responses) {
+            scope.get(url).reply(200, response);
+          }
+          break;
+        case 'POST':
+          for (const response of responses) {
+            scope.post(url, body).reply(200, response);
+          }
+          break;
       }
     }
 

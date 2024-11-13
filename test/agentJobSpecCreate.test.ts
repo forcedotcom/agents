@@ -8,22 +8,51 @@ import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { SfProject } from '@salesforce/core';
 import { Agent } from '../src/agent';
+import { AgentJobSpecCreateConfig } from '../src/types';
 
 describe('agent job spec create test', () => {
   const $$ = new TestContext();
   const testOrg = new MockTestOrgData();
   $$.inProject(true);
 
+  process.env.SF_MOCK_DIR = 'test/mocks';
+
   it('runs agent run test', async () => {
     const connection = await testOrg.getConnection();
+    connection.instanceUrl = 'https://mydomain.salesforce.com';
     const sfProject = SfProject.getInstance();
+    $$.SANDBOXES.CONNECTION.restore();
     const agent = new Agent(connection, sfProject);
-    const output = agent.createSpec({
+    const output = await agent.createSpec({
+      name: 'MyFirstAgent',
+      type: 'customer_facing',
+      role: 'answer questions about vacation_rentals',
+      companyName: 'Coral Cloud Enterprises',
+      companyDescription: 'Provide vacation rentals and activities',
+    });
+
+    // TODO: make this assertion more meaningful
+    expect(output).to.be.ok;
+  });
+
+  it('creates an agent', async () => {
+    const connection = await testOrg.getConnection();
+    connection.instanceUrl = 'https://mydomain.salesforce.com';
+    const sfProject = SfProject.getInstance();
+    $$.SANDBOXES.CONNECTION.restore();
+    const agent = new Agent(connection, sfProject);
+    const opts: AgentJobSpecCreateConfig = {
       name: 'MyFirstAgent',
       type: 'customer_facing',
       role: 'answer questions about vacation rentals',
       companyName: 'Coral Cloud Enterprises',
       companyDescription: 'Provide vacation rentals and activities',
+    };
+    const jobSpecs = await agent.createSpec(opts);
+    expect(jobSpecs).to.be.ok;
+    const output = agent.create({
+      ...opts,
+      jobSpecs,
     });
     expect(output).to.be.ok;
   });
