@@ -6,7 +6,7 @@
  */
 import { Connection, PollingClient, StatusResult } from '@salesforce/core';
 import { Duration } from '@salesforce/kit';
-import { MaybeMock } from './mockDir';
+import { MaybeMock } from './maybe-mock';
 
 type Format = 'human' | 'tap' | 'junit' | 'json';
 

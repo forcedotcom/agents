@@ -8,7 +8,7 @@
 import { inspect } from 'node:util';
 import { Connection, Logger, SfError, SfProject } from '@salesforce/core';
 import { Duration, sleep } from '@salesforce/kit';
-import { MaybeMock } from './mockDir';
+import { MaybeMock } from './maybe-mock';
 import {
   type SfAgent,
   type AgentCreateConfig,
