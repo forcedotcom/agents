@@ -8,7 +8,7 @@
 import { inspect } from 'node:util';
 import { Connection, Logger, SfError, SfProject } from '@salesforce/core';
 import { Duration, sleep } from '@salesforce/kit';
-import { mockOrRequest } from './mockDir';
+import { MaybeMock } from './mockDir';
 import {
   type SfAgent,
   type AgentCreateConfig,
@@ -20,9 +20,11 @@ import {
 
 export class Agent implements SfAgent {
   private logger: Logger;
+  private maybeMock: MaybeMock;
 
-  public constructor(private connection: Connection, private project: SfProject) {
+  public constructor(connection: Connection, private project: SfProject) {
     this.logger = Logger.childFromRoot(this.constructor.name);
+    this.maybeMock = new MaybeMock(connection);
   }
 
   public async create(config: AgentCreateConfig): Promise<AgentCreateResponse> {
@@ -46,11 +48,7 @@ export class Agent implements SfAgent {
     this.verifyAgentSpecConfig(config);
 
     let agentSpec: AgentJobSpec;
-    const response = await mockOrRequest<AgentJobSpecCreateResponse>(
-      this.connection,
-      'GET',
-      this.buildAgentJobSpecUrl(config)
-    );
+    const response = await this.maybeMock.request<AgentJobSpecCreateResponse>('GET', this.buildAgentJobSpecUrl(config));
 
     if (response.isSuccess && response.jobSpecs) {
       agentSpec = response.jobSpecs;

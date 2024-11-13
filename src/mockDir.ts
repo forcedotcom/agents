@@ -6,9 +6,11 @@
  */
 
 import { join, resolve } from 'node:path';
-import { readFileSync, type Stats, statSync } from 'node:fs';
+import { type Stats, statSync } from 'node:fs';
+import { readdir, readFile } from 'node:fs/promises';
 import { Connection, Logger, SfError } from '@salesforce/core';
 import { env } from '@salesforce/kit';
+import nock from 'nock';
 
 /**
  * If the `SF_MOCK_DIR` environment variable is set, resolve to an absolute path
@@ -18,7 +20,7 @@ import { env } from '@salesforce/kit';
  *
  * @returns the absolute path to an existing directory used for mocking behavior
  */
-export const getMockDir = (): string | undefined => {
+const getMockDir = (): string | undefined => {
   const mockDir = env.getString('SF_MOCK_DIR');
   if (mockDir) {
     let mockDirStat: Stats;
@@ -48,33 +50,106 @@ export const getMockDir = (): string | undefined => {
   }
 };
 
-export function mockOrRequest<T>(
-  connection: Connection,
-  method: 'GET' | 'POST',
-  url: string,
-  body?: Record<string, unknown>
-): Promise<T> {
-  const mockDir = getMockDir();
-  const logger = Logger.childFromRoot('mockOrRequest');
-  if (mockDir) {
-    logger.debug(`Mocking ${method} request to ${url} using ${mockDir}`);
-    const mockResponseFileName = url.replace(/\//g, '_').replace(/^_/, '').split('?')[0] + '.json';
-    const mockResponseFilePath = join(mockDir, mockResponseFileName);
-    logger.debug(`Using mock file: ${mockResponseFilePath} for ${url}`);
-    try {
-      return Promise.resolve(JSON.parse(readFileSync(mockResponseFilePath, 'utf-8')) as T);
-    } catch (err) {
-      throw SfError.create({
-        name: 'MissingMockFile',
-        message: `SF_MOCK_DIR [${mockDir}] must contain a spec file with name ${mockResponseFileName}`,
-        cause: err,
-      });
+async function readJson<T extends nock.Body>(path: string): Promise<T | undefined> {
+  return JSON.parse(await readFile(path, 'utf-8')) as T;
+}
+
+async function readPlainText(path: string): Promise<string | undefined> {
+  return readFile(path, 'utf-8');
+}
+
+async function readDirectory<T extends nock.Body>(path: string): Promise<T[] | undefined> {
+  const files = await readdir(path);
+  const promises = files.map((file) => {
+    if (file.endsWith('.json')) {
+      return readJson(join(path, file));
+    } else {
+      return readPlainText(join(path, file));
     }
-  } else {
-    logger.debug(`Making ${method} request to ${url}`);
+  });
+  return (await Promise.all(promises)).filter((r): r is T => !!r);
+}
+
+async function readResponses<T extends nock.Body>(mockDir: string, url: string, logger: Logger): Promise<T[]> {
+  const mockResponseName = url.replace(/\//g, '_').replace(/^_/, '').split('?')[0];
+  const mockResponsePath = join(mockDir, mockResponseName);
+
+  // Try all possibilities for the mock response file
+  const responses = (
+    await Promise.all([
+      readJson(`${mockResponsePath}.json`)
+        .then((r) => {
+          logger.debug(`Found JSON mock file: ${mockResponsePath}.json`);
+          return r;
+        })
+        .catch(() => undefined),
+      readPlainText(mockResponsePath)
+        .then((r) => {
+          logger.debug(`Found plain text mock file: ${mockResponsePath}`);
+          return r;
+        })
+        .catch(() => undefined),
+      readDirectory(mockResponsePath)
+        .then((r) => {
+          logger.debug(`Found directory of mock files: ${mockResponsePath}`);
+          return r;
+        })
+        .catch(() => undefined),
+    ])
+  )
+    .filter((r): r is T[] => !!r)
+    .flat();
+  if (responses.length === 0) {
+    throw SfError.create({
+      name: 'MissingMockFile',
+      message: `SF_MOCK_DIR [${mockDir}] must contain a spec file with name ${mockResponsePath} or ${mockResponsePath}.json`,
+    });
+  }
+
+  logger.debug(`Using responses: ${responses.map((r) => JSON.stringify(r)).join(', ')}`);
+
+  return responses;
+}
+
+export class MaybeMock {
+  private mockDir = getMockDir();
+  private scopes = new Map<string, nock.Scope>();
+  private logger: Logger;
+
+  public constructor(private connection: Connection) {
+    this.logger = Logger.childFromRoot(this.constructor.name);
+  }
+
+  public async request<T extends nock.Body>(
+    method: 'GET' | 'POST',
+    url: string,
+    body?: nock.RequestBodyMatcher
+  ): Promise<T> {
+    if (this.mockDir) {
+      this.logger.debug(`Mocking ${method} request to ${url} using ${this.mockDir}`);
+      const responses = await readResponses<T>(this.mockDir, url, this.logger);
+      if (!this.scopes.has(url)) {
+        const scope = nock(this.connection.baseUrl());
+        this.scopes.set(url, scope);
+        switch (method) {
+          case 'GET':
+            for (const response of responses) {
+              scope.get(url).reply(200, response);
+            }
+            break;
+          case 'POST':
+            for (const response of responses) {
+              scope.post(url, body).reply(200, response);
+            }
+            break;
+        }
+      }
+    }
+
+    this.logger.debug(`Making ${method} request to ${url}`);
     switch (method) {
       case 'GET':
-        return connection.requestGet<T>(url, { retry: { maxRetries: 3 } });
+        return this.connection.requestGet<T>(url, { retry: { maxRetries: 3 } });
       case 'POST':
         if (!body) {
           throw SfError.create({
@@ -82,13 +157,7 @@ export function mockOrRequest<T>(
             message: 'POST requests must include a body',
           });
         }
-        return connection.requestPost<T>(url, body, { retry: { maxRetries: 3 } });
-      default:
-        throw SfError.create({
-          name: 'InvalidMethod',
-          // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
-          message: `Invalid method: ${method}`,
-        });
+        return this.connection.requestPost<T>(url, body, { retry: { maxRetries: 3 } });
     }
   }
 }
