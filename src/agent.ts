@@ -5,12 +5,10 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
-import { join } from 'node:path';
-import { readFileSync, statSync } from 'node:fs';
 import { inspect } from 'node:util';
 import { Connection, Logger, SfError, SfProject } from '@salesforce/core';
 import { Duration, sleep } from '@salesforce/kit';
-import { getMockDir } from './mockDir';
+import { mockOrRequest } from './mockDir';
 import {
   type SfAgent,
   type AgentCreateConfig,
@@ -22,11 +20,9 @@ import {
 
 export class Agent implements SfAgent {
   private logger: Logger;
-  private mockDir?: string;
 
   public constructor(private connection: Connection, private project: SfProject) {
     this.logger = Logger.childFromRoot(this.constructor.name);
-    this.mockDir = getMockDir();
   }
 
   public async create(config: AgentCreateConfig): Promise<AgentCreateResponse> {
@@ -50,48 +46,19 @@ export class Agent implements SfAgent {
     this.verifyAgentSpecConfig(config);
 
     let agentSpec: AgentJobSpec;
+    const response = await mockOrRequest<AgentJobSpecCreateResponse>(
+      this.connection,
+      'GET',
+      this.buildAgentJobSpecUrl(config)
+    );
 
-    if (this.mockDir) {
-      const specFileName = `${config.name}.json`;
-      const specFilePath = join(this.mockDir, `${specFileName}`);
-      try {
-        this.logger.debug(`Using mock directory: ${this.mockDir} for agent job spec creation`);
-        statSync(specFilePath);
-      } catch (err) {
-        throw SfError.create({
-          name: 'MissingMockFile',
-          message: `SF_MOCK_DIR [${this.mockDir}] must contain a spec file with name ${specFileName}`,
-          cause: err,
-        });
-      }
-      try {
-        this.logger.debug(`Returning mock agent spec file: ${specFilePath}`);
-        agentSpec = JSON.parse(readFileSync(specFilePath, 'utf8')) as AgentJobSpec;
-      } catch (err) {
-        throw SfError.create({
-          name: 'InvalidMockFile',
-          message: `SF_MOCK_DIR [${this.mockDir}] must contain a valid spec file with name ${specFileName}`,
-          cause: err,
-          actions: [
-            'Check that the file is readable',
-            'Check that the file is a valid JSON array of jobTitle and jobDescription objects',
-          ],
-        });
-      }
+    if (response.isSuccess && response.jobSpecs) {
+      agentSpec = response.jobSpecs;
     } else {
-      // TODO: We'll probably want to wrap this for better error handling but let's see
-      //       what it looks like first.
-      const response = await this.connection.requestGet<AgentJobSpecCreateResponse>(this.buildAgentJobSpecUrl(config), {
-        retry: { maxRetries: 3 },
+      throw SfError.create({
+        name: 'AgentJobSpecCreateError',
+        message: response.errorMessage ?? 'unknown',
       });
-      if (response.isSuccess) {
-        agentSpec = response?.jobSpecs as AgentJobSpec;
-      } else {
-        throw SfError.create({
-          name: 'AgentJobSpecCreateError',
-          message: response.errorMessage ?? 'unknown',
-        });
-      }
     }
 
     return agentSpec;
