@@ -66,6 +66,9 @@ export class AgentTester {
     }: {
       format?: Format;
       timeout?: Duration;
+    } = {
+      format: 'human',
+      timeout: Duration.minutes(5),
     }
   ): Promise<{ response: AgentTestDetailsResponse; formatted: string }> {
     const client = await PollingClient.create({

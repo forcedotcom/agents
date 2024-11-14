@@ -6,22 +6,31 @@
  */
 import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
-import { SfProject } from '@salesforce/core';
+import { Connection, SfProject } from '@salesforce/core';
 import { Agent } from '../src/agent';
 import { AgentJobSpecCreateConfig } from '../src/types';
 
 describe('Agents', () => {
   const $$ = new TestContext();
-  const testOrg = new MockTestOrgData();
-  $$.inProject(true);
+  let testOrg: MockTestOrgData;
+  let connection: Connection;
 
-  process.env.SF_MOCK_DIR = 'test/mocks';
+  beforeEach(async () => {
+    $$.inProject(true);
+    testOrg = new MockTestOrgData();
+    process.env.SF_MOCK_DIR = 'test/mocks';
+    connection = await testOrg.getConnection();
+    connection.instanceUrl = 'https://mydomain.salesforce.com';
+    // restore the connection sandbox so that it doesn't override the builtin mocking (MaybeMock)
+    $$.SANDBOXES.CONNECTION.restore();
+  });
+
+  afterEach(() => {
+    delete process.env.SF_MOCK_DIR;
+  });
 
   it('createSpec', async () => {
-    const connection = await testOrg.getConnection();
-    connection.instanceUrl = 'https://mydomain.salesforce.com';
     const sfProject = SfProject.getInstance();
-    $$.SANDBOXES.CONNECTION.restore();
     const agent = new Agent(connection, sfProject);
     const output = await agent.createSpec({
       name: 'MyFirstAgent',
@@ -36,10 +45,7 @@ describe('Agents', () => {
   });
 
   it('create', async () => {
-    const connection = await testOrg.getConnection();
-    connection.instanceUrl = 'https://mydomain.salesforce.com';
     const sfProject = SfProject.getInstance();
-    $$.SANDBOXES.CONNECTION.restore();
     const agent = new Agent(connection, sfProject);
     const opts: AgentJobSpecCreateConfig = {
       name: 'MyFirstAgent',
@@ -54,6 +60,7 @@ describe('Agents', () => {
       ...opts,
       jobSpecs,
     });
+    // TODO: make this assertion more meaningful
     expect(output).to.be.ok;
   });
 });
