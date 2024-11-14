@@ -1,0 +1,90 @@
+{
+  "isSuccess": true,
+  "type": "customer_facing",
+  "role": "replace me",
+  "companyName": "replace me",
+  "companyDescription": "replace me",
+  "companyWebsite": "replace me",
+  "jobSpecs": [
+    {
+      "jobTitle": "Guest_Experience_Enhancement",
+      "jobDescription": "Develop and implement entertainment programs to enhance guest experience."
+    },
+    {
+      "jobTitle": "Event_Planning_and_Execution",
+      "jobDescription": "Plan, organize, and execute resort events and activities."
+    },
+    {
+      "jobTitle": "Vendor_Management",
+      "jobDescription": "Coordinate with external vendors for event supplies and services."
+    },
+    {
+      "jobTitle": "Staff_Training_and_Development",
+      "jobDescription": "Train and develop staff to deliver exceptional entertainment services."
+    },
+    {
+      "jobTitle": "Budget_Management",
+      "jobDescription": "Manage budgets for entertainment activities and events."
+    },
+    {
+      "jobTitle": "Guest_Feedback_Analysis",
+      "jobDescription": "Collect and analyze guest feedback to improve entertainment offerings."
+    },
+    {
+      "jobTitle": "Marketing_Collaboration",
+      "jobDescription": "Work with marketing to promote events and entertainment activities."
+    },
+    {
+      "jobTitle": "Technology_Integration",
+      "jobDescription": "Utilize technology to enhance guest engagement and streamline operations."
+    },
+    {
+      "jobTitle": "Safety_and_Compliance",
+      "jobDescription": "Ensure all entertainment activities comply with safety regulations."
+    },
+    {
+      "jobTitle": "Performance_Monitoring",
+      "jobDescription": "Monitor and evaluate the performance of entertainment programs."
+    },
+    {
+      "jobTitle": "Community_Partnerships",
+      "jobDescription": "Build partnerships with local artists and performers."
+    },
+    {
+      "jobTitle": "Inventory_Management",
+      "jobDescription": "Manage inventory of entertainment equipment and supplies."
+    },
+    {
+      "jobTitle": "Custom_Experience_Creation",
+      "jobDescription": "Design personalized entertainment experiences for VIP guests."
+    },
+    {
+      "jobTitle": "Data_Reporting",
+      "jobDescription": "Generate reports on entertainment program performance and guest satisfaction."
+    },
+    {
+      "jobTitle": "Crisis_Management",
+      "jobDescription": "Develop plans to handle emergencies during entertainment events."
+    },
+    {
+      "jobTitle": "Digital_Engagement",
+      "jobDescription": "Enhance online presence and engagement through social media."
+    },
+    {
+      "jobTitle": "Salesforce_Integration",
+      "jobDescription": "Utilize Salesforce to track guest preferences and tailor entertainment."
+    },
+    {
+      "jobTitle": "Trend_Analysis",
+      "jobDescription": "Stay updated on industry trends to keep entertainment offerings fresh."
+    },
+    {
+      "jobTitle": "Cross_Department_Coordination",
+      "jobDescription": "Collaborate with other departments to ensure seamless guest experience."
+    },
+    {
+      "jobTitle": "Resource_Optimization",
+      "jobDescription": "Optimize the use of resources to maximize guest satisfaction."
+    }
+  ]
+}

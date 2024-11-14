@@ -14,3 +14,4 @@ export {
   SfAgent,
 } from './types';
 export { Agent } from './agent';
+export { AgentTester } from './agentTester';

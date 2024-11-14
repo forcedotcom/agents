@@ -1,0 +1,41 @@
+{
+  "AiEvaluationSuiteDefinition": "",
+  "tests": [
+    {
+      "AiEvaluationDefinition": "my first test",
+      "results": [
+        {
+          "test_number": 1,
+          "results": [
+            {
+              "name": "action_assertion",
+              "actual": ["Identify Record by Name", "Get Record Details"],
+              "is_pass": true,
+              "execution_time_ms": 3000,
+              "error": ""
+            },
+            {
+              "name": "action_assertion",
+              "actual": ["Identify Record by Name", "Get Record Details"],
+              "is_pass": false,
+              "execution_time_ms": 3000,
+              "error": "assertion failed"
+            }
+          ]
+        },
+        {
+          "test_number": 2,
+          "results": [
+            {
+              "name": "action_assertion",
+              "actual": ["Identify Record by Name", "Get Record Details"],
+              "is_pass": true,
+              "execution_time_ms": 3000,
+              "error": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
