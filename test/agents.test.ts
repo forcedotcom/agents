@@ -10,14 +10,14 @@ import { SfProject } from '@salesforce/core';
 import { Agent } from '../src/agent';
 import { AgentJobSpecCreateConfig } from '../src/types';
 
-describe('agent job spec create test', () => {
+describe('Agents', () => {
   const $$ = new TestContext();
   const testOrg = new MockTestOrgData();
   $$.inProject(true);
 
   process.env.SF_MOCK_DIR = 'test/mocks';
 
-  it('runs agent run test', async () => {
+  it('createSpec', async () => {
     const connection = await testOrg.getConnection();
     connection.instanceUrl = 'https://mydomain.salesforce.com';
     const sfProject = SfProject.getInstance();
@@ -35,7 +35,7 @@ describe('agent job spec create test', () => {
     expect(output).to.be.ok;
   });
 
-  it('creates an agent', async () => {
+  it('create', async () => {
     const connection = await testOrg.getConnection();
     connection.instanceUrl = 'https://mydomain.salesforce.com';
     const sfProject = SfProject.getInstance();
