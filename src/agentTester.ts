@@ -4,7 +4,7 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-import { Connection, PollingClient, StatusResult } from '@salesforce/core';
+import { Connection, Lifecycle, PollingClient, StatusResult } from '@salesforce/core';
 import { Duration } from '@salesforce/kit';
 import { MaybeMock } from './maybe-mock';
 
@@ -71,13 +71,16 @@ export class AgentTester {
       timeout: Duration.minutes(5),
     }
   ): Promise<{ response: AgentTestDetailsResponse; formatted: string }> {
+    const lifecycle = Lifecycle.getInstance();
     const client = await PollingClient.create({
       poll: async (): Promise<StatusResult> => {
         const { status } = await this.status(jobId);
         if (status === 'COMPLETED') {
+          await lifecycle.emit('AGENT_TEST_POLLING_EVENT', { jobId, status });
           return { payload: await this.details(jobId, format), completed: true };
         }
 
+        await lifecycle.emit('AGENT_TEST_POLLING_EVENT', { jobId, status });
         return { completed: false };
       },
       frequency: Duration.seconds(1),
