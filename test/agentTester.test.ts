@@ -11,7 +11,6 @@ import { AgentTester } from '../src/agentTester';
 
 describe('AgentTester', () => {
   const $$ = new TestContext();
-
   let testOrg: MockTestOrgData;
   let connection: Connection;
 
