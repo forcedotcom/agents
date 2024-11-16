@@ -1,3 +1,12 @@
+## [0.1.6](https://github.com/forcedotcom/agents/compare/0.1.5...0.1.6) (2024-11-16)
+
+
+### Bug Fixes
+
+* **deps:** bump cross-spawn from 7.0.3 to 7.0.5 ([7f43cc7](https://github.com/forcedotcom/agents/commit/7f43cc706b848fd54c88d04bee2c0b7b632d7e76))
+
+
+
 ## [0.1.5](https://github.com/forcedotcom/agents/compare/0.1.4...0.1.5) (2024-11-16)
 
 
