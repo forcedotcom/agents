@@ -110,6 +110,12 @@ export class AgentTester {
           : await jsonFormat(response),
     };
   }
+
+  public async cancel(jobId: string): Promise<{ success: boolean }> {
+    const url = `/einstein/ai-evaluations/runs/${jobId}/cancel`;
+
+    return this.maybeMock.request<{ success: boolean }>('POST', url);
+  }
 }
 
 export async function humanFormat(details: AgentTestDetailsResponse): Promise<string> {
@@ -188,7 +194,7 @@ export async function junitFormat(details: AgentTestDetailsResponse): Promise<st
 }
 
 export async function tapFormat(details: AgentTestDetailsResponse): Promise<string> {
-  // APEX EXAMPLE
+  // APEX EXAMPLE (these are streamed in chunks)
   // 1..11
   // ok 1 TestPropertyController.testGetPagedPropertyList
   // ok 2 TestPropertyController.testGetPicturesNoResults

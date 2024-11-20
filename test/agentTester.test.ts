@@ -81,4 +81,13 @@ describe('AgentTester', () => {
       expect(output).to.be.ok;
     });
   });
+
+  describe('cancel', () => {
+    it('should cancel test run', async () => {
+      const tester = new AgentTester(connection);
+      await tester.start('suiteId');
+      const output = await tester.cancel('4KBSM000000003F4AQ');
+      expect(output.success).to.be.true;
+    });
+  });
 });

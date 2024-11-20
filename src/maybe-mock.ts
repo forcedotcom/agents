@@ -123,7 +123,7 @@ export class MaybeMock {
   public async request<T extends nock.Body>(
     method: 'GET' | 'POST',
     url: string,
-    body?: nock.RequestBodyMatcher
+    body: nock.RequestBodyMatcher = {}
   ): Promise<T> {
     if (this.mockDir) {
       this.logger.debug(`Mocking ${method} request to ${url} using ${this.mockDir}`);
