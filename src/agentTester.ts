@@ -119,13 +119,13 @@ export class AgentTester {
 }
 
 export async function humanFormat(details: AgentTestDetailsResponse): Promise<string> {
-  // TODO: these tables need to follow the same defaults that sf-plugins-core uses
   // TODO: the api response isn't finalized so this is just a POC
-  const { makeTable } = await import('@oclif/table');
+  const { Ux } = await import('@salesforce/sf-plugins-core');
+  const ux = new Ux();
   const tables: string[] = [];
   for (const aiEvalDef of details.tests) {
     for (const result of aiEvalDef.results) {
-      const table = makeTable({
+      const table = ux.makeTable({
         title: `Test Results for ${aiEvalDef.AiEvaluationDefinition} (#${result.test_number})`,
         data: result.results.map((r) => ({
           'TEST NAME': r.name,
