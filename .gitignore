@@ -39,3 +39,4 @@ node_modules
 /Library
 
 .vscode/settings.json
+/src/gen

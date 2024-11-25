@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "@salesforce/core": "^8.8.0",
-    "@salesforce/kit": "^3.2.3"
+    "@salesforce/kit": "^3.2.3",
+    "axios": "^1.7.7"
   },
   "devDependencies": {
     "@salesforce/cli-plugins-testkit": "^5.3.38",

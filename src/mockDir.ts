@@ -11,11 +11,11 @@ import { SfError } from '@salesforce/core';
 import { env } from '@salesforce/kit';
 
 /**
- * If the `SF_MOCK_DIR` environment variable is set, resolve to an absolue path
+ * If the `SF_MOCK_DIR` environment variable is set, resolve to an absolute path
  * and ensure the directory exits, then return the path.
- * 
+ *
  * NOTE: THIS SHOULD BE MOVED TO SOME OTHER LIBRARY LIKE `@salesforce/kit`.
- * 
+ *
  * @returns the absolute path to an existing directory used for mocking behavior
  */
 export const getMockDir = (): string | undefined => {
@@ -29,17 +29,21 @@ export const getMockDir = (): string | undefined => {
         name: 'InvalidMockDir',
         message: `SF_MOCK_DIR [${mockDir}] not found`,
         cause: err,
-        actions: ['If you\'re trying to mock agent behavior you must create the mock directory and add expected mock files to it.']
+        actions: [
+          "If you're trying to mock agent behavior you must create the mock directory and add expected mock files to it.",
+        ],
       });
     }
-    
+
     if (!mockDirStat.isDirectory()) {
       throw SfError.create({
         name: 'InvalidMockDir',
         message: `SF_MOCK_DIR [${mockDir}] is not a directory`,
-        actions: ['If you\'re trying to mock agent behavior you must create the mock directory and add expected mock files to it.']
+        actions: [
+          "If you're trying to mock agent behavior you must create the mock directory and add expected mock files to it.",
+        ],
       });
     }
     return mockDir;
   }
-}
+};

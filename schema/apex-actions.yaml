@@ -1,0 +1,291 @@
+openapi: 3.0.0
+info:
+  title: Salesforce Integration Artifacts API
+  description: API for managing integration artifacts within a Salesforce organization.
+  version: 1.0.0
+servers:
+  - url: https://{{SF_ORG_NAME}}.my.salesforce.com.{{SF_HOST}}/services/data/{SF_VERSION}
+    variables:
+      SF_VERSION:
+        default: v62.0
+        description: Salesforce API version
+paths:
+  /integration/artifacts/discovery/:
+    get:
+      summary: Discover Integration Artifacts
+      description: Discover integration artifacts within the specified Salesforce organization.
+      parameters:
+        - name: grant_type
+          in: query
+          required: true
+          schema:
+            type: string
+          example: client_credentials
+        - name: addTokenTo
+          in: query
+          required: true
+          schema:
+            type: string
+          example: header
+        - name: id
+          in: query
+          required: true
+          schema:
+            type: string
+          example: request/1bfaf7db-3b37-4d46-a93b-20cf9984f0c2/29ba1c6f-43ab-4e23-8a6c-27c39a57a069
+      responses:
+        '200':
+          description: A list of integration artifacts.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    name:
+                      type: string
+                    type:
+                      type: string
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal Server Error
+
+  /connect/assetmanager/artifact/org/example/testmvnlib/maven-metadata.xml.sha1:
+    get:
+      summary: Retrieve Maven Metadata SHA1
+      description: Retrieve the SHA1 checksum of the Maven metadata XML for a specific artifact in the asset manager.
+      responses:
+        '200':
+          description: The SHA1 checksum of the Maven metadata XML.
+          content:
+            text/plain:
+              schema:
+                type: string
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal Server Error
+
+  /integration/artifacts/types:
+    get:
+      summary: Retrieve Artifact Types
+      description: Retrieve the types of integration artifacts available in the specified Salesforce organization.
+      responses:
+        '200':
+          description: A list of artifact types.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal Server Error
+
+  /integration/artifacts/{artifactId}:
+    get:
+      summary: Retrieve Artifact Details
+      description: Retrieve details of a specific integration artifact identified by {artifactId}.
+      parameters:
+        - name: artifactId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Details of the integration artifact.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  type:
+                    type: string
+                  details:
+                    type: string
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not Found
+        '500':
+          description: Internal Server Error
+
+  /integration/artifacts/{artifactId}/versions:
+    get:
+      summary: Retrieve Artifact Versions
+      description: Retrieve the versions of a specific integration artifact identified by {artifactId}.
+      parameters:
+        - name: artifactId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A list of artifact versions.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    versionId:
+                      type: string
+                    name:
+                      type: string
+                    createdDate:
+                      type: string
+                      format: date-time
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not Found
+        '500':
+          description: Internal Server Error
+
+  /integration/artifacts/{artifactId}/versions/{versionId}:
+    get:
+      summary: Retrieve Artifact Version Details
+      description: Retrieve details of a specific version of an integration artifact identified by {artifactId} and {versionId}.
+      parameters:
+        - name: artifactId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Details of the artifact version.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  versionId:
+                    type: string
+                  name:
+                    type: string
+                  createdDate:
+                    type: string
+                    format: date-time
+                  metadata:
+                    type: string
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not Found
+        '500':
+          description: Internal Server Error
+
+  /integration/artifacts/{artifactId}/versions/{versionId}/download:
+    get:
+      summary: Download Artifact Version
+      description: Download a specific version of an integration artifact identified by {artifactId} and {versionId}.
+      parameters:
+        - name: artifactId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The artifact version file.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not Found
+        '500':
+          description: Internal Server Error
+
+  /integration/artifacts/{artifactId}/versions/{versionId}/metadata:
+    get:
+      summary: Retrieve Artifact Version Metadata
+      description: Retrieve metadata of a specific version of an integration artifact identified by {artifactId} and {versionId}.
+      parameters:
+        - name: artifactId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Metadata of the artifact version.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  metadata:
+                    type: string
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not Found
+        '500':
+          description: Internal Server Error
+
+  /integration/artifacts/{artifactId}/versions/{versionId}/validate:
+    post:
+      summary: Validate Artifact Version
+      description: Validate a specific version of an integration artifact identified by {artifactId} and {versionId}.
+      parameters:
+        - name: artifactId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Validation results.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  isValid:
+                    type: boolean
+                  validationMessage:
+                    type: string
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not Found
+        '500':
+          description: Internal Server Error
