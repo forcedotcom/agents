@@ -1,3 +1,12 @@
+## [0.2.2](https://github.com/forcedotcom/agents/compare/0.2.1...0.2.2) (2024-12-02)
+
+
+### Bug Fixes
+
+* export more types ([0a1d408](https://github.com/forcedotcom/agents/commit/0a1d408dd0d815b36509d5b5fe343e7e0817d1a2))
+
+
+
 ## [0.2.1](https://github.com/forcedotcom/agents/compare/0.2.0...0.2.1) (2024-12-02)
 
 
