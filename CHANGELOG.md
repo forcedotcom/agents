@@ -1,3 +1,12 @@
+## [0.2.1](https://github.com/forcedotcom/agents/compare/0.2.0...0.2.1) (2024-12-02)
+
+
+### Bug Fixes
+
+* update return type on start ([c14e8c4](https://github.com/forcedotcom/agents/commit/c14e8c41c3180dad1df807a3531e944b89cce229))
+
+
+
 # [0.2.0](https://github.com/forcedotcom/agents/compare/0.1.6...0.2.0) (2024-12-02)
 
 
