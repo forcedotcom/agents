@@ -1,11 +1,11 @@
 {
-  "status": "Completed",
+  "status": "COMPLETED",
   "startTime": "2024-11-28T12:00:00Z",
   "endTime": "2024-11-28T12:05:00Z",
   "errorMessage": null,
   "testCases": [
     {
-      "status": "Completed",
+      "status": "COMPLETED",
       "number": 1,
       "startTime": "2024-11-28T12:00:10Z",
       "endTime": "2024-11-28T12:00:20Z",
@@ -49,7 +49,7 @@
       ]
     },
     {
-      "status": "Failed",
+      "status": "ERROR",
       "number": 2,
       "startTime": "2024-11-28T12:00:30Z",
       "endTime": "2024-11-28T12:00:40Z",

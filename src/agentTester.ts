@@ -104,13 +104,31 @@ export class AgentTester {
     const lifecycle = Lifecycle.getInstance();
     const client = await PollingClient.create({
       poll: async (): Promise<StatusResult> => {
-        const { status } = await this.status(jobId);
-        if (status === 'COMPLETED') {
-          await lifecycle.emit('AGENT_TEST_POLLING_EVENT', { jobId, status });
+        const [detailsResponse, statusResponse] = await Promise.all([this.details(jobId, format), this.status(jobId)]);
+        const totalTestCases = detailsResponse.response.testCases.length;
+        const failingTestCases = detailsResponse.response.testCases.filter((tc) => tc.status === 'ERROR').length;
+        const passingTestCases = detailsResponse.response.testCases.filter(
+          (tc) => tc.status === 'COMPLETED' && tc.expectationResults.every((r) => r.result === 'Passed')
+        ).length;
+
+        if (statusResponse.status.toLowerCase() === 'completed') {
+          await lifecycle.emit('AGENT_TEST_POLLING_EVENT', {
+            jobId,
+            status: statusResponse.status,
+            totalTestCases,
+            failingTestCases,
+            passingTestCases,
+          });
           return { payload: await this.details(jobId, format), completed: true };
         }
 
-        await lifecycle.emit('AGENT_TEST_POLLING_EVENT', { jobId, status });
+        await lifecycle.emit('AGENT_TEST_POLLING_EVENT', {
+          jobId,
+          status: statusResponse.status,
+          totalTestCases,
+          failingTestCases,
+          passingTestCases,
+        });
         return { completed: false };
       },
       frequency: Duration.seconds(1),
