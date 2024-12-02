@@ -57,8 +57,9 @@ describe('AgentTester', () => {
       const output = await tester.poll('4KBSM000000003F4AQ');
       expect(output).to.be.ok;
       // TODO: make these assertions more meaningful
-      expect(output.formatted).to.include('Test Results for my first test');
-      expect(output.response.tests[0].results[0].results[0].is_pass).to.be.true;
+      expect(output.formatted).to.include('Test Case #1');
+      expect(output.formatted).to.include('Test Case #2');
+      expect(output.response.testCases[0].status).to.equal('Completed');
     });
 
     it('should poll until test run is complete (json format)', async () => {
@@ -68,7 +69,7 @@ describe('AgentTester', () => {
       expect(output).to.be.ok;
       // TODO: make these assertions more meaningful
       expect(JSON.parse(output.formatted)).to.deep.equal(output.response);
-      expect(output.response.tests[0].results[0].results[0].is_pass).to.be.true;
+      expect(output.response.testCases[0].status).to.equal('Completed');
     });
   });
 
