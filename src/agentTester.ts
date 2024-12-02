@@ -104,6 +104,8 @@ export class AgentTester {
     const lifecycle = Lifecycle.getInstance();
     const client = await PollingClient.create({
       poll: async (): Promise<StatusResult> => {
+        // NOTE: we don't actually need to call the status API here since all the same information is present on the
+        // details API. We could just call the details API and check the status there.
         const [detailsResponse, statusResponse] = await Promise.all([this.details(jobId, format), this.status(jobId)]);
         const totalTestCases = detailsResponse.response.testCases.length;
         const failingTestCases = detailsResponse.response.testCases.filter((tc) => tc.status === 'ERROR').length;
