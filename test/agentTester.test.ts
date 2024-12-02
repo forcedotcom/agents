@@ -59,7 +59,7 @@ describe('AgentTester', () => {
       // TODO: make these assertions more meaningful
       expect(output.formatted).to.include('Test Case #1');
       expect(output.formatted).to.include('Test Case #2');
-      expect(output.response.testCases[0].status).to.equal('Completed');
+      expect(output.response.testCases[0].status).to.equal('COMPLETED');
     });
 
     it('should poll until test run is complete (json format)', async () => {
@@ -69,7 +69,7 @@ describe('AgentTester', () => {
       expect(output).to.be.ok;
       // TODO: make these assertions more meaningful
       expect(JSON.parse(output.formatted)).to.deep.equal(output.response);
-      expect(output.response.testCases[0].status).to.equal('Completed');
+      expect(output.response.testCases[0].status).to.equal('COMPLETED');
     });
   });
 
