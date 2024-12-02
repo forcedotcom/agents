@@ -10,21 +10,21 @@ import { MaybeMock } from './maybe-mock';
 
 type Format = 'human' | 'json';
 
-type TestStatus = 'NEW' | 'IN_PROGRESS' | 'COMPLETED' | 'ERROR';
+export type TestStatus = 'NEW' | 'IN_PROGRESS' | 'COMPLETED' | 'ERROR';
 
-type AgentTestStartResponse = {
+export type AgentTestStartResponse = {
   aiEvaluationId: string;
   status: TestStatus;
 };
 
-type AgentTestStatusResponse = {
+export type AgentTestStatusResponse = {
   status: TestStatus;
   startTime: string;
   endTime?: string;
   errorMessage?: string;
 };
 
-type TestCaseResult = {
+export type TestCaseResult = {
   status: TestStatus;
   number: string;
   startTime: string;
@@ -53,7 +53,7 @@ type TestCaseResult = {
   }>;
 };
 
-type AgentTestDetailsResponse = {
+export type AgentTestDetailsResponse = {
   status: TestStatus;
   startTime: string;
   endTime?: string;

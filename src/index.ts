@@ -6,12 +6,19 @@
  */
 
 export {
-  AgentCreateConfig,
-  AgentCreateResponse,
-  AgentJobSpec,
-  AgentJobSpecCreateConfig,
-  AgentJobSpecCreateResponse,
+  type AgentCreateConfig,
+  type AgentCreateResponse,
+  type AgentJobSpec,
+  type AgentJobSpecCreateConfig,
+  type AgentJobSpecCreateResponse,
   SfAgent,
 } from './types';
 export { Agent } from './agent';
-export { AgentTester } from './agentTester';
+export {
+  AgentTester,
+  type AgentTestDetailsResponse,
+  type AgentTestStartResponse,
+  type AgentTestStatusResponse,
+  type TestCaseResult,
+  type TestStatus,
+} from './agentTester';
