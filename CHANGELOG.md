@@ -1,3 +1,7 @@
+## [0.2.3](https://github.com/forcedotcom/agents/compare/0.2.2...0.2.3) (2024-12-03)
+
+
+
 ## [0.2.2](https://github.com/forcedotcom/agents/compare/0.2.1...0.2.2) (2024-12-02)
 
 
