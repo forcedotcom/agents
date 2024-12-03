@@ -1,3 +1,12 @@
+## [0.2.4](https://github.com/forcedotcom/agents/compare/0.2.3...0.2.4) (2024-12-03)
+
+
+### Bug Fixes
+
+* add doc for agent class ([5208345](https://github.com/forcedotcom/agents/commit/52083450e7eff71e1cc3caf570abd18939317d9a))
+
+
+
 ## [0.2.3](https://github.com/forcedotcom/agents/compare/0.2.2...0.2.3) (2024-12-03)
 
 
