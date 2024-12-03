@@ -18,6 +18,9 @@ import {
   type AgentJobSpecCreateResponse,
 } from './types.js';
 
+/**
+ * Class for creating Agents and agent specs.
+ */
 export class Agent implements SfAgent {
   private logger: Logger;
   private maybeMock: MaybeMock;
