@@ -34,7 +34,7 @@ describe('Agents', () => {
     const agent = new Agent(connection, sfProject);
     const output = await agent.createSpec({
       name: 'MyFirstAgent',
-      type: 'customer_facing',
+      type: 'customer',
       role: 'answer questions about vacation_rentals',
       companyName: 'Coral Cloud Enterprises',
       companyDescription: 'Provide vacation rentals and activities',
@@ -49,7 +49,7 @@ describe('Agents', () => {
     const agent = new Agent(connection, sfProject);
     const opts: AgentJobSpecCreateConfig = {
       name: 'MyFirstAgent',
-      type: 'customer_facing',
+      type: 'customer',
       role: 'answer questions about vacation rentals',
       companyName: 'Coral Cloud Enterprises',
       companyDescription: 'Provide vacation rentals and activities',

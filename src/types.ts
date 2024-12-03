@@ -21,7 +21,7 @@ export type AgentJobSpec = [
  */
 export type AgentJobSpecCreateConfig = {
   name: string;
-  type: 'customer_facing' | 'employee_facing';
+  type: 'customer' | 'internal';
   role: string;
   companyName: string;
   companyDescription: string;
