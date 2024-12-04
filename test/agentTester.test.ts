@@ -51,25 +51,13 @@ describe('AgentTester', () => {
   });
 
   describe('poll', () => {
-    it('should poll until test run is complete (human format)', async () => {
+    it('should poll until test run is complete', async () => {
       const tester = new AgentTester(connection);
       await tester.start('suiteId');
-      const output = await tester.poll('4KBSM000000003F4AQ');
-      expect(output).to.be.ok;
+      const response = await tester.poll('4KBSM000000003F4AQ');
+      expect(response).to.be.ok;
       // TODO: make these assertions more meaningful
-      expect(output.formatted).to.include('Test Case #1');
-      expect(output.formatted).to.include('Test Case #2');
-      expect(output.response.testCases[0].status).to.equal('COMPLETED');
-    });
-
-    it('should poll until test run is complete (json format)', async () => {
-      const tester = new AgentTester(connection);
-      await tester.start('suiteId');
-      const output = await tester.poll('4KBSM000000003F4AQ', { format: 'json' });
-      expect(output).to.be.ok;
-      // TODO: make these assertions more meaningful
-      expect(JSON.parse(output.formatted)).to.deep.equal(output.response);
-      expect(output.response.testCases[0].status).to.equal('COMPLETED');
+      expect(response.testCases[0].status).to.equal('COMPLETED');
     });
   });
 
