@@ -6,9 +6,11 @@
  */
 
 import { inspect } from 'node:util';
+import path from 'node:path';
+import fs from 'node:fs';
 import { Connection, Logger, SfError, SfProject } from '@salesforce/core';
-import { Duration, sleep } from '@salesforce/kit';
-import { MaybeMock } from './maybe-mock';
+import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
+import { Duration } from '@salesforce/kit';
 import {
   type SfAgent,
   type AgentCreateConfig,
@@ -16,7 +18,9 @@ import {
   type AgentJobSpec,
   type AgentJobSpecCreateConfig,
   type AgentJobSpecCreateResponse,
+  AttachAgentTopicsBody,
 } from './types.js';
+import { MaybeMock } from './maybe-mock';
 
 /**
  * Class for creating Agents and agent specs.
@@ -24,22 +28,74 @@ import {
 export class Agent implements SfAgent {
   private logger: Logger;
   private maybeMock: MaybeMock;
+  private readonly connection: Connection;
 
   public constructor(connection: Connection, private project: SfProject) {
     this.logger = Logger.childFromRoot(this.constructor.name);
     this.maybeMock = new MaybeMock(connection);
+    this.connection = connection;
   }
 
   public async create(config: AgentCreateConfig): Promise<AgentCreateResponse> {
     this.logger.debug(`Creating Agent using config: ${inspect(config)} in project: ${this.project.getPath()}`);
     // Generate a GenAiPlanner in the local project and deploy
+    const genAiSourceDirPath = path.join(
+      this.project?.getDefaultPackage().fullPath ?? 'force-app',
+      'main',
+      'default',
+      'genAiPlanners'
+    );
+    const genAiSourcePath = path.join(genAiSourceDirPath, `${config.name}.genAiPlanner-meta.xml`);
+
+    this.logger.debug(`Creating Agent using config: ${inspect(config)} in project: ${this.project.getPath()}`);
+    // instead of writing file, zip to memory and send in cs.deploy({zipPath
+    fs.mkdirSync(genAiSourceDirPath, { recursive: true });
+    fs.writeFileSync(
+      genAiSourcePath,
+      `<?xml version="1.0" encoding="UTF-8"?>
+<GenAiPlanner xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>description for ${config.name}</description>
+    <masterLabel>MasterLabel for ${config.name}</masterLabel>
+    <plannerType>AiCopilot__ReAct</plannerType>
+</GenAiPlanner>
+      `
+    );
+
+    const cs = await ComponentSetBuilder.build({ sourcepath: [genAiSourcePath] });
+
+    const deploy = await cs.deploy({ usernameOrConnection: this.connection });
+    const result = await deploy.pollStatus({ timeout: Duration.minutes(10_000), frequency: Duration.seconds(1) });
+    if (!result.response.success) {
+      throw new SfError(result.response.errorMessage ?? `Unable to deploy ${result.response.id}`);
+    }
+
+    const plannerId = (
+      await this.connection.singleRecordQuery<{ Id: string }>(
+        `SELECT Id
+           FROM GenAiPlannerDefinition
+           WHERE MasterLabel = 'MasterLabel for ${config.name}'`,
+        { tooling: true }
+      )
+    ).Id;
 
     // make API request to /services/data/{api-version}/connect/attach-agent-topics
-    await sleep(Duration.seconds(3));
+    const url = `${
+      this.connection.instanceUrl
+    }/services/data/v${this.connection.getApiVersion()}/connect/attach-agent-topics`;
+
+    const body: AttachAgentTopicsBody = {
+      plannerId,
+      agentJobSpecs: config.jobSpec,
+      companyDescription: config.companyDescription,
+      role: config.role,
+      companyName: config.companyName,
+      agentType: config.type,
+    };
+    const response = await this.maybeMock.request<AgentCreateResponse>('POST', url, body);
 
     // on success, retrieve all Agent metadata
 
-    return { isSuccess: true };
+    return response;
   }
 
   /**
