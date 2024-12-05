@@ -16,6 +16,8 @@ export {
 export { Agent } from './agent';
 export {
   AgentTester,
+  humanFormat,
+  jsonFormat,
   type AgentTestDetailsResponse,
   type AgentTestStartResponse,
   type AgentTestStatusResponse,

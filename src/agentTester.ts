@@ -8,8 +8,6 @@ import { Connection, Lifecycle, PollingClient, StatusResult } from '@salesforce/
 import { Duration } from '@salesforce/kit';
 import { MaybeMock } from './maybe-mock';
 
-type Format = 'human' | 'json';
-
 export type TestStatus = 'NEW' | 'IN_PROGRESS' | 'COMPLETED' | 'ERROR';
 
 export type AgentTestStartResponse = {
@@ -91,25 +89,22 @@ export class AgentTester {
   public async poll(
     jobId: string,
     {
-      format = 'human',
       timeout = Duration.minutes(5),
     }: {
-      format?: Format;
       timeout?: Duration;
     } = {
-      format: 'human',
       timeout: Duration.minutes(5),
     }
-  ): Promise<{ response: AgentTestDetailsResponse; formatted: string }> {
+  ): Promise<AgentTestDetailsResponse> {
     const lifecycle = Lifecycle.getInstance();
     const client = await PollingClient.create({
       poll: async (): Promise<StatusResult> => {
         // NOTE: we don't actually need to call the status API here since all the same information is present on the
         // details API. We could just call the details API and check the status there.
-        const [detailsResponse, statusResponse] = await Promise.all([this.details(jobId, format), this.status(jobId)]);
-        const totalTestCases = detailsResponse.response.testCases.length;
-        const failingTestCases = detailsResponse.response.testCases.filter((tc) => tc.status === 'ERROR').length;
-        const passingTestCases = detailsResponse.response.testCases.filter(
+        const [detailsResponse, statusResponse] = await Promise.all([this.details(jobId), this.status(jobId)]);
+        const totalTestCases = detailsResponse.testCases.length;
+        const failingTestCases = detailsResponse.testCases.filter((tc) => tc.status === 'ERROR').length;
+        const passingTestCases = detailsResponse.testCases.filter(
           (tc) => tc.status === 'COMPLETED' && tc.expectationResults.every((r) => r.result === 'Passed')
         ).length;
 
@@ -121,7 +116,7 @@ export class AgentTester {
             failingTestCases,
             passingTestCases,
           });
-          return { payload: await this.details(jobId, format), completed: true };
+          return { payload: detailsResponse, completed: true };
         }
 
         await lifecycle.emit('AGENT_TEST_POLLING_EVENT', {
@@ -137,21 +132,14 @@ export class AgentTester {
       timeout,
     });
 
-    const result = await client.subscribe<{ response: AgentTestDetailsResponse; formatted: string }>();
+    const result = await client.subscribe<AgentTestDetailsResponse>();
     return result;
   }
 
-  public async details(
-    jobId: string,
-    format: Format = 'human'
-  ): Promise<{ response: AgentTestDetailsResponse; formatted: string }> {
+  public async details(jobId: string): Promise<AgentTestDetailsResponse> {
     const url = `/einstein/ai-evaluations/runs/${jobId}/details`;
 
-    const response = await this.maybeMock.request<AgentTestDetailsResponse>('GET', url);
-    return {
-      response,
-      formatted: format === 'human' ? await humanFormat(jobId, response) : await jsonFormat(response),
-    };
+    return this.maybeMock.request<AgentTestDetailsResponse>('GET', url);
   }
 
   public async cancel(jobId: string): Promise<{ success: boolean }> {
