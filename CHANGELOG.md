@@ -1,3 +1,12 @@
+# [0.3.0](https://github.com/forcedotcom/agents/compare/0.2.4...0.3.0) (2024-12-05)
+
+
+### Features
+
+* export test formatters ([b5f26df](https://github.com/forcedotcom/agents/commit/b5f26df835c3a08e9065f327afc4a6bc1997c9ab))
+
+
+
 ## [0.2.4](https://github.com/forcedotcom/agents/compare/0.2.3...0.2.4) (2024-12-03)
 
 
