@@ -18,6 +18,7 @@ export {
   AgentTester,
   humanFormat,
   jsonFormat,
+  junitFormat,
   type AgentTestDetailsResponse,
   type AgentTestStartResponse,
   type AgentTestStatusResponse,

@@ -4,10 +4,11 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
+import { readFile } from 'node:fs/promises';
 import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection } from '@salesforce/core';
-import { AgentTester } from '../src/agentTester';
+import { AgentTestDetailsResponse, AgentTester, junitFormat } from '../src/agentTester';
 
 describe('AgentTester', () => {
   const $$ = new TestContext();
@@ -78,5 +79,24 @@ describe('AgentTester', () => {
       const output = await tester.cancel('4KBSM000000003F4AQ');
       expect(output.success).to.be.true;
     });
+  });
+});
+
+describe('junitFormatter', () => {
+  it('should transform test results to JUnit format', async () => {
+    const raw = await readFile('./test/mocks/einstein_ai-evaluations_runs_4KBSM000000003F4AQ_details.json', 'utf8');
+    const input = JSON.parse(raw) as AgentTestDetailsResponse;
+    const output = await junitFormat(input);
+    expect(output).to.deep.equal(`<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="Copilot_for_Salesforce" tests="2" failures="1" time="20000">
+  <property name="status" value="COMPLETED"></property>
+  <property name="start-time" value="2024-11-28T12:00:00Z"></property>
+  <property name="end-time" value="2024-11-28T12:05:00Z"></property>
+  <testsuite name="CRM_Sanity_v1.1" time="10000" assertions="2"></testsuite>
+  <testsuite name="CRM_Sanity_v1.2" time="10000" assertions="2">
+    <failure message="Expected &quot;Result D&quot; but got &quot;Result C&quot;."></failure>
+    <failure message="Expected &quot;Result D&quot; but got &quot;Result C&quot;."></failure>
+  </testsuite>
+</testsuites>`);
   });
 });
