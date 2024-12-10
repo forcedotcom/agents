@@ -19,9 +19,15 @@ import {
   type AgentJobSpecCreateConfig,
   type AgentJobSpecCreateResponse,
   AttachAgentTopicsBody,
-  AgentCreateLifecycleStages,
 } from './types.js';
 import { MaybeMock } from './maybe-mock';
+
+export const AgentCreateLifecycleStages = {
+  CreatingLocally: 'creatinglocally',
+  DeployingMetadata: 'deployingmetadata',
+  CreatingRemotely: 'creatingremotely',
+  RetrievingMetadata: 'retrievingmetadata',
+};
 
 /**
  * Class for creating Agents and agent specs.

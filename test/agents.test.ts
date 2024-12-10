@@ -8,7 +8,7 @@ import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection, SfProject } from '@salesforce/core';
 import { Agent } from '../src/agent';
-import { AgentJobSpecCreateConfig } from '../src/types';
+import type { AgentJobSpecCreateConfig } from '../src/types';
 
 describe('Agents', () => {
   const $$ = new TestContext();

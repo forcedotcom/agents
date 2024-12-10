@@ -12,9 +12,8 @@ export {
   type AgentJobSpecCreateConfig,
   type AgentJobSpecCreateResponse,
   SfAgent,
-  AgentCreateLifecycleStages,
 } from './types';
-export { Agent } from './agent';
+export { Agent, AgentCreateLifecycleStages } from './agent';
 export {
   AgentTester,
   type AgentTestDetailsResponse,
