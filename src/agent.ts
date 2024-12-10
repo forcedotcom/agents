@@ -91,6 +91,14 @@ export class Agent implements SfAgent {
 
     await Lifecycle.getInstance().emit(AgentCreateLifecycleStages.RetrievingMetadata, {});
 
+    const genAiPluginNames = (
+      await this.connection.tooling.query<{ DeveloperName: string }>(
+        `SELECT DeveloperName FROM GenAiPluginDefinition WHERE DeveloperName LIKE 'p_${plannerId}%'`
+      )
+    ).records;
+    // more MD types were created in the org, than were in the project when we started
+    genAiPluginNames.map((r) => cs.add({ fullName: r.DeveloperName, type: 'GenAiPlugin' }));
+
     const retrieve = await cs.retrieve({
       usernameOrConnection: this.connection,
       merge: true,
