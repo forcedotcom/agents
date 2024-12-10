@@ -8,8 +8,6 @@ import { Connection, Lifecycle, PollingClient, StatusResult } from '@salesforce/
 import { Duration } from '@salesforce/kit';
 import { MaybeMock } from './maybe-mock';
 
-type Format = 'human' | 'json';
-
 export type TestStatus = 'NEW' | 'IN_PROGRESS' | 'COMPLETED' | 'ERROR';
 
 export type AgentTestStartResponse = {
@@ -91,25 +89,22 @@ export class AgentTester {
   public async poll(
     jobId: string,
     {
-      format = 'human',
       timeout = Duration.minutes(5),
     }: {
-      format?: Format;
       timeout?: Duration;
     } = {
-      format: 'human',
       timeout: Duration.minutes(5),
     }
-  ): Promise<{ response: AgentTestDetailsResponse; formatted: string }> {
+  ): Promise<AgentTestDetailsResponse> {
     const lifecycle = Lifecycle.getInstance();
     const client = await PollingClient.create({
       poll: async (): Promise<StatusResult> => {
         // NOTE: we don't actually need to call the status API here since all the same information is present on the
         // details API. We could just call the details API and check the status there.
-        const [detailsResponse, statusResponse] = await Promise.all([this.details(jobId, format), this.status(jobId)]);
-        const totalTestCases = detailsResponse.response.testCases.length;
-        const failingTestCases = detailsResponse.response.testCases.filter((tc) => tc.status === 'ERROR').length;
-        const passingTestCases = detailsResponse.response.testCases.filter(
+        const [detailsResponse, statusResponse] = await Promise.all([this.details(jobId), this.status(jobId)]);
+        const totalTestCases = detailsResponse.testCases.length;
+        const failingTestCases = detailsResponse.testCases.filter((tc) => tc.status === 'ERROR').length;
+        const passingTestCases = detailsResponse.testCases.filter(
           (tc) => tc.status === 'COMPLETED' && tc.expectationResults.every((r) => r.result === 'Passed')
         ).length;
 
@@ -121,7 +116,7 @@ export class AgentTester {
             failingTestCases,
             passingTestCases,
           });
-          return { payload: await this.details(jobId, format), completed: true };
+          return { payload: detailsResponse, completed: true };
         }
 
         await lifecycle.emit('AGENT_TEST_POLLING_EVENT', {
@@ -137,21 +132,14 @@ export class AgentTester {
       timeout,
     });
 
-    const result = await client.subscribe<{ response: AgentTestDetailsResponse; formatted: string }>();
+    const result = await client.subscribe<AgentTestDetailsResponse>();
     return result;
   }
 
-  public async details(
-    jobId: string,
-    format: Format = 'human'
-  ): Promise<{ response: AgentTestDetailsResponse; formatted: string }> {
+  public async details(jobId: string): Promise<AgentTestDetailsResponse> {
     const url = `/einstein/ai-evaluations/runs/${jobId}/details`;
 
-    const response = await this.maybeMock.request<AgentTestDetailsResponse>('GET', url);
-    return {
-      response,
-      formatted: format === 'human' ? await humanFormat(jobId, response) : await jsonFormat(response),
-    };
+    return this.maybeMock.request<AgentTestDetailsResponse>('GET', url);
   }
 
   public async cancel(jobId: string): Promise<{ success: boolean }> {
@@ -161,7 +149,7 @@ export class AgentTester {
   }
 }
 
-export async function humanFormat(name: string, details: AgentTestDetailsResponse): Promise<string> {
+export async function humanFormat(details: AgentTestDetailsResponse): Promise<string> {
   const { Ux } = await import('@salesforce/sf-plugins-core');
   const ux = new Ux();
 
@@ -187,4 +175,63 @@ export async function humanFormat(name: string, details: AgentTestDetailsRespons
 
 export async function jsonFormat(details: AgentTestDetailsResponse): Promise<string> {
   return Promise.resolve(JSON.stringify(details, null, 2));
+}
+
+export async function junitFormat(details: AgentTestDetailsResponse): Promise<string> {
+  // Ideally, these would come from the API response.
+  // Worst case scenario, we cache these values when the customer starts the test run.
+  // Caching would generally work BUT it's problematic because it doesn't allow the customer to get the results from a test they didn't start on their machine
+  // and it doesn't allow them to get the results after the TTL cache expires.
+  const subjectName = 'Copilot_for_Salesforce';
+  const testSetName = 'CRM_Sanity_v1';
+
+  const { XMLBuilder } = await import('fast-xml-parser');
+  const builder = new XMLBuilder({
+    format: true,
+    attributeNamePrefix: '$',
+    ignoreAttributes: false,
+  });
+
+  const testCount = details.testCases.length;
+  const failureCount = details.testCases.filter((tc) => tc.status === 'ERROR').length;
+  const time = details.testCases.reduce((acc, tc) => {
+    if (tc.endTime && tc.startTime) {
+      return acc + new Date(tc.endTime).getTime() - new Date(tc.startTime).getTime();
+    }
+    return acc;
+  }, 0);
+
+  const suites = builder.build({
+    testsuites: {
+      $name: subjectName,
+      $tests: testCount,
+      $failures: failureCount,
+      $time: time,
+      property: [
+        { $name: 'status', $value: details.status },
+        { $name: 'start-time', $value: details.startTime },
+        { $name: 'end-time', $value: details.endTime },
+      ],
+      testsuite: details.testCases.map((testCase) => {
+        const testCaseTime = testCase.endTime
+          ? new Date(testCase.endTime).getTime() - new Date(testCase.startTime).getTime()
+          : 0;
+
+        return {
+          $name: `${testSetName}.${testCase.number}`,
+          $time: testCaseTime,
+          $assertions: testCase.expectationResults.length,
+          failure: testCase.expectationResults
+            .map((r) => {
+              if (r.result === 'Failed') {
+                return { $message: r.errorMessage ?? 'Unknown error' };
+              }
+            })
+            .filter((f) => f),
+        };
+      }),
+    },
+  }) as string;
+
+  return `<?xml version="1.0" encoding="UTF-8"?>\n${suites}`.trim();
 }

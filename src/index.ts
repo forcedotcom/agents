@@ -16,6 +16,9 @@ export {
 export { Agent, AgentCreateLifecycleStages } from './agent';
 export {
   AgentTester,
+  humanFormat,
+  jsonFormat,
+  junitFormat,
   type AgentTestDetailsResponse,
   type AgentTestStartResponse,
   type AgentTestStatusResponse,

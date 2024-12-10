@@ -4,10 +4,11 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
+import { readFile } from 'node:fs/promises';
 import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection } from '@salesforce/core';
-import { AgentTester } from '../src/agentTester';
+import { AgentTestDetailsResponse, AgentTester, junitFormat } from '../src/agentTester';
 
 describe('AgentTester', () => {
   const $$ = new TestContext();
@@ -51,25 +52,13 @@ describe('AgentTester', () => {
   });
 
   describe('poll', () => {
-    it('should poll until test run is complete (human format)', async () => {
+    it('should poll until test run is complete', async () => {
       const tester = new AgentTester(connection);
       await tester.start('suiteId');
-      const output = await tester.poll('4KBSM000000003F4AQ');
-      expect(output).to.be.ok;
+      const response = await tester.poll('4KBSM000000003F4AQ');
+      expect(response).to.be.ok;
       // TODO: make these assertions more meaningful
-      expect(output.formatted).to.include('Test Case #1');
-      expect(output.formatted).to.include('Test Case #2');
-      expect(output.response.testCases[0].status).to.equal('COMPLETED');
-    });
-
-    it('should poll until test run is complete (json format)', async () => {
-      const tester = new AgentTester(connection);
-      await tester.start('suiteId');
-      const output = await tester.poll('4KBSM000000003F4AQ', { format: 'json' });
-      expect(output).to.be.ok;
-      // TODO: make these assertions more meaningful
-      expect(JSON.parse(output.formatted)).to.deep.equal(output.response);
-      expect(output.response.testCases[0].status).to.equal('COMPLETED');
+      expect(response.testCases[0].status).to.equal('COMPLETED');
     });
   });
 
@@ -90,5 +79,24 @@ describe('AgentTester', () => {
       const output = await tester.cancel('4KBSM000000003F4AQ');
       expect(output.success).to.be.true;
     });
+  });
+});
+
+describe('junitFormatter', () => {
+  it('should transform test results to JUnit format', async () => {
+    const raw = await readFile('./test/mocks/einstein_ai-evaluations_runs_4KBSM000000003F4AQ_details.json', 'utf8');
+    const input = JSON.parse(raw) as AgentTestDetailsResponse;
+    const output = await junitFormat(input);
+    expect(output).to.deep.equal(`<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="Copilot_for_Salesforce" tests="2" failures="1" time="20000">
+  <property name="status" value="COMPLETED"></property>
+  <property name="start-time" value="2024-11-28T12:00:00Z"></property>
+  <property name="end-time" value="2024-11-28T12:05:00Z"></property>
+  <testsuite name="CRM_Sanity_v1.1" time="10000" assertions="2"></testsuite>
+  <testsuite name="CRM_Sanity_v1.2" time="10000" assertions="2">
+    <failure message="Expected &quot;Result D&quot; but got &quot;Result C&quot;."></failure>
+    <failure message="Expected &quot;Result D&quot; but got &quot;Result C&quot;."></failure>
+  </testsuite>
+</testsuites>`);
   });
 });
