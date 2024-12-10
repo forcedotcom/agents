@@ -74,7 +74,21 @@
           "startTime": "2024-11-28T12:00:32Z",
           "endTime": "2024-11-28T12:00:33Z",
           "errorCode": null,
-          "errorMessage": null
+          "errorMessage": "Expected \"Result D\" but got \"Result C\"."
+        },
+        {
+          "name": "topic_sequence_match",
+          "actualValue": "Result C",
+          "expectedValue": "Result D",
+          "score": 0.5,
+          "result": "Failed",
+          "metricLabel": "Accuracy",
+          "metricExplainability": "Measures the correctness of the result.",
+          "status": "Completed",
+          "startTime": "2024-11-28T12:00:32Z",
+          "endTime": "2024-11-28T12:00:33Z",
+          "errorCode": null,
+          "errorMessage": "Expected \"Result D\" but got \"Result C\"."
         }
       ]
     }
