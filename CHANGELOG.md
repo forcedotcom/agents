@@ -1,3 +1,12 @@
+# [0.4.0](https://github.com/forcedotcom/agents/compare/0.3.1...0.4.0) (2024-12-10)
+
+
+### Features
+
+* junit result formatter ([42ff64b](https://github.com/forcedotcom/agents/commit/42ff64bd855d4de5e4f6585ab5c141816d1bccf3))
+
+
+
 ## [0.3.1](https://github.com/forcedotcom/agents/compare/0.3.0...0.3.1) (2024-12-07)
 
 
