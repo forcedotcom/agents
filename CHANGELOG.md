@@ -1,3 +1,12 @@
+## [0.4.2](https://github.com/forcedotcom/agents/compare/0.4.1...0.4.2) (2024-12-10)
+
+
+### Bug Fixes
+
+* retrieve GenAiPlugins too ([1d461a2](https://github.com/forcedotcom/agents/commit/1d461a27a713212bb2f033046a71d47d3be21204))
+
+
+
 ## [0.4.1](https://github.com/forcedotcom/agents/compare/0.4.0...0.4.1) (2024-12-10)
 
 
