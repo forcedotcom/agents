@@ -22,6 +22,11 @@ import {
 } from './types.js';
 import { MaybeMock } from './maybe-mock';
 
+/**
+ * Events emitted during Agent.create() for consumers to listen to and keep track of progress
+ *
+ * @type {{DeployingMetadata: string, CreatingLocally: string, CreatingRemotely: string, RetrievingMetadata: string}}
+ */
 export const AgentCreateLifecycleStages = {
   CreatingLocally: 'creatinglocally',
   DeployingMetadata: 'deployingmetadata',
@@ -37,6 +42,12 @@ export class Agent implements SfAgent {
   private maybeMock: MaybeMock;
   private readonly connection: Connection;
 
+  /**
+   * Create an Agent instance
+   *
+   * @param {Connection} connection
+   * @param {SfProject} project
+   */
   public constructor(connection: Connection, private project: SfProject) {
     this.logger = Logger.childFromRoot(this.constructor.name);
     this.maybeMock = new MaybeMock(connection);

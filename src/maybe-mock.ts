@@ -111,6 +111,13 @@ async function readResponses<T extends nock.Body>(mockDir: string, url: string, 
   return responses;
 }
 
+/**
+ * A class to act as an inbetween the library's request, and the orgs response
+ *
+ * if `SF_MOCK_DIR` is set it will read from the directory, resolving files as API responses with nock
+ *
+ * if it is NOT set, it will hit the endpoint and use real server responses
+ */
 export class MaybeMock {
   private mockDir = getMockDir();
   private scopes = new Map<string, nock.Scope>();
@@ -120,6 +127,15 @@ export class MaybeMock {
     this.logger = Logger.childFromRoot(this.constructor.name);
   }
 
+  /**
+   * Will either use mocked responses, or the real server response, as the library/APIs become more feature complete,
+   * there will be fewer mocks and more real responses
+   *
+   * @param {"GET" | "POST"} method
+   * @param {string} url
+   * @param {nock.RequestBodyMatcher} body
+   * @returns {Promise<T>}
+   */
   public async request<T extends nock.Body>(
     method: 'GET' | 'POST',
     url: string,
