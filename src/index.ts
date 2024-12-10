@@ -13,7 +13,7 @@ export {
   type AgentJobSpecCreateResponse,
   SfAgent,
 } from './types';
-export { Agent } from './agent';
+export { Agent, AgentCreateLifecycleStages } from './agent';
 export {
   AgentTester,
   humanFormat,

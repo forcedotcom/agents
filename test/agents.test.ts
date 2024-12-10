@@ -8,7 +8,7 @@ import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection, SfProject } from '@salesforce/core';
 import { Agent } from '../src/agent';
-import { AgentJobSpecCreateConfig } from '../src/types';
+import type { AgentJobSpecCreateConfig } from '../src/types';
 
 describe('Agents', () => {
   const $$ = new TestContext();
@@ -54,11 +54,11 @@ describe('Agents', () => {
       companyName: 'Coral Cloud Enterprises',
       companyDescription: 'Provide vacation rentals and activities',
     };
-    const jobSpecs = await agent.createSpec(opts);
-    expect(jobSpecs).to.be.ok;
+    const jobSpec = await agent.createSpec(opts);
+    expect(jobSpec).to.be.ok;
     const output = agent.create({
       ...opts,
-      jobSpecs,
+      jobSpec,
     });
     // TODO: make this assertion more meaningful
     expect(output).to.be.ok;
