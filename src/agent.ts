@@ -8,7 +8,7 @@
 import { inspect } from 'node:util';
 import path from 'node:path';
 import fs from 'node:fs';
-import { Connection, Logger, SfError, SfProject } from '@salesforce/core';
+import { Connection, Lifecycle, Logger, SfError, SfProject } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { Duration } from '@salesforce/kit';
 import {
@@ -19,6 +19,7 @@ import {
   type AgentJobSpecCreateConfig,
   type AgentJobSpecCreateResponse,
   AttachAgentTopicsBody,
+  AgentCreateLifecycleStages,
 } from './types.js';
 import { MaybeMock } from './maybe-mock';
 
@@ -36,14 +37,20 @@ export class Agent implements SfAgent {
     this.connection = connection;
   }
 
+  /**
+   * From an AgentCreateConfig, deploy the required metadata, call the connect/attach-agent-topics endpoint, and then retrieve
+   * the newly updated metadata back to the local project
+   *
+   * @param {AgentCreateConfig} config
+   * @returns {Promise<AgentCreateResponse>}
+   */
   public async create(config: AgentCreateConfig): Promise<AgentCreateResponse> {
     this.logger.debug(`Creating Agent using config: ${inspect(config)} in project: ${this.project.getPath()}`);
-    // await Lifecycle.getInstance().emit(AgentCreateStages.CreatingLocally, {});
-    // Generate a GenAiPlanner in the local project and deploy
+    await Lifecycle.getInstance().emit(AgentCreateLifecycleStages.CreatingLocally, {});
 
     const sourcepaths = await this.createMetadata(config);
 
-    // await Lifecycle.getInstance().emit(AgentCreateStages.DeployingMetadata, {});
+    await Lifecycle.getInstance().emit(AgentCreateLifecycleStages.DeployingMetadata, {});
     const cs = await ComponentSetBuilder.build({ sourcepath: sourcepaths });
     const deploy = await cs.deploy({ usernameOrConnection: this.connection });
     const result = await deploy.pollStatus({ timeout: Duration.minutes(10_000), frequency: Duration.seconds(1) });
@@ -51,7 +58,7 @@ export class Agent implements SfAgent {
       throw new SfError(result.response.errorMessage ?? `Unable to deploy ${result.response.id}`);
     }
 
-    // await Lifecycle.getInstance().emit(AgentCreateStages.CreatingRemotely, {});
+    await Lifecycle.getInstance().emit(AgentCreateLifecycleStages.CreatingRemotely, {});
 
     const plannerId = (
       await this.connection.singleRecordQuery<{ Id: string }>(
@@ -62,7 +69,6 @@ export class Agent implements SfAgent {
       )
     ).Id;
 
-    // make API request to /services/data/{api-version}/connect/attach-agent-topics
     const url = `${
       this.connection.instanceUrl
     }/services/data/v${this.connection.getApiVersion()}/connect/attach-agent-topics`;
@@ -76,6 +82,8 @@ export class Agent implements SfAgent {
       agentType: config.type,
     };
     const response = await this.maybeMock.request<AgentCreateResponse>('POST', url, body);
+
+    await Lifecycle.getInstance().emit(AgentCreateLifecycleStages.RetrievingMetadata, {});
 
     const retrieve = await cs.retrieve({
       usernameOrConnection: this.connection,
@@ -91,8 +99,6 @@ export class Agent implements SfAgent {
     if (!retrieveResult.response.success) {
       throw new SfError(`Unable to retrieve ${retrieveResult.response.id}`);
     }
-
-    // await Lifecycle.getInstance().emit(AgentCreateStages.RetrievingMetadata, {});
 
     return response;
   }
@@ -142,9 +148,10 @@ export class Agent implements SfAgent {
     const genAiSourcePath = path.join(genAiSourceDirPath, `${config.name}.genAiPlanner-meta.xml`);
     const botSourcePath = path.join(botDirPath, `${config.name}.bot-meta.xml`);
     const botVersionSourcePath = path.join(botDirPath, 'v1.botVersion-meta.xml');
+    // TODO: will this need to be user specified? Something to update for V2 APIs
     const botUser = (
       await this.connection.singleRecordQuery<{ Username: string }>(
-        "SELECT Username FROM User Where Profile.name='Einstein Agent User'"
+        "SELECT Username FROM User Where Profile.name='Einstein Agent User' LIMIT 1"
       )
     ).Username;
 

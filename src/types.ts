@@ -27,6 +27,13 @@ export type AttachAgentTopicsBody = {
   agentJobSpecs: AgentJobSpec;
 };
 
+export const AgentCreateLifecycleStages = {
+  CreatingLocally: 'creatinglocally',
+  DeployingMetadata: 'deployingmetadata',
+  CreatingRemotely: 'creatingremotely',
+  RetrievingMetadata: 'retrievingmetadata',
+};
+
 /**
  * The parameters used to generate an agent spec.
  */
