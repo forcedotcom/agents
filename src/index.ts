@@ -19,6 +19,7 @@ export {
   humanFormat,
   jsonFormat,
   junitFormat,
+  tapFormat,
   type AgentTestDetailsResponse,
   type AgentTestStartResponse,
   type AgentTestStatusResponse,

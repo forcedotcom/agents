@@ -8,7 +8,7 @@ import { readFile } from 'node:fs/promises';
 import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection } from '@salesforce/core';
-import { AgentTestDetailsResponse, AgentTester, junitFormat } from '../src/agentTester';
+import { AgentTestDetailsResponse, AgentTester, junitFormat, tapFormat } from '../src/agentTester';
 
 describe('AgentTester', () => {
   const $$ = new TestContext();
@@ -98,5 +98,31 @@ describe('junitFormatter', () => {
     <failure message="Expected &quot;Result D&quot; but got &quot;Result C&quot;."></failure>
   </testsuite>
 </testsuites>`);
+  });
+});
+
+describe('tapFormatter', () => {
+  it('should transform test results to TAP format', async () => {
+    const raw = await readFile('./test/mocks/einstein_ai-evaluations_runs_4KBSM000000003F4AQ_details.json', 'utf8');
+    const input = JSON.parse(raw) as AgentTestDetailsResponse;
+    const output = await tapFormat(input);
+    expect(output).to.deep.equal(`Tap Version 14
+1..4
+ok 1 CRM_Sanity_v1.1
+ok 2 CRM_Sanity_v1.1
+not ok 3 CRM_Sanity_v1.2
+  ---
+  message: Expected "Result D" but got "Result C".
+  expectation: topic_sequence_match
+  actual: Result C
+  expected: Result D
+  ...
+not ok 4 CRM_Sanity_v1.2
+  ---
+  message: Expected "Result D" but got "Result C".
+  expectation: topic_sequence_match
+  actual: Result C
+  expected: Result D
+  ...`);
   });
 });
