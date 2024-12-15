@@ -21,7 +21,7 @@
   },
   "devDependencies": {
     "@salesforce/cli-plugins-testkit": "^5.3.38",
-    "@salesforce/dev-scripts": "^10.2.10",
+    "@salesforce/dev-scripts": "^10.2.11",
     "ts-node": "^10.9.2",
     "typescript": "^5.5.4"
   },
