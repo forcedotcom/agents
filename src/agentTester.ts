@@ -56,6 +56,8 @@ export type AgentTestDetailsResponse = {
   startTime: string;
   endTime?: string;
   errorMessage?: string;
+  subjectName: string;
+  testSetName: string;
   testCases: TestCaseResult[];
 };
 
@@ -205,13 +207,6 @@ export async function jsonFormat(details: AgentTestDetailsResponse): Promise<str
 }
 
 export async function junitFormat(details: AgentTestDetailsResponse): Promise<string> {
-  // Ideally, these would come from the API response.
-  // Worst case scenario, we cache these values when the customer starts the test run.
-  // Caching would generally work BUT it's problematic because it doesn't allow the customer to get the results from a test they didn't start on their machine
-  // and it doesn't allow them to get the results after the TTL cache expires.
-  const subjectName = 'Copilot_for_Salesforce';
-  const testSetName = 'CRM_Sanity_v1';
-
   // eslint-disable-next-line import/no-extraneous-dependencies
   const { XMLBuilder } = await import('fast-xml-parser');
   const builder = new XMLBuilder({
@@ -231,7 +226,7 @@ export async function junitFormat(details: AgentTestDetailsResponse): Promise<st
 
   const suites = builder.build({
     testsuites: {
-      $name: subjectName,
+      $name: details.subjectName,
       $tests: testCount,
       $failures: failureCount,
       $time: time,
@@ -246,7 +241,7 @@ export async function junitFormat(details: AgentTestDetailsResponse): Promise<st
           : 0;
 
         return {
-          $name: `${testSetName}.${testCase.number}`,
+          $name: `${details.testSetName}.${testCase.number}`,
           $time: testCaseTime,
           $assertions: testCase.expectationResults.length,
           failure: testCase.expectationResults
@@ -262,4 +257,26 @@ export async function junitFormat(details: AgentTestDetailsResponse): Promise<st
   }) as string;
 
   return `<?xml version="1.0" encoding="UTF-8"?>\n${suites}`.trim();
+}
+
+export async function tapFormat(details: AgentTestDetailsResponse): Promise<string> {
+  const lines: string[] = [];
+  let expectationCount = 0;
+  for (const testCase of details.testCases) {
+    for (const result of testCase.expectationResults) {
+      const status = result.result === 'Passed' ? 'ok' : 'not ok';
+      expectationCount++;
+      lines.push(`${status} ${expectationCount} ${details.testSetName}.${testCase.number}`);
+      if (status === 'not ok') {
+        lines.push('  ---');
+        lines.push(`  message: ${result.errorMessage ?? 'Unknown error'}`);
+        lines.push(`  expectation: ${result.name}`);
+        lines.push(`  actual: ${result.actualValue}`);
+        lines.push(`  expected: ${result.expectedValue}`);
+        lines.push('  ...');
+      }
+    }
+  }
+
+  return Promise.resolve(`Tap Version 14\n1..${expectationCount}\n${lines.join('\n')}`);
 }
