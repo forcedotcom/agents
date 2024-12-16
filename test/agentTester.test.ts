@@ -58,7 +58,7 @@ describe('AgentTester', () => {
       const response = await tester.poll('4KBSM000000003F4AQ');
       expect(response).to.be.ok;
       // TODO: make these assertions more meaningful
-      expect(response.testCases[0].status).to.equal('COMPLETED');
+      expect(response.testSet.testCases[0].status).to.equal('COMPLETED');
     });
   });
 
