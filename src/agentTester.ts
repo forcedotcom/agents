@@ -61,6 +61,9 @@ export type AgentTestDetailsResponse = {
   testCases: TestCaseResult[];
 };
 
+/**
+ * AgentTester class to test Agents
+ */
 export class AgentTester {
   private maybeMock: MaybeMock;
   public constructor(connection: Connection) {
@@ -82,12 +85,25 @@ export class AgentTester {
     });
   }
 
+  /**
+   * Get the status of a test run
+   *
+   * @param {string} jobId
+   * @returns {Promise<AgentTestStatusResponse>}
+   */
   public async status(jobId: string): Promise<AgentTestStatusResponse> {
     const url = `/einstein/ai-evaluations/runs/${jobId}`;
 
     return this.maybeMock.request<AgentTestStatusResponse>('GET', url);
   }
 
+  /**
+   * Poll for a test run to complete
+   *
+   * @param {string} jobId
+   * @param {Duration} timeout
+   * @returns {Promise<AgentTestDetailsResponse>}
+   */
   public async poll(
     jobId: string,
     {
@@ -134,16 +150,27 @@ export class AgentTester {
       timeout,
     });
 
-    const result = await client.subscribe<AgentTestDetailsResponse>();
-    return result;
+    return client.subscribe<AgentTestDetailsResponse>();
   }
 
+  /**
+   * Request test run details
+   *
+   * @param {string} jobId
+   * @returns {Promise<AgentTestDetailsResponse>}
+   */
   public async details(jobId: string): Promise<AgentTestDetailsResponse> {
     const url = `/einstein/ai-evaluations/runs/${jobId}/details`;
 
     return this.maybeMock.request<AgentTestDetailsResponse>('GET', url);
   }
 
+  /**
+   * Cancel an in-progress test run
+   *
+   * @param {string} jobId
+   * @returns {Promise<{success: boolean}>}
+   */
   public async cancel(jobId: string): Promise<{ success: boolean }> {
     const url = `/einstein/ai-evaluations/runs/${jobId}/cancel`;
 
@@ -180,6 +207,7 @@ export async function jsonFormat(details: AgentTestDetailsResponse): Promise<str
 }
 
 export async function junitFormat(details: AgentTestDetailsResponse): Promise<string> {
+  // eslint-disable-next-line import/no-extraneous-dependencies
   const { XMLBuilder } = await import('fast-xml-parser');
   const builder = new XMLBuilder({
     format: true,
