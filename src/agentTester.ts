@@ -57,8 +57,10 @@ export type AgentTestDetailsResponse = {
   endTime?: string;
   errorMessage?: string;
   subjectName: string;
-  testSetName: string;
-  testCases: TestCaseResult[];
+  testSet: {
+    name: string;
+    testCases: TestCaseResult[];
+  };
 };
 
 /**
@@ -120,9 +122,9 @@ export class AgentTester {
         // NOTE: we don't actually need to call the status API here since all the same information is present on the
         // details API. We could just call the details API and check the status there.
         const [detailsResponse, statusResponse] = await Promise.all([this.details(jobId), this.status(jobId)]);
-        const totalTestCases = detailsResponse.testCases.length;
-        const failingTestCases = detailsResponse.testCases.filter((tc) => tc.status === 'ERROR').length;
-        const passingTestCases = detailsResponse.testCases.filter(
+        const totalTestCases = detailsResponse.testSet.testCases.length;
+        const failingTestCases = detailsResponse.testSet.testCases.filter((tc) => tc.status === 'ERROR').length;
+        const passingTestCases = detailsResponse.testSet.testCases.filter(
           (tc) => tc.status === 'COMPLETED' && tc.expectationResults.every((r) => r.result === 'Passed')
         ).length;
 
@@ -183,7 +185,7 @@ export async function humanFormat(details: AgentTestDetailsResponse): Promise<st
   const ux = new Ux();
 
   const tables: string[] = [];
-  for (const testCase of details.testCases) {
+  for (const testCase of details.testSet.testCases) {
     const table = ux.makeTable({
       title: `Test Case #${testCase.number}`,
       data: testCase.expectationResults.map((r) => ({
@@ -215,9 +217,9 @@ export async function junitFormat(details: AgentTestDetailsResponse): Promise<st
     ignoreAttributes: false,
   });
 
-  const testCount = details.testCases.length;
-  const failureCount = details.testCases.filter((tc) => tc.status === 'ERROR').length;
-  const time = details.testCases.reduce((acc, tc) => {
+  const testCount = details.testSet.testCases.length;
+  const failureCount = details.testSet.testCases.filter((tc) => tc.status === 'ERROR').length;
+  const time = details.testSet.testCases.reduce((acc, tc) => {
     if (tc.endTime && tc.startTime) {
       return acc + new Date(tc.endTime).getTime() - new Date(tc.startTime).getTime();
     }
@@ -235,13 +237,13 @@ export async function junitFormat(details: AgentTestDetailsResponse): Promise<st
         { $name: 'start-time', $value: details.startTime },
         { $name: 'end-time', $value: details.endTime },
       ],
-      testsuite: details.testCases.map((testCase) => {
+      testsuite: details.testSet.testCases.map((testCase) => {
         const testCaseTime = testCase.endTime
           ? new Date(testCase.endTime).getTime() - new Date(testCase.startTime).getTime()
           : 0;
 
         return {
-          $name: `${details.testSetName}.${testCase.number}`,
+          $name: `${details.testSet.name}.${testCase.number}`,
           $time: testCaseTime,
           $assertions: testCase.expectationResults.length,
           failure: testCase.expectationResults
@@ -262,11 +264,11 @@ export async function junitFormat(details: AgentTestDetailsResponse): Promise<st
 export async function tapFormat(details: AgentTestDetailsResponse): Promise<string> {
   const lines: string[] = [];
   let expectationCount = 0;
-  for (const testCase of details.testCases) {
+  for (const testCase of details.testSet.testCases) {
     for (const result of testCase.expectationResults) {
       const status = result.result === 'Passed' ? 'ok' : 'not ok';
       expectationCount++;
-      lines.push(`${status} ${expectationCount} ${details.testSetName}.${testCase.number}`);
+      lines.push(`${status} ${expectationCount} ${details.testSet.name}.${testCase.number}`);
       if (status === 'not ok') {
         lines.push('  ---');
         lines.push(`  message: ${result.errorMessage ?? 'Unknown error'}`);
