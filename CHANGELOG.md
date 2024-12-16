@@ -1,3 +1,12 @@
+## [0.5.1](https://github.com/forcedotcom/agents/compare/0.5.0...0.5.1) (2024-12-16)
+
+
+### Bug Fixes
+
+* update expected response from details API ([49a19fd](https://github.com/forcedotcom/agents/commit/49a19fd8032a0d47d4256c554b48eb6f47c95bae))
+
+
+
 # [0.5.0](https://github.com/forcedotcom/agents/compare/0.4.5...0.5.0) (2024-12-16)
 
 
