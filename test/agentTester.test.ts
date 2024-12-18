@@ -8,7 +8,7 @@ import { readFile } from 'node:fs/promises';
 import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection } from '@salesforce/core';
-import { AgentTestDetailsResponse, AgentTester, junitFormat, tapFormat } from '../src/agentTester';
+import { AgentTestDetailsResponse, AgentTester, humanFormat, junitFormat, tapFormat } from '../src/agentTester';
 
 describe('AgentTester', () => {
   const $$ = new TestContext();
@@ -82,6 +82,15 @@ describe('AgentTester', () => {
   });
 });
 
+describe('humanFormat', () => {
+  it('should transform test results to human readable format', async () => {
+    const raw = await readFile('./test/mocks/einstein_ai-evaluations_runs_4KBSM000000003F4AQ_details.json', 'utf8');
+    const input = JSON.parse(raw) as AgentTestDetailsResponse;
+    const output = await humanFormat(input);
+    expect(output).to.be.ok;
+  });
+});
+
 describe('junitFormatter', () => {
   it('should transform test results to JUnit format', async () => {
     const raw = await readFile('./test/mocks/einstein_ai-evaluations_runs_4KBSM000000003F4AQ_details.json', 'utf8');
@@ -91,11 +100,11 @@ describe('junitFormatter', () => {
 <testsuites name="Copilot_for_Salesforce" tests="2" failures="1" time="20000">
   <property name="status" value="COMPLETED"></property>
   <property name="start-time" value="2024-11-28T12:00:00Z"></property>
-  <property name="end-time" value="2024-11-28T12:05:00Z"></property>
-  <testsuite name="CRM_Sanity_v1.1" time="10000" assertions="2"></testsuite>
-  <testsuite name="CRM_Sanity_v1.2" time="10000" assertions="2">
-    <failure message="Expected &quot;Result D&quot; but got &quot;Result C&quot;."></failure>
-    <failure message="Expected &quot;Result D&quot; but got &quot;Result C&quot;."></failure>
+  <property name="end-time" value="2024-11-28T12:00:48.56Z"></property>
+  <testsuite name="CRM_Sanity_v1.1" time="10000" assertions="3"></testsuite>
+  <testsuite name="CRM_Sanity_v1.2" time="10000" assertions="3">
+    <failure message="Actual response does not match the expected response" name="action_sequence_match"></failure>
+    <failure message="Actual response does not match the expected response" name="bot_response_rating"></failure>
   </testsuite>
 </testsuites>`);
   });
@@ -107,22 +116,24 @@ describe('tapFormatter', () => {
     const input = JSON.parse(raw) as AgentTestDetailsResponse;
     const output = await tapFormat(input);
     expect(output).to.deep.equal(`Tap Version 14
-1..4
+1..6
 ok 1 CRM_Sanity_v1.1
 ok 2 CRM_Sanity_v1.1
-not ok 3 CRM_Sanity_v1.2
+ok 3 CRM_Sanity_v1.1
+ok 4 CRM_Sanity_v1.2
+not ok 5 CRM_Sanity_v1.2
   ---
-  message: Expected "Result D" but got "Result C".
-  expectation: topic_sequence_match
-  actual: Result C
-  expected: Result D
+  message: Actual response does not match the expected response
+  expectation: action_sequence_match
+  actual: ["IdentifyRecordByName","QueryRecords"]
+  expected: ["IdentifyRecordByName","QueryRecords","GetActivitiesTimeline"]
   ...
-not ok 4 CRM_Sanity_v1.2
+not ok 6 CRM_Sanity_v1.2
   ---
-  message: Expected "Result D" but got "Result C".
-  expectation: topic_sequence_match
-  actual: Result C
-  expected: Result D
+  message: Actual response does not match the expected response
+  expectation: bot_response_rating
+  actual: It looks like I am unable to find the information you are looking for due to access restrictions. How else can I assist you?
+  expected: Summary of open cases and activities associated with timeline
   ...`);
   });
 });

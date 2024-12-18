@@ -6,6 +6,7 @@
  */
 import { Connection, Lifecycle, PollingClient, StatusResult } from '@salesforce/core';
 import { Duration } from '@salesforce/kit';
+import ansis from 'ansis';
 import { MaybeMock } from './maybe-mock';
 
 export type TestStatus = 'NEW' | 'IN_PROGRESS' | 'COMPLETED' | 'ERROR';
@@ -25,6 +26,7 @@ export type AgentTestStatusResponse = {
 export type TestCaseResult = {
   status: TestStatus;
   number: string;
+  utterance: string;
   startTime: string;
   endTime?: string;
   generatedData: {
@@ -180,6 +182,69 @@ export class AgentTester {
   }
 }
 
+function humanFriendlyName(name: string): string {
+  switch (name) {
+    case 'topic_sequence_match':
+      return 'Topic';
+    case 'action_sequence_match':
+      return 'Action';
+    case 'bot_response_rating':
+      return 'Outcome';
+    default:
+      return name;
+  }
+}
+
+function truncate(value: number, decimals = 2): string {
+  const remainder = value % 1;
+  // truncate remainder to specified decimals
+  const fractionalPart = remainder ? remainder.toString().split('.')[1].slice(0, decimals) : '0'.repeat(decimals);
+  const wholeNumberPart = Math.floor(value).toString();
+  return decimals ? `${wholeNumberPart}.${fractionalPart}` : wholeNumberPart;
+}
+
+function readableTime(time: number, decimalPlaces = 2): string {
+  if (time < 1000) {
+    return '< 1s';
+  }
+
+  // if time < 1000ms, return time in ms
+  if (time < 1000) {
+    return `${time}ms`;
+  }
+
+  // if time < 60s, return time in seconds
+  if (time < 60_000) {
+    return `${truncate(time / 1000, decimalPlaces)}s`;
+  }
+
+  // if time < 60m, return time in minutes and seconds
+  if (time < 3_600_000) {
+    const minutes = Math.floor(time / 60_000);
+    const seconds = truncate((time % 60_000) / 1000, decimalPlaces);
+    return `${minutes}m ${seconds}s`;
+  }
+
+  // if time >= 60m, return time in hours and minutes
+  const hours = Math.floor(time / 3_600_000);
+  const minutes = Math.floor((time % 3_600_000) / 60_000);
+  return `${hours}h ${minutes}m`;
+}
+
+function makeSimpleTable(data: Record<string, string>, title: string): string {
+  if (Object.keys(data).length === 0) {
+    return '';
+  }
+
+  const longestKey = Object.keys(data).reduce((acc, key) => (key.length > acc ? key.length : acc), 0);
+  const longestValue = Object.values(data).reduce((acc, value) => (value.length > acc ? value.length : acc), 0);
+  const table = Object.entries(data)
+    .map(([key, value]) => `${key.padEnd(longestKey)}  ${value.padEnd(longestValue)}`)
+    .join('\n');
+
+  return `${title}\n${table}`;
+}
+
 export async function humanFormat(details: AgentTestDetailsResponse): Promise<string> {
   const { Ux } = await import('@salesforce/sf-plugins-core');
   const ux = new Ux();
@@ -187,21 +252,61 @@ export async function humanFormat(details: AgentTestDetailsResponse): Promise<st
   const tables: string[] = [];
   for (const testCase of details.testSet.testCases) {
     const table = ux.makeTable({
-      title: `Test Case #${testCase.number}`,
+      title: `${ansis.bold(`Test Case #${testCase.number}`)}\n${ansis.dim('Utterance')}: ${testCase.utterance}`,
+      overflow: 'wrap',
       data: testCase.expectationResults.map((r) => ({
-        name: r.name,
-        outcome: r.result === 'Passed' ? 'Pass' : 'Fail',
-        actualValue: r.actualValue,
-        expectedValue: r.expectedValue,
-        score: r.score,
-        'metric label': r.metricLabel,
-        message: r.errorMessage ?? '',
-        'runtime (MS)': r.endTime ? new Date(r.endTime).getTime() - new Date(r.startTime).getTime() : 0,
+        test: humanFriendlyName(r.name),
+        result: r.result === 'Passed' ? ansis.green('Pass') : ansis.red('Fail'),
+        expected: r.expectedValue,
+        actual: r.actualValue,
       })),
     });
     tables.push(table);
   }
-  return tables.join('\n');
+
+  const topicPassCount = details.testSet.testCases.reduce((acc, tc) => {
+    const topic = tc.expectationResults.find((r) => r.name === 'topic_sequence_match');
+    return topic?.result === 'Passed' ? acc + 1 : acc;
+  }, 0);
+  const topicPassPercent = (topicPassCount / details.testSet.testCases.length) * 100;
+
+  const actionPassCount = details.testSet.testCases.reduce((acc, tc) => {
+    const action = tc.expectationResults.find((r) => r.name === 'action_sequence_match');
+    return action?.result === 'Passed' ? acc + 1 : acc;
+  }, 0);
+  const actionPassPercent = (actionPassCount / details.testSet.testCases.length) * 100;
+
+  const outcomePassCount = details.testSet.testCases.reduce((acc, tc) => {
+    const outcome = tc.expectationResults.find((r) => r.name === 'bot_response_rating');
+    return outcome?.result === 'Passed' ? acc + 1 : acc;
+  }, 0);
+  const outcomePassPercent = (outcomePassCount / details.testSet.testCases.length) * 100;
+
+  const results = {
+    Status: details.status,
+    Duration: details.endTime
+      ? readableTime(new Date(details.endTime).getTime() - new Date(details.startTime).getTime())
+      : 'Unknown',
+    'Topic Pass %': `${topicPassPercent.toFixed(2)}%`,
+    'Action Pass %': `${actionPassPercent.toFixed(2)}%`,
+    'Outcome Pass %': `${outcomePassPercent.toFixed(2)}%`,
+  };
+
+  const resultsTable = makeSimpleTable(results, ansis.bold.blue('Test Results'));
+
+  const failedTestCases = details.testSet.testCases.filter((tc) => tc.status === 'ERROR');
+  const failedTestCasesObj = Object.fromEntries(
+    Object.entries(failedTestCases).map(([, tc]) => [
+      `Test Case #${tc.number}`,
+      tc.expectationResults
+        .filter((r) => r.result === 'Failed')
+        .map((r) => r.name)
+        .join(', '),
+    ])
+  );
+  const failedTestCasesTable = makeSimpleTable(failedTestCasesObj, ansis.red.bold('Failed Test Cases'));
+
+  return tables.join('\n') + `\n${resultsTable}\n\n${failedTestCasesTable}\n`;
 }
 
 export async function jsonFormat(details: AgentTestDetailsResponse): Promise<string> {
@@ -249,7 +354,7 @@ export async function junitFormat(details: AgentTestDetailsResponse): Promise<st
           failure: testCase.expectationResults
             .map((r) => {
               if (r.result === 'Failed') {
-                return { $message: r.errorMessage ?? 'Unknown error' };
+                return { $message: r.errorMessage ?? 'Unknown error', $name: r.name };
               }
             })
             .filter((f) => f),

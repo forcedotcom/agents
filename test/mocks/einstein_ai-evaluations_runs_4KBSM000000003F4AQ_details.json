@@ -1,7 +1,7 @@
 {
   "status": "COMPLETED",
   "startTime": "2024-11-28T12:00:00Z",
-  "endTime": "2024-11-28T12:05:00Z",
+  "endTime": "2024-11-28T12:00:48.56Z",
   "errorMessage": null,
   "subjectName": "Copilot_for_Salesforce",
   "testSet": {
@@ -10,6 +10,7 @@
       {
         "status": "COMPLETED",
         "number": 1,
+        "utterance": "Summarize account Acme",
         "startTime": "2024-11-28T12:00:10Z",
         "endTime": "2024-11-28T12:00:20Z",
         "generatedData": {
@@ -23,8 +24,8 @@
         "expectationResults": [
           {
             "name": "topic_sequence_match",
-            "actualValue": "Result A",
-            "expectedValue": "Result A",
+            "actualValue": "GeneralCRM",
+            "expectedValue": "GeneralCRM",
             "score": 1.0,
             "result": "Passed",
             "metricLabel": "Accuracy",
@@ -37,8 +38,22 @@
           },
           {
             "name": "action_sequence_match",
-            "actualValue": "Result B",
-            "expectedValue": "Result B",
+            "actualValue": "[\"IdentifyRecordByName\",\"SummarizeRecord\"]",
+            "expectedValue": "[\"IdentifyRecordByName\",\"SummarizeRecord\"]",
+            "score": 1.0,
+            "result": "Passed",
+            "metricLabel": "Precision",
+            "metricExplainability": "Measures the precision of the result.",
+            "status": "Completed",
+            "startTime": "2024-11-28T12:00:14Z",
+            "endTime": "2024-11-28T12:00:15Z",
+            "errorCode": null,
+            "errorMessage": null
+          },
+          {
+            "name": "bot_response_rating",
+            "actualValue": "Here is the summary of the account Acme. How else can I assist you? Acme is a customer since 2019. They have 3 open opportunities and 2 open cases.",
+            "expectedValue": "Summary of account details are shown",
             "score": 0.9,
             "result": "Passed",
             "metricLabel": "Precision",
@@ -55,6 +70,7 @@
         "status": "ERROR",
         "number": 2,
         "startTime": "2024-11-28T12:00:30Z",
+        "utterance": "Summarize the open cases and Activities of acme from sep to nov 2024",
         "endTime": "2024-11-28T12:00:40Z",
         "generatedData": {
           "type": "AGENT",
@@ -67,31 +83,45 @@
         "expectationResults": [
           {
             "name": "topic_sequence_match",
-            "actualValue": "Result C",
-            "expectedValue": "Result D",
-            "score": 0.5,
-            "result": "Failed",
+            "actualValue": "GeneralCRM",
+            "expectedValue": "GeneralCRM",
+            "score": 1,
+            "result": "Passed",
             "metricLabel": "Accuracy",
             "metricExplainability": "Measures the correctness of the result.",
             "status": "Completed",
             "startTime": "2024-11-28T12:00:32Z",
             "endTime": "2024-11-28T12:00:33Z",
             "errorCode": null,
-            "errorMessage": "Expected \"Result D\" but got \"Result C\"."
+            "errorMessage": null
           },
           {
-            "name": "topic_sequence_match",
-            "actualValue": "Result C",
-            "expectedValue": "Result D",
+            "name": "action_sequence_match",
+            "actualValue": "[\"IdentifyRecordByName\",\"QueryRecords\"]",
+            "expectedValue": "[\"IdentifyRecordByName\",\"QueryRecords\",\"GetActivitiesTimeline\"]",
             "score": 0.5,
             "result": "Failed",
-            "metricLabel": "Accuracy",
-            "metricExplainability": "Measures the correctness of the result.",
+            "metricLabel": "Precision",
+            "metricExplainability": "Measures the precision of the result.",
             "status": "Completed",
-            "startTime": "2024-11-28T12:00:32Z",
-            "endTime": "2024-11-28T12:00:33Z",
-            "errorCode": null,
-            "errorMessage": "Expected \"Result D\" but got \"Result C\"."
+            "startTime": "2024-11-28T12:00:14Z",
+            "endTime": "2024-11-28T12:00:15Z",
+            "errorCode": 1,
+            "errorMessage": "Actual response does not match the expected response"
+          },
+          {
+            "name": "bot_response_rating",
+            "actualValue": "It looks like I am unable to find the information you are looking for due to access restrictions. How else can I assist you?",
+            "expectedValue": "Summary of open cases and activities associated with timeline",
+            "score": 0.1,
+            "result": "Failed",
+            "metricLabel": "Precision",
+            "metricExplainability": "Measures the precision of the result.",
+            "status": "Completed",
+            "startTime": "2024-11-28T12:00:14Z",
+            "endTime": "2024-11-28T12:00:15Z",
+            "errorCode": 1,
+            "errorMessage": "Actual response does not match the expected response"
           }
         ]
       }
