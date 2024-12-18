@@ -1,3 +1,12 @@
+## [0.5.2](https://github.com/forcedotcom/agents/compare/0.5.1...0.5.2) (2024-12-18)
+
+
+### Bug Fixes
+
+* update HRO ([accc6a1](https://github.com/forcedotcom/agents/commit/accc6a109295b7b8ca4ae6d6410e761cabd5ccc7))
+
+
+
 ## [0.5.1](https://github.com/forcedotcom/agents/compare/0.5.0...0.5.1) (2024-12-16)
 
 
