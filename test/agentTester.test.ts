@@ -8,7 +8,7 @@ import { readFile } from 'node:fs/promises';
 import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection } from '@salesforce/core';
-import { AgentTestDetailsResponse, AgentTester, junitFormat, tapFormat } from '../src/agentTester';
+import { AgentTestDetailsResponse, AgentTester, humanFormat, junitFormat, tapFormat } from '../src/agentTester';
 
 describe('AgentTester', () => {
   const $$ = new TestContext();
@@ -79,6 +79,15 @@ describe('AgentTester', () => {
       const output = await tester.cancel('4KBSM000000003F4AQ');
       expect(output.success).to.be.true;
     });
+  });
+});
+
+describe('humanFormat', () => {
+  it('should transform test results to human readable format', async () => {
+    const raw = await readFile('./test/mocks/einstein_ai-evaluations_runs_4KBSM000000003F4AQ_details.json', 'utf8');
+    const input = JSON.parse(raw) as AgentTestDetailsResponse;
+    const output = await humanFormat(input);
+    expect(output).to.be.ok;
   });
 });
 
