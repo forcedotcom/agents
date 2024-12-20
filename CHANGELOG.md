@@ -1,3 +1,12 @@
+## [0.5.3](https://github.com/forcedotcom/agents/compare/0.5.2...0.5.3) (2024-12-20)
+
+
+### Bug Fixes
+
+* add env var for polling ([4a20d50](https://github.com/forcedotcom/agents/commit/4a20d50d68352c25509c4a1f32c2dce1286d6882))
+
+
+
 ## [0.5.2](https://github.com/forcedotcom/agents/compare/0.5.1...0.5.2) (2024-12-18)
 
 
