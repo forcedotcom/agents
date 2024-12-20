@@ -112,7 +112,7 @@ async function readResponses<T extends nock.Body>(mockDir: string, url: string, 
 }
 
 /**
- * A class to act as an inbetween the library's request, and the orgs response
+ * A class to act as an in-between the library's request, and the orgs response
  *
  * if `SF_MOCK_DIR` is set it will read from the directory, resolving files as API responses with nock
  *

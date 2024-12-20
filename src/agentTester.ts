@@ -5,7 +5,7 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 import { Connection, Lifecycle, PollingClient, StatusResult } from '@salesforce/core';
-import { Duration } from '@salesforce/kit';
+import { Duration, env } from '@salesforce/kit';
 import ansis from 'ansis';
 import { MaybeMock } from './maybe-mock';
 
@@ -118,6 +118,7 @@ export class AgentTester {
       timeout: Duration.minutes(5),
     }
   ): Promise<AgentTestDetailsResponse> {
+    const frequency = env.getNumber('SF_AGENT_TEST_POLLING_FREQUENCY_MS', 1000);
     const lifecycle = Lifecycle.getInstance();
     const client = await PollingClient.create({
       poll: async (): Promise<StatusResult> => {
@@ -150,7 +151,7 @@ export class AgentTester {
         });
         return { completed: false };
       },
-      frequency: Duration.seconds(1),
+      frequency: Duration.milliseconds(frequency),
       timeout,
     });
 
@@ -300,7 +301,7 @@ export async function humanFormat(details: AgentTestDetailsResponse): Promise<st
       `Test Case #${tc.number}`,
       tc.expectationResults
         .filter((r) => r.result === 'Failed')
-        .map((r) => r.name)
+        .map((r) => humanFriendlyName(r.name))
         .join(', '),
     ])
   );
