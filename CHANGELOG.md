@@ -1,3 +1,12 @@
+## [0.5.5](https://github.com/forcedotcom/agents/compare/0.5.4...0.5.5) (2024-12-21)
+
+
+### Bug Fixes
+
+* **deps:** bump @oclif/table from 0.3.7 to 0.3.9 ([a6fe6df](https://github.com/forcedotcom/agents/commit/a6fe6dfcfbb88a61940d15e762fc58587731d54e))
+
+
+
 ## [0.5.4](https://github.com/forcedotcom/agents/compare/0.5.3...0.5.4) (2024-12-21)
 
 
