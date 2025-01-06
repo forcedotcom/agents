@@ -1,3 +1,12 @@
+## [0.5.8](https://github.com/forcedotcom/agents/compare/0.5.7...0.5.8) (2025-01-06)
+
+
+### Bug Fixes
+
+* bump oclif table ([7ed9d30](https://github.com/forcedotcom/agents/commit/7ed9d30263fef2243bf087d2c7d5777f47a2c032))
+
+
+
 ## [0.5.7](https://github.com/forcedotcom/agents/compare/0.5.6...0.5.7) (2025-01-04)
 
 
