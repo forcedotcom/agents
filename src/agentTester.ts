@@ -255,12 +255,14 @@ export async function humanFormat(details: AgentTestDetailsResponse): Promise<st
     const table = ux.makeTable({
       title: `${ansis.bold(`Test Case #${testCase.number}`)}\n${ansis.dim('Utterance')}: ${testCase.utterance}`,
       overflow: 'wrap',
+      columns: ['test', 'result', { key: 'expected', width: '40%' }, { key: 'actual', width: '40%' }],
       data: testCase.expectationResults.map((r) => ({
         test: humanFriendlyName(r.name),
         result: r.result === 'Passed' ? ansis.green('Pass') : ansis.red('Fail'),
         expected: r.expectedValue,
         actual: r.actualValue,
       })),
+      width: '100%',
     });
     tables.push(table);
   }
