@@ -1,3 +1,12 @@
+## [0.5.9](https://github.com/forcedotcom/agents/compare/0.5.8...0.5.9) (2025-01-06)
+
+
+### Bug Fixes
+
+* fixed column widths ([13b661f](https://github.com/forcedotcom/agents/commit/13b661f6d97a233a213bf266b187624b72d4d389))
+
+
+
 ## [0.5.8](https://github.com/forcedotcom/agents/compare/0.5.7...0.5.8) (2025-01-06)
 
 
