@@ -20,7 +20,7 @@ export {
   jsonFormat,
   junitFormat,
   tapFormat,
-  type AgentTestDetailsResponse,
+  type AgentTestResultsResponse,
   type AgentTestStartResponse,
   type AgentTestStatusResponse,
   type TestCaseResult,

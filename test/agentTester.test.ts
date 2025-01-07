@@ -8,7 +8,7 @@ import { readFile } from 'node:fs/promises';
 import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection } from '@salesforce/core';
-import { AgentTestDetailsResponse, AgentTester, humanFormat, junitFormat, tapFormat } from '../src/agentTester';
+import { AgentTestResultsResponse, AgentTester, humanFormat, junitFormat, tapFormat } from '../src/agentTester';
 
 describe('AgentTester', () => {
   const $$ = new TestContext();
@@ -62,11 +62,11 @@ describe('AgentTester', () => {
     });
   });
 
-  describe('details', () => {
-    it('should return details of completed test run', async () => {
+  describe('results', () => {
+    it('should return results of completed test run', async () => {
       const tester = new AgentTester(connection);
       await tester.start('suiteId');
-      const output = await tester.details('4KBSM000000003F4AQ');
+      const output = await tester.results('4KBSM000000003F4AQ');
       // TODO: make this assertion more meaningful
       expect(output).to.be.ok;
     });
@@ -84,8 +84,8 @@ describe('AgentTester', () => {
 
 describe('humanFormat', () => {
   it('should transform test results to human readable format', async () => {
-    const raw = await readFile('./test/mocks/einstein_ai-evaluations_runs_4KBSM000000003F4AQ_details.json', 'utf8');
-    const input = JSON.parse(raw) as AgentTestDetailsResponse;
+    const raw = await readFile('./test/mocks/einstein_ai-evaluations_runs_4KBSM000000003F4AQ_results.json', 'utf8');
+    const input = JSON.parse(raw) as AgentTestResultsResponse;
     const output = await humanFormat(input);
     expect(output).to.be.ok;
   });
@@ -93,8 +93,8 @@ describe('humanFormat', () => {
 
 describe('junitFormatter', () => {
   it('should transform test results to JUnit format', async () => {
-    const raw = await readFile('./test/mocks/einstein_ai-evaluations_runs_4KBSM000000003F4AQ_details.json', 'utf8');
-    const input = JSON.parse(raw) as AgentTestDetailsResponse;
+    const raw = await readFile('./test/mocks/einstein_ai-evaluations_runs_4KBSM000000003F4AQ_results.json', 'utf8');
+    const input = JSON.parse(raw) as AgentTestResultsResponse;
     const output = await junitFormat(input);
     expect(output).to.deep.equal(`<?xml version="1.0" encoding="UTF-8"?>
 <testsuites name="Copilot_for_Salesforce" tests="2" failures="1" time="20000">
@@ -112,8 +112,8 @@ describe('junitFormatter', () => {
 
 describe('tapFormatter', () => {
   it('should transform test results to TAP format', async () => {
-    const raw = await readFile('./test/mocks/einstein_ai-evaluations_runs_4KBSM000000003F4AQ_details.json', 'utf8');
-    const input = JSON.parse(raw) as AgentTestDetailsResponse;
+    const raw = await readFile('./test/mocks/einstein_ai-evaluations_runs_4KBSM000000003F4AQ_results.json', 'utf8');
+    const input = JSON.parse(raw) as AgentTestResultsResponse;
     const output = await tapFormat(input);
     expect(output).to.deep.equal(`Tap Version 14
 1..6

@@ -53,7 +53,7 @@ export type TestCaseResult = {
   }>;
 };
 
-export type AgentTestDetailsResponse = {
+export type AgentTestResultsResponse = {
   status: TestStatus;
   startTime: string;
   endTime?: string;
@@ -106,7 +106,7 @@ export class AgentTester {
    *
    * @param {string} jobId
    * @param {Duration} timeout
-   * @returns {Promise<AgentTestDetailsResponse>}
+   * @returns {Promise<AgentTestResultsResponse>}
    */
   public async poll(
     jobId: string,
@@ -117,17 +117,17 @@ export class AgentTester {
     } = {
       timeout: Duration.minutes(5),
     }
-  ): Promise<AgentTestDetailsResponse> {
+  ): Promise<AgentTestResultsResponse> {
     const frequency = env.getNumber('SF_AGENT_TEST_POLLING_FREQUENCY_MS', 1000);
     const lifecycle = Lifecycle.getInstance();
     const client = await PollingClient.create({
       poll: async (): Promise<StatusResult> => {
         // NOTE: we don't actually need to call the status API here since all the same information is present on the
         // details API. We could just call the details API and check the status there.
-        const [detailsResponse, statusResponse] = await Promise.all([this.details(jobId), this.status(jobId)]);
-        const totalTestCases = detailsResponse.testSet.testCases.length;
-        const failingTestCases = detailsResponse.testSet.testCases.filter((tc) => tc.status === 'ERROR').length;
-        const passingTestCases = detailsResponse.testSet.testCases.filter(
+        const [resultsResponse, statusResponse] = await Promise.all([this.results(jobId), this.status(jobId)]);
+        const totalTestCases = resultsResponse.testSet.testCases.length;
+        const failingTestCases = resultsResponse.testSet.testCases.filter((tc) => tc.status === 'ERROR').length;
+        const passingTestCases = resultsResponse.testSet.testCases.filter(
           (tc) => tc.status === 'COMPLETED' && tc.expectationResults.every((r) => r.result === 'Passed')
         ).length;
 
@@ -139,7 +139,7 @@ export class AgentTester {
             failingTestCases,
             passingTestCases,
           });
-          return { payload: detailsResponse, completed: true };
+          return { payload: resultsResponse, completed: true };
         }
 
         await lifecycle.emit('AGENT_TEST_POLLING_EVENT', {
@@ -155,19 +155,19 @@ export class AgentTester {
       timeout,
     });
 
-    return client.subscribe<AgentTestDetailsResponse>();
+    return client.subscribe<AgentTestResultsResponse>();
   }
 
   /**
    * Request test run details
    *
    * @param {string} jobId
-   * @returns {Promise<AgentTestDetailsResponse>}
+   * @returns {Promise<AgentTestResultsResponse>}
    */
-  public async details(jobId: string): Promise<AgentTestDetailsResponse> {
-    const url = `/einstein/ai-evaluations/runs/${jobId}/details`;
+  public async results(jobId: string): Promise<AgentTestResultsResponse> {
+    const url = `/einstein/ai-evaluations/runs/${jobId}/results`;
 
-    return this.maybeMock.request<AgentTestDetailsResponse>('GET', url);
+    return this.maybeMock.request<AgentTestResultsResponse>('GET', url);
   }
 
   /**
@@ -246,7 +246,7 @@ function makeSimpleTable(data: Record<string, string>, title: string): string {
   return `${title}\n${table}`;
 }
 
-export async function humanFormat(details: AgentTestDetailsResponse): Promise<string> {
+export async function humanFormat(details: AgentTestResultsResponse): Promise<string> {
   const { Ux } = await import('@salesforce/sf-plugins-core');
   const ux = new Ux();
 
@@ -312,11 +312,11 @@ export async function humanFormat(details: AgentTestDetailsResponse): Promise<st
   return tables.join('\n') + `\n${resultsTable}\n\n${failedTestCasesTable}\n`;
 }
 
-export async function jsonFormat(details: AgentTestDetailsResponse): Promise<string> {
+export async function jsonFormat(details: AgentTestResultsResponse): Promise<string> {
   return Promise.resolve(JSON.stringify(details, null, 2));
 }
 
-export async function junitFormat(details: AgentTestDetailsResponse): Promise<string> {
+export async function junitFormat(details: AgentTestResultsResponse): Promise<string> {
   // eslint-disable-next-line import/no-extraneous-dependencies
   const { XMLBuilder } = await import('fast-xml-parser');
   const builder = new XMLBuilder({
@@ -369,7 +369,7 @@ export async function junitFormat(details: AgentTestDetailsResponse): Promise<st
   return `<?xml version="1.0" encoding="UTF-8"?>\n${suites}`.trim();
 }
 
-export async function tapFormat(details: AgentTestDetailsResponse): Promise<string> {
+export async function tapFormat(details: AgentTestResultsResponse): Promise<string> {
   const lines: string[] = [];
   let expectationCount = 0;
   for (const testCase of details.testSet.testCases) {
