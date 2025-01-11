@@ -1,3 +1,12 @@
+## [0.5.11](https://github.com/forcedotcom/agents/compare/0.5.10...0.5.11) (2025-01-11)
+
+
+### Bug Fixes
+
+* **deps:** bump ansis from 3.5.2 to 3.8.1 ([8721e95](https://github.com/forcedotcom/agents/commit/8721e95b6f08f158dd57df90cfed992ab74ee7a7))
+
+
+
 ## [0.5.10](https://github.com/forcedotcom/agents/compare/0.5.9...0.5.10) (2025-01-11)
 
 
