@@ -15,6 +15,12 @@ export type AgentJobSpec = [
     jobDescription: string;
   }
 ];
+
+export type AgentJobSpecV2 = {
+  config: AgentJobSpecCreateConfigV2;
+  topics: DraftAgentTopics;
+};
+
 /**
  * The body POST'd to /services/data/{api-version}/connect/attach-agent-topics
  */
@@ -41,12 +47,62 @@ export type AgentJobSpecCreateConfig = {
 };
 
 /**
+ * The parameters used to generate an agent spec V2.
+ */
+export type AgentJobSpecCreateConfigV2 = {
+  /**
+   * Internal type is copilots; used by customers' employees.
+   * Customer type is agents; used by customers' customers.
+   */
+  agentType: 'customer' | 'internal';
+  role: string;
+  companyName: string;
+  companyDescription: string;
+  companyWebsite?: string;
+  /**
+   * The maximum number of topics to create in the spec.
+   * Default is 10.
+   */
+  maxNumOfTopics?: number;
+  /**
+   * Developer name of the prompt template.
+   */
+  promptTemplateName?: string;
+  /**
+   * Context info to be used in customized prompt template
+   */
+  groundingContext?: string;
+};
+
+/**
  * The parameters used to generate an agent in an org.
  *
  * NOTE: This is likely to change with planned serverside APIs.
  */
 export type AgentCreateConfig = AgentJobSpecCreateConfig & {
   jobSpec: AgentJobSpec;
+};
+
+/**
+ * The request body to send to the `draft-agent-topics` API.
+ */
+export type DraftAgentTopicsBody = {
+  agentType: 'customer' | 'internal';
+  generationInfo: {
+    defaultInfo: {
+      role: string;
+      companyName: string;
+      companyDescription: string;
+      companyWebsite?: string;
+    };
+    customizedInfo?: {
+      promptTemplateName: string;
+      groundingContext?: string;
+    };
+  };
+  generationSettings: {
+    maxNumOfTopics?: number;
+  };
 };
 
 /**
@@ -72,4 +128,20 @@ export type AgentJobSpecCreateResponse = {
 export type AgentCreateResponse = {
   isSuccess: boolean;
   errorMessage?: string;
+};
+
+export type DraftAgentTopics = [
+  {
+    name: string;
+    description: string;
+  }
+];
+
+/**
+ * The response from the `draft-agent-topics` API.
+ */
+export type DraftAgentTopicsResponse = {
+  isSuccess: boolean;
+  errorMessage?: string;
+  topics: DraftAgentTopics;
 };

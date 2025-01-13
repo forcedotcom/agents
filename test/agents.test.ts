@@ -44,6 +44,26 @@ describe('Agents', () => {
     expect(output).to.be.ok;
   });
 
+  it('createSpecV2 (mock behavior) should return a spec', async () => {
+    const sfProject = SfProject.getInstance();
+    const agent = new Agent(connection, sfProject);
+    const agentType = 'customer';
+    const companyName = 'Coral Cloud Enterprises';
+    const output = await agent.createSpecV2({
+      agentType,
+      role: 'answer questions about vacation_rentals',
+      companyName,
+      companyDescription: 'Provide vacation rentals and activities',
+    });
+
+    expect(output).to.have.property('config');
+    expect(output).to.have.property('topics');
+    expect(output.config).to.have.property('agentType', agentType);
+    expect(output.config).to.have.property('companyName', companyName);
+    expect(output.topics).to.be.an('array').with.lengthOf(10);
+    expect(output.topics[0]).to.have.property('name', 'Guest_Experience_Enhancement');
+  });
+
   it('create', async () => {
     const sfProject = SfProject.getInstance();
     const agent = new Agent(connection, sfProject);
