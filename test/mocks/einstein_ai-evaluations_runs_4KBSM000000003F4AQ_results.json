@@ -9,7 +9,7 @@
     "testCases": [
       {
         "status": "COMPLETED",
-        "utterence": "Summarize account Acme",
+        "utterance": "Summarize account Acme",
         "startTime": "2024-11-28T12:00:10Z",
         "endTime": "2024-11-28T12:00:20Z",
         "generatedData": {
@@ -68,7 +68,7 @@
       {
         "status": "COMPLETED",
         "startTime": "2024-11-28T12:00:30Z",
-        "utterence": "Summarize the open cases and Activities of acme from sep to nov 2024",
+        "utterance": "Summarize the open cases and Activities of acme from sep to nov 2024",
         "endTime": "2024-11-28T12:00:40Z",
         "generatedData": {
           "type": "AGENT",

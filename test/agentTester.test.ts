@@ -8,7 +8,7 @@ import { readFile } from 'node:fs/promises';
 import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection } from '@salesforce/core';
-import { AgentTestResultsResponse, AgentTester, humanFormat, junitFormat, tapFormat } from '../src/agentTester';
+import { AgentTestResultsResponse, AgentTester, convertTestResultsToFormat } from '../src/agentTester';
 
 describe('AgentTester', () => {
   const $$ = new TestContext();
@@ -82,20 +82,20 @@ describe('AgentTester', () => {
   });
 });
 
-describe('humanFormat', () => {
+describe('human format', () => {
   it('should transform test results to human readable format', async () => {
     const raw = await readFile('./test/mocks/einstein_ai-evaluations_runs_4KBSM000000003F4AQ_results.json', 'utf8');
     const input = JSON.parse(raw) as AgentTestResultsResponse;
-    const output = await humanFormat(input);
+    const output = await convertTestResultsToFormat(input, 'human');
     expect(output).to.be.ok;
   });
 });
 
-describe('junitFormatter', () => {
+describe('junit formatter', () => {
   it('should transform test results to JUnit format', async () => {
     const raw = await readFile('./test/mocks/einstein_ai-evaluations_runs_4KBSM000000003F4AQ_results.json', 'utf8');
     const input = JSON.parse(raw) as AgentTestResultsResponse;
-    const output = await junitFormat(input);
+    const output = await convertTestResultsToFormat(input, 'junit');
     expect(output).to.deep.equal(`<?xml version="1.0" encoding="UTF-8"?>
 <testsuites name="Copilot_for_Salesforce" tests="2" failures="1" time="20000">
   <property name="status" value="COMPLETED"></property>
@@ -110,11 +110,11 @@ describe('junitFormatter', () => {
   });
 });
 
-describe('tapFormatter', () => {
+describe('tap formatter', () => {
   it('should transform test results to TAP format', async () => {
     const raw = await readFile('./test/mocks/einstein_ai-evaluations_runs_4KBSM000000003F4AQ_results.json', 'utf8');
     const input = JSON.parse(raw) as AgentTestResultsResponse;
-    const output = await tapFormat(input);
+    const output = await convertTestResultsToFormat(input, 'tap');
     expect(output).to.deep.equal(`Tap Version 14
 1..6
 ok 1 CRM_Sanity_v1.1

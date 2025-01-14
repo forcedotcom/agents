@@ -26,7 +26,6 @@ export type AgentTestStatusResponse = {
 export type TestCaseResult = {
   status: TestStatus;
   utterance: string;
-  utterence: string;
   startTime: string;
   endTime?: string;
   generatedData: {
@@ -246,7 +245,25 @@ function makeSimpleTable(data: Record<string, string>, title: string): string {
   return `${title}\n${table}`;
 }
 
-export async function humanFormat(details: AgentTestResultsResponse): Promise<string> {
+export async function convertTestResultsToFormat(
+  results: AgentTestResultsResponse,
+  format: 'human' | 'json' | 'junit' | 'tap'
+): Promise<string> {
+  switch (format) {
+    case 'human':
+      return humanFormat(results);
+    case 'json':
+      return jsonFormat(results);
+    case 'junit':
+      return junitFormat(results);
+    case 'tap':
+      return tapFormat(results);
+    default:
+      throw new Error(`Unsupported format: ${format as string}`);
+  }
+}
+
+async function humanFormat(details: AgentTestResultsResponse): Promise<string> {
   const { Ux } = await import('@salesforce/sf-plugins-core');
   const ux = new Ux();
 
@@ -254,9 +271,7 @@ export async function humanFormat(details: AgentTestResultsResponse): Promise<st
   for (const testCase of details.testSet.testCases) {
     const number = details.testSet.testCases.indexOf(testCase) + 1;
     const table = ux.makeTable({
-      title: `${ansis.bold(`Test Case #${number}`)}\n${ansis.dim('Utterance')}: ${
-        testCase.utterance ?? testCase.utterence
-      }`,
+      title: `${ansis.bold(`Test Case #${number}`)}\n${ansis.dim('Utterance')}: ${testCase.utterance}`,
       overflow: 'wrap',
       columns: ['test', 'result', { key: 'expected', width: '40%' }, { key: 'actual', width: '40%' }],
       data: testCase.expectationResults.map((r) => ({
@@ -315,11 +330,11 @@ export async function humanFormat(details: AgentTestResultsResponse): Promise<st
   return tables.join('\n') + `\n${resultsTable}\n\n${failedTestCasesTable}\n`;
 }
 
-export async function jsonFormat(details: AgentTestResultsResponse): Promise<string> {
-  return Promise.resolve(JSON.stringify(details, null, 2));
+async function jsonFormat(results: AgentTestResultsResponse): Promise<string> {
+  return Promise.resolve(JSON.stringify(results, null, 2));
 }
 
-export async function junitFormat(details: AgentTestResultsResponse): Promise<string> {
+async function junitFormat(results: AgentTestResultsResponse): Promise<string> {
   // eslint-disable-next-line import/no-extraneous-dependencies
   const { XMLBuilder } = await import('fast-xml-parser');
   const builder = new XMLBuilder({
@@ -328,11 +343,11 @@ export async function junitFormat(details: AgentTestResultsResponse): Promise<st
     ignoreAttributes: false,
   });
 
-  const testCount = details.testSet.testCases.length;
-  const failureCount = details.testSet.testCases.filter(
+  const testCount = results.testSet.testCases.length;
+  const failureCount = results.testSet.testCases.filter(
     (tc) => ['ERROR', 'COMPLETED'].includes(tc.status) && tc.expectationResults.some((r) => r.result === 'FAIL')
   ).length;
-  const time = details.testSet.testCases.reduce((acc, tc) => {
+  const time = results.testSet.testCases.reduce((acc, tc) => {
     if (tc.endTime && tc.startTime) {
       return acc + new Date(tc.endTime).getTime() - new Date(tc.startTime).getTime();
     }
@@ -341,22 +356,22 @@ export async function junitFormat(details: AgentTestResultsResponse): Promise<st
 
   const suites = builder.build({
     testsuites: {
-      $name: details.subjectName,
+      $name: results.subjectName,
       $tests: testCount,
       $failures: failureCount,
       $time: time,
       property: [
-        { $name: 'status', $value: details.status },
-        { $name: 'start-time', $value: details.startTime },
-        { $name: 'end-time', $value: details.endTime },
+        { $name: 'status', $value: results.status },
+        { $name: 'start-time', $value: results.startTime },
+        { $name: 'end-time', $value: results.endTime },
       ],
-      testsuite: details.testSet.testCases.map((testCase) => {
+      testsuite: results.testSet.testCases.map((testCase) => {
         const testCaseTime = testCase.endTime
           ? new Date(testCase.endTime).getTime() - new Date(testCase.startTime).getTime()
           : 0;
 
         return {
-          $name: `${details.testSet.name}.${details.testSet.testCases.indexOf(testCase) + 1}`,
+          $name: `${results.testSet.name}.${results.testSet.testCases.indexOf(testCase) + 1}`,
           $time: testCaseTime,
           $assertions: testCase.expectationResults.length,
           failure: testCase.expectationResults
@@ -374,15 +389,15 @@ export async function junitFormat(details: AgentTestResultsResponse): Promise<st
   return `<?xml version="1.0" encoding="UTF-8"?>\n${suites}`.trim();
 }
 
-export async function tapFormat(details: AgentTestResultsResponse): Promise<string> {
+async function tapFormat(results: AgentTestResultsResponse): Promise<string> {
   const lines: string[] = [];
   let expectationCount = 0;
-  for (const testCase of details.testSet.testCases) {
+  for (const testCase of results.testSet.testCases) {
     for (const result of testCase.expectationResults) {
       const status = result.result === 'PASS' ? 'ok' : 'not ok';
       expectationCount++;
       lines.push(
-        `${status} ${expectationCount} ${details.testSet.name}.${details.testSet.testCases.indexOf(testCase) + 1}`
+        `${status} ${expectationCount} ${results.testSet.name}.${results.testSet.testCases.indexOf(testCase) + 1}`
       );
       if (status === 'not ok') {
         lines.push('  ---');
