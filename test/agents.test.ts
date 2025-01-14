@@ -56,10 +56,9 @@ describe('Agents', () => {
       companyDescription: 'Provide vacation rentals and activities',
     });
 
-    expect(output).to.have.property('config');
     expect(output).to.have.property('topics');
-    expect(output.config).to.have.property('agentType', agentType);
-    expect(output.config).to.have.property('companyName', companyName);
+    expect(output).to.have.property('agentType', agentType);
+    expect(output).to.have.property('companyName', companyName);
     expect(output.topics).to.be.an('array').with.lengthOf(10);
     expect(output.topics[0]).to.have.property('name', 'Guest_Experience_Enhancement');
   });
