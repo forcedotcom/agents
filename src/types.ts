@@ -16,8 +16,7 @@ export type AgentJobSpec = [
   }
 ];
 
-export type AgentJobSpecV2 = {
-  config: AgentJobSpecCreateConfigV2;
+export type AgentJobSpecV2 = AgentJobSpecCreateConfigV2 & {
   topics: DraftAgentTopics;
 };
 
