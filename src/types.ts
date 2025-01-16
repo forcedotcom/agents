@@ -82,6 +82,73 @@ export type AgentCreateConfig = AgentJobSpecCreateConfig & {
   jobSpec: AgentJobSpec;
 };
 
+export type AgentCreateConfigV2 = DraftAgentTopicsBody & {
+  generationInfo: {
+    defaultInfo: {
+      /**
+       * List of topics from an agent spec.
+       */
+      preDefinedTopics?: DraftAgentTopics;
+    };
+  };
+  /**
+   * Whether to persist the agent creation in the org (true) or preview
+   * what would be created (false).
+   *
+   * Default: false
+   */
+  saveAgent?: boolean;
+
+  /**
+   * Settings for the agent being created. Needed only when saveAgent=true
+   */
+  agentSettings?: {
+    /**
+     * The name to use for the Agent metadata to be created.
+     */
+    agentName: string;
+    /**
+     * The API name to use for the Agent metadata to be created.
+     */
+    agentApiName: string;
+    /**
+     * The GenAiPlanner metadata ID if already created in the org.
+     */
+    plannerId?: string;
+    /**
+     * User ID of an existing user or "new" to create a new user.
+     *
+     * Determines what this agent can access and do. If your agent uses
+     * features or objects that require additional permissions, assign
+     * a custom user.
+     *
+     * Default: new
+     */
+    userId: string;
+    /**
+     * Store conversation transcripts, including end-user data, in event logs
+     * for this agent for troubleshooting. If false, conversation data is
+     * replaced with, "Sensitive data not available."
+     *
+     * Default: false
+     */
+    enrichLogs?: boolean;
+    /**
+     * The conversational style of your agent's responses.
+     *
+     * Default: Casual
+     */
+    tone?: 'Casual';
+    /**
+     * The language your agent uses in conversations. Agent currently
+     * supports English only.
+     *
+     * Default: en_US
+     */
+    primaryLanguage?: 'en_US';
+  };
+};
+
 /**
  * The request body to send to the `draft-agent-topics` API.
  */
@@ -127,6 +194,53 @@ export type AgentJobSpecCreateResponse = {
 export type AgentCreateResponse = {
   isSuccess: boolean;
   errorMessage?: string;
+};
+
+export type AgentCreateResponseV2 = {
+  isSuccess: boolean;
+  errorMessage?: string;
+  /**
+   * If the agent was created with saveAgent=true, these are the
+   * IDs that make up an agent; Bot, BotVersion, and GenAiPlanner metadata.
+   */
+  agentId?: {
+    botId: string;
+    botVersionId: string;
+    plannerId: string;
+  };
+  agentDefinition: {
+    agentDescription: string;
+    topics: [
+      {
+        scope: string;
+        topic: string;
+        actions: [
+          {
+            actionName: string;
+            exampleOutput: string;
+            actionDescription: string;
+            inputs: [
+              {
+                inputName: string;
+                inputDataType: string;
+                inputDescription: string;
+              }
+            ];
+            outputs: [
+              {
+                outputName: string;
+                outputDataType: string;
+                outputDescription: string;
+              }
+            ];
+          }
+        ];
+        instructions: string[];
+        classificationDescription: string;
+      }
+    ];
+    sampleUtterances: string[];
+  };
 };
 
 export type DraftAgentTopics = [

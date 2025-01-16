@@ -7,7 +7,9 @@
 
 export {
   type AgentCreateConfig,
+  type AgentCreateConfigV2,
   type AgentCreateResponse,
+  type AgentCreateResponseV2,
   type AgentJobSpec,
   type AgentJobSpecV2,
   type AgentJobSpecCreateConfig,
@@ -18,7 +20,7 @@ export {
   type DraftAgentTopicsResponse,
   SfAgent,
 } from './types';
-export { Agent, AgentCreateLifecycleStages } from './agent';
+export { Agent, AgentCreateLifecycleStages, AgentCreateLifecycleStagesV2 } from './agent';
 export {
   AgentTester,
   humanFormat,

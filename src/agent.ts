@@ -14,7 +14,9 @@ import { Duration } from '@salesforce/kit';
 import {
   type SfAgent,
   type AgentCreateConfig,
+  type AgentCreateConfigV2,
   type AgentCreateResponse,
+  type AgentCreateResponseV2,
   type AgentJobSpec,
   type AgentJobSpecV2,
   type AgentJobSpecCreateConfig,
@@ -39,6 +41,12 @@ export const AgentCreateLifecycleStages = {
   DeployingMetadata: 'deployingmetadata',
   CreatingRemotely: 'creatingremotely',
   RetrievingMetadata: 'retrievingmetadata',
+};
+
+export const AgentCreateLifecycleStagesV2 = {
+  Creating: 'creatingAgent',
+  Previewing: 'previewingAgent',
+  Retrieving: 'retrievingAgent',
 };
 
 /**
@@ -138,6 +146,61 @@ export class Agent implements SfAgent {
   }
 
   /**
+   * Creates an agent from a configuration, optionally saving the agent in an org.
+   *
+   * @param config a configuration for creating or previewing an agent
+   * @returns
+   */
+  public async createV2(config: AgentCreateConfigV2): Promise<AgentCreateResponseV2> {
+    const url = '/connect/ai-assist/create-agent';
+
+    // When previewing agent creation just return the response.
+    if (!config.saveAgent) {
+      this.logger.debug(
+        `Previewing agent creation using config: ${inspect(config)} in project: ${this.project.getPath()}`
+      );
+      await Lifecycle.getInstance().emit(AgentCreateLifecycleStagesV2.Previewing, {});
+      return this.maybeMock.request<AgentCreateResponseV2>('POST', url, config);
+    }
+
+    // When saving agent creation we need to retrieve the created metadata.
+    this.logger.debug(`Creating agent using config: ${inspect(config)} in project: ${this.project.getPath()}`);
+    await Lifecycle.getInstance().emit(AgentCreateLifecycleStagesV2.Creating, {});
+    const response = await this.maybeMock.request<AgentCreateResponseV2>('POST', url, config);
+
+    await Lifecycle.getInstance().emit(AgentCreateLifecycleStagesV2.Retrieving, {});
+
+    //
+    // When retrieving all agent metadata by a Bot API name works in SDR we can use that.
+    //
+
+    // Query for the Bot API name by the Bot ID.
+    // const botApiName = this.connection.singleRecordQuery('get bot from response.agentId?.botId');
+    // const cs = await ComponentSetBuilder.build({
+    //   metadata: {
+    //     metadataEntries: [`Bot:${}`],
+    //     directoryPaths: [this.project.getDefaultPackage().path],
+    //   }
+    // });
+    // const retrieve = await cs.retrieve({
+    //   usernameOrConnection: this.connection,
+    //   merge: true,
+    //   format: 'source',
+    //   output: this.project.getDefaultPackage().path ?? 'force-app',
+    // });
+    // const retrieveResult = await retrieve.pollStatus({
+    //   frequency: Duration.milliseconds(200),
+    //   timeout: Duration.minutes(5),
+    // });
+
+    // if (!retrieveResult.response.success) {
+    //   throw new SfError(`Unable to retrieve ${retrieveResult.response.id}`);
+    // }
+
+    return response;
+  }
+
+  /**
    * Create an agent spec from provided data.
    *
    * @deprecated Use the V2 APIs.
@@ -161,8 +224,6 @@ export class Agent implements SfAgent {
 
   /**
    * Create an agent spec from provided data.
-   *
-   * V2 API: /connect/ai-assist/draft-agent-topics
    *
    * @param config The configuration used to generate an agent spec.
    */
