@@ -8,7 +8,7 @@
 import { inspect } from 'node:util';
 import path from 'node:path';
 import fs from 'node:fs';
-import { Connection, Lifecycle, Logger, SfError, SfProject } from '@salesforce/core';
+import { Connection, Lifecycle, Logger, Messages, SfError, SfProject } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { Duration } from '@salesforce/kit';
 import {
@@ -16,11 +16,18 @@ import {
   type AgentCreateConfig,
   type AgentCreateResponse,
   type AgentJobSpec,
+  type AgentJobSpecV2,
   type AgentJobSpecCreateConfig,
+  type AgentJobSpecCreateConfigV2,
   type AgentJobSpecCreateResponse,
-  AttachAgentTopicsBody,
+  type AttachAgentTopicsBody,
+  type DraftAgentTopicsBody,
+  type DraftAgentTopicsResponse,
 } from './types.js';
 import { MaybeMock } from './maybe-mock';
+
+Messages.importMessagesDirectory(__dirname);
+const messages = Messages.loadMessages('@salesforce/agents', 'agents');
 
 /**
  * Events emitted during Agent.create() for consumers to listen to and keep track of progress
@@ -57,6 +64,8 @@ export class Agent implements SfAgent {
   /**
    * From an AgentCreateConfig, deploy the required metadata, call the connect/attach-agent-topics endpoint, and then retrieve
    * the newly updated metadata back to the local project
+   *
+   * @deprecated Use the V2 APIs.
    *
    * @param {AgentCreateConfig} config
    * @returns {Promise<AgentCreateResponse>}
@@ -131,11 +140,11 @@ export class Agent implements SfAgent {
   /**
    * Create an agent spec from provided data.
    *
+   * @deprecated Use the V2 APIs.
+   *
    * @param config The configuration used to generate an agent spec.
    */
   public async createSpec(config: AgentJobSpecCreateConfig): Promise<AgentJobSpec> {
-    this.verifyAgentSpecConfig(config);
-
     let agentSpec: AgentJobSpec;
     const response = await this.maybeMock.request<AgentJobSpecCreateResponse>('GET', this.buildAgentJobSpecUrl(config));
     if (response.isSuccess && response.jobSpecs) {
@@ -150,10 +159,59 @@ export class Agent implements SfAgent {
     return agentSpec;
   }
 
+  /**
+   * Create an agent spec from provided data.
+   *
+   * V2 API: /connect/ai-assist/draft-agent-topics
+   *
+   * @param config The configuration used to generate an agent spec.
+   */
+  public async createSpecV2(config: AgentJobSpecCreateConfigV2): Promise<AgentJobSpecV2> {
+    this.verifyAgentSpecConfig(config);
+
+    const url = '/connect/ai-assist/draft-agent-topics';
+
+    const body: DraftAgentTopicsBody = {
+      agentType: config.agentType,
+      generationInfo: {
+        defaultInfo: {
+          role: config.role,
+          companyName: config.companyName,
+          companyDescription: config.companyDescription,
+        },
+      },
+      generationSettings: {
+        maxNumOfTopics: config.maxNumOfTopics ?? 10,
+      },
+    };
+    if (config.companyWebsite) {
+      body.generationInfo.defaultInfo.companyWebsite = config.companyWebsite;
+    }
+    if (config.promptTemplateName) {
+      body.generationInfo.customizedInfo = { promptTemplateName: config.promptTemplateName };
+      if (config.groundingContext) {
+        body.generationInfo.customizedInfo.groundingContext = config.groundingContext;
+      }
+    }
+
+    const response = await this.maybeMock.request<DraftAgentTopicsResponse>('POST', url, body);
+
+    if (response.isSuccess && response.topics) {
+      return { ...config, topics: response.topics };
+    } else {
+      throw SfError.create({
+        name: 'AgentJobSpecCreateError',
+        message: response.errorMessage ?? 'unknown',
+      });
+    }
+  }
+
   // eslint-disable-next-line class-methods-use-this
-  private verifyAgentSpecConfig(config: AgentJobSpecCreateConfig): void {
-    // TBD: for now just return. At some point verify all required config values.
-    if (config) return;
+  private verifyAgentSpecConfig(config: AgentJobSpecCreateConfigV2): void {
+    const { agentType, role, companyName, companyDescription } = config;
+    if (!agentType || !role || !companyName || !companyDescription) {
+      throw messages.createError('invalidAgentSpecConfig');
+    }
   }
 
   // eslint-disable-next-line class-methods-use-this
