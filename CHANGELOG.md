@@ -1,3 +1,18 @@
+# [0.6.0](https://github.com/forcedotcom/agents/compare/0.5.11...0.6.0) (2025-01-16)
+
+
+### Bug Fixes
+
+* modify structure, order, and types ([5f75c87](https://github.com/forcedotcom/agents/commit/5f75c878a19a15123bb3cbc37e8424e2b5b27834))
+* update test ([e22b460](https://github.com/forcedotcom/agents/commit/e22b4606793a70b51d1321a4a232295c64bd03b2))
+
+
+### Features
+
+* add agentCreate v2 API and mock ([333f8cb](https://github.com/forcedotcom/agents/commit/333f8cb58e6633348af035b757e404dd276db0c0))
+
+
+
 ## [0.5.11](https://github.com/forcedotcom/agents/compare/0.5.10...0.5.11) (2025-01-11)
 
 
