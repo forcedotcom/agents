@@ -110,21 +110,19 @@ export type AgentCreateConfigV2 = DraftAgentTopicsBody & {
     /**
      * The API name to use for the Agent metadata to be created.
      */
-    agentApiName: string;
+    agentApiName?: string;
     /**
      * The GenAiPlanner metadata ID if already created in the org.
      */
     plannerId?: string;
     /**
-     * User ID of an existing user or "new" to create a new user.
+     * User ID of an existing user.
      *
      * Determines what this agent can access and do. If your agent uses
      * features or objects that require additional permissions, assign
      * a custom user.
-     *
-     * Default: new
      */
-    userId: string;
+    userId?: string;
     /**
      * Store conversation transcripts, including end-user data, in event logs
      * for this agent for troubleshooting. If false, conversation data is
