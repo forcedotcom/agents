@@ -9,8 +9,13 @@ export {
   type AgentCreateConfig,
   type AgentCreateResponse,
   type AgentJobSpec,
+  type AgentJobSpecV2,
   type AgentJobSpecCreateConfig,
+  type AgentJobSpecCreateConfigV2,
   type AgentJobSpecCreateResponse,
+  type DraftAgentTopics,
+  type DraftAgentTopicsBody,
+  type DraftAgentTopicsResponse,
   SfAgent,
 } from './types';
 export { Agent, AgentCreateLifecycleStages } from './agent';
