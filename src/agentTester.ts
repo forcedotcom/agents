@@ -122,14 +122,6 @@ export class AgentTester {
     const client = await PollingClient.create({
       poll: async (): Promise<StatusResult> => {
         const statusResponse = await this.status(jobId);
-        // eslint-disable-next-line no-console
-        console.log('*'.repeat(process.stdout.columns));
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-var-requires
-        const util = require('node:util');
-        // eslint-disable-next-line no-console, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
-        console.log(util.inspect(statusResponse, { depth: 6 }));
-        // eslint-disable-next-line no-console
-        console.log('*'.repeat(process.stdout.columns));
         if (statusResponse.status.toLowerCase() !== 'new') {
           const resultsResponse = await this.results(jobId);
           const totalTestCases = resultsResponse.testSet.testCases.length;
