@@ -137,7 +137,7 @@ export type AgentCreateConfigV2 = DraftAgentTopicsBody & {
      *
      * Default: casual
      */
-    tone?: 'casual';
+    tone?: 'casual' | 'formal' | 'neutral';
     /**
      * The language your agent uses in conversations. Agent currently
      * supports English only.
