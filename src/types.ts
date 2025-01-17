@@ -132,11 +132,12 @@ export type AgentCreateConfigV2 = DraftAgentTopicsBody & {
      */
     enrichLogs?: boolean;
     /**
-     * The conversational style of your agent's responses.
+     * The conversational style of your agent's responses. Can be one of:
+     * formal, casual, or neutral.
      *
-     * Default: Casual
+     * Default: casual
      */
-    tone?: 'Casual';
+    tone?: 'casual';
     /**
      * The language your agent uses in conversations. Agent currently
      * supports English only.
