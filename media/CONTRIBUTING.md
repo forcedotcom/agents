@@ -2,15 +2,15 @@
 
 1. Familiarize yourself with the codebase by reading the docs, in
    particular the [developing](./developing.md) doc.
-1. Create a new issue before starting your project so that we can keep track of
+2. Create a new issue before starting your project so that we can keep track of
    what you're trying to add/fix. That way, we can also offer suggestions or
    let you know if there is already an effort in progress.
-1. Fork this repository.
-1. Set up your environment using the information in the [developing](./developing.md) doc.
-1. Create a _topic_ branch in your fork based on the correct branch (usually the **develop** branch, see [Branches section](./developing.md)). Note: this step is recommended but technically not required if contributing using a fork.
-1. Edit the code in your fork.
-1. Sign the CLA (see [CLA](#cla)).
-1. Send us a pull request when you're done. We'll review your code, suggest any
+3. Fork this repository.
+4. Set up your environment using the information in the [developing](./developing.md) doc.
+5. Create a _topic_ branch in your fork based on the correct branch (usually the **develop** branch, see [Branches section](./developing.md)). Note: this step is recommended but technically not required if contributing using a fork.
+6. Edit the code in your fork.
+7. Sign the CLA (see [CLA](#cla)).
+8. Send us a pull request when you're done. We'll review your code, suggest any
    needed changes, and merge it in.
 
 ## Pull Requests
@@ -31,7 +31,3 @@ Agreement. You can do so by going to <https://cla.salesforce.com/sign-cla>.
 ### Merging Pull Requests
 
 Pull request merging is restricted to squash and merge only.
-
-## Helpful Resources
-
-- [developing](./developing.md) doc.
