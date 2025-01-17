@@ -45,7 +45,7 @@ describe('AgentTester', () => {
       const output = await tester.status('4KBSM000000003F4AQ');
       expect(output).to.be.ok;
       expect(output).to.deep.equal({
-        status: 'IN_PROGRESS',
+        status: 'InProgress',
         startTime: '2024-11-13T15:00:00.000Z',
       });
     });
@@ -98,7 +98,7 @@ describe('junit formatter', () => {
     const output = await convertTestResultsToFormat(input, 'junit');
     expect(output).to.deep.equal(`<?xml version="1.0" encoding="UTF-8"?>
 <testsuites name="Copilot_for_Salesforce" tests="2" failures="1" time="20000">
-  <property name="status" value="COMPLETED"></property>
+  <property name="status" value="Completed"></property>
   <property name="start-time" value="2024-11-28T12:00:00Z"></property>
   <property name="end-time" value="2024-11-28T12:00:48.56Z"></property>
   <testsuite name="CRM_Sanity_v1.1" time="10000" assertions="3"></testsuite>

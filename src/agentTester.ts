@@ -9,7 +9,7 @@ import { Duration, env } from '@salesforce/kit';
 import ansis from 'ansis';
 import { MaybeMock } from './maybe-mock';
 
-export type TestStatus = 'NEW' | 'IN_PROGRESS' | 'COMPLETED' | 'ERROR';
+export type TestStatus = 'New' | 'InProgress' | 'Completed' | 'Error';
 
 export type AgentTestStartResponse = {
   aiEvaluationId: string;
@@ -41,7 +41,7 @@ export type TestCaseResult = {
     actualValue: string;
     expectedValue: string;
     score: number;
-    result: 'PASS' | 'FAIL';
+    result: 'PASS' | 'FAILURE';
     metricLabel: 'Accuracy' | 'Precision';
     metricExplainability: string;
     status: TestStatus;
@@ -121,16 +121,38 @@ export class AgentTester {
     const lifecycle = Lifecycle.getInstance();
     const client = await PollingClient.create({
       poll: async (): Promise<StatusResult> => {
-        const resultsResponse = await this.results(jobId);
-        const totalTestCases = resultsResponse.testSet.testCases.length;
-        const passingTestCases = resultsResponse.testSet.testCases.filter(
-          (tc) => tc.status === 'COMPLETED' && tc.expectationResults.every((r) => r.result === 'PASS')
-        ).length;
-        const failingTestCases = resultsResponse.testSet.testCases.filter(
-          (tc) => ['ERROR', 'COMPLETED'].includes(tc.status) && tc.expectationResults.some((r) => r.result === 'FAIL')
-        ).length;
+        const statusResponse = await this.status(jobId);
+        // eslint-disable-next-line no-console
+        console.log('*'.repeat(process.stdout.columns));
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-var-requires
+        const util = require('node:util');
+        // eslint-disable-next-line no-console, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+        console.log(util.inspect(statusResponse, { depth: 6 }));
+        // eslint-disable-next-line no-console
+        console.log('*'.repeat(process.stdout.columns));
+        if (statusResponse.status.toLowerCase() !== 'new') {
+          const resultsResponse = await this.results(jobId);
+          const totalTestCases = resultsResponse.testSet.testCases.length;
+          const passingTestCases = resultsResponse.testSet.testCases.filter(
+            (tc) => tc.status.toLowerCase() === 'completed' && tc.expectationResults.every((r) => r.result === 'PASS')
+          ).length;
+          const failingTestCases = resultsResponse.testSet.testCases.filter(
+            (tc) =>
+              ['error', 'completed'].includes(tc.status.toLowerCase()) &&
+              tc.expectationResults.some((r) => r.result === 'FAILURE')
+          ).length;
 
-        if (resultsResponse.status.toLowerCase() === 'completed') {
+          if (resultsResponse.status.toLowerCase() === 'completed') {
+            await lifecycle.emit('AGENT_TEST_POLLING_EVENT', {
+              jobId,
+              status: resultsResponse.status,
+              totalTestCases,
+              failingTestCases,
+              passingTestCases,
+            });
+            return { payload: resultsResponse, completed: true };
+          }
+
           await lifecycle.emit('AGENT_TEST_POLLING_EVENT', {
             jobId,
             status: resultsResponse.status,
@@ -138,16 +160,8 @@ export class AgentTester {
             failingTestCases,
             passingTestCases,
           });
-          return { payload: resultsResponse, completed: true };
         }
 
-        await lifecycle.emit('AGENT_TEST_POLLING_EVENT', {
-          jobId,
-          status: resultsResponse.status,
-          totalTestCases,
-          failingTestCases,
-          passingTestCases,
-        });
         return { completed: false };
       },
       frequency: Duration.milliseconds(frequency),
@@ -315,12 +329,12 @@ async function humanFormat(details: AgentTestResultsResponse): Promise<string> {
 
   const resultsTable = makeSimpleTable(results, ansis.bold.blue('Test Results'));
 
-  const failedTestCases = details.testSet.testCases.filter((tc) => tc.status === 'ERROR');
+  const failedTestCases = details.testSet.testCases.filter((tc) => tc.status.toLowerCase() === 'error');
   const failedTestCasesObj = Object.fromEntries(
     Object.entries(failedTestCases).map(([, tc]) => [
       `Test Case #${failedTestCases.indexOf(tc) + 1}`,
       tc.expectationResults
-        .filter((r) => r.result === 'FAIL')
+        .filter((r) => r.result === 'FAILURE')
         .map((r) => humanFriendlyName(r.name))
         .join(', '),
     ])
@@ -345,7 +359,9 @@ async function junitFormat(results: AgentTestResultsResponse): Promise<string> {
 
   const testCount = results.testSet.testCases.length;
   const failureCount = results.testSet.testCases.filter(
-    (tc) => ['ERROR', 'COMPLETED'].includes(tc.status) && tc.expectationResults.some((r) => r.result === 'FAIL')
+    (tc) =>
+      ['error', 'completed'].includes(tc.status.toLowerCase()) &&
+      tc.expectationResults.some((r) => r.result === 'FAILURE')
   ).length;
   const time = results.testSet.testCases.reduce((acc, tc) => {
     if (tc.endTime && tc.startTime) {
@@ -376,7 +392,7 @@ async function junitFormat(results: AgentTestResultsResponse): Promise<string> {
           $assertions: testCase.expectationResults.length,
           failure: testCase.expectationResults
             .map((r) => {
-              if (r.result === 'FAIL') {
+              if (r.result === 'FAILURE') {
                 return { $message: r.errorMessage ?? 'Unknown error', $name: r.name };
               }
             })
