@@ -9,7 +9,7 @@ import { Duration, env } from '@salesforce/kit';
 import ansis from 'ansis';
 import { MaybeMock } from './maybe-mock';
 
-export type TestStatus = 'NEW' | 'IN_PROGRESS' | 'COMPLETED' | 'ERROR';
+export type TestStatus = 'New' | 'InProgress' | 'Completed' | 'Error';
 
 export type AgentTestStartResponse = {
   aiEvaluationId: string;
@@ -25,14 +25,13 @@ export type AgentTestStatusResponse = {
 
 export type TestCaseResult = {
   status: TestStatus;
-  number: string;
   utterance: string;
   startTime: string;
   endTime?: string;
   generatedData: {
     type: 'AGENT';
     actionsSequence: string[];
-    outcome: 'Success' | 'Failure';
+    outcome: string;
     topic: string;
     inputTokensCount: string;
     outputTokensCount: string;
@@ -42,7 +41,7 @@ export type TestCaseResult = {
     actualValue: string;
     expectedValue: string;
     score: number;
-    result: 'Passed' | 'Failed';
+    result: 'PASS' | 'FAILURE';
     metricLabel: 'Accuracy' | 'Precision';
     metricExplainability: string;
     status: TestStatus;
@@ -53,7 +52,7 @@ export type TestCaseResult = {
   }>;
 };
 
-export type AgentTestDetailsResponse = {
+export type AgentTestResultsResponse = {
   status: TestStatus;
   startTime: string;
   endTime?: string;
@@ -106,7 +105,7 @@ export class AgentTester {
    *
    * @param {string} jobId
    * @param {Duration} timeout
-   * @returns {Promise<AgentTestDetailsResponse>}
+   * @returns {Promise<AgentTestResultsResponse>}
    */
   public async poll(
     jobId: string,
@@ -117,57 +116,63 @@ export class AgentTester {
     } = {
       timeout: Duration.minutes(5),
     }
-  ): Promise<AgentTestDetailsResponse> {
+  ): Promise<AgentTestResultsResponse> {
     const frequency = env.getNumber('SF_AGENT_TEST_POLLING_FREQUENCY_MS', 1000);
     const lifecycle = Lifecycle.getInstance();
     const client = await PollingClient.create({
       poll: async (): Promise<StatusResult> => {
-        // NOTE: we don't actually need to call the status API here since all the same information is present on the
-        // details API. We could just call the details API and check the status there.
-        const [detailsResponse, statusResponse] = await Promise.all([this.details(jobId), this.status(jobId)]);
-        const totalTestCases = detailsResponse.testSet.testCases.length;
-        const failingTestCases = detailsResponse.testSet.testCases.filter((tc) => tc.status === 'ERROR').length;
-        const passingTestCases = detailsResponse.testSet.testCases.filter(
-          (tc) => tc.status === 'COMPLETED' && tc.expectationResults.every((r) => r.result === 'Passed')
-        ).length;
+        const statusResponse = await this.status(jobId);
+        if (statusResponse.status.toLowerCase() !== 'new') {
+          const resultsResponse = await this.results(jobId);
+          const totalTestCases = resultsResponse.testSet.testCases.length;
+          const passingTestCases = resultsResponse.testSet.testCases.filter(
+            (tc) => tc.status.toLowerCase() === 'completed' && tc.expectationResults.every((r) => r.result === 'PASS')
+          ).length;
+          const failingTestCases = resultsResponse.testSet.testCases.filter(
+            (tc) =>
+              ['error', 'completed'].includes(tc.status.toLowerCase()) &&
+              tc.expectationResults.some((r) => r.result === 'FAILURE')
+          ).length;
 
-        if (statusResponse.status.toLowerCase() === 'completed') {
+          if (resultsResponse.status.toLowerCase() === 'completed') {
+            await lifecycle.emit('AGENT_TEST_POLLING_EVENT', {
+              jobId,
+              status: resultsResponse.status,
+              totalTestCases,
+              failingTestCases,
+              passingTestCases,
+            });
+            return { payload: resultsResponse, completed: true };
+          }
+
           await lifecycle.emit('AGENT_TEST_POLLING_EVENT', {
             jobId,
-            status: statusResponse.status,
+            status: resultsResponse.status,
             totalTestCases,
             failingTestCases,
             passingTestCases,
           });
-          return { payload: detailsResponse, completed: true };
         }
 
-        await lifecycle.emit('AGENT_TEST_POLLING_EVENT', {
-          jobId,
-          status: statusResponse.status,
-          totalTestCases,
-          failingTestCases,
-          passingTestCases,
-        });
         return { completed: false };
       },
       frequency: Duration.milliseconds(frequency),
       timeout,
     });
 
-    return client.subscribe<AgentTestDetailsResponse>();
+    return client.subscribe<AgentTestResultsResponse>();
   }
 
   /**
    * Request test run details
    *
    * @param {string} jobId
-   * @returns {Promise<AgentTestDetailsResponse>}
+   * @returns {Promise<AgentTestResultsResponse>}
    */
-  public async details(jobId: string): Promise<AgentTestDetailsResponse> {
-    const url = `/einstein/ai-evaluations/runs/${jobId}/details`;
+  public async results(jobId: string): Promise<AgentTestResultsResponse> {
+    const url = `/einstein/ai-evaluations/runs/${jobId}/results`;
 
-    return this.maybeMock.request<AgentTestDetailsResponse>('GET', url);
+    return this.maybeMock.request<AgentTestResultsResponse>('GET', url);
   }
 
   /**
@@ -246,19 +251,38 @@ function makeSimpleTable(data: Record<string, string>, title: string): string {
   return `${title}\n${table}`;
 }
 
-export async function humanFormat(details: AgentTestDetailsResponse): Promise<string> {
+export async function convertTestResultsToFormat(
+  results: AgentTestResultsResponse,
+  format: 'human' | 'json' | 'junit' | 'tap'
+): Promise<string> {
+  switch (format) {
+    case 'human':
+      return humanFormat(results);
+    case 'json':
+      return jsonFormat(results);
+    case 'junit':
+      return junitFormat(results);
+    case 'tap':
+      return tapFormat(results);
+    default:
+      throw new Error(`Unsupported format: ${format as string}`);
+  }
+}
+
+async function humanFormat(details: AgentTestResultsResponse): Promise<string> {
   const { Ux } = await import('@salesforce/sf-plugins-core');
   const ux = new Ux();
 
   const tables: string[] = [];
   for (const testCase of details.testSet.testCases) {
+    const number = details.testSet.testCases.indexOf(testCase) + 1;
     const table = ux.makeTable({
-      title: `${ansis.bold(`Test Case #${testCase.number}`)}\n${ansis.dim('Utterance')}: ${testCase.utterance}`,
+      title: `${ansis.bold(`Test Case #${number}`)}\n${ansis.dim('Utterance')}: ${testCase.utterance}`,
       overflow: 'wrap',
       columns: ['test', 'result', { key: 'expected', width: '40%' }, { key: 'actual', width: '40%' }],
       data: testCase.expectationResults.map((r) => ({
         test: humanFriendlyName(r.name),
-        result: r.result === 'Passed' ? ansis.green('Pass') : ansis.red('Fail'),
+        result: r.result === 'PASS' ? ansis.green('Pass') : ansis.red('Fail'),
         expected: r.expectedValue,
         actual: r.actualValue,
       })),
@@ -269,19 +293,19 @@ export async function humanFormat(details: AgentTestDetailsResponse): Promise<st
 
   const topicPassCount = details.testSet.testCases.reduce((acc, tc) => {
     const topic = tc.expectationResults.find((r) => r.name === 'topic_sequence_match');
-    return topic?.result === 'Passed' ? acc + 1 : acc;
+    return topic?.result === 'PASS' ? acc + 1 : acc;
   }, 0);
   const topicPassPercent = (topicPassCount / details.testSet.testCases.length) * 100;
 
   const actionPassCount = details.testSet.testCases.reduce((acc, tc) => {
     const action = tc.expectationResults.find((r) => r.name === 'action_sequence_match');
-    return action?.result === 'Passed' ? acc + 1 : acc;
+    return action?.result === 'PASS' ? acc + 1 : acc;
   }, 0);
   const actionPassPercent = (actionPassCount / details.testSet.testCases.length) * 100;
 
   const outcomePassCount = details.testSet.testCases.reduce((acc, tc) => {
     const outcome = tc.expectationResults.find((r) => r.name === 'bot_response_rating');
-    return outcome?.result === 'Passed' ? acc + 1 : acc;
+    return outcome?.result === 'PASS' ? acc + 1 : acc;
   }, 0);
   const outcomePassPercent = (outcomePassCount / details.testSet.testCases.length) * 100;
 
@@ -297,12 +321,12 @@ export async function humanFormat(details: AgentTestDetailsResponse): Promise<st
 
   const resultsTable = makeSimpleTable(results, ansis.bold.blue('Test Results'));
 
-  const failedTestCases = details.testSet.testCases.filter((tc) => tc.status === 'ERROR');
+  const failedTestCases = details.testSet.testCases.filter((tc) => tc.status.toLowerCase() === 'error');
   const failedTestCasesObj = Object.fromEntries(
     Object.entries(failedTestCases).map(([, tc]) => [
-      `Test Case #${tc.number}`,
+      `Test Case #${failedTestCases.indexOf(tc) + 1}`,
       tc.expectationResults
-        .filter((r) => r.result === 'Failed')
+        .filter((r) => r.result === 'FAILURE')
         .map((r) => humanFriendlyName(r.name))
         .join(', '),
     ])
@@ -312,11 +336,11 @@ export async function humanFormat(details: AgentTestDetailsResponse): Promise<st
   return tables.join('\n') + `\n${resultsTable}\n\n${failedTestCasesTable}\n`;
 }
 
-export async function jsonFormat(details: AgentTestDetailsResponse): Promise<string> {
-  return Promise.resolve(JSON.stringify(details, null, 2));
+async function jsonFormat(results: AgentTestResultsResponse): Promise<string> {
+  return Promise.resolve(JSON.stringify(results, null, 2));
 }
 
-export async function junitFormat(details: AgentTestDetailsResponse): Promise<string> {
+async function junitFormat(results: AgentTestResultsResponse): Promise<string> {
   // eslint-disable-next-line import/no-extraneous-dependencies
   const { XMLBuilder } = await import('fast-xml-parser');
   const builder = new XMLBuilder({
@@ -325,9 +349,13 @@ export async function junitFormat(details: AgentTestDetailsResponse): Promise<st
     ignoreAttributes: false,
   });
 
-  const testCount = details.testSet.testCases.length;
-  const failureCount = details.testSet.testCases.filter((tc) => tc.status === 'ERROR').length;
-  const time = details.testSet.testCases.reduce((acc, tc) => {
+  const testCount = results.testSet.testCases.length;
+  const failureCount = results.testSet.testCases.filter(
+    (tc) =>
+      ['error', 'completed'].includes(tc.status.toLowerCase()) &&
+      tc.expectationResults.some((r) => r.result === 'FAILURE')
+  ).length;
+  const time = results.testSet.testCases.reduce((acc, tc) => {
     if (tc.endTime && tc.startTime) {
       return acc + new Date(tc.endTime).getTime() - new Date(tc.startTime).getTime();
     }
@@ -336,27 +364,27 @@ export async function junitFormat(details: AgentTestDetailsResponse): Promise<st
 
   const suites = builder.build({
     testsuites: {
-      $name: details.subjectName,
+      $name: results.subjectName,
       $tests: testCount,
       $failures: failureCount,
       $time: time,
       property: [
-        { $name: 'status', $value: details.status },
-        { $name: 'start-time', $value: details.startTime },
-        { $name: 'end-time', $value: details.endTime },
+        { $name: 'status', $value: results.status },
+        { $name: 'start-time', $value: results.startTime },
+        { $name: 'end-time', $value: results.endTime },
       ],
-      testsuite: details.testSet.testCases.map((testCase) => {
+      testsuite: results.testSet.testCases.map((testCase) => {
         const testCaseTime = testCase.endTime
           ? new Date(testCase.endTime).getTime() - new Date(testCase.startTime).getTime()
           : 0;
 
         return {
-          $name: `${details.testSet.name}.${testCase.number}`,
+          $name: `${results.testSet.name}.${results.testSet.testCases.indexOf(testCase) + 1}`,
           $time: testCaseTime,
           $assertions: testCase.expectationResults.length,
           failure: testCase.expectationResults
             .map((r) => {
-              if (r.result === 'Failed') {
+              if (r.result === 'FAILURE') {
                 return { $message: r.errorMessage ?? 'Unknown error', $name: r.name };
               }
             })
@@ -369,14 +397,16 @@ export async function junitFormat(details: AgentTestDetailsResponse): Promise<st
   return `<?xml version="1.0" encoding="UTF-8"?>\n${suites}`.trim();
 }
 
-export async function tapFormat(details: AgentTestDetailsResponse): Promise<string> {
+async function tapFormat(results: AgentTestResultsResponse): Promise<string> {
   const lines: string[] = [];
   let expectationCount = 0;
-  for (const testCase of details.testSet.testCases) {
+  for (const testCase of results.testSet.testCases) {
     for (const result of testCase.expectationResults) {
-      const status = result.result === 'Passed' ? 'ok' : 'not ok';
+      const status = result.result === 'PASS' ? 'ok' : 'not ok';
       expectationCount++;
-      lines.push(`${status} ${expectationCount} ${details.testSet.name}.${testCase.number}`);
+      lines.push(
+        `${status} ${expectationCount} ${results.testSet.name}.${results.testSet.testCases.indexOf(testCase) + 1}`
+      );
       if (status === 'not ok') {
         lines.push('  ---');
         lines.push(`  message: ${result.errorMessage ?? 'Unknown error'}`);
