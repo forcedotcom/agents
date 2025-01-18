@@ -1,3 +1,12 @@
+## [0.6.2](https://github.com/forcedotcom/agents/compare/0.6.1...0.6.2) (2025-01-18)
+
+
+### Bug Fixes
+
+* **deps:** bump @salesforce/core from 8.8.0 to 8.8.2 ([8af43ee](https://github.com/forcedotcom/agents/commit/8af43ee14990ffee28f5a8c4fc81dfeb46509523))
+
+
+
 ## [0.6.1](https://github.com/forcedotcom/agents/compare/0.6.0...0.6.1) (2025-01-17)
 
 
