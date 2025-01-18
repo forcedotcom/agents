@@ -4,11 +4,12 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
+import { join } from 'node:path';
 import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection, SfProject } from '@salesforce/core';
 import { Agent } from '../src/agent';
-import type { AgentJobSpecCreateConfig } from '../src/types';
+import type { AgentJobSpecCreateConfig, AgentCreateConfigV2 } from '../src/types';
 
 describe('Agents', () => {
   const $$ = new TestContext();
@@ -18,7 +19,7 @@ describe('Agents', () => {
   beforeEach(async () => {
     $$.inProject(true);
     testOrg = new MockTestOrgData();
-    process.env.SF_MOCK_DIR = 'test/mocks';
+    process.env.SF_MOCK_DIR = join('test', 'mocks');
     connection = await testOrg.getConnection();
     connection.instanceUrl = 'https://mydomain.salesforce.com';
     // restore the connection sandbox so that it doesn't override the builtin mocking (MaybeMock)
@@ -61,6 +62,59 @@ describe('Agents', () => {
     expect(output).to.have.property('companyName', companyName);
     expect(output.topics).to.be.an('array').with.lengthOf(10);
     expect(output.topics[0]).to.have.property('name', 'Guest_Experience_Enhancement');
+  });
+
+  it('createV2 save agent', async () => {
+    process.env.SF_MOCK_DIR = join('test', 'mocks', 'createAgent-Save');
+    const sfProject = SfProject.getInstance();
+    const agent = new Agent(connection, sfProject);
+    const config: AgentCreateConfigV2 = {
+      agentType: 'customer',
+      saveAgent: true,
+      agentSettings: {
+        agentName: 'My First Agent',
+        agentApiName: 'My_First_Agent',
+        userId: 'new',
+      },
+      generationInfo: {
+        defaultInfo: {
+          role: 'answer questions about vacation rentals',
+          companyName: 'Coral Cloud Enterprises',
+          companyDescription: 'Provide vacation rentals and activities',
+        },
+      },
+      generationSettings: {
+        maxNumOfTopics: 10,
+      },
+    };
+    const response = await agent.createV2(config);
+    expect(response).to.have.property('isSuccess', true);
+    expect(response).to.have.property('agentId');
+    expect(response).to.have.property('agentDefinition');
+  });
+
+  it('createV2 preview agent', async () => {
+    process.env.SF_MOCK_DIR = join('test', 'mocks', 'createAgent-Preview');
+    const sfProject = SfProject.getInstance();
+    const agent = new Agent(connection, sfProject);
+    const config: AgentCreateConfigV2 = {
+      agentType: 'customer',
+      saveAgent: false,
+      generationInfo: {
+        defaultInfo: {
+          role: 'answer questions about vacation rentals',
+          companyName: 'Coral Cloud Enterprises',
+          companyDescription: 'Provide vacation rentals and activities',
+        },
+      },
+      generationSettings: {
+        maxNumOfTopics: 10,
+      },
+    };
+    const response = await agent.createV2(config);
+    expect(response).to.have.property('isSuccess', true);
+    expect(response).to.not.have.property('agentId');
+    expect(response).to.have.property('agentDefinition');
   });
 
   it('create', async () => {
