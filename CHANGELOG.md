@@ -1,3 +1,19 @@
+# [0.7.0](https://github.com/forcedotcom/agents/compare/0.6.3...0.7.0) (2025-01-18)
+
+
+### Bug Fixes
+
+* type updates for agent tone ([b73d70a](https://github.com/forcedotcom/agents/commit/b73d70ac4fbbd58d8f713ecca55e4dd076dd0022))
+* type updates for agent tone options ([f3df889](https://github.com/forcedotcom/agents/commit/f3df8895ab087c44b45f6aaf9def3f1e9f3cbac1))
+* type updates for server side API changes ([d1fb0b5](https://github.com/forcedotcom/agents/commit/d1fb0b5dca5611a6a8155f8da8c2f4a722733966))
+
+
+### Features
+
+* add mock agentCreateV2 API and tests ([fa968be](https://github.com/forcedotcom/agents/commit/fa968beba2898b6d54d26d416cb3ffc8a0a9ac4f))
+
+
+
 ## [0.6.3](https://github.com/forcedotcom/agents/compare/0.6.2...0.6.3) (2025-01-18)
 
 
