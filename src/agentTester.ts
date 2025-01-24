@@ -65,7 +65,7 @@ export type AgentTestResultsResponse = {
   };
 };
 
-type Definitions = Omit<FileProperties, 'manageableState' | 'namespacePrefix'>;
+export type AvailableDefinition = Omit<FileProperties, 'manageableState' | 'namespacePrefix'>;
 
 /**
  * AgentTester class to test Agents
@@ -79,7 +79,7 @@ export class AgentTester {
   /**
    * List the AiEvaluationDefinitions available in the org.
    */
-  public async list(): Promise<Definitions[]> {
+  public async list(): Promise<AvailableDefinition[]> {
     return this.connection.metadata.list({ type: 'AiEvaluationDefinition' });
   }
 
