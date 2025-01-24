@@ -7,6 +7,7 @@
 import { Connection, Lifecycle, PollingClient, StatusResult } from '@salesforce/core';
 import { Duration, env } from '@salesforce/kit';
 import ansis from 'ansis';
+import { FileProperties } from '@salesforce/source-deploy-retrieve';
 import { MaybeMock } from './maybe-mock';
 
 export type TestStatus = 'New' | 'InProgress' | 'Completed' | 'Error';
@@ -64,13 +65,22 @@ export type AgentTestResultsResponse = {
   };
 };
 
+export type AvailableDefinition = Omit<FileProperties, 'manageableState' | 'namespacePrefix'>;
+
 /**
  * AgentTester class to test Agents
  */
 export class AgentTester {
   private maybeMock: MaybeMock;
-  public constructor(connection: Connection) {
+  public constructor(private connection: Connection) {
     this.maybeMock = new MaybeMock(connection);
+  }
+
+  /**
+   * List the AiEvaluationDefinitions available in the org.
+   */
+  public async list(): Promise<AvailableDefinition[]> {
+    return this.connection.metadata.list({ type: 'AiEvaluationDefinition' });
   }
 
   /**
