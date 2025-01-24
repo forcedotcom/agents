@@ -1,3 +1,12 @@
+# [0.8.0](https://github.com/forcedotcom/agents/compare/0.7.1...0.8.0) (2025-01-24)
+
+
+### Features
+
+* add list method to AgentTester ([#35](https://github.com/forcedotcom/agents/issues/35)) ([2703724](https://github.com/forcedotcom/agents/commit/2703724eb382b55f915fdd994769c2474115f9de))
+
+
+
 ## [0.7.1](https://github.com/forcedotcom/agents/compare/0.7.0...0.7.1) (2025-01-24)
 
 
