@@ -1,3 +1,12 @@
+## [0.7.1](https://github.com/forcedotcom/agents/compare/0.7.0...0.7.1) (2025-01-24)
+
+
+### Bug Fixes
+
+* correct expected draft topic response ([67f8f3c](https://github.com/forcedotcom/agents/commit/67f8f3c5b274c440e587bbe889da1c97ab9111c2))
+
+
+
 # [0.7.0](https://github.com/forcedotcom/agents/compare/0.6.3...0.7.0) (2025-01-18)
 
 
