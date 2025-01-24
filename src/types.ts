@@ -255,5 +255,5 @@ export type DraftAgentTopics = [
 export type DraftAgentTopicsResponse = {
   isSuccess: boolean;
   errorMessage?: string;
-  topics: DraftAgentTopics;
+  topicDrafts: DraftAgentTopics;
 };

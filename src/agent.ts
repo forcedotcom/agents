@@ -257,8 +257,8 @@ export class Agent implements SfAgent {
 
     const response = await this.maybeMock.request<DraftAgentTopicsResponse>('POST', url, body);
 
-    if (response.isSuccess && response.topics) {
-      return { ...config, topics: response.topics };
+    if (response.isSuccess && response.topicDrafts) {
+      return { ...config, topics: response.topicDrafts };
     } else {
       throw SfError.create({
         name: 'AgentJobSpecCreateError',
