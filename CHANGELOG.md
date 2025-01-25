@@ -1,3 +1,12 @@
+## [0.8.1](https://github.com/forcedotcom/agents/compare/0.8.0...0.8.1) (2025-01-25)
+
+
+### Bug Fixes
+
+* **deps:** bump @salesforce/source-deploy-retrieve ([6f62052](https://github.com/forcedotcom/agents/commit/6f62052c3c722963e1abbbc9a238eb126c7e24e2))
+
+
+
 # [0.8.0](https://github.com/forcedotcom/agents/compare/0.7.1...0.8.0) (2025-01-24)
 
 
