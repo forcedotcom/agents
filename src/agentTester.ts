@@ -4,13 +4,17 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-import { Connection, Lifecycle, PollingClient, StatusResult } from '@salesforce/core';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { Connection, Lifecycle, PollingClient, SfError, StatusResult } from '@salesforce/core';
 import { Duration, env } from '@salesforce/kit';
 import ansis from 'ansis';
-import { FileProperties } from '@salesforce/source-deploy-retrieve';
+import { ComponentSetBuilder, DeployResult, FileProperties, RequestStatus } from '@salesforce/source-deploy-retrieve';
+import { parse, stringify } from 'yaml';
+import { XMLBuilder } from 'fast-xml-parser';
 import { MaybeMock } from './maybe-mock';
 
-export type TestStatus = 'New' | 'InProgress' | 'Completed' | 'Error';
+export type TestStatus = 'NEW' | 'IN_PROGRESS' | 'COMPLETED' | 'ERROR' | 'TERMINATED';
 
 export type AgentTestStartResponse = {
   aiEvaluationId: string;
@@ -26,18 +30,17 @@ export type AgentTestStatusResponse = {
 
 export type TestCaseResult = {
   status: TestStatus;
-  utterance: string;
   startTime: string;
   endTime?: string;
+  inputs: {
+    utterance: string;
+  };
   generatedData: {
-    type: 'AGENT';
     actionsSequence: string[];
     outcome: string;
     topic: string;
-    inputTokensCount: string;
-    outputTokensCount: string;
   };
-  expectationResults: Array<{
+  testResults: Array<{
     name: string;
     actualValue: string;
     expectedValue: string;
@@ -66,6 +69,29 @@ export type AgentTestResultsResponse = {
 };
 
 export type AvailableDefinition = Omit<FileProperties, 'manageableState' | 'namespacePrefix'>;
+
+export type TestCase = {
+  utterance: string;
+  expectedActions: string[];
+  expectedOutcome: string;
+  expectedTopic: string;
+};
+
+export type TestSpec = {
+  name: string;
+  description?: string;
+  subjectType: string;
+  subjectName: string;
+  subjectVersion?: string;
+  testCases: TestCase[];
+};
+
+export const AgentTestCreateLifecycleStages = {
+  CreatingLocalMetadata: 'Creating Local Metadata',
+  Waiting: 'Waiting for the org to respond',
+  DeployingMetadata: 'Deploying Metadata',
+  Done: 'Done',
+};
 
 /**
  * AgentTester class to test Agents
@@ -136,12 +162,12 @@ export class AgentTester {
           const resultsResponse = await this.results(jobId);
           const totalTestCases = resultsResponse.testSet.testCases.length;
           const passingTestCases = resultsResponse.testSet.testCases.filter(
-            (tc) => tc.status.toLowerCase() === 'completed' && tc.expectationResults.every((r) => r.result === 'PASS')
+            (tc) => tc.status.toLowerCase() === 'completed' && tc.testResults.every((r) => r.result === 'PASS')
           ).length;
           const failingTestCases = resultsResponse.testSet.testCases.filter(
             (tc) =>
               ['error', 'completed'].includes(tc.status.toLowerCase()) &&
-              tc.expectationResults.some((r) => r.result === 'FAILURE')
+              tc.testResults.some((r) => r.result === 'FAILURE')
           ).length;
 
           if (resultsResponse.status.toLowerCase() === 'completed') {
@@ -196,18 +222,117 @@ export class AgentTester {
 
     return this.maybeMock.request<{ success: boolean }>('POST', url);
   }
-}
 
-function humanFriendlyName(name: string): string {
-  switch (name) {
-    case 'topic_sequence_match':
-      return 'Topic';
-    case 'action_sequence_match':
-      return 'Action';
-    case 'bot_response_rating':
-      return 'Outcome';
-    default:
-      return name;
+  /**
+   * Creates and deploys an AiEvaluationDefinition from a specification file.
+   *
+   * @param specFilePath - The path to the specification file to create the definition from
+   * @param options - Configuration options for creating the definition
+   * @param options.outputDir - The directory where the AiEvaluationDefinition file will be written
+   * @param options.preview - If true, writes the AiEvaluationDefinition file to <api-name>-preview-<timestamp>.xml in the current working directory and does not deploy it
+   * @param options.confirmationCallback - Optional callback function to confirm overwriting existing definitions
+   *
+   * @returns Promise containing:
+   * - path: The filesystem path to the created AiEvaluationDefinition file
+   * - contents: The AiEvaluationDefinition contents as a string
+   * - deployResult: The deployment result (if not in preview mode)
+   *
+   * @throws {SfError} When a definition with the same name already exists and is not confirmed to be overwritten
+   * @throws {SfError} When deployment fails
+   */
+  public async create(
+    specFilePath: string,
+    options: { outputDir: string; preview?: boolean; confirmationCallback?: (spec: TestSpec) => Promise<boolean> }
+  ): Promise<{ path: string; contents: string; deployResult?: DeployResult }> {
+    const parsed = parse(await readFile(specFilePath, 'utf-8')) as TestSpec;
+    const existingDefinitions = await this.list();
+
+    if (existingDefinitions.some((d) => d.fullName === parsed.name)) {
+      const getConfirmation = options.confirmationCallback ?? (async (): Promise<boolean> => Promise.resolve(false));
+      const confirmation = await getConfirmation(parsed);
+      if (!confirmation) {
+        throw new SfError(`An AiEvaluationDefinition with the name ${parsed.name} already exists in the org.`);
+      }
+    }
+
+    const lifecycle = Lifecycle.getInstance();
+    await lifecycle.emit(AgentTestCreateLifecycleStages.CreatingLocalMetadata, {});
+    const preview = options.preview ?? false;
+    // outputDir is overridden if preview is true
+    const outputDir = preview ? process.cwd() : options.outputDir;
+    const filename = preview
+      ? `${parsed.name}-preview-${new Date().toISOString()}.xml`
+      : `${parsed.name}.aiEvaluationDefinition-meta.xml`;
+    const definitionPath = join(outputDir, filename);
+
+    const builder = new XMLBuilder({
+      format: true,
+      attributeNamePrefix: '$',
+      ignoreAttributes: false,
+    });
+
+    const xml = builder.build({
+      AiEvaluationDefinition: {
+        $xmlns: 'http://soap.sforce.com/2006/04/metadata',
+        ...(parsed.description && { description: parsed.description }),
+        name: parsed.name,
+        subjectType: parsed.subjectType,
+        subjectName: parsed.subjectName,
+        ...(parsed.subjectVersion && { subjectVersion: parsed.subjectVersion }),
+        // TODO: Once SF Eval removes AiEvaluationTestSet, we can remove testSetName and uncomment testCase
+        testSetName: 'CliTestSet',
+        // testCase: parsed.testCases.map((tc) => ({
+        //   number: parsed.testCases.indexOf(tc) + 1,
+        //   inputs: {
+        //     utterance: tc.utterance,
+        //   },
+        //   expectation: [
+        //     {
+        //       name: 'expectedTopic',
+        //       expectedValue: tc.topicSequenceExpectedValue,
+        //     },
+        //     {
+        //       name: 'expectedActions',
+        //       expectedValue: `[${tc.actionSequenceExpectedValue.map((v) => `"${v}"`).join(',')}]`,
+        //     },
+        //     {
+        //       name: 'expectedOutcome',
+        //       expectedValue: tc.botRatingExpectedValue,
+        //     },
+        //   ],
+        // })),
+      },
+    }) as string;
+
+    await mkdir(outputDir, { recursive: true });
+    await writeFile(definitionPath, `<?xml version="1.0" encoding="UTF-8"?>\n${xml}`);
+    if (preview)
+      return {
+        path: definitionPath,
+        contents: xml,
+      };
+
+    const cs = await ComponentSetBuilder.build({ sourcepath: [definitionPath] });
+    const deploy = await cs.deploy({ usernameOrConnection: this.connection });
+    deploy.onUpdate((status) => {
+      if (status.status === RequestStatus.Pending) {
+        void lifecycle.emit(AgentTestCreateLifecycleStages.Waiting, status);
+      } else {
+        void lifecycle.emit(AgentTestCreateLifecycleStages.DeployingMetadata, status);
+      }
+    });
+
+    deploy.onFinish((result) => {
+      void lifecycle.emit(AgentTestCreateLifecycleStages.Done, result);
+    });
+
+    const result = await deploy.pollStatus({ timeout: Duration.minutes(10_000), frequency: Duration.seconds(1) });
+
+    if (!result.response.success) {
+      throw new SfError(result.response.errorMessage ?? `Unable to deploy ${result.response.id}`);
+    }
+
+    return { path: definitionPath, contents: xml, deployResult: result };
   }
 }
 
@@ -287,11 +412,11 @@ async function humanFormat(details: AgentTestResultsResponse): Promise<string> {
   for (const testCase of details.testSet.testCases) {
     const number = details.testSet.testCases.indexOf(testCase) + 1;
     const table = ux.makeTable({
-      title: `${ansis.bold(`Test Case #${number}`)}\n${ansis.dim('Utterance')}: ${testCase.utterance}`,
+      title: `${ansis.bold(`Test Case #${number}`)}\n${ansis.dim('Utterance')}: ${testCase.inputs.utterance}`,
       overflow: 'wrap',
       columns: ['test', 'result', { key: 'expected', width: '40%' }, { key: 'actual', width: '40%' }],
-      data: testCase.expectationResults.map((r) => ({
-        test: humanFriendlyName(r.name),
+      data: testCase.testResults.map((r) => ({
+        test: r.name,
         result: r.result === 'PASS' ? ansis.green('Pass') : ansis.red('Fail'),
         expected: r.expectedValue,
         actual: r.actualValue,
@@ -302,19 +427,19 @@ async function humanFormat(details: AgentTestResultsResponse): Promise<string> {
   }
 
   const topicPassCount = details.testSet.testCases.reduce((acc, tc) => {
-    const topic = tc.expectationResults.find((r) => r.name === 'topic_sequence_match');
+    const topic = tc.testResults.find((r) => r.name === 'topic_sequence_match');
     return topic?.result === 'PASS' ? acc + 1 : acc;
   }, 0);
   const topicPassPercent = (topicPassCount / details.testSet.testCases.length) * 100;
 
   const actionPassCount = details.testSet.testCases.reduce((acc, tc) => {
-    const action = tc.expectationResults.find((r) => r.name === 'action_sequence_match');
+    const action = tc.testResults.find((r) => r.name === 'action_sequence_match');
     return action?.result === 'PASS' ? acc + 1 : acc;
   }, 0);
   const actionPassPercent = (actionPassCount / details.testSet.testCases.length) * 100;
 
   const outcomePassCount = details.testSet.testCases.reduce((acc, tc) => {
-    const outcome = tc.expectationResults.find((r) => r.name === 'bot_response_rating');
+    const outcome = tc.testResults.find((r) => r.name === 'bot_response_rating');
     return outcome?.result === 'PASS' ? acc + 1 : acc;
   }, 0);
   const outcomePassPercent = (outcomePassCount / details.testSet.testCases.length) * 100;
@@ -335,10 +460,7 @@ async function humanFormat(details: AgentTestResultsResponse): Promise<string> {
   const failedTestCasesObj = Object.fromEntries(
     Object.entries(failedTestCases).map(([, tc]) => [
       `Test Case #${failedTestCases.indexOf(tc) + 1}`,
-      tc.expectationResults
-        .filter((r) => r.result === 'FAILURE')
-        .map((r) => humanFriendlyName(r.name))
-        .join(', '),
+      tc.testResults.filter((r) => r.result === 'FAILURE').join(', '),
     ])
   );
   const failedTestCasesTable = makeSimpleTable(failedTestCasesObj, ansis.red.bold('Failed Test Cases'));
@@ -351,8 +473,6 @@ async function jsonFormat(results: AgentTestResultsResponse): Promise<string> {
 }
 
 async function junitFormat(results: AgentTestResultsResponse): Promise<string> {
-  // eslint-disable-next-line import/no-extraneous-dependencies
-  const { XMLBuilder } = await import('fast-xml-parser');
   const builder = new XMLBuilder({
     format: true,
     attributeNamePrefix: '$',
@@ -362,8 +482,7 @@ async function junitFormat(results: AgentTestResultsResponse): Promise<string> {
   const testCount = results.testSet.testCases.length;
   const failureCount = results.testSet.testCases.filter(
     (tc) =>
-      ['error', 'completed'].includes(tc.status.toLowerCase()) &&
-      tc.expectationResults.some((r) => r.result === 'FAILURE')
+      ['error', 'completed'].includes(tc.status.toLowerCase()) && tc.testResults.some((r) => r.result === 'FAILURE')
   ).length;
   const time = results.testSet.testCases.reduce((acc, tc) => {
     if (tc.endTime && tc.startTime) {
@@ -391,8 +510,8 @@ async function junitFormat(results: AgentTestResultsResponse): Promise<string> {
         return {
           $name: `${results.testSet.name}.${results.testSet.testCases.indexOf(testCase) + 1}`,
           $time: testCaseTime,
-          $assertions: testCase.expectationResults.length,
-          failure: testCase.expectationResults
+          $assertions: testCase.testResults.length,
+          failure: testCase.testResults
             .map((r) => {
               if (r.result === 'FAILURE') {
                 return { $message: r.errorMessage ?? 'Unknown error', $name: r.name };
@@ -404,14 +523,14 @@ async function junitFormat(results: AgentTestResultsResponse): Promise<string> {
     },
   }) as string;
 
-  return `<?xml version="1.0" encoding="UTF-8"?>\n${suites}`.trim();
+  return Promise.resolve(`<?xml version="1.0" encoding="UTF-8"?>\n${suites}`.trim());
 }
 
 async function tapFormat(results: AgentTestResultsResponse): Promise<string> {
   const lines: string[] = [];
   let expectationCount = 0;
   for (const testCase of results.testSet.testCases) {
-    for (const result of testCase.expectationResults) {
+    for (const result of testCase.testResults) {
       const status = result.result === 'PASS' ? 'ok' : 'not ok';
       expectationCount++;
       lines.push(
@@ -429,4 +548,19 @@ async function tapFormat(results: AgentTestResultsResponse): Promise<string> {
   }
 
   return Promise.resolve(`Tap Version 14\n1..${expectationCount}\n${lines.join('\n')}`);
+}
+
+/**
+ * Generate a test spec file from a TestSpec object
+ */
+export async function generateTestSpec(spec: TestSpec, outputFile: string): Promise<void> {
+  // strip out undefined values and empty strings
+  const clean = Object.entries(spec).reduce<Partial<TestSpec>>((acc, [key, value]) => {
+    if (value !== undefined && value !== '') return { ...acc, [key]: value };
+    return acc;
+  }, {});
+
+  const yml = stringify(clean);
+  await mkdir(dirname(outputFile), { recursive: true });
+  await writeFile(outputFile, yml);
 }

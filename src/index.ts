@@ -24,6 +24,8 @@ export { Agent, AgentCreateLifecycleStages, AgentCreateLifecycleStagesV2 } from 
 export {
   AgentTester,
   convertTestResultsToFormat,
+  generateTestSpec,
+  AgentTestCreateLifecycleStages,
   type AvailableDefinition,
   type AgentTestResultsResponse,
   type AgentTestStartResponse,
