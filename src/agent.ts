@@ -178,30 +178,44 @@ export class Agent implements SfAgent {
     if (response.isSuccess) {
       await Lifecycle.getInstance().emit(AgentCreateLifecycleStagesV2.Retrieving, {});
       const defaultPackagePath = this.project.getDefaultPackage().path ?? 'force-app';
-      const cs = await ComponentSetBuilder.build({
-        metadata: {
-          metadataEntries: [`Agent:${config.agentSettings.agentApiName}`],
-          directoryPaths: [defaultPackagePath],
-        },
-        org: {
-          username: this.connection.getUsername() as string,
-          exclude: [],
-        },
-      });
-
-      const retrieve = await cs.retrieve({
-        usernameOrConnection: this.connection,
-        merge: true,
-        format: 'source',
-        output: defaultPackagePath,
-      });
-      const retrieveResult = await retrieve.pollStatus({
-        frequency: Duration.milliseconds(200),
-        timeout: Duration.minutes(5),
-      });
-      if (!retrieveResult.response.success) {
-        const errMessages = retrieveResult.response.messages?.toString() ?? 'unknown';
-        throw messages.createError('agentRetrievalError', [errMessages]);
+      try {
+        const cs = await ComponentSetBuilder.build({
+          metadata: {
+            metadataEntries: [`Agent:${config.agentSettings.agentApiName}`],
+            directoryPaths: [defaultPackagePath],
+          },
+          org: {
+            username: this.connection.getUsername() as string,
+            exclude: [],
+          },
+        });
+        const retrieve = await cs.retrieve({
+          usernameOrConnection: this.connection,
+          merge: true,
+          format: 'source',
+          output: defaultPackagePath,
+        });
+        const retrieveResult = await retrieve.pollStatus({
+          frequency: Duration.milliseconds(200),
+          timeout: Duration.minutes(5),
+        });
+        if (!retrieveResult.response.success) {
+          const errMessages = retrieveResult.response.messages?.toString() ?? 'unknown';
+          const error = messages.createError('agentRetrievalError', [errMessages]);
+          error.actions = [messages.getMessage('agentRetrievalErrorActions')];
+          throw error;
+        }
+      } catch (err) {
+        const error = SfError.wrap(err);
+        if (error.name === 'AgentRetrievalError') {
+          throw error;
+        }
+        throw SfError.create({
+          name: 'AgentRetrievalError',
+          message: messages.getMessage('agentRetrievalError', [error.message]),
+          cause: error,
+          actions: [messages.getMessage('agentRetrievalErrorActions')],
+        });
       }
     }
 
