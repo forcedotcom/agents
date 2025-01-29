@@ -278,6 +278,7 @@ export class AgentTester {
         name: parsed.name,
         subjectType: parsed.subjectType,
         subjectName: parsed.subjectName,
+        // TODO: Once SF Eval removes AiEvaluationTestSet, we can remove testSetName and uncomment testCase
         testSetName: 'CliTestSet',
         // testCase: parsed.testCases.map((tc) => ({
         //   number: parsed.testCases.indexOf(tc) + 1,
