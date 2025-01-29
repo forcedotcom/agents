@@ -87,6 +87,54 @@ describe('AgentTester', () => {
       expect(output.success).to.be.true;
     });
   });
+
+  describe('create', () => {
+    const yml = `name: Test
+description: Test
+subjectType: AGENT
+subjectName: MyAgent
+testCases:
+  - utterance: List contact names associated with Acme account
+    expectedActions:
+      - IdentifyRecordByName
+      - QueryRecords
+    expectedOutcome: contacts available name available with Acme are listed
+    expectedTopic: GeneralCRM
+  - utterance: List contact emails associated with Acme account
+    expectedActions:
+      - IdentifyRecordByName
+      - QueryRecords
+    expectedOutcome: contacts available emails available with Acme are listed
+    expectedTopic: GeneralCRM
+`;
+    beforeEach(() => {
+      sinon.stub(fs, 'writeFile').resolves();
+      sinon.stub(fs, 'mkdir').resolves();
+    });
+
+    afterEach(() => {
+      sinon.restore();
+    });
+
+    it('should generate preview of AiEvaluationDefinition', async () => {
+      const tester = new AgentTester(connection);
+      sinon.stub(fs, 'readFile').resolves(yml);
+      sinon.stub(tester, 'list').resolves([]);
+      const { contents } = await tester.create('test.yaml', {
+        outputDir: 'tmp',
+        preview: true,
+      });
+
+      expect(contents).to.equal(`<AiEvaluationDefinition xmlns="http://soap.sforce.com/2006/04/metadata">
+  <description>Test</description>
+  <name>Test</name>
+  <subjectType>AGENT</subjectType>
+  <subjectName>MyAgent</subjectName>
+  <testSetName>CliTestSet</testSetName>
+</AiEvaluationDefinition>
+`);
+    });
+  });
 });
 
 describe('human format', () => {
