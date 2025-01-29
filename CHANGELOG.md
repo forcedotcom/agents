@@ -1,3 +1,13 @@
+## [0.9.1](https://github.com/forcedotcom/agents/compare/0.9.0...0.9.1) (2025-01-29)
+
+
+### Bug Fixes
+
+* better error handling when metadata retrieve fails ([8cbfabe](https://github.com/forcedotcom/agents/commit/8cbfabebc6c71f6fa1aa5775a84c6af1805ef7a3))
+* retrieve created agents ([8217e6f](https://github.com/forcedotcom/agents/commit/8217e6fc2c23ff956c1207470620ed4d887f692a))
+
+
+
 # [0.9.0](https://github.com/forcedotcom/agents/compare/0.8.1...0.9.0) (2025-01-29)
 
 
