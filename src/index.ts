@@ -20,7 +20,7 @@ export {
   type DraftAgentTopicsResponse,
   SfAgent,
 } from './types';
-export { Agent, AgentCreateLifecycleStages, AgentCreateLifecycleStagesV2 } from './agent';
+export { Agent, AgentCreateLifecycleStages, AgentCreateLifecycleStagesV2, generateAgentApiName } from './agent';
 export {
   AgentTester,
   convertTestResultsToFormat,

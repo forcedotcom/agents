@@ -8,7 +8,8 @@ import { join } from 'node:path';
 import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection, SfProject } from '@salesforce/core';
-import { Agent } from '../src/agent';
+import { ComponentSetBuilder, ComponentSet, MetadataApiRetrieve } from '@salesforce/source-deploy-retrieve';
+import { Agent, generateAgentApiName } from '../src/agent';
 import type { AgentJobSpecCreateConfig, AgentCreateConfigV2 } from '../src/types';
 
 describe('Agents', () => {
@@ -67,14 +68,27 @@ describe('Agents', () => {
   it('createV2 save agent', async () => {
     process.env.SF_MOCK_DIR = join('test', 'mocks', 'createAgent-Save');
     const sfProject = SfProject.getInstance();
+
+    // @ts-expect-error Not the full package def
+    $$.SANDBOX.stub(sfProject, 'getDefaultPackage').returns({ path: 'force-app' });
+    const mdApiRetrieve = new MetadataApiRetrieve({
+      usernameOrConnection: testOrg.getMockUserInfo().Username,
+      output: 'nowhere',
+    });
+    const pollingStub = $$.SANDBOX.stub(mdApiRetrieve, 'pollStatus').resolves({
+      // @ts-expect-error Not the full response
+      response: { success: true },
+    });
+    const compSet = new ComponentSet();
+    const retrieveStub = $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
+    const csbStub = $$.SANDBOX.stub(ComponentSetBuilder, 'build').resolves(compSet);
+
     const agent = new Agent(connection, sfProject);
     const config: AgentCreateConfigV2 = {
       agentType: 'customer',
       saveAgent: true,
       agentSettings: {
         agentName: 'My First Agent',
-        agentApiName: 'My_First_Agent',
-        userId: 'new',
       },
       generationInfo: {
         defaultInfo: {
@@ -91,6 +105,10 @@ describe('Agents', () => {
     expect(response).to.have.property('isSuccess', true);
     expect(response).to.have.property('agentId');
     expect(response).to.have.property('agentDefinition');
+    expect(csbStub.calledOnce).to.be.true;
+    expect(retrieveStub.calledOnce).to.be.true;
+    expect(pollingStub.calledOnce).to.be.true;
+    expect(config.agentSettings?.agentApiName).to.equal('My_First_Agent');
   });
 
   it('createV2 preview agent', async () => {
@@ -135,5 +153,26 @@ describe('Agents', () => {
     });
     // TODO: make this assertion more meaningful
     expect(output).to.be.ok;
+  });
+});
+
+describe('generateAgentApiName', () => {
+  it('should create valid agent API name with spaces', () => {
+    expect(generateAgentApiName('My Test Agent')).to.equal('My_Test_Agent');
+  });
+  it('should create valid agent API name with no spaces', () => {
+    expect(generateAgentApiName('MyTestAgent')).to.equal('MyTestAgent');
+  });
+  it('should create valid agent API name with beginning underscore', () => {
+    expect(generateAgentApiName('_My Test Agent')).to.equal('My_Test_Agent');
+  });
+  it('should create valid agent API name with multiple beginning underscores', () => {
+    expect(generateAgentApiName('___My Test Agent')).to.equal('My_Test_Agent');
+  });
+  it('should create valid agent API name with special characters', () => {
+    expect(generateAgentApiName('My ()*&^$% Test @!""; Agent')).to.equal('My_Test_Agent');
+  });
+  it('should create valid agent API name with weird spacing', () => {
+    expect(generateAgentApiName(' My   Test Agent  ')).to.equal('My_Test_Agent');
   });
 });

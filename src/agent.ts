@@ -149,7 +149,7 @@ export class Agent implements SfAgent {
    * Creates an agent from a configuration, optionally saving the agent in an org.
    *
    * @param config a configuration for creating or previewing an agent
-   * @returns
+   * @returns the agent definition
    */
   public async createV2(config: AgentCreateConfigV2): Promise<AgentCreateResponseV2> {
     const url = '/connect/ai-assist/create-agent';
@@ -163,39 +163,61 @@ export class Agent implements SfAgent {
       return this.maybeMock.request<AgentCreateResponseV2>('POST', url, config);
     }
 
-    // When saving agent creation we need to retrieve the created metadata.
+    if (!config.agentSettings?.agentName) {
+      throw messages.createError('missingAgentName');
+    }
+
     this.logger.debug(`Creating agent using config: ${inspect(config)} in project: ${this.project.getPath()}`);
     await Lifecycle.getInstance().emit(AgentCreateLifecycleStagesV2.Creating, {});
+    if (!config.agentSettings.agentApiName) {
+      config.agentSettings.agentApiName = generateAgentApiName(config.agentSettings?.agentName);
+    }
     const response = await this.maybeMock.request<AgentCreateResponseV2>('POST', url, config);
 
-    await Lifecycle.getInstance().emit(AgentCreateLifecycleStagesV2.Retrieving, {});
-
-    //
-    // When retrieving all agent metadata by a Bot API name works in SDR we can use that.
-    //
-
-    // Query for the Bot API name by the Bot ID.
-    // const botApiName = this.connection.singleRecordQuery('get bot from response.agentId?.botId');
-    // const cs = await ComponentSetBuilder.build({
-    //   metadata: {
-    //     metadataEntries: [`Bot:${}`],
-    //     directoryPaths: [this.project.getDefaultPackage().path],
-    //   }
-    // });
-    // const retrieve = await cs.retrieve({
-    //   usernameOrConnection: this.connection,
-    //   merge: true,
-    //   format: 'source',
-    //   output: this.project.getDefaultPackage().path ?? 'force-app',
-    // });
-    // const retrieveResult = await retrieve.pollStatus({
-    //   frequency: Duration.milliseconds(200),
-    //   timeout: Duration.minutes(5),
-    // });
-
-    // if (!retrieveResult.response.success) {
-    //   throw new SfError(`Unable to retrieve ${retrieveResult.response.id}`);
-    // }
+    // When saving agent creation we need to retrieve the created metadata.
+    if (response.isSuccess) {
+      await Lifecycle.getInstance().emit(AgentCreateLifecycleStagesV2.Retrieving, {});
+      const defaultPackagePath = this.project.getDefaultPackage().path ?? 'force-app';
+      try {
+        const cs = await ComponentSetBuilder.build({
+          metadata: {
+            metadataEntries: [`Agent:${config.agentSettings.agentApiName}`],
+            directoryPaths: [defaultPackagePath],
+          },
+          org: {
+            username: this.connection.getUsername() as string,
+            exclude: [],
+          },
+        });
+        const retrieve = await cs.retrieve({
+          usernameOrConnection: this.connection,
+          merge: true,
+          format: 'source',
+          output: defaultPackagePath,
+        });
+        const retrieveResult = await retrieve.pollStatus({
+          frequency: Duration.milliseconds(200),
+          timeout: Duration.minutes(5),
+        });
+        if (!retrieveResult.response.success) {
+          const errMessages = retrieveResult.response.messages?.toString() ?? 'unknown';
+          const error = messages.createError('agentRetrievalError', [errMessages]);
+          error.actions = [messages.getMessage('agentRetrievalErrorActions')];
+          throw error;
+        }
+      } catch (err) {
+        const error = SfError.wrap(err);
+        if (error.name === 'AgentRetrievalError') {
+          throw error;
+        }
+        throw SfError.create({
+          name: 'AgentRetrievalError',
+          message: messages.getMessage('agentRetrievalError', [error.message]),
+          cause: error,
+          actions: [messages.getMessage('agentRetrievalErrorActions')],
+        });
+      }
+    }
 
     return response;
   }
@@ -555,3 +577,22 @@ export class Agent implements SfAgent {
     return [genAiSourcePath, botSourcePath, botVersionSourcePath];
   }
 }
+
+/**
+ * Generate an API name from an agent name. Matches what the UI does.
+ */
+export const generateAgentApiName = (agentName: string): string => {
+  const maxLength = 255;
+  let apiName = agentName;
+  apiName = apiName.replace(/[\W_]+/g, '_');
+  if (apiName.charAt(0).match(/_/i)) {
+    apiName = apiName.slice(1);
+  }
+  apiName = apiName
+    .replace(/(^\d+)/, 'X$1')
+    .slice(0, maxLength)
+    .replace(/_$/, '');
+  const logger = Logger.childFromRoot('Agent-GenApiName');
+  logger.debug(`Generated Agent API name: [${apiName}] from Agent name: [${agentName}]`);
+  return apiName;
+};
