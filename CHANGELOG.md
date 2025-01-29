@@ -1,3 +1,17 @@
+# [0.9.0](https://github.com/forcedotcom/agents/compare/0.8.1...0.9.0) (2025-01-29)
+
+
+### Bug Fixes
+
+* update api responses ([874697e](https://github.com/forcedotcom/agents/commit/874697eb2e1a1beec8b42ac9c9a4fabc4ebbea60))
+
+
+### Features
+
+* create and deploy tests ([6179b6d](https://github.com/forcedotcom/agents/commit/6179b6db976b9e5b5f88b27f17dba612ddfcde7a))
+
+
+
 ## [0.8.1](https://github.com/forcedotcom/agents/compare/0.8.0...0.8.1) (2025-01-25)
 
 
