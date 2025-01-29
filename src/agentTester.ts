@@ -14,7 +14,7 @@ import { parse, stringify } from 'yaml';
 import { XMLBuilder } from 'fast-xml-parser';
 import { MaybeMock } from './maybe-mock';
 
-export type TestStatus = 'New' | 'InProgress' | 'Completed' | 'Error';
+export type TestStatus = 'NEW' | 'IN_PROGRESS' | 'COMPLETED' | 'ERROR' | 'TERMINATED';
 
 export type AgentTestStartResponse = {
   aiEvaluationId: string;
@@ -30,18 +30,17 @@ export type AgentTestStatusResponse = {
 
 export type TestCaseResult = {
   status: TestStatus;
-  utterance: string;
   startTime: string;
   endTime?: string;
+  inputs: {
+    utterance: string;
+  };
   generatedData: {
-    type: 'AGENT';
     actionsSequence: string[];
     outcome: string;
     topic: string;
-    inputTokensCount: string;
-    outputTokensCount: string;
   };
-  expectationResults: Array<{
+  testResults: Array<{
     name: string;
     actualValue: string;
     expectedValue: string;
@@ -83,6 +82,7 @@ export type TestSpec = {
   description?: string;
   subjectType: string;
   subjectName: string;
+  subjectVersion?: string;
   testCases: TestCase[];
 };
 
@@ -162,12 +162,12 @@ export class AgentTester {
           const resultsResponse = await this.results(jobId);
           const totalTestCases = resultsResponse.testSet.testCases.length;
           const passingTestCases = resultsResponse.testSet.testCases.filter(
-            (tc) => tc.status.toLowerCase() === 'completed' && tc.expectationResults.every((r) => r.result === 'PASS')
+            (tc) => tc.status.toLowerCase() === 'completed' && tc.testResults.every((r) => r.result === 'PASS')
           ).length;
           const failingTestCases = resultsResponse.testSet.testCases.filter(
             (tc) =>
               ['error', 'completed'].includes(tc.status.toLowerCase()) &&
-              tc.expectationResults.some((r) => r.result === 'FAILURE')
+              tc.testResults.some((r) => r.result === 'FAILURE')
           ).length;
 
           if (resultsResponse.status.toLowerCase() === 'completed') {
@@ -278,6 +278,7 @@ export class AgentTester {
         name: parsed.name,
         subjectType: parsed.subjectType,
         subjectName: parsed.subjectName,
+        ...(parsed.subjectVersion && { subjectVersion: parsed.subjectVersion }),
         // TODO: Once SF Eval removes AiEvaluationTestSet, we can remove testSetName and uncomment testCase
         testSetName: 'CliTestSet',
         // testCase: parsed.testCases.map((tc) => ({
@@ -332,19 +333,6 @@ export class AgentTester {
     }
 
     return { path: definitionPath, contents: xml, deployResult: result };
-  }
-}
-
-function humanFriendlyName(name: string): string {
-  switch (name) {
-    case 'topic_sequence_match':
-      return 'Topic';
-    case 'action_sequence_match':
-      return 'Action';
-    case 'bot_response_rating':
-      return 'Outcome';
-    default:
-      return name;
   }
 }
 
@@ -424,11 +412,11 @@ async function humanFormat(details: AgentTestResultsResponse): Promise<string> {
   for (const testCase of details.testSet.testCases) {
     const number = details.testSet.testCases.indexOf(testCase) + 1;
     const table = ux.makeTable({
-      title: `${ansis.bold(`Test Case #${number}`)}\n${ansis.dim('Utterance')}: ${testCase.utterance}`,
+      title: `${ansis.bold(`Test Case #${number}`)}\n${ansis.dim('Utterance')}: ${testCase.inputs.utterance}`,
       overflow: 'wrap',
       columns: ['test', 'result', { key: 'expected', width: '40%' }, { key: 'actual', width: '40%' }],
-      data: testCase.expectationResults.map((r) => ({
-        test: humanFriendlyName(r.name),
+      data: testCase.testResults.map((r) => ({
+        test: r.name,
         result: r.result === 'PASS' ? ansis.green('Pass') : ansis.red('Fail'),
         expected: r.expectedValue,
         actual: r.actualValue,
@@ -439,19 +427,19 @@ async function humanFormat(details: AgentTestResultsResponse): Promise<string> {
   }
 
   const topicPassCount = details.testSet.testCases.reduce((acc, tc) => {
-    const topic = tc.expectationResults.find((r) => r.name === 'topic_sequence_match');
+    const topic = tc.testResults.find((r) => r.name === 'topic_sequence_match');
     return topic?.result === 'PASS' ? acc + 1 : acc;
   }, 0);
   const topicPassPercent = (topicPassCount / details.testSet.testCases.length) * 100;
 
   const actionPassCount = details.testSet.testCases.reduce((acc, tc) => {
-    const action = tc.expectationResults.find((r) => r.name === 'action_sequence_match');
+    const action = tc.testResults.find((r) => r.name === 'action_sequence_match');
     return action?.result === 'PASS' ? acc + 1 : acc;
   }, 0);
   const actionPassPercent = (actionPassCount / details.testSet.testCases.length) * 100;
 
   const outcomePassCount = details.testSet.testCases.reduce((acc, tc) => {
-    const outcome = tc.expectationResults.find((r) => r.name === 'bot_response_rating');
+    const outcome = tc.testResults.find((r) => r.name === 'bot_response_rating');
     return outcome?.result === 'PASS' ? acc + 1 : acc;
   }, 0);
   const outcomePassPercent = (outcomePassCount / details.testSet.testCases.length) * 100;
@@ -472,10 +460,7 @@ async function humanFormat(details: AgentTestResultsResponse): Promise<string> {
   const failedTestCasesObj = Object.fromEntries(
     Object.entries(failedTestCases).map(([, tc]) => [
       `Test Case #${failedTestCases.indexOf(tc) + 1}`,
-      tc.expectationResults
-        .filter((r) => r.result === 'FAILURE')
-        .map((r) => humanFriendlyName(r.name))
-        .join(', '),
+      tc.testResults.filter((r) => r.result === 'FAILURE').join(', '),
     ])
   );
   const failedTestCasesTable = makeSimpleTable(failedTestCasesObj, ansis.red.bold('Failed Test Cases'));
@@ -497,8 +482,7 @@ async function junitFormat(results: AgentTestResultsResponse): Promise<string> {
   const testCount = results.testSet.testCases.length;
   const failureCount = results.testSet.testCases.filter(
     (tc) =>
-      ['error', 'completed'].includes(tc.status.toLowerCase()) &&
-      tc.expectationResults.some((r) => r.result === 'FAILURE')
+      ['error', 'completed'].includes(tc.status.toLowerCase()) && tc.testResults.some((r) => r.result === 'FAILURE')
   ).length;
   const time = results.testSet.testCases.reduce((acc, tc) => {
     if (tc.endTime && tc.startTime) {
@@ -526,8 +510,8 @@ async function junitFormat(results: AgentTestResultsResponse): Promise<string> {
         return {
           $name: `${results.testSet.name}.${results.testSet.testCases.indexOf(testCase) + 1}`,
           $time: testCaseTime,
-          $assertions: testCase.expectationResults.length,
-          failure: testCase.expectationResults
+          $assertions: testCase.testResults.length,
+          failure: testCase.testResults
             .map((r) => {
               if (r.result === 'FAILURE') {
                 return { $message: r.errorMessage ?? 'Unknown error', $name: r.name };
@@ -546,7 +530,7 @@ async function tapFormat(results: AgentTestResultsResponse): Promise<string> {
   const lines: string[] = [];
   let expectationCount = 0;
   for (const testCase of results.testSet.testCases) {
-    for (const result of testCase.expectationResults) {
+    for (const result of testCase.testResults) {
       const status = result.result === 'PASS' ? 'ok' : 'not ok';
       expectationCount++;
       lines.push(

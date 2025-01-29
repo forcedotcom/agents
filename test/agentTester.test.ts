@@ -52,7 +52,7 @@ describe('AgentTester', () => {
       const output = await tester.status('4KBSM000000003F4AQ');
       expect(output).to.be.ok;
       expect(output).to.deep.equal({
-        status: 'InProgress',
+        status: 'IN_PROGRESS',
         startTime: '2024-11-13T15:00:00.000Z',
       });
     });
@@ -153,13 +153,13 @@ describe('junit formatter', () => {
     const output = await convertTestResultsToFormat(input, 'junit');
     expect(output).to.deep.equal(`<?xml version="1.0" encoding="UTF-8"?>
 <testsuites name="Copilot_for_Salesforce" tests="2" failures="1" time="20000">
-  <property name="status" value="Completed"></property>
+  <property name="status" value="COMPLETED"></property>
   <property name="start-time" value="2024-11-28T12:00:00Z"></property>
   <property name="end-time" value="2024-11-28T12:00:48.56Z"></property>
   <testsuite name="CRM_Sanity_v1.1" time="10000" assertions="3"></testsuite>
   <testsuite name="CRM_Sanity_v1.2" time="10000" assertions="3">
-    <failure message="Actual response does not match the expected response" name="action_sequence_match"></failure>
-    <failure message="Actual response does not match the expected response" name="bot_response_rating"></failure>
+    <failure message="Actual response does not match the expected response" name="expectedActions"></failure>
+    <failure message="Actual response does not match the expected response" name="expectedOutcome"></failure>
   </testsuite>
 </testsuites>`);
   });
@@ -179,14 +179,14 @@ ok 4 CRM_Sanity_v1.2
 not ok 5 CRM_Sanity_v1.2
   ---
   message: Actual response does not match the expected response
-  expectation: action_sequence_match
+  expectation: expectedActions
   actual: ["IdentifyRecordByName","QueryRecords"]
   expected: ["IdentifyRecordByName","QueryRecords","GetActivitiesTimeline"]
   ...
 not ok 6 CRM_Sanity_v1.2
   ---
   message: Actual response does not match the expected response
-  expectation: bot_response_rating
+  expectation: expectedOutcome
   actual: It looks like I am unable to find the information you are looking for due to access restrictions. How else can I assist you?
   expected: Summary of open cases and activities associated with timeline
   ...`);
