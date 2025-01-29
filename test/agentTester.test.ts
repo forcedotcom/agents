@@ -4,11 +4,18 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
+import fs from 'node:fs/promises';
 import { readFile } from 'node:fs/promises';
+import sinon from 'sinon';
 import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection } from '@salesforce/core';
-import { AgentTestResultsResponse, AgentTester, convertTestResultsToFormat } from '../src/agentTester';
+import {
+  AgentTestResultsResponse,
+  AgentTester,
+  convertTestResultsToFormat,
+  generateTestSpec,
+} from '../src/agentTester';
 
 describe('AgentTester', () => {
   const $$ = new TestContext();
@@ -135,5 +142,131 @@ not ok 6 CRM_Sanity_v1.2
   actual: It looks like I am unable to find the information you are looking for due to access restrictions. How else can I assist you?
   expected: Summary of open cases and activities associated with timeline
   ...`);
+  });
+});
+
+describe('generateTestSpec', () => {
+  let writeFileStub: sinon.SinonStub;
+  beforeEach(() => {
+    writeFileStub = sinon.stub(fs, 'writeFile');
+    sinon.stub(fs, 'mkdir').resolves();
+  });
+  afterEach(() => {
+    sinon.restore();
+  });
+
+  it('should generate a yaml file', async () => {
+    await generateTestSpec(
+      {
+        name: 'Test',
+        description: 'Test',
+        subjectType: 'AGENT',
+        subjectName: 'MyAgent',
+        testCases: [
+          {
+            utterance: 'List contact names associated with Acme account',
+            expectedActions: ['IdentifyRecordByName', 'QueryRecords'],
+            expectedOutcome: 'contacts available name available with Acme are listed',
+            expectedTopic: 'GeneralCRM',
+          },
+          {
+            utterance: 'List contact emails associated with Acme account',
+            expectedActions: ['IdentifyRecordByName', 'QueryRecords'],
+            expectedOutcome: 'contacts available emails available with Acme are listed',
+            expectedTopic: 'GeneralCRM',
+          },
+        ],
+      },
+      'test-spec.yaml'
+    );
+    expect(writeFileStub.firstCall.args).to.deep.equal([
+      'test-spec.yaml',
+      `name: Test
+description: Test
+subjectType: AGENT
+subjectName: MyAgent
+testCases:
+  - utterance: List contact names associated with Acme account
+    expectedActions:
+      - IdentifyRecordByName
+      - QueryRecords
+    expectedOutcome: contacts available name available with Acme are listed
+    expectedTopic: GeneralCRM
+  - utterance: List contact emails associated with Acme account
+    expectedActions:
+      - IdentifyRecordByName
+      - QueryRecords
+    expectedOutcome: contacts available emails available with Acme are listed
+    expectedTopic: GeneralCRM
+`,
+    ]);
+  });
+
+  it('should remove empty strings', async () => {
+    await generateTestSpec(
+      {
+        name: 'Test',
+        description: '',
+        subjectType: 'AGENT',
+        subjectName: 'MyAgent',
+        testCases: [
+          {
+            utterance: 'List contact names associated with Acme account',
+            expectedActions: ['IdentifyRecordByName', 'QueryRecords'],
+            expectedOutcome: 'contacts available name available with Acme are listed',
+            expectedTopic: 'GeneralCRM',
+          },
+        ],
+      },
+      'test-spec.yaml'
+    );
+    expect(writeFileStub.firstCall.args).to.deep.equal([
+      'test-spec.yaml',
+      `name: Test
+subjectType: AGENT
+subjectName: MyAgent
+testCases:
+  - utterance: List contact names associated with Acme account
+    expectedActions:
+      - IdentifyRecordByName
+      - QueryRecords
+    expectedOutcome: contacts available name available with Acme are listed
+    expectedTopic: GeneralCRM
+`,
+    ]);
+  });
+
+  it('should remove undefined values', async () => {
+    await generateTestSpec(
+      {
+        name: 'Test',
+        description: undefined,
+        subjectType: 'AGENT',
+        subjectName: 'MyAgent',
+        testCases: [
+          {
+            utterance: 'List contact names associated with Acme account',
+            expectedActions: ['IdentifyRecordByName', 'QueryRecords'],
+            expectedOutcome: 'contacts available name available with Acme are listed',
+            expectedTopic: 'GeneralCRM',
+          },
+        ],
+      },
+      'test-spec.yaml'
+    );
+    expect(writeFileStub.firstCall.args).to.deep.equal([
+      'test-spec.yaml',
+      `name: Test
+subjectType: AGENT
+subjectName: MyAgent
+testCases:
+  - utterance: List contact names associated with Acme account
+    expectedActions:
+      - IdentifyRecordByName
+      - QueryRecords
+    expectedOutcome: contacts available name available with Acme are listed
+    expectedTopic: GeneralCRM
+`,
+    ]);
   });
 });

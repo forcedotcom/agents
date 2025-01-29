@@ -4,10 +4,14 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-import { Connection, Lifecycle, PollingClient, StatusResult } from '@salesforce/core';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { Connection, Lifecycle, PollingClient, SfError, StatusResult } from '@salesforce/core';
 import { Duration, env } from '@salesforce/kit';
 import ansis from 'ansis';
-import { FileProperties } from '@salesforce/source-deploy-retrieve';
+import { ComponentSetBuilder, DeployResult, FileProperties, RequestStatus } from '@salesforce/source-deploy-retrieve';
+import { parse, stringify } from 'yaml';
+import { XMLBuilder } from 'fast-xml-parser';
 import { MaybeMock } from './maybe-mock';
 
 export type TestStatus = 'New' | 'InProgress' | 'Completed' | 'Error';
@@ -66,6 +70,28 @@ export type AgentTestResultsResponse = {
 };
 
 export type AvailableDefinition = Omit<FileProperties, 'manageableState' | 'namespacePrefix'>;
+
+export type TestCase = {
+  utterance: string;
+  expectedActions: string[];
+  expectedOutcome: string;
+  expectedTopic: string;
+};
+
+export type TestSpec = {
+  name: string;
+  description?: string;
+  subjectType: string;
+  subjectName: string;
+  testCases: TestCase[];
+};
+
+export const AgentTestCreateLifecycleStages = {
+  CreatingLocalMetadata: 'Creating Local Metadata',
+  Waiting: 'Waiting for the org to respond',
+  DeployingMetadata: 'Deploying Metadata',
+  Done: 'Done',
+};
 
 /**
  * AgentTester class to test Agents
@@ -195,6 +221,116 @@ export class AgentTester {
     const url = `/einstein/ai-evaluations/runs/${jobId}/cancel`;
 
     return this.maybeMock.request<{ success: boolean }>('POST', url);
+  }
+
+  /**
+   * Creates and deploys an AiEvaluationDefinition from a specification file.
+   *
+   * @param specFilePath - The path to the specification file to create the definition from
+   * @param options - Configuration options for creating the definition
+   * @param options.outputDir - The directory where the AiEvaluationDefinition file will be written
+   * @param options.preview - If true, writes the AiEvaluationDefinition file to <api-name>-preview-<timestamp>.xml in the current working directory and does not deploy it
+   * @param options.confirmationCallback - Optional callback function to confirm overwriting existing definitions
+   *
+   * @returns Promise containing:
+   * - path: The filesystem path to the created AiEvaluationDefinition file
+   * - contents: The AiEvaluationDefinition contents as a string
+   * - deployResult: The deployment result (if not in preview mode)
+   *
+   * @throws {SfError} When a definition with the same name already exists and is not confirmed to be overwritten
+   * @throws {SfError} When deployment fails
+   */
+  public async create(
+    specFilePath: string,
+    options: { outputDir: string; preview?: boolean; confirmationCallback?: (spec: TestSpec) => Promise<boolean> }
+  ): Promise<{ path: string; contents: string; deployResult?: DeployResult }> {
+    const parsed = parse(await readFile(specFilePath, 'utf-8')) as TestSpec;
+    const existingDefinitions = await this.list();
+
+    if (existingDefinitions.some((d) => d.fullName === parsed.name)) {
+      const getConfirmation = options.confirmationCallback ?? (async (): Promise<boolean> => Promise.resolve(false));
+      const confirmation = await getConfirmation(parsed);
+      if (!confirmation) {
+        throw new SfError(`An AiEvaluationDefinition with the name ${parsed.name} already exists in the org.`);
+      }
+    }
+
+    const lifecycle = Lifecycle.getInstance();
+    await lifecycle.emit(AgentTestCreateLifecycleStages.CreatingLocalMetadata, {});
+    const preview = options.preview ?? false;
+    // outputDir is overridden if preview is true
+    const outputDir = preview ? process.cwd() : options.outputDir;
+    const filename = preview
+      ? `${parsed.name}-preview-${new Date().toISOString()}.xml`
+      : `${parsed.name}.aiEvaluationDefinition-meta.xml`;
+    const definitionPath = join(outputDir, filename);
+
+    const builder = new XMLBuilder({
+      format: true,
+      attributeNamePrefix: '$',
+      ignoreAttributes: false,
+    });
+
+    const xml = builder.build({
+      AiEvaluationDefinition: {
+        $xmlns: 'http://soap.sforce.com/2006/04/metadata',
+        ...(parsed.description && { description: parsed.description }),
+        name: parsed.name,
+        subjectType: parsed.subjectType,
+        subjectName: parsed.subjectName,
+        testSetName: 'CliTestSet',
+        // testCase: parsed.testCases.map((tc) => ({
+        //   number: parsed.testCases.indexOf(tc) + 1,
+        //   inputs: {
+        //     utterance: tc.utterance,
+        //   },
+        //   expectation: [
+        //     {
+        //       name: 'expectedTopic',
+        //       expectedValue: tc.topicSequenceExpectedValue,
+        //     },
+        //     {
+        //       name: 'expectedActions',
+        //       expectedValue: `[${tc.actionSequenceExpectedValue.map((v) => `"${v}"`).join(',')}]`,
+        //     },
+        //     {
+        //       name: 'expectedOutcome',
+        //       expectedValue: tc.botRatingExpectedValue,
+        //     },
+        //   ],
+        // })),
+      },
+    }) as string;
+
+    await mkdir(outputDir, { recursive: true });
+    await writeFile(definitionPath, `<?xml version="1.0" encoding="UTF-8"?>\n${xml}`);
+    if (preview)
+      return {
+        path: definitionPath,
+        contents: xml,
+      };
+
+    const cs = await ComponentSetBuilder.build({ sourcepath: [definitionPath] });
+    const deploy = await cs.deploy({ usernameOrConnection: this.connection });
+    deploy.onUpdate((status) => {
+      if (status.status === RequestStatus.Pending) {
+        void lifecycle.emit(AgentTestCreateLifecycleStages.Waiting, status);
+      } else {
+        void lifecycle.emit(AgentTestCreateLifecycleStages.DeployingMetadata, status);
+      }
+    });
+
+    deploy.onFinish((result) => {
+      void lifecycle.emit(AgentTestCreateLifecycleStages.Done, result);
+    });
+
+    const result = await deploy.pollStatus({ timeout: Duration.minutes(10_000), frequency: Duration.seconds(1) });
+
+    if (!result.response.success) {
+      throw new SfError(result.response.errorMessage ?? `Unable to deploy ${result.response.id}`);
+    }
+
+    return { path: definitionPath, contents: xml, deployResult: result };
   }
 }
 
@@ -351,8 +487,6 @@ async function jsonFormat(results: AgentTestResultsResponse): Promise<string> {
 }
 
 async function junitFormat(results: AgentTestResultsResponse): Promise<string> {
-  // eslint-disable-next-line import/no-extraneous-dependencies
-  const { XMLBuilder } = await import('fast-xml-parser');
   const builder = new XMLBuilder({
     format: true,
     attributeNamePrefix: '$',
@@ -404,7 +538,7 @@ async function junitFormat(results: AgentTestResultsResponse): Promise<string> {
     },
   }) as string;
 
-  return `<?xml version="1.0" encoding="UTF-8"?>\n${suites}`.trim();
+  return Promise.resolve(`<?xml version="1.0" encoding="UTF-8"?>\n${suites}`.trim());
 }
 
 async function tapFormat(results: AgentTestResultsResponse): Promise<string> {
@@ -429,4 +563,19 @@ async function tapFormat(results: AgentTestResultsResponse): Promise<string> {
   }
 
   return Promise.resolve(`Tap Version 14\n1..${expectationCount}\n${lines.join('\n')}`);
+}
+
+/**
+ * Generate a test spec file from a TestSpec object
+ */
+export async function generateTestSpec(spec: TestSpec, outputFile: string): Promise<void> {
+  // strip out undefined values and empty strings
+  const clean = Object.entries(spec).reduce<Partial<TestSpec>>((acc, [key, value]) => {
+    if (value !== undefined && value !== '') return { ...acc, [key]: value };
+    return acc;
+  }, {});
+
+  const yml = stringify(clean);
+  await mkdir(dirname(outputFile), { recursive: true });
+  await writeFile(outputFile, yml);
 }
