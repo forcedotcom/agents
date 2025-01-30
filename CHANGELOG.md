@@ -1,3 +1,12 @@
+## [0.9.2](https://github.com/forcedotcom/agents/compare/0.9.1...0.9.2) (2025-01-30)
+
+
+### Bug Fixes
+
+* generate single AiEvaluationDefinition ([01869ed](https://github.com/forcedotcom/agents/commit/01869eda68d2e5fe734da28859e1d333c9a3d25a))
+
+
+
 ## [0.9.1](https://github.com/forcedotcom/agents/compare/0.9.0...0.9.1) (2025-01-29)
 
 
