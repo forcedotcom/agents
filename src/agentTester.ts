@@ -279,28 +279,26 @@ export class AgentTester {
         subjectType: parsed.subjectType,
         subjectName: parsed.subjectName,
         ...(parsed.subjectVersion && { subjectVersion: parsed.subjectVersion }),
-        // TODO: Once SF Eval removes AiEvaluationTestSet, we can remove testSetName and uncomment testCase
-        testSetName: 'CliTestSet',
-        // testCase: parsed.testCases.map((tc) => ({
-        //   number: parsed.testCases.indexOf(tc) + 1,
-        //   inputs: {
-        //     utterance: tc.utterance,
-        //   },
-        //   expectation: [
-        //     {
-        //       name: 'expectedTopic',
-        //       expectedValue: tc.topicSequenceExpectedValue,
-        //     },
-        //     {
-        //       name: 'expectedActions',
-        //       expectedValue: `[${tc.actionSequenceExpectedValue.map((v) => `"${v}"`).join(',')}]`,
-        //     },
-        //     {
-        //       name: 'expectedOutcome',
-        //       expectedValue: tc.botRatingExpectedValue,
-        //     },
-        //   ],
-        // })),
+        testCase: parsed.testCases.map((tc) => ({
+          number: parsed.testCases.indexOf(tc) + 1,
+          inputs: {
+            utterance: tc.utterance,
+          },
+          expectation: [
+            {
+              name: 'expectedTopic',
+              expectedValue: tc.expectedTopic,
+            },
+            {
+              name: 'expectedActions',
+              expectedValue: `[${tc.expectedActions.map((v) => `"${v}"`).join(',')}]`,
+            },
+            {
+              name: 'expectedOutcome',
+              expectedValue: tc.expectedOutcome,
+            },
+          ],
+        })),
       },
     }) as string;
 

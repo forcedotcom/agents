@@ -130,7 +130,42 @@ testCases:
   <name>Test</name>
   <subjectType>AGENT</subjectType>
   <subjectName>MyAgent</subjectName>
-  <testSetName>CliTestSet</testSetName>
+  <testCase>
+    <number>1</number>
+    <inputs>
+      <utterance>List contact names associated with Acme account</utterance>
+    </inputs>
+    <expectation>
+      <name>expectedTopic</name>
+      <expectedValue>GeneralCRM</expectedValue>
+    </expectation>
+    <expectation>
+      <name>expectedActions</name>
+      <expectedValue>[&quot;IdentifyRecordByName&quot;,&quot;QueryRecords&quot;]</expectedValue>
+    </expectation>
+    <expectation>
+      <name>expectedOutcome</name>
+      <expectedValue>contacts available name available with Acme are listed</expectedValue>
+    </expectation>
+  </testCase>
+  <testCase>
+    <number>2</number>
+    <inputs>
+      <utterance>List contact emails associated with Acme account</utterance>
+    </inputs>
+    <expectation>
+      <name>expectedTopic</name>
+      <expectedValue>GeneralCRM</expectedValue>
+    </expectation>
+    <expectation>
+      <name>expectedActions</name>
+      <expectedValue>[&quot;IdentifyRecordByName&quot;,&quot;QueryRecords&quot;]</expectedValue>
+    </expectation>
+    <expectation>
+      <name>expectedOutcome</name>
+      <expectedValue>contacts available emails available with Acme are listed</expectedValue>
+    </expectation>
+  </testCase>
 </AiEvaluationDefinition>
 `);
     });
