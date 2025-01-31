@@ -24,3 +24,4 @@ export {
   type TestCaseResult,
   type TestStatus,
 } from './agentTester';
+export { AgentPreview } from './agentPreview';
