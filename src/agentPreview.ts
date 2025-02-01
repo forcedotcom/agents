@@ -6,7 +6,7 @@
  */
 
 import { Connection } from '@salesforce/core';
-import { MaybeMock } from './maybe-mock-preview';
+import { RequestPreview } from './request-preview';
 
 type ApiStatus = {
   status: 'UP' | 'DOWN';
@@ -64,13 +64,13 @@ type EndResponse = {
 type EndReason = 'UserRequest' | 'Transfer' | 'Expiration' | 'Error' | 'Other';
 
 export class AgentPreview {
-  private maybeMock: MaybeMock;
+  private got: RequestPreview;
   private headers;
   private instanceUrl: string;
   private tempApiBase = process.env.AFDX_TEMP_AGENT_API_BASE as string;
 
   public constructor(connection: Connection) {
-    this.maybeMock = new MaybeMock(connection);
+    this.got = new RequestPreview();
     const auth = process.env.AFDX_TEMP_AGENT_API_KEY as string;
     const env = process.env.AFDX_TEMP_AGENT_ENV as string;
 
@@ -87,7 +87,8 @@ export class AgentPreview {
 
   public async start(botId: string): Promise<StartResponse> {
     const url = `${this.tempApiBase}/einstein/ai-agent/v1/agents/${botId}/sessions`;
-    const body = JSON.stringify({
+
+    const body = {
       // TODO: this needs to generate a unique guid
       externalSessionKey: '44736288-030b-4080-b477-975a60f00a12',
       instanceConfig: {
@@ -97,30 +98,30 @@ export class AgentPreview {
         chunkTypes: ['Text'],
       },
       variables: [],
-    });
+    };
 
-    return this.maybeMock.request<StartResponse>('POST', url, body, this.headers);
+    return this.got.request<StartResponse>('POST', url, body, this.headers);
   }
 
   public async send(sessionId: string, message: string): Promise<SendResponse> {
     const url = `${this.tempApiBase}/einstein/ai-agent/v1/sessions/${sessionId}/messages`;
 
-    const body = JSON.stringify({
+    const body = {
       message: {
         sequenceId: Date.now(),
         type: 'Text',
         text: message,
       },
       variables: [],
-    });
+    };
 
-    return this.maybeMock.request<SendResponse>('POST', url, body, this.headers);
+    return this.got.request<SendResponse>('POST', url, body, this.headers);
   }
 
   public async end(sessionId: string, reason: EndReason): Promise<EndResponse> {
     const url = `${this.tempApiBase}/einstein/ai-agent/v1/sessions/${sessionId}`;
 
-    return this.maybeMock.request<EndResponse>('DELETE', url, undefined, {
+    return this.got.request<EndResponse>('DELETE', url, undefined, {
       ...this.headers,
       'x-session-end-reason': reason,
     });
@@ -131,6 +132,6 @@ export class AgentPreview {
     const base = 'https://test.api.salesforce.com';
     const url = `${base}/einstein/ai-agent/v1/status`;
 
-    return this.maybeMock.request<ApiStatus>('GET', url, undefined, this.headers);
+    return this.got.request<ApiStatus>('GET', url, undefined, this.headers);
   }
 }
