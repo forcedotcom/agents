@@ -14,14 +14,14 @@ type ApiStatus = {
 
 type Href = { href: string };
 
-type Links = {
+export type AgentPreviewMessageLinks = {
   self: Href | null;
   messages: Href | null;
   session: Href | null;
   end: Href | null;
 };
 
-type Message = {
+export type AgentPreviewMessage = {
   type: string;
   id: string;
   feedbackId: string;
@@ -40,25 +40,25 @@ type Message = {
   };
 };
 
-type StartResponse = {
+export type AgentPreviewStartResponse = {
   sessionId: string;
-  _links: Links;
-  messages: Message[];
+  _links: AgentPreviewMessageLinks;
+  messages: AgentPreviewMessage[];
 };
 
-type SendResponse = {
-  messages: Message[];
-  _links: Links;
+export type AgentPreviewSendResponse = {
+  messages: AgentPreviewMessage[];
+  _links: AgentPreviewMessageLinks;
 };
 
-type EndResponse = {
+export type AgentPreviewEndResponse = {
   messages: {
     type: string;
     id: string;
     reason: string;
     feedbackId: string;
   };
-  _links: Links;
+  _links: AgentPreviewMessageLinks;
 };
 
 type EndReason = 'UserRequest' | 'Transfer' | 'Expiration' | 'Error' | 'Other';
@@ -85,7 +85,7 @@ export class AgentPreview {
     };
   }
 
-  public async start(botId: string): Promise<StartResponse> {
+  public async start(botId: string): Promise<AgentPreviewStartResponse> {
     const url = `${this.tempApiBase}/einstein/ai-agent/v1/agents/${botId}/sessions`;
 
     const body = {
@@ -100,10 +100,10 @@ export class AgentPreview {
       variables: [],
     };
 
-    return this.got.request<StartResponse>('POST', url, body, this.headers);
+    return this.got.request<AgentPreviewStartResponse>('POST', url, body, this.headers);
   }
 
-  public async send(sessionId: string, message: string): Promise<SendResponse> {
+  public async send(sessionId: string, message: string): Promise<AgentPreviewSendResponse> {
     const url = `${this.tempApiBase}/einstein/ai-agent/v1/sessions/${sessionId}/messages`;
 
     const body = {
@@ -115,13 +115,13 @@ export class AgentPreview {
       variables: [],
     };
 
-    return this.got.request<SendResponse>('POST', url, body, this.headers);
+    return this.got.request<AgentPreviewSendResponse>('POST', url, body, this.headers);
   }
 
-  public async end(sessionId: string, reason: EndReason): Promise<EndResponse> {
+  public async end(sessionId: string, reason: EndReason): Promise<AgentPreviewEndResponse> {
     const url = `${this.tempApiBase}/einstein/ai-agent/v1/sessions/${sessionId}`;
 
-    return this.got.request<EndResponse>('DELETE', url, undefined, {
+    return this.got.request<AgentPreviewEndResponse>('DELETE', url, undefined, {
       ...this.headers,
       'x-session-end-reason': reason,
     });
