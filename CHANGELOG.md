@@ -1,3 +1,12 @@
+## [0.9.4](https://github.com/forcedotcom/agents/compare/0.9.3...0.9.4) (2025-02-01)
+
+
+### Bug Fixes
+
+* **deps:** bump @salesforce/sf-plugins-core from 12.1.2 to 12.1.3 ([bc17192](https://github.com/forcedotcom/agents/commit/bc1719265cbc405019f035827c266628d7cd9dca))
+
+
+
 ## [0.9.3](https://github.com/forcedotcom/agents/compare/0.9.2...0.9.3) (2025-02-01)
 
 
