@@ -1,0 +1,45 @@
+{
+  "isSuccess": true,
+  "topicDrafts": [
+    {
+      "name": "Guest_Experience_Enhancement",
+      "description": "Develop and implement entertainment programs to enhance guest experience."
+    },
+    {
+      "name": "Event_Planning_and_Execution",
+      "description": "Plan, organize, and execute resort events and activities."
+    },
+    {
+      "name": "Vendor_Management",
+      "description": "Coordinate with external vendors for event supplies and services."
+    },
+    {
+      "name": "Staff_Training_and_Development",
+      "description": "Train and develop staff to deliver exceptional entertainment services."
+    },
+    {
+      "name": "Budget_Management",
+      "description": "Manage budgets for entertainment activities and events."
+    },
+    {
+      "name": "Guest_Feedback_Analysis",
+      "description": "Collect and analyze guest feedback to improve entertainment offerings."
+    },
+    {
+      "name": "Marketing_Collaboration",
+      "description": "Work with marketing to promote events and entertainment activities."
+    },
+    {
+      "name": "Technology_Integration",
+      "description": "Utilize technology to enhance guest engagement and streamline operations."
+    },
+    {
+      "name": "Safety_and_Compliance",
+      "description": "Ensure all entertainment activities comply with safety regulations."
+    },
+    {
+      "name": "Performance_Monitoring",
+      "description": "Monitor and evaluate the performance of entertainment programs."
+    }
+  ]
+}

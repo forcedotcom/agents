@@ -7,18 +7,27 @@
 
 export {
   type AgentCreateConfig,
+  type AgentCreateConfigV2,
   type AgentCreateResponse,
+  type AgentCreateResponseV2,
   type AgentJobSpec,
+  type AgentJobSpecV2,
   type AgentJobSpecCreateConfig,
+  type AgentJobSpecCreateConfigV2,
   type AgentJobSpecCreateResponse,
+  type DraftAgentTopics,
+  type DraftAgentTopicsBody,
+  type DraftAgentTopicsResponse,
   SfAgent,
 } from './types';
-export { Agent } from './agent';
+export { Agent, AgentCreateLifecycleStages, AgentCreateLifecycleStagesV2, generateAgentApiName } from './agent';
 export {
   AgentTester,
-  humanFormat,
-  jsonFormat,
-  type AgentTestDetailsResponse,
+  convertTestResultsToFormat,
+  generateTestSpec,
+  AgentTestCreateLifecycleStages,
+  type AvailableDefinition,
+  type AgentTestResultsResponse,
   type AgentTestStartResponse,
   type AgentTestStatusResponse,
   type TestCaseResult,

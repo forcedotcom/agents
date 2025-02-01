@@ -1,0 +1,46 @@
+{
+  "isSuccess": true,
+  "agentId": {
+    "botId": "12345",
+    "botVersionId": "12345",
+    "plannerId": "12345"
+  },
+  "agentDefinition": {
+    "agentDescription": "some agent description",
+    "topics": [
+      {
+        "scope": "some scope",
+        "topic": "topic_name",
+        "actions": [
+          {
+            "actionName": "some_action_name",
+            "exampleOutput": "some example output",
+            "actionDescription": "some description",
+            "inputs": [
+              {
+                "inputName": "input_name_1",
+                "inputDataType": "string",
+                "inputDescription": "some description"
+              },
+              {
+                "inputName": "input_name_2",
+                "inputDataType": "date",
+                "inputDescription": "some description"
+              }
+            ],
+            "outputs": [
+              {
+                "outputName": "output_name",
+                "outputDataType": "string",
+                "outputDescription": "some description"
+              }
+            ]
+          }
+        ],
+        "instructions": ["instruction 1", "instruction 2"],
+        "classificationDescription": "some classification description"
+      }
+    ],
+    "Sample_Utterances": ["sample utterance 1", "sample utterance 2", "sample utterance 3"]
+  }
+}
