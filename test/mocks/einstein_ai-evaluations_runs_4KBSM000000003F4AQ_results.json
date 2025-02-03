@@ -8,6 +8,7 @@
     "name": "CRM_Sanity_v1",
     "testCases": [
       {
+        "number": 1,
         "status": "COMPLETED",
         "inputs": {
           "utterance": "Summarize account Acme"
@@ -66,6 +67,7 @@
         ]
       },
       {
+        "number": 2,
         "status": "COMPLETED",
         "startTime": "2024-11-28T12:00:30Z",
         "inputs": {
