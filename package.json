@@ -1,7 +1,7 @@
 {
   "name": "@salesforce/agents",
   "description": "Client side APIs for working with Salesforce agents",
-  "version": "0.9.4",
+  "version": "0.9.5-preview.1",
   "license": "BSD-3-Clause",
   "author": "Salesforce",
   "main": "lib/index",
@@ -17,6 +17,7 @@
     "@salesforce/source-deploy-retrieve": "^12.14.1",
     "ansis": "^3.10.0",
     "fast-xml-parser": "^4.5.1",
+    "got": "^11.8.6",
     "nock": "^13.5.6",
     "yaml": "^2.7.0"
   },
