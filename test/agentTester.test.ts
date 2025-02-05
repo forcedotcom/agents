@@ -65,7 +65,7 @@ describe('AgentTester', () => {
       const response = await tester.poll('4KBSM000000003F4AQ');
       expect(response).to.be.ok;
       // TODO: make these assertions more meaningful
-      expect(response.testSet.testCases[0].status).to.equal('COMPLETED');
+      expect(response.testCases[0].status).to.equal('COMPLETED');
     });
   });
 
@@ -136,15 +136,15 @@ testCases:
       <utterance>List contact names associated with Acme account</utterance>
     </inputs>
     <expectation>
-      <name>expectedTopic</name>
+      <name>topic_sequence_match</name>
       <expectedValue>GeneralCRM</expectedValue>
     </expectation>
     <expectation>
-      <name>expectedActions</name>
+      <name>action_sequence_match</name>
       <expectedValue>[&quot;IdentifyRecordByName&quot;,&quot;QueryRecords&quot;]</expectedValue>
     </expectation>
     <expectation>
-      <name>expectedOutcome</name>
+      <name>bot_response_rating</name>
       <expectedValue>contacts available name available with Acme are listed</expectedValue>
     </expectation>
   </testCase>
@@ -154,15 +154,15 @@ testCases:
       <utterance>List contact emails associated with Acme account</utterance>
     </inputs>
     <expectation>
-      <name>expectedTopic</name>
+      <name>topic_sequence_match</name>
       <expectedValue>GeneralCRM</expectedValue>
     </expectation>
     <expectation>
-      <name>expectedActions</name>
+      <name>action_sequence_match</name>
       <expectedValue>[&quot;IdentifyRecordByName&quot;,&quot;QueryRecords&quot;]</expectedValue>
     </expectation>
     <expectation>
-      <name>expectedOutcome</name>
+      <name>bot_response_rating</name>
       <expectedValue>contacts available emails available with Acme are listed</expectedValue>
     </expectation>
   </testCase>
@@ -191,10 +191,10 @@ describe('junit formatter', () => {
   <property name="status" value="COMPLETED"></property>
   <property name="start-time" value="2024-11-28T12:00:00Z"></property>
   <property name="end-time" value="2024-11-28T12:00:48.56Z"></property>
-  <testsuite name="CRM_Sanity_v1.1" time="10000" assertions="3"></testsuite>
-  <testsuite name="CRM_Sanity_v1.2" time="10000" assertions="3">
-    <failure message="Actual response does not match the expected response" name="expectedActions"></failure>
-    <failure message="Actual response does not match the expected response" name="expectedOutcome"></failure>
+  <testsuite name="1" time="10000" assertions="3"></testsuite>
+  <testsuite name="2" time="10000" assertions="3">
+    <failure message="Actual response does not match the expected response" name="action_sequence_match"></failure>
+    <failure message="Actual response does not match the expected response" name="bot_response_rating"></failure>
   </testsuite>
 </testsuites>`);
   });
@@ -205,23 +205,23 @@ describe('tap formatter', () => {
     const raw = await readFile('./test/mocks/einstein_ai-evaluations_runs_4KBSM000000003F4AQ_results.json', 'utf8');
     const input = JSON.parse(raw) as AgentTestResultsResponse;
     const output = await convertTestResultsToFormat(input, 'tap');
-    expect(output).to.deep.equal(`Tap Version 14
+    expect(output).to.equal(`Tap Version 14
 1..6
-ok 1 CRM_Sanity_v1.1
-ok 2 CRM_Sanity_v1.1
-ok 3 CRM_Sanity_v1.1
-ok 4 CRM_Sanity_v1.2
-not ok 5 CRM_Sanity_v1.2
+ok 1 1.topic_sequence_match
+ok 2 1.action_sequence_match
+ok 3 1.bot_response_rating
+ok 4 2.topic_sequence_match
+not ok 5 2.action_sequence_match
   ---
   message: Actual response does not match the expected response
-  expectation: expectedActions
+  expectation: action_sequence_match
   actual: ["IdentifyRecordByName","QueryRecords"]
   expected: ["IdentifyRecordByName","QueryRecords","GetActivitiesTimeline"]
   ...
-not ok 6 CRM_Sanity_v1.2
+not ok 6 2.bot_response_rating
   ---
   message: Actual response does not match the expected response
-  expectation: expectedOutcome
+  expectation: bot_response_rating
   actual: It looks like I am unable to find the information you are looking for due to access restrictions. How else can I assist you?
   expected: Summary of open cases and activities associated with timeline
   ...`);

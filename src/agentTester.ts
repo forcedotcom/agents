@@ -17,7 +17,7 @@ import { MaybeMock } from './maybe-mock';
 export type TestStatus = 'NEW' | 'IN_PROGRESS' | 'COMPLETED' | 'ERROR' | 'TERMINATED';
 
 export type AgentTestStartResponse = {
-  aiEvaluationId: string;
+  runId: string;
   status: TestStatus;
 };
 
@@ -54,6 +54,7 @@ export type TestCaseResult = {
     errorCode?: string;
     errorMessage?: string;
   }>;
+  testNumber: number;
 };
 
 export type AgentTestResultsResponse = {
@@ -62,10 +63,7 @@ export type AgentTestResultsResponse = {
   endTime?: string;
   errorMessage?: string;
   subjectName: string;
-  testSet: {
-    name: string;
-    testCases: TestCaseResult[];
-  };
+  testCases: TestCaseResult[];
 };
 
 export type AvailableDefinition = Omit<FileProperties, 'manageableState' | 'namespacePrefix'>;
@@ -160,11 +158,11 @@ export class AgentTester {
         const statusResponse = await this.status(jobId);
         if (statusResponse.status.toLowerCase() !== 'new') {
           const resultsResponse = await this.results(jobId);
-          const totalTestCases = resultsResponse.testSet.testCases.length;
-          const passingTestCases = resultsResponse.testSet.testCases.filter(
+          const totalTestCases = resultsResponse.testCases.length;
+          const passingTestCases = resultsResponse.testCases.filter(
             (tc) => tc.status.toLowerCase() === 'completed' && tc.testResults.every((r) => r.result === 'PASS')
           ).length;
-          const failingTestCases = resultsResponse.testSet.testCases.filter(
+          const failingTestCases = resultsResponse.testCases.filter(
             (tc) =>
               ['error', 'completed'].includes(tc.status.toLowerCase()) &&
               tc.testResults.some((r) => r.result === 'FAILURE')
@@ -286,15 +284,15 @@ export class AgentTester {
           },
           expectation: [
             {
-              name: 'expectedTopic',
+              name: 'topic_sequence_match',
               expectedValue: tc.expectedTopic,
             },
             {
-              name: 'expectedActions',
+              name: 'action_sequence_match',
               expectedValue: `[${tc.expectedActions.map((v) => `"${v}"`).join(',')}]`,
             },
             {
-              name: 'expectedOutcome',
+              name: 'bot_response_rating',
               expectedValue: tc.expectedOutcome,
             },
           ],
@@ -331,6 +329,19 @@ export class AgentTester {
     }
 
     return { path: definitionPath, contents: xml, deployResult: result };
+  }
+}
+
+function humanFriendlyName(name: string): string {
+  switch (name) {
+    case 'topic_sequence_match':
+      return 'Topic';
+    case 'action_sequence_match':
+      return 'Action';
+    case 'bot_response_rating':
+      return 'Outcome';
+    default:
+      return name;
   }
 }
 
@@ -402,19 +413,20 @@ export async function convertTestResultsToFormat(
   }
 }
 
-async function humanFormat(details: AgentTestResultsResponse): Promise<string> {
+async function humanFormat(results: AgentTestResultsResponse): Promise<string> {
   const { Ux } = await import('@salesforce/sf-plugins-core');
   const ux = new Ux();
 
   const tables: string[] = [];
-  for (const testCase of details.testSet.testCases) {
-    const number = details.testSet.testCases.indexOf(testCase) + 1;
+  for (const testCase of results.testCases) {
     const table = ux.makeTable({
-      title: `${ansis.bold(`Test Case #${number}`)}\n${ansis.dim('Utterance')}: ${testCase.inputs.utterance}`,
+      title: `${ansis.bold(`Test Case #${testCase.testNumber}`)}\n${ansis.dim('Utterance')}: ${
+        testCase.inputs.utterance
+      }`,
       overflow: 'wrap',
       columns: ['test', 'result', { key: 'expected', width: '40%' }, { key: 'actual', width: '40%' }],
       data: testCase.testResults.map((r) => ({
-        test: r.name,
+        test: humanFriendlyName(r.name),
         result: r.result === 'PASS' ? ansis.green('Pass') : ansis.red('Fail'),
         expected: r.expectedValue,
         actual: r.actualValue,
@@ -424,41 +436,44 @@ async function humanFormat(details: AgentTestResultsResponse): Promise<string> {
     tables.push(table);
   }
 
-  const topicPassCount = details.testSet.testCases.reduce((acc, tc) => {
+  const topicPassCount = results.testCases.reduce((acc, tc) => {
     const topic = tc.testResults.find((r) => r.name === 'topic_sequence_match');
     return topic?.result === 'PASS' ? acc + 1 : acc;
   }, 0);
-  const topicPassPercent = (topicPassCount / details.testSet.testCases.length) * 100;
+  const topicPassPercent = (topicPassCount / results.testCases.length) * 100;
 
-  const actionPassCount = details.testSet.testCases.reduce((acc, tc) => {
+  const actionPassCount = results.testCases.reduce((acc, tc) => {
     const action = tc.testResults.find((r) => r.name === 'action_sequence_match');
     return action?.result === 'PASS' ? acc + 1 : acc;
   }, 0);
-  const actionPassPercent = (actionPassCount / details.testSet.testCases.length) * 100;
+  const actionPassPercent = (actionPassCount / results.testCases.length) * 100;
 
-  const outcomePassCount = details.testSet.testCases.reduce((acc, tc) => {
+  const outcomePassCount = results.testCases.reduce((acc, tc) => {
     const outcome = tc.testResults.find((r) => r.name === 'bot_response_rating');
     return outcome?.result === 'PASS' ? acc + 1 : acc;
   }, 0);
-  const outcomePassPercent = (outcomePassCount / details.testSet.testCases.length) * 100;
+  const outcomePassPercent = (outcomePassCount / results.testCases.length) * 100;
 
-  const results = {
-    Status: details.status,
-    Duration: details.endTime
-      ? readableTime(new Date(details.endTime).getTime() - new Date(details.startTime).getTime())
+  const final = {
+    Status: results.status,
+    Duration: results.endTime
+      ? readableTime(new Date(results.endTime).getTime() - new Date(results.startTime).getTime())
       : 'Unknown',
     'Topic Pass %': `${topicPassPercent.toFixed(2)}%`,
     'Action Pass %': `${actionPassPercent.toFixed(2)}%`,
     'Outcome Pass %': `${outcomePassPercent.toFixed(2)}%`,
   };
 
-  const resultsTable = makeSimpleTable(results, ansis.bold.blue('Test Results'));
+  const resultsTable = makeSimpleTable(final, ansis.bold.blue('Test Results'));
 
-  const failedTestCases = details.testSet.testCases.filter((tc) => tc.status.toLowerCase() === 'error');
+  const failedTestCases = results.testCases.filter((tc) => tc.status.toLowerCase() === 'error');
   const failedTestCasesObj = Object.fromEntries(
     Object.entries(failedTestCases).map(([, tc]) => [
-      `Test Case #${failedTestCases.indexOf(tc) + 1}`,
-      tc.testResults.filter((r) => r.result === 'FAILURE').join(', '),
+      `Test Case #${tc.testNumber}`,
+      tc.testResults
+        .filter((r) => r.result === 'FAILURE')
+        .map((r) => humanFriendlyName(r.name))
+        .join(', '),
     ])
   );
   const failedTestCasesTable = makeSimpleTable(failedTestCasesObj, ansis.red.bold('Failed Test Cases'));
@@ -477,12 +492,12 @@ async function junitFormat(results: AgentTestResultsResponse): Promise<string> {
     ignoreAttributes: false,
   });
 
-  const testCount = results.testSet.testCases.length;
-  const failureCount = results.testSet.testCases.filter(
+  const testCount = results.testCases.length;
+  const failureCount = results.testCases.filter(
     (tc) =>
       ['error', 'completed'].includes(tc.status.toLowerCase()) && tc.testResults.some((r) => r.result === 'FAILURE')
   ).length;
-  const time = results.testSet.testCases.reduce((acc, tc) => {
+  const time = results.testCases.reduce((acc, tc) => {
     if (tc.endTime && tc.startTime) {
       return acc + new Date(tc.endTime).getTime() - new Date(tc.startTime).getTime();
     }
@@ -500,13 +515,13 @@ async function junitFormat(results: AgentTestResultsResponse): Promise<string> {
         { $name: 'start-time', $value: results.startTime },
         { $name: 'end-time', $value: results.endTime },
       ],
-      testsuite: results.testSet.testCases.map((testCase) => {
+      testsuite: results.testCases.map((testCase) => {
         const testCaseTime = testCase.endTime
           ? new Date(testCase.endTime).getTime() - new Date(testCase.startTime).getTime()
           : 0;
 
         return {
-          $name: `${results.testSet.name}.${results.testSet.testCases.indexOf(testCase) + 1}`,
+          $name: testCase.testNumber,
           $time: testCaseTime,
           $assertions: testCase.testResults.length,
           failure: testCase.testResults
@@ -527,13 +542,11 @@ async function junitFormat(results: AgentTestResultsResponse): Promise<string> {
 async function tapFormat(results: AgentTestResultsResponse): Promise<string> {
   const lines: string[] = [];
   let expectationCount = 0;
-  for (const testCase of results.testSet.testCases) {
+  for (const testCase of results.testCases) {
     for (const result of testCase.testResults) {
       const status = result.result === 'PASS' ? 'ok' : 'not ok';
       expectationCount++;
-      lines.push(
-        `${status} ${expectationCount} ${results.testSet.name}.${results.testSet.testCases.indexOf(testCase) + 1}`
-      );
+      lines.push(`${status} ${expectationCount} ${testCase.testNumber}.${result.name}`);
       if (status === 'not ok') {
         lines.push('  ---');
         lines.push(`  message: ${result.errorMessage ?? 'Unknown error'}`);
