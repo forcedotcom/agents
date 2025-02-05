@@ -1,0 +1,191 @@
+{
+  "status": "IN_PROGRESS",
+  "startTime": "2025-01-07T12:00:00Z",
+  "endTime": "2025-01-07T12:00:10.35Z",
+  "errorMessage": null,
+  "subjectName": "Guest_Experience_Agent",
+  "testCases": [
+    {
+      "status": "COMPLETED",
+      "testNumber": 1,
+      "inputs": {
+        "utterance": "I'd like a 1 hour massage anytime after 2pm today. My email is sofiarodriguez@example.com and my membership number is 10008155."
+      },
+      "startTime": "2025-01-07T12:00:10Z",
+      "endTime": "2025-01-07T12:00:20Z",
+      "generatedData": {
+        "type": "AGENT",
+        "actionsSequence": [
+          "Get_Experience_Details",
+          "Generate_Personalized_Schedule",
+          "Get_Customer_Details",
+          "Create_Experience_Session_Booking"
+        ],
+        "outcome": "Success",
+        "topic": "Mathematics"
+      },
+      "testResults": [
+        {
+          "name": "topic_sequence_match",
+          "actualValue": "Experience_Management",
+          "expectedValue": "Experience_Management",
+          "score": 1.0,
+          "result": "PASS",
+          "metricLabel": "Accuracy",
+          "metricExplainability": "Measures the correctness of the result.",
+          "status": "COMPLETED",
+          "startTime": "2025-01-07T12:00:12Z",
+          "endTime": "2025-01-07T12:00:13Z",
+          "errorCode": null,
+          "errorMessage": null
+        },
+        {
+          "name": "action_sequence_match",
+          "actualValue": "[\"Get_Experience_Details\", \"Generate_Personalized_Schedule\", \"Get_Customer_Details\", \"Create_Experience_Session_Booking\"]",
+          "expectedValue": "[\"Get_Experience_Details\", \"Generate_Personalized_Schedule\", \"Get_Customer_Details\", \"Create_Experience_Session_Booking\"]",
+          "score": 1.0,
+          "result": "PASS",
+          "metricLabel": "Precision",
+          "metricExplainability": "Measures the precision of the result.",
+          "status": "COMPLETED",
+          "startTime": "2025-01-07T12:00:14Z",
+          "endTime": "2025-01-07T12:00:15Z",
+          "errorCode": null,
+          "errorMessage": null
+        },
+        {
+          "name": "bot_response_rating",
+          "actualValue": "I can help you book a massage. Are you looking for a relaxing or deep-tissue massage today?.",
+          "expectedValue": "I can help you with that! Are you looking for a Swedish or deep-tissue massage?",
+          "score": 0.9,
+          "result": "PASS",
+          "metricLabel": "Precision",
+          "metricExplainability": "Measures the precision of the result.",
+          "status": "COMPLETED",
+          "startTime": "2025-01-07T12:00:14Z",
+          "endTime": "2025-01-07T12:00:15Z",
+          "errorCode": null,
+          "errorMessage": null
+        }
+      ]
+    },
+    {
+      "status": "COMPLETED",
+      "testNumber": 2,
+      "inputs": {
+        "utterance": "Can you tell me why there are so many flamingoes around the resort?"
+      },
+      "startTime": "2025-01-07T12:00:10Z",
+      "endTime": "2025-01-07T12:00:20Z",
+      "generatedData": {
+        "type": "AGENT",
+        "actionsSequence": ["EmployeeCopilot__AnswerQuestionsWithKnowledge", "Get_Customer_Details"],
+        "outcome": "Success",
+        "topic": "Mathematics"
+      },
+      "testResults": [
+        {
+          "name": "topic_sequence_match",
+          "actualValue": "Local_History",
+          "expectedValue": "Local_History",
+          "score": 1.0,
+          "result": "PASS",
+          "metricLabel": "Accuracy",
+          "metricExplainability": "Measures the correctness of the result.",
+          "status": "COMPLETED",
+          "startTime": "2025-01-07T12:00:12Z",
+          "endTime": "2025-01-07T12:00:13Z",
+          "errorCode": null,
+          "errorMessage": null
+        },
+        {
+          "name": "action_sequence_match",
+          "actualValue": "[\"EmployeeCopilot__AnswerQuestionsWithKnowledge\", \"Get_Customer_Details\"]",
+          "expectedValue": "[\"EmployeeCopilot__AnswerQuestionsWithKnowledge\", \"Get_Customer_Details\"]",
+          "score": 1.0,
+          "result": "PASS",
+          "metricLabel": "Precision",
+          "metricExplainability": "Measures the precision of the result.",
+          "status": "COMPLETED",
+          "startTime": "2025-01-07T12:00:14Z",
+          "endTime": "2025-01-07T12:00:15Z",
+          "errorCode": null,
+          "errorMessage": null
+        },
+        {
+          "name": "bot_response_rating",
+          "actualValue": "The flamigoes are a key part of Coral Cloud history, ever since 1948 when our founder, Cathy Coral imported them from Africa. Would you like to know more?",
+          "expectedValue": "The flamigoes have been here since 1948 when our founder, Cathy Coral imported them from Africa. Would you like to know more?",
+          "score": 0.9,
+          "result": "PASS",
+          "metricLabel": "Precision",
+          "metricExplainability": "Measures the precision of the result.",
+          "status": "COMPLETED",
+          "startTime": "2025-01-07T12:00:14Z",
+          "endTime": "2025-01-07T12:00:15Z",
+          "errorCode": null,
+          "errorMessage": null
+        }
+      ]
+    },
+    {
+      "status": "IN_PROGRESS",
+      "testNumber": 3,
+      "startTime": "2025-01-07T12:00:30Z",
+      "inputs": {
+        "utterance": "What's the weather going to be like this afternoon?"
+      },
+      "endTime": "2025-01-07T12:00:40Z",
+      "generatedData": {
+        "type": "AGENT",
+        "actionsSequence": ["Check_Weather"],
+        "outcome": "Failure",
+        "topic": "Physics"
+      },
+      "testResults": [
+        {
+          "name": "topic_sequence_match",
+          "actualValue": "Local_Weather",
+          "expectedValue": "Local_Weather",
+          "score": 1,
+          "result": "PASS",
+          "metricLabel": "Accuracy",
+          "metricExplainability": "Measures the correctness of the result.",
+          "status": "COMPLETED",
+          "startTime": "2025-01-07T12:00:32Z",
+          "endTime": "2025-01-07T12:00:33Z",
+          "errorCode": null,
+          "errorMessage": null
+        },
+        {
+          "name": "action_sequence_match",
+          "actualValue": "[\"Check_Weather\"]",
+          "expectedValue": "[\"Check_Weather\"]",
+          "score": 1.0,
+          "result": "PASS",
+          "metricLabel": "Precision",
+          "metricExplainability": "Measures the precision of the result.",
+          "status": "COMPLETED",
+          "startTime": "2025-01-07T12:00:14Z",
+          "endTime": "2025-01-07T12:00:15Z",
+          "errorCode": 1,
+          "errorMessage": "Actual response does not match the expected response"
+        },
+        {
+          "name": "bot_response_rating",
+          "actualValue": "It looks like I am unable to check the weather. There's something wrong with the Weather Service. How else can I assist you?",
+          "expectedValue": "The answer should start by describing expected conditions, for example \"clear skies\" or \"50% chance of rain\" and conclude with a range of high and low temperatures in degrees fahrenheit.",
+          "score": 0.1,
+          "result": "FAILURE",
+          "metricLabel": "Precision",
+          "metricExplainability": "Measures the precision of the result.",
+          "status": "COMPLETED",
+          "startTime": "2025-01-07T12:00:14Z",
+          "endTime": "2025-01-07T12:00:15Z",
+          "errorCode": 1,
+          "errorMessage": "An Apex error occurred: System.CalloutException: Bad Response: System.HttpResponse[Status=Not Found, StatusCode=404]"
+        }
+      ]
+    }
+  ]
+}

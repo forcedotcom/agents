@@ -52,7 +52,7 @@ describe('AgentTester', () => {
       const output = await tester.status('4KBSM000000003F4AQ');
       expect(output).to.be.ok;
       expect(output).to.deep.equal({
-        status: 'IN_PROGRESS',
+        status: 'NEW',
         startTime: '2024-11-13T15:00:00.000Z',
       });
     });
@@ -125,7 +125,8 @@ testCases:
         preview: true,
       });
 
-      expect(contents).to.equal(`<AiEvaluationDefinition xmlns="http://soap.sforce.com/2006/04/metadata">
+      expect(contents).to.equal(`<?xml version="1.0" encoding="UTF-8"?>
+<AiEvaluationDefinition xmlns="http://soap.sforce.com/2006/04/metadata">
   <description>Test</description>
   <name>Test</name>
   <subjectType>AGENT</subjectType>
@@ -174,7 +175,7 @@ testCases:
 
 describe('human format', () => {
   it('should transform test results to human readable format', async () => {
-    const raw = await readFile('./test/mocks/einstein_ai-evaluations_runs_4KBSM000000003F4AQ_results.json', 'utf8');
+    const raw = await readFile('./test/mocks/einstein_ai-evaluations_runs_4KBSM000000003F4AQ_results/4.json', 'utf8');
     const input = JSON.parse(raw) as AgentTestResultsResponse;
     const output = await convertTestResultsToFormat(input, 'human');
     expect(output).to.be.ok;
@@ -183,18 +184,18 @@ describe('human format', () => {
 
 describe('junit formatter', () => {
   it('should transform test results to JUnit format', async () => {
-    const raw = await readFile('./test/mocks/einstein_ai-evaluations_runs_4KBSM000000003F4AQ_results.json', 'utf8');
+    const raw = await readFile('./test/mocks/einstein_ai-evaluations_runs_4KBSM000000003F4AQ_results/4.json', 'utf8');
     const input = JSON.parse(raw) as AgentTestResultsResponse;
     const output = await convertTestResultsToFormat(input, 'junit');
-    expect(output).to.deep.equal(`<?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="Copilot_for_Salesforce" tests="2" failures="1" time="20000">
+    expect(output).to.equal(`<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="Guest_Experience_Agent" tests="3" failures="1" time="30000">
   <property name="status" value="COMPLETED"></property>
-  <property name="start-time" value="2024-11-28T12:00:00Z"></property>
-  <property name="end-time" value="2024-11-28T12:00:48.56Z"></property>
+  <property name="start-time" value="2025-01-07T12:00:00Z"></property>
+  <property name="end-time" value="2025-01-07T12:00:10.35Z"></property>
   <testsuite name="1" time="10000" assertions="3"></testsuite>
-  <testsuite name="2" time="10000" assertions="3">
-    <failure message="Actual response does not match the expected response" name="action_sequence_match"></failure>
-    <failure message="Actual response does not match the expected response" name="bot_response_rating"></failure>
+  <testsuite name="2" time="10000" assertions="3"></testsuite>
+  <testsuite name="3" time="10000" assertions="3">
+    <failure message="An Apex error occurred: System.CalloutException: Bad Response: System.HttpResponse[Status=Not Found, StatusCode=404]" name="bot_response_rating"></failure>
   </testsuite>
 </testsuites>`);
   });
@@ -202,28 +203,25 @@ describe('junit formatter', () => {
 
 describe('tap formatter', () => {
   it('should transform test results to TAP format', async () => {
-    const raw = await readFile('./test/mocks/einstein_ai-evaluations_runs_4KBSM000000003F4AQ_results.json', 'utf8');
+    const raw = await readFile('./test/mocks/einstein_ai-evaluations_runs_4KBSM000000003F4AQ_results/4.json', 'utf8');
     const input = JSON.parse(raw) as AgentTestResultsResponse;
     const output = await convertTestResultsToFormat(input, 'tap');
     expect(output).to.equal(`Tap Version 14
-1..6
+1..9
 ok 1 1.topic_sequence_match
 ok 2 1.action_sequence_match
 ok 3 1.bot_response_rating
 ok 4 2.topic_sequence_match
-not ok 5 2.action_sequence_match
+ok 5 2.action_sequence_match
+ok 6 2.bot_response_rating
+ok 7 3.topic_sequence_match
+ok 8 3.action_sequence_match
+not ok 9 3.bot_response_rating
   ---
-  message: Actual response does not match the expected response
-  expectation: action_sequence_match
-  actual: ["IdentifyRecordByName","QueryRecords"]
-  expected: ["IdentifyRecordByName","QueryRecords","GetActivitiesTimeline"]
-  ...
-not ok 6 2.bot_response_rating
-  ---
-  message: Actual response does not match the expected response
+  message: An Apex error occurred: System.CalloutException: Bad Response: System.HttpResponse[Status=Not Found, StatusCode=404]
   expectation: bot_response_rating
-  actual: It looks like I am unable to find the information you are looking for due to access restrictions. How else can I assist you?
-  expected: Summary of open cases and activities associated with timeline
+  actual: It looks like I am unable to check the weather. There's something wrong with the Weather Service. How else can I assist you?
+  expected: The answer should start by describing expected conditions, for example "clear skies" or "50% chance of rain" and conclude with a range of high and low temperatures in degrees fahrenheit.
   ...`);
   });
 });

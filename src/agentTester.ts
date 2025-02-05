@@ -299,13 +299,13 @@ export class AgentTester {
         })),
       },
     }) as string;
-
+    const finalXml = `<?xml version="1.0" encoding="UTF-8"?>\n${xml}`;
     await mkdir(outputDir, { recursive: true });
-    await writeFile(definitionPath, `<?xml version="1.0" encoding="UTF-8"?>\n${xml}`);
+    await writeFile(definitionPath, finalXml);
     if (preview)
       return {
         path: definitionPath,
-        contents: xml,
+        contents: finalXml,
       };
 
     const cs = await ComponentSetBuilder.build({ sourcepath: [definitionPath] });
@@ -328,7 +328,7 @@ export class AgentTester {
       throw new SfError(result.response.errorMessage ?? `Unable to deploy ${result.response.id}`);
     }
 
-    return { path: definitionPath, contents: xml, deployResult: result };
+    return { path: definitionPath, contents: finalXml, deployResult: result };
   }
 }
 

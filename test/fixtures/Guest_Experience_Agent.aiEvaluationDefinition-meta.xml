@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<AiEvaluationDefinition xmlns="http://soap.sforce.com/2006/04/metadata">
+  <description>Tests for My First Agent</description>
+  <name>My_First_Agent</name>
+  <subjectType>AGENT</subjectType>
+  <subjectName>My_First_Agent</subjectName>
+  <subjectVersion>v1</subjectVersion>
+  <testCase>
+    <number>1</number>
+    <inputs>
+      <utterance>I&apos;d like a 1 hour massage anytime after 2pm today. My email is
+        sofiarodriguez@example.com and my membership number is 10008155.</utterance>
+    </inputs>
+    <expectation>
+      <name>topic_sequence_match</name>
+      <expectedValue>Experience_Management</expectedValue>
+    </expectation>
+    <expectation>
+      <name>action_sequence_match</name>
+      <expectedValue>[&apos;Get_Experience_Details&apos;,&apos;Generate_Personalized_Schedule&apos;,
+        &apos;Get_Customer_Details&apos;,&apos;Create_Experience_Session_Booking&apos;]</expectedValue>
+    </expectation>
+    <expectation>
+      <name>bot_response_rating</name>
+      <expectedValue>I can help you with that! Are you looking for a Swedish or deep-tissue massage?</expectedValue>
+    </expectation>
+  </testCase>
+  <testCase>
+    <number>2</number>
+    <inputs>
+      <utterance>Can you tell me why there are so many flamingoes around the resort?</utterance>
+    </inputs>
+    <expectation>
+      <name>topic_sequence_match</name>
+      <expectedValue>Local_History</expectedValue>
+    </expectation>
+    <expectation>
+      <name>action_sequence_match</name>
+      <expectedValue>
+        [&apos;EmployeeCopilot__AnswerQuestionsWithKnowledge&apos;,&apos;Get_Customer_Details&apos;]</expectedValue>
+    </expectation>
+    <expectation>
+      <name>bot_response_rating</name>
+      <expectedValue>The flamigoes have been here since 1948 when our founder, Cathy Coral imported
+        them from Africa. Would you like to know more?</expectedValue>
+    </expectation>
+  </testCase>
+  <testCase>
+    <number>3</number>
+    <inputs>
+      <utterance>What&apos;s the weather going to be like this afternoon?</utterance>
+    </inputs>
+    <expectation>
+      <name>topic_sequence_match</name>
+      <expectedValue>Local_Weather</expectedValue>
+    </expectation>
+    <expectation>
+      <name>action_sequence_match</name>
+      <expectedValue>[&apos;Check_Weather&apos;]
+      </expectedValue>
+    </expectation>
+    <expectation>
+      <name>bot_response_rating</name>
+      <expectedValue>The answer should start by describing expected conditions, for example
+        &quot;clear skies&quot; or &quot;50% chance of rain&quot; and conclude with a range of high
+        and low temperatures in degrees fahrenheit.</expectedValue>
+    </expectation>
+  </testCase>
+</AiEvaluationDefinition>
