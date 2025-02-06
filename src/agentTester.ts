@@ -413,6 +413,27 @@ export async function convertTestResultsToFormat(
   }
 }
 
+/**
+ * Clean a string by replacing HTML entities with their respective characters. Implementation done by copilot.
+ *
+ * This is only required until W-17594913 is resolved by SF Eval
+ *
+ * @param str - The string to clean.
+ * @returns The cleaned string with all instances of '&#39;' replaced with "'".
+ */
+function decodeHtmlEntities(str: string): string {
+  const entities: { [key: string]: string } = {
+    '&quot;': '"',
+    '&apos;': "'",
+    '&amp;': '&',
+    '&lt;': '<',
+    '&gt;': '>',
+    '&#39;': "'",
+  };
+
+  return str.replace(/&[a-zA-Z0-9#]+;/g, (entity) => entities[entity] || entity);
+}
+
 async function humanFormat(results: AgentTestResultsResponse): Promise<string> {
   const { Ux } = await import('@salesforce/sf-plugins-core');
   const ux = new Ux();
@@ -428,8 +449,8 @@ async function humanFormat(results: AgentTestResultsResponse): Promise<string> {
       data: testCase.testResults.map((r) => ({
         test: humanFriendlyName(r.name),
         result: r.result === 'PASS' ? ansis.green('Pass') : ansis.red('Fail'),
-        expected: r.expectedValue,
-        actual: r.actualValue,
+        expected: decodeHtmlEntities(r.expectedValue),
+        actual: decodeHtmlEntities(r.actualValue),
       })),
       width: '100%',
     });
@@ -551,8 +572,8 @@ async function tapFormat(results: AgentTestResultsResponse): Promise<string> {
         lines.push('  ---');
         lines.push(`  message: ${result.errorMessage ?? 'Unknown error'}`);
         lines.push(`  expectation: ${result.name}`);
-        lines.push(`  actual: ${result.actualValue}`);
-        lines.push(`  expected: ${result.expectedValue}`);
+        lines.push(`  actual: ${decodeHtmlEntities(result.actualValue)}`);
+        lines.push(`  expected: ${decodeHtmlEntities(result.expectedValue)}`);
         lines.push('  ...');
       }
     }
