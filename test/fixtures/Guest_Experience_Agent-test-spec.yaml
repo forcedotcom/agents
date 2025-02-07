@@ -1,0 +1,26 @@
+name: My_First_Agent
+subjectType: AGENT
+subjectName: My_First_Agent
+subjectVersion: v1
+description: Tests for My First Agent
+testCases:
+  - utterance: I'd like a 1 hour massage anytime after 2pm today. My email is sofiarodriguez@example.com and my membership number is 10008155.
+    expectedTopic: Experience_Management
+    expectedActions:
+      - Get_Experience_Details
+      - QueryRecords
+      - Generate_Personalized_Schedule
+      - Get_Customer_Details
+      - Create_Experience_Session_Booking
+    expectedOutcome: I can help you with that! Are you looking for a Swedish or deep-tissue massage?
+  - utterance: Can you tell me why there are so many flamingoes around the resort?
+    expectedTopic: Local_History
+    expectedActions:
+      - EmployeeCopilot__AnswerQuestionsWithKnowledge
+      - Get_Customer_Details
+    expectedOutcome: The flamigoes have been here since 1948 when our founder, Cathy Coral imported them from Africa. Would you like to know more?
+  - utterance: What's the weather going to be like this afternoon?
+    expectedTopic: Local_Weather
+    expectedActions:
+      - Check_Weather
+    expectedOutcome: The answer should start by describing expected conditions, for example "clear skies" or "50% chance of rain" and conclude with a range of high and low temperatures in degrees fahrenheit.
