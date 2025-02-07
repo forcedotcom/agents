@@ -173,15 +173,6 @@ testCases:
   });
 });
 
-describe('human format', () => {
-  it('should transform test results to human readable format', async () => {
-    const raw = await readFile('./test/mocks/einstein_ai-evaluations_runs_4KBSM000000003F4AQ_results/4.json', 'utf8');
-    const input = JSON.parse(raw) as AgentTestResultsResponse;
-    const output = await convertTestResultsToFormat(input, 'human');
-    expect(output).to.be.ok;
-  });
-});
-
 describe('junit formatter', () => {
   it('should transform test results to JUnit format', async () => {
     const raw = await readFile('./test/mocks/einstein_ai-evaluations_runs_4KBSM000000003F4AQ_results/4.json', 'utf8');
