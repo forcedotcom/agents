@@ -1,3 +1,12 @@
+## [0.9.6](https://github.com/forcedotcom/agents/compare/0.9.5...0.9.6) (2025-02-07)
+
+
+### Bug Fixes
+
+* remove human readable formatter ([eeca160](https://github.com/forcedotcom/agents/commit/eeca1600f303efc06eefec486d96409baa046017))
+
+
+
 ## [0.9.5](https://github.com/forcedotcom/agents/compare/0.9.5-dev.1...0.9.5) (2025-02-07)
 
 
