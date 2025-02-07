@@ -26,6 +26,7 @@ export {
   convertTestResultsToFormat,
   generateTestSpec,
   AgentTestCreateLifecycleStages,
+  humanFriendlyName,
   type AvailableDefinition,
   type AgentTestResultsResponse,
   type AgentTestStartResponse,

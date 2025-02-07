@@ -426,6 +426,19 @@ async function junitFormat(results: AgentTestResultsResponse): Promise<string> {
   return Promise.resolve(`<?xml version="1.0" encoding="UTF-8"?>\n${suites}`.trim());
 }
 
+export function humanFriendlyName(name: string): string {
+  switch (name) {
+    case 'topic_sequence_match':
+      return 'Topic';
+    case 'action_sequence_match':
+      return 'Action';
+    case 'bot_response_rating':
+      return 'Outcome';
+    default:
+      return name;
+  }
+}
+
 async function tapFormat(results: AgentTestResultsResponse): Promise<string> {
   const lines: string[] = [];
   let expectationCount = 0;
