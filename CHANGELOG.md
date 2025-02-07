@@ -1,3 +1,25 @@
+## [0.9.5](https://github.com/forcedotcom/agents/compare/0.9.5-dev.1...0.9.5) (2025-02-07)
+
+
+
+## [0.9.5-dev.1](https://github.com/forcedotcom/agents/compare/0.9.5-dev.0...0.9.5-dev.1) (2025-02-06)
+
+
+### Bug Fixes
+
+* decode html entities ([7181876](https://github.com/forcedotcom/agents/commit/718187662faed2a327698ecf671c06603954ccb8))
+
+
+
+## [0.9.5-dev.0](https://github.com/forcedotcom/agents/compare/0.9.4...0.9.5-dev.0) (2025-02-05)
+
+
+### Bug Fixes
+
+* adjust to incoming api changes ([b8eff72](https://github.com/forcedotcom/agents/commit/b8eff7262c96ba699480a03a78f2a7c32ba23cb6))
+
+
+
 ## [0.9.4](https://github.com/forcedotcom/agents/compare/0.9.3...0.9.4) (2025-02-01)
 
 
