@@ -471,7 +471,10 @@ export async function generateTestSpec(spec: TestSpec, outputFile: string): Prom
     return acc;
   }, {});
 
-  const yml = stringify(clean);
+  const yml = stringify(clean, undefined, {
+    minContentWidth: 0,
+    lineWidth: 0,
+  });
   await mkdir(dirname(outputFile), { recursive: true });
   await writeFile(outputFile, yml);
 }
