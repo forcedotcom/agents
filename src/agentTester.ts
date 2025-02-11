@@ -109,15 +109,15 @@ export class AgentTester {
   /**
    * Starts an AI evaluation run based on the provided name or ID.
    *
-   * @param nameOrId - The name or ID of the AI evaluation definition.
+   * @param aiEvalDefName - The name or ID of the AI evaluation definition.
    * @param type - Specifies whether the provided identifier is a 'name' or 'id'. Defaults to 'name'. If 'name' is provided, nameOrId is treated as the name of the AiEvaluationDefinition. If 'id' is provided, nameOrId is treated as the unique ID of the AiEvaluationDefinition.
    * @returns A promise that resolves to an object containing the ID of the started AI evaluation run.
    */
-  public async start(nameOrId: string, type: 'name' | 'id' = 'name'): Promise<AgentTestStartResponse> {
+  public async start(aiEvalDefName: string): Promise<AgentTestStartResponse> {
     const url = '/einstein/ai-evaluations/runs';
 
     return this.maybeMock.request<AgentTestStartResponse>('POST', url, {
-      [type === 'name' ? 'aiEvaluationDefinitionName' : 'aiEvaluationDefinitionVersionId']: nameOrId,
+      aiEvaluationDefinitionName: aiEvalDefName,
     });
   }
 
