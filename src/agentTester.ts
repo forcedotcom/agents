@@ -204,7 +204,21 @@ export class AgentTester {
   public async results(jobId: string): Promise<AgentTestResultsResponse> {
     const url = `/einstein/ai-evaluations/runs/${jobId}/results`;
 
-    return this.maybeMock.request<AgentTestResultsResponse>('GET', url);
+    const results = await this.maybeMock.request<AgentTestResultsResponse>('GET', url);
+    return {
+      ...results,
+      testCases: results.testCases.map((tc) => ({
+        ...tc,
+        inputs: {
+          utterance: decodeHtmlEntities(tc.inputs.utterance),
+        },
+        testResults: tc.testResults.map((r) => ({
+          ...r,
+          actualValue: decodeHtmlEntities(r.actualValue),
+          expectedValue: decodeHtmlEntities(r.expectedValue),
+        })),
+      })),
+    };
   }
 
   /**
@@ -222,43 +236,33 @@ export class AgentTester {
   /**
    * Creates and deploys an AiEvaluationDefinition from a specification file.
    *
+   * @param apiName - The API name of the AiEvaluationDefinition to create
    * @param specFilePath - The path to the specification file to create the definition from
    * @param options - Configuration options for creating the definition
    * @param options.outputDir - The directory where the AiEvaluationDefinition file will be written
    * @param options.preview - If true, writes the AiEvaluationDefinition file to <api-name>-preview-<timestamp>.xml in the current working directory and does not deploy it
-   * @param options.confirmationCallback - Optional callback function to confirm overwriting existing definitions
    *
    * @returns Promise containing:
    * - path: The filesystem path to the created AiEvaluationDefinition file
    * - contents: The AiEvaluationDefinition contents as a string
    * - deployResult: The deployment result (if not in preview mode)
    *
-   * @throws {SfError} When a definition with the same name already exists and is not confirmed to be overwritten
    * @throws {SfError} When deployment fails
    */
   public async create(
+    apiName: string,
     specFilePath: string,
-    options: { outputDir: string; preview?: boolean; confirmationCallback?: (spec: TestSpec) => Promise<boolean> }
+    options: { outputDir: string; preview?: boolean }
   ): Promise<{ path: string; contents: string; deployResult?: DeployResult }> {
     const parsed = parse(await readFile(specFilePath, 'utf-8')) as TestSpec;
-    const existingDefinitions = await this.list();
-
-    if (existingDefinitions.some((d) => d.fullName === parsed.name)) {
-      const getConfirmation = options.confirmationCallback ?? (async (): Promise<boolean> => Promise.resolve(false));
-      const confirmation = await getConfirmation(parsed);
-      if (!confirmation) {
-        throw new SfError(`An AiEvaluationDefinition with the name ${parsed.name} already exists in the org.`);
-      }
-    }
-
     const lifecycle = Lifecycle.getInstance();
     await lifecycle.emit(AgentTestCreateLifecycleStages.CreatingLocalMetadata, {});
     const preview = options.preview ?? false;
     // outputDir is overridden if preview is true
     const outputDir = preview ? process.cwd() : options.outputDir;
     const filename = preview
-      ? `${parsed.name}-preview-${new Date().toISOString()}.xml`
-      : `${parsed.name}.aiEvaluationDefinition-meta.xml`;
+      ? `${apiName}-preview-${new Date().toISOString()}.xml`
+      : `${apiName}.aiEvaluationDefinition-meta.xml`;
     const definitionPath = join(outputDir, filename);
 
     const builder = new XMLBuilder({
@@ -347,9 +351,7 @@ export async function convertTestResultsToFormat(
 }
 
 /**
- * Clean a string by replacing HTML entities with their respective characters. Implementation done by copilot.
- *
- * This is only required until W-17594913 is resolved by SF Eval
+ * Clean a string by replacing HTML entities with their respective characters.
  *
  * @param str - The string to clean.
  * @returns The cleaned string with all HTML entities replaced with their respective characters.
@@ -450,8 +452,8 @@ async function tapFormat(results: AgentTestResultsResponse): Promise<string> {
         lines.push('  ---');
         lines.push(`  message: ${result.errorMessage ?? 'Unknown error'}`);
         lines.push(`  expectation: ${result.name}`);
-        lines.push(`  actual: ${decodeHtmlEntities(result.actualValue)}`);
-        lines.push(`  expected: ${decodeHtmlEntities(result.expectedValue)}`);
+        lines.push(`  actual: ${result.actualValue}`);
+        lines.push(`  expected: ${result.expectedValue}`);
         lines.push('  ...');
       }
     }

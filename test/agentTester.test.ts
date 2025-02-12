@@ -120,7 +120,7 @@ testCases:
       const tester = new AgentTester(connection);
       sinon.stub(fs, 'readFile').resolves(yml);
       sinon.stub(tester, 'list').resolves([]);
-      const { contents } = await tester.create('test.yaml', {
+      const { contents } = await tester.create('MyTest', 'test.yaml', {
         outputDir: 'tmp',
         preview: true,
       });
