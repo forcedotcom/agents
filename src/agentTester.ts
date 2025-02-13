@@ -481,6 +481,21 @@ async function tapFormat(results: AgentTestResultsResponse): Promise<string> {
   return Promise.resolve(`Tap Version 14\n1..${expectationCount}\n${lines.join('\n')}`);
 }
 
+function transformStringToArray(str: string | undefined): string[] {
+  try {
+    if (!str) return [];
+    // Remove any whitespace and ensure proper JSON format
+    const cleaned = str.replace(/\s+/g, '');
+    return JSON.parse(cleaned) as string[];
+  } catch {
+    return [];
+  }
+}
+
+function castArray<T>(value: T | T[]): T[] {
+  return Array.isArray(value) ? value : [value];
+}
+
 /**
  * Generate a test specification file in YAML format.
  * This function takes a test specification object, cleans it by removing undefined and empty string values,
@@ -506,13 +521,6 @@ export async function writeTestSpec(spec: TestSpec, outputFile: string): Promise
   await writeFile(outputFile, yml);
 }
 
-function convertToArray(str: string | undefined): string[] {
-  if (!str) return [];
-  // Remove any whitespace and ensure proper JSON format
-  const cleaned = str.replace(/\s+/g, '');
-  return JSON.parse(cleaned) as string[];
-}
-
 /**
  * Generates a TestSpec object from an AI Evaluation Definition XML file.
  *
@@ -532,11 +540,16 @@ export async function generateTestSpecFromAiEvalDefinition(path: string): Promis
     subjectType: parsed.AiEvaluationDefinition.subjectType,
     subjectName: parsed.AiEvaluationDefinition.subjectName,
     subjectVersion: parsed.AiEvaluationDefinition.subjectVersion,
-    testCases: parsed.AiEvaluationDefinition.testCase.map((tc) => ({
-      utterance: tc.inputs.utterance,
-      expectedTopic: tc.expectation.find((e) => e.name === 'topic_sequence_match')?.expectedValue,
-      expectedActions: convertToArray(tc.expectation.find((e) => e.name === 'action_sequence_match')?.expectedValue),
-      expectedOutcome: tc.expectation.find((e) => e.name === 'bot_response_rating')?.expectedValue,
-    })),
+    testCases: castArray(parsed.AiEvaluationDefinition.testCase).map((tc) => {
+      const expectations = castArray(tc.expectation);
+      return {
+        utterance: tc.inputs.utterance,
+        expectedTopic: expectations.find((e) => e.name === 'topic_sequence_match')?.expectedValue,
+        expectedActions: transformStringToArray(
+          expectations.find((e) => e.name === 'action_sequence_match')?.expectedValue
+        ),
+        expectedOutcome: expectations.find((e) => e.name === 'bot_response_rating')?.expectedValue,
+      };
+    }),
   };
 }
