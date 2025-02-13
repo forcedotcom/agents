@@ -23,9 +23,10 @@ export {
 export { Agent, AgentCreateLifecycleStages, AgentCreateLifecycleStagesV2, generateAgentApiName } from './agent';
 export {
   AgentTester,
-  convertTestResultsToFormat,
-  generateTestSpec,
   AgentTestCreateLifecycleStages,
+  convertTestResultsToFormat,
+  writeTestSpec,
+  generateTestSpecFromAiEvalDefinition,
   humanFriendlyName,
   type AvailableDefinition,
   type AgentTestResultsResponse,

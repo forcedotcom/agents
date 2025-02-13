@@ -10,7 +10,7 @@ import { Connection, Lifecycle, PollingClient, SfError, StatusResult } from '@sa
 import { Duration, env } from '@salesforce/kit';
 import { ComponentSetBuilder, DeployResult, FileProperties, RequestStatus } from '@salesforce/source-deploy-retrieve';
 import { parse, stringify } from 'yaml';
-import { XMLBuilder } from 'fast-xml-parser';
+import { XMLBuilder, XMLParser } from 'fast-xml-parser';
 import { MaybeMock } from './maybe-mock';
 
 export type TestStatus = 'NEW' | 'IN_PROGRESS' | 'COMPLETED' | 'ERROR' | 'TERMINATED';
@@ -69,9 +69,9 @@ export type AvailableDefinition = Omit<FileProperties, 'manageableState' | 'name
 
 export type TestCase = {
   utterance: string;
-  expectedActions: string[];
-  expectedOutcome: string;
-  expectedTopic: string;
+  expectedActions: string[] | undefined;
+  expectedOutcome: string | undefined;
+  expectedTopic: string | undefined;
 };
 
 export type TestSpec = {
@@ -81,6 +81,25 @@ export type TestSpec = {
   subjectName: string;
   subjectVersion?: string;
   testCases: TestCase[];
+};
+
+type AiEvaluationDefinition = {
+  AiEvaluationDefinition: {
+    description?: string;
+    name: string;
+    subjectType: 'AGENT';
+    subjectName: string;
+    subjectVersion?: string;
+    testCase: Array<{
+      expectation: Array<{
+        name: string;
+        expectedValue: string;
+      }>;
+      inputs: {
+        utterance: string;
+      };
+    }>;
+  };
 };
 
 export const AgentTestCreateLifecycleStages = {
@@ -291,7 +310,7 @@ export class AgentTester {
             },
             {
               name: 'action_sequence_match',
-              expectedValue: `[${tc.expectedActions.map((v) => `"${v}"`).join(',')}]`,
+              expectedValue: `[${(tc.expectedActions ?? []).map((v) => `"${v}"`).join(',')}]`,
             },
             {
               name: 'bot_response_rating',
@@ -463,9 +482,16 @@ async function tapFormat(results: AgentTestResultsResponse): Promise<string> {
 }
 
 /**
- * Generate a test spec file from a TestSpec object
+ * Generate a test specification file in YAML format.
+ * This function takes a test specification object, cleans it by removing undefined and empty string values,
+ * converts it to YAML format, and writes it to the specified output file.
+ *
+ * @param spec - The test specification object to be converted to YAML.
+ * @param outputFile - The file path where the YAML output should be written.
+ * @throws {Error} - May throw an error if file operations fail.
+ * @returns A Promise that resolves when the file has been written.
  */
-export async function generateTestSpec(spec: TestSpec, outputFile: string): Promise<void> {
+export async function writeTestSpec(spec: TestSpec, outputFile: string): Promise<void> {
   // strip out undefined values and empty strings
   const clean = Object.entries(spec).reduce<Partial<TestSpec>>((acc, [key, value]) => {
     if (value !== undefined && value !== '') return { ...acc, [key]: value };
@@ -478,4 +504,39 @@ export async function generateTestSpec(spec: TestSpec, outputFile: string): Prom
   });
   await mkdir(dirname(outputFile), { recursive: true });
   await writeFile(outputFile, yml);
+}
+
+function convertToArray(str: string | undefined): string[] {
+  if (!str) return [];
+  // Remove any whitespace and ensure proper JSON format
+  const cleaned = str.replace(/\s+/g, '');
+  return JSON.parse(cleaned) as string[];
+}
+
+/**
+ * Generates a TestSpec object from an AI Evaluation Definition XML file.
+ *
+ * @param path - The file path to the AI Evaluation Definition XML file.
+ * @returns Promise that resolves to a TestSpec object containing the parsed evaluation definition data.
+ * @description Reads and parses an XML file containing AIEvaluationDefinition, converting it into a structured TestSpec format.
+ *
+ * @throws {Error} If the file cannot be read or parsed.
+ */
+export async function generateTestSpecFromAiEvalDefinition(path: string): Promise<TestSpec> {
+  const xml = await readFile(path, 'utf-8');
+  const parser = new XMLParser();
+  const parsed = parser.parse(xml) as AiEvaluationDefinition;
+  return {
+    name: parsed.AiEvaluationDefinition.name,
+    description: parsed.AiEvaluationDefinition.description,
+    subjectType: parsed.AiEvaluationDefinition.subjectType,
+    subjectName: parsed.AiEvaluationDefinition.subjectName,
+    subjectVersion: parsed.AiEvaluationDefinition.subjectVersion,
+    testCases: parsed.AiEvaluationDefinition.testCase.map((tc) => ({
+      utterance: tc.inputs.utterance,
+      expectedTopic: tc.expectation.find((e) => e.name === 'topic_sequence_match')?.expectedValue,
+      expectedActions: convertToArray(tc.expectation.find((e) => e.name === 'action_sequence_match')?.expectedValue),
+      expectedOutcome: tc.expectation.find((e) => e.name === 'bot_response_rating')?.expectedValue,
+    })),
+  };
 }
