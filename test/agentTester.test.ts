@@ -16,6 +16,7 @@ import {
   convertTestResultsToFormat,
   writeTestSpec,
   generateTestSpecFromAiEvalDefinition,
+  normalizeResults,
 } from '../src/agentTester';
 
 describe('AgentTester', () => {
@@ -498,5 +499,133 @@ describe('generateTestSpecFromAiEvalDefinition', () => {
     const result = await generateTestSpecFromAiEvalDefinition('test.xml');
 
     expect(result.testCases[0].expectedActions).to.deep.equal([]);
+  });
+});
+
+describe('normalizeResults', () => {
+  it('should decode HTML entities in utterances and test results', () => {
+    const results: AgentTestResultsResponse = {
+      status: 'COMPLETED',
+      startTime: '2024-01-01T00:00:00Z',
+      subjectName: 'TestBot',
+      testCases: [
+        {
+          status: 'COMPLETED',
+          startTime: '2024-01-01T00:00:00Z',
+          testNumber: 1,
+          inputs: {
+            utterance: 'What&apos;s the weather like in &quot;San Francisco&quot;?',
+          },
+          generatedData: {
+            actionsSequence: [],
+            outcome: '',
+            topic: '',
+          },
+          testResults: [
+            {
+              name: 'test1',
+              actualValue: 'The temperature is &gt; 75&deg;F',
+              expectedValue: 'Expect &lt; 80&deg;F',
+              score: 1,
+              result: 'PASS',
+              metricLabel: 'Accuracy',
+              metricExplainability: '',
+              status: 'COMPLETED',
+              startTime: '2024-01-01T00:00:00Z',
+            },
+          ],
+        },
+      ],
+    };
+
+    const normalized = normalizeResults(results);
+
+    expect(normalized.testCases[0].inputs.utterance).to.equal('What\'s the weather like in "San Francisco"?');
+    expect(normalized.testCases[0].testResults[0].actualValue).to.equal('The temperature is > 75°F');
+    expect(normalized.testCases[0].testResults[0].expectedValue).to.equal('Expect < 80°F');
+  });
+
+  it('should handle undefined or empty values', () => {
+    const results: AgentTestResultsResponse = {
+      status: 'COMPLETED',
+      startTime: '2024-01-01T00:00:00Z',
+      subjectName: 'TestBot',
+      testCases: [
+        {
+          status: 'COMPLETED',
+          startTime: '2024-01-01T00:00:00Z',
+          testNumber: 1,
+          // @ts-expect-error because we want to test undefined values
+          inputs: {},
+          generatedData: {
+            actionsSequence: [],
+            outcome: '',
+            topic: '',
+          },
+          testResults: [
+            {
+              name: 'test1',
+              actualValue: '',
+              // @ts-expect-error because we want to test undefined values
+              expectedValue: undefined,
+              score: 1,
+              result: 'PASS',
+              metricLabel: 'Accuracy',
+              metricExplainability: '',
+              status: 'COMPLETED',
+              startTime: '2024-01-01T00:00:00Z',
+            },
+          ],
+        },
+      ],
+    };
+
+    const normalized = normalizeResults(results);
+
+    expect(normalized.testCases[0].inputs.utterance).to.equal('');
+    expect(normalized.testCases[0].testResults[0].actualValue).to.equal('');
+    expect(normalized.testCases[0].testResults[0].expectedValue).to.equal('');
+  });
+
+  it('should preserve non-encoded strings', () => {
+    const results: AgentTestResultsResponse = {
+      status: 'COMPLETED',
+      startTime: '2024-01-01T00:00:00Z',
+      subjectName: 'TestBot',
+      testCases: [
+        {
+          status: 'COMPLETED',
+          startTime: '2024-01-01T00:00:00Z',
+          testNumber: 1,
+          inputs: {
+            utterance: 'Regular string with no HTML entities',
+          },
+          generatedData: {
+            actionsSequence: [],
+            outcome: '',
+            topic: '',
+          },
+          testResults: [
+            {
+              name: 'test1',
+              actualValue: 'Plain text response',
+              expectedValue: 'Expected plain text',
+              score: 1,
+              result: 'PASS',
+              metricLabel: 'Accuracy',
+              metricExplainability: '',
+              status: 'COMPLETED',
+              startTime: '2024-01-01T00:00:00Z',
+            },
+          ],
+        },
+      ],
+    };
+
+    const normalized = normalizeResults(results);
+
+    expect(normalized.testCases[0].inputs.utterance).to.equal('Regular string with no HTML entities');
+    expect(normalized.testCases[0].testResults[0].actualValue).to.equal('Plain text response');
+    expect(normalized.testCases[0].testResults[0].expectedValue).to.equal('Expected plain text');
   });
 });

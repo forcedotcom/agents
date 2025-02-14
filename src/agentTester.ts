@@ -224,20 +224,7 @@ export class AgentTester {
     const url = `/einstein/ai-evaluations/runs/${jobId}/results`;
 
     const results = await this.maybeMock.request<AgentTestResultsResponse>('GET', url);
-    return {
-      ...results,
-      testCases: results.testCases.map((tc) => ({
-        ...tc,
-        inputs: {
-          utterance: decodeHtmlEntities(tc.inputs.utterance),
-        },
-        testResults: tc.testResults.map((r) => ({
-          ...r,
-          actualValue: decodeHtmlEntities(r.actualValue),
-          expectedValue: decodeHtmlEntities(r.expectedValue),
-        })),
-      })),
-    };
+    return normalizeResults(results);
   }
 
   /**
@@ -370,12 +357,47 @@ export async function convertTestResultsToFormat(
 }
 
 /**
+ * Normalizes test results by decoding HTML entities in utterances and test result values.
+ *
+ * @param results - The agent test results response object to normalize
+ * @returns A new AgentTestResultsResponse with decoded HTML entities
+ *
+ * @example
+ * const results = {
+ *   testCases: [{
+ *     inputs: { utterance: "&quot;hello&quot;" },
+ *     testResults: [{
+ *       actualValue: "&amp;test",
+ *       expectedValue: "&lt;value&gt;"
+ *     }]
+ *   }]
+ * };
+ * const normalized = normalizeResults(results);
+ */
+export function normalizeResults(results: AgentTestResultsResponse): AgentTestResultsResponse {
+  return {
+    ...results,
+    testCases: results.testCases.map((tc) => ({
+      ...tc,
+      inputs: {
+        utterance: decodeHtmlEntities(tc.inputs.utterance),
+      },
+      testResults: tc.testResults.map((r) => ({
+        ...r,
+        actualValue: decodeHtmlEntities(r.actualValue),
+        expectedValue: decodeHtmlEntities(r.expectedValue),
+      })),
+    })),
+  };
+}
+
+/**
  * Clean a string by replacing HTML entities with their respective characters.
  *
  * @param str - The string to clean.
  * @returns The cleaned string with all HTML entities replaced with their respective characters.
  */
-function decodeHtmlEntities(str: string): string {
+function decodeHtmlEntities(str: string = ''): string {
   const entities: { [key: string]: string } = {
     '&quot;': '"',
     '&apos;': "'",
@@ -383,6 +405,30 @@ function decodeHtmlEntities(str: string): string {
     '&lt;': '<',
     '&gt;': '>',
     '&#39;': "'",
+    '&deg;': '°',
+    '&nbsp;': ' ',
+    '&ndash;': '–',
+    '&mdash;': '—',
+    '&rsquo;': '’',
+    '&lsquo;': '‘',
+    '&ldquo;': '“',
+    '&rdquo;': '”',
+    '&hellip;': '…',
+    '&trade;': '™',
+    '&copy;': '©',
+    '&reg;': '®',
+    '&euro;': '€',
+    '&pound;': '£',
+    '&yen;': '¥',
+    '&cent;': '¢',
+    '&times;': '×',
+    '&divide;': '÷',
+    '&plusmn;': '±',
+    '&micro;': 'µ',
+    '&para;': '¶',
+    '&sect;': '§',
+    '&bull;': '•',
+    '&middot;': '·',
   };
 
   return str.replace(/&[a-zA-Z0-9#]+;/g, (entity) => entities[entity] || entity);
