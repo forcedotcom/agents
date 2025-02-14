@@ -14,7 +14,9 @@ import {
   AgentTestResultsResponse,
   AgentTester,
   convertTestResultsToFormat,
-  generateTestSpec,
+  writeTestSpec,
+  generateTestSpecFromAiEvalDefinition,
+  normalizeResults,
 } from '../src/agentTester';
 
 describe('AgentTester', () => {
@@ -120,7 +122,7 @@ testCases:
       const tester = new AgentTester(connection);
       sinon.stub(fs, 'readFile').resolves(yml);
       sinon.stub(tester, 'list').resolves([]);
-      const { contents } = await tester.create('test.yaml', {
+      const { contents } = await tester.create('MyTest', 'test.yaml', {
         outputDir: 'tmp',
         preview: true,
       });
@@ -217,7 +219,7 @@ not ok 9 3.bot_response_rating
   });
 });
 
-describe('generateTestSpec', () => {
+describe('writeTestSpec', () => {
   let writeFileStub: sinon.SinonStub;
   beforeEach(() => {
     writeFileStub = sinon.stub(fs, 'writeFile');
@@ -228,7 +230,7 @@ describe('generateTestSpec', () => {
   });
 
   it('should generate a yaml file', async () => {
-    await generateTestSpec(
+    await writeTestSpec(
       {
         name: 'Test',
         description: 'Test',
@@ -275,7 +277,7 @@ testCases:
   });
 
   it('should remove empty strings', async () => {
-    await generateTestSpec(
+    await writeTestSpec(
       {
         name: 'Test',
         description: '',
@@ -309,7 +311,7 @@ testCases:
   });
 
   it('should remove undefined values', async () => {
-    await generateTestSpec(
+    await writeTestSpec(
       {
         name: 'Test',
         description: undefined,
@@ -340,5 +342,290 @@ testCases:
     expectedTopic: GeneralCRM
 `,
     ]);
+  });
+});
+
+describe('generateTestSpecFromAiEvalDefinition', () => {
+  let readFileStub: sinon.SinonStub;
+
+  beforeEach(() => {
+    readFileStub = sinon.stub(fs, 'readFile');
+  });
+
+  afterEach(() => {
+    sinon.restore();
+  });
+
+  it('should parse AiEvaluationDefinition XML into TestSpec', async () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+    <AiEvaluationDefinition xmlns="http://soap.sforce.com/2006/04/metadata">
+      <description>Test Description</description>
+      <name>TestSpec</name>
+      <subjectType>AGENT</subjectType>
+      <subjectName>WeatherBot</subjectName>
+      <subjectVersion>1</subjectVersion>
+      <testCase>
+        <inputs>
+          <utterance>What's the weather like?</utterance>
+        </inputs>
+        <expectation>
+          <name>topic_sequence_match</name>
+          <expectedValue>Weather</expectedValue>
+        </expectation>
+        <expectation>
+          <name>action_sequence_match</name>
+          <expectedValue>["GetLocation","GetWeather"]</expectedValue>
+        </expectation>
+        <expectation>
+          <name>bot_response_rating</name>
+          <expectedValue>Sunny with a high of 75F</expectedValue>
+        </expectation>
+      </testCase>
+    </AiEvaluationDefinition>`;
+
+    readFileStub.resolves(xml);
+
+    const result = await generateTestSpecFromAiEvalDefinition('test.xml');
+
+    expect(result).to.deep.equal({
+      name: 'TestSpec',
+      description: 'Test Description',
+      subjectType: 'AGENT',
+      subjectName: 'WeatherBot',
+      subjectVersion: 1,
+      testCases: [
+        {
+          utterance: "What's the weather like?",
+          expectedTopic: 'Weather',
+          expectedActions: ['GetLocation', 'GetWeather'],
+          expectedOutcome: 'Sunny with a high of 75F',
+        },
+      ],
+    });
+  });
+
+  it('should handle missing optional fields', async () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+    <AiEvaluationDefinition xmlns="http://soap.sforce.com/2006/04/metadata">
+      <name>TestSpec</name>
+      <subjectType>AGENT</subjectType>
+      <subjectName>WeatherBot</subjectName>
+      <testCase>
+        <inputs>
+          <utterance>What's the weather like?</utterance>
+        </inputs>
+        <expectation>
+          <name>topic_sequence_match</name>
+          <expectedValue>Weather</expectedValue>
+        </expectation>
+      </testCase>
+    </AiEvaluationDefinition>`;
+
+    readFileStub.resolves(xml);
+
+    const result = await generateTestSpecFromAiEvalDefinition('test.xml');
+
+    expect(result).to.deep.equal({
+      description: undefined,
+      name: 'TestSpec',
+      subjectType: 'AGENT',
+      subjectName: 'WeatherBot',
+      subjectVersion: undefined,
+      testCases: [
+        {
+          utterance: "What's the weather like?",
+          expectedTopic: 'Weather',
+          expectedActions: [],
+          expectedOutcome: undefined,
+        },
+      ],
+    });
+  });
+
+  it('should handle multiple test cases', async () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+    <AiEvaluationDefinition xmlns="http://soap.sforce.com/2006/04/metadata">
+      <name>TestSpec</name>
+      <subjectType>AGENT</subjectType>
+      <subjectName>WeatherBot</subjectName>
+      <testCase>
+        <inputs>
+          <utterance>What's the weather like?</utterance>
+        </inputs>
+        <expectation>
+          <name>action_sequence_match</name>
+          <expectedValue>["GetWeather"]</expectedValue>
+        </expectation>
+      </testCase>
+      <testCase>
+        <inputs>
+          <utterance>Will it rain tomorrow?</utterance>
+        </inputs>
+        <expectation>
+          <name>action_sequence_match</name>
+          <expectedValue>["GetForecast"]</expectedValue>
+        </expectation>
+      </testCase>
+    </AiEvaluationDefinition>`;
+
+    readFileStub.resolves(xml);
+
+    const result = await generateTestSpecFromAiEvalDefinition('test.xml');
+
+    expect(result.testCases).to.have.length(2);
+    expect(result.testCases[0].expectedActions).to.deep.equal(['GetWeather']);
+    expect(result.testCases[1].expectedActions).to.deep.equal(['GetForecast']);
+  });
+
+  it('should handle malformed action sequence JSON', async () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+    <AiEvaluationDefinition xmlns="http://soap.sforce.com/2006/04/metadata">
+      <name>TestSpec</name>
+      <subjectType>AGENT</subjectType>
+      <subjectName>WeatherBot</subjectName>
+      <testCase>
+        <inputs>
+          <utterance>Test</utterance>
+        </inputs>
+        <expectation>
+          <name>action_sequence_match</name>
+          <expectedValue>invalid json</expectedValue>
+        </expectation>
+      </testCase>
+    </AiEvaluationDefinition>`;
+
+    readFileStub.resolves(xml);
+
+    const result = await generateTestSpecFromAiEvalDefinition('test.xml');
+
+    expect(result.testCases[0].expectedActions).to.deep.equal([]);
+  });
+});
+
+describe('normalizeResults', () => {
+  it('should decode HTML entities in utterances and test results', () => {
+    const results: AgentTestResultsResponse = {
+      status: 'COMPLETED',
+      startTime: '2024-01-01T00:00:00Z',
+      subjectName: 'TestBot',
+      testCases: [
+        {
+          status: 'COMPLETED',
+          startTime: '2024-01-01T00:00:00Z',
+          testNumber: 1,
+          inputs: {
+            utterance: 'What&apos;s the weather like in &quot;San Francisco&quot;?',
+          },
+          generatedData: {
+            actionsSequence: [],
+            outcome: '',
+            topic: '',
+          },
+          testResults: [
+            {
+              name: 'test1',
+              actualValue: 'The temperature is &gt; 75&deg;F',
+              expectedValue: 'Expect &lt; 80&deg;F',
+              score: 1,
+              result: 'PASS',
+              metricLabel: 'Accuracy',
+              metricExplainability: '',
+              status: 'COMPLETED',
+              startTime: '2024-01-01T00:00:00Z',
+            },
+          ],
+        },
+      ],
+    };
+
+    const normalized = normalizeResults(results);
+
+    expect(normalized.testCases[0].inputs.utterance).to.equal('What\'s the weather like in "San Francisco"?');
+    expect(normalized.testCases[0].testResults[0].actualValue).to.equal('The temperature is > 75°F');
+    expect(normalized.testCases[0].testResults[0].expectedValue).to.equal('Expect < 80°F');
+  });
+
+  it('should handle undefined or empty values', () => {
+    const results: AgentTestResultsResponse = {
+      status: 'COMPLETED',
+      startTime: '2024-01-01T00:00:00Z',
+      subjectName: 'TestBot',
+      testCases: [
+        {
+          status: 'COMPLETED',
+          startTime: '2024-01-01T00:00:00Z',
+          testNumber: 1,
+          // @ts-expect-error because we want to test undefined values
+          inputs: {},
+          generatedData: {
+            actionsSequence: [],
+            outcome: '',
+            topic: '',
+          },
+          testResults: [
+            {
+              name: 'test1',
+              actualValue: '',
+              // @ts-expect-error because we want to test undefined values
+              expectedValue: undefined,
+              score: 1,
+              result: 'PASS',
+              metricLabel: 'Accuracy',
+              metricExplainability: '',
+              status: 'COMPLETED',
+              startTime: '2024-01-01T00:00:00Z',
+            },
+          ],
+        },
+      ],
+    };
+
+    const normalized = normalizeResults(results);
+
+    expect(normalized.testCases[0].inputs.utterance).to.equal('');
+    expect(normalized.testCases[0].testResults[0].actualValue).to.equal('');
+    expect(normalized.testCases[0].testResults[0].expectedValue).to.equal('');
+  });
+
+  it('should preserve non-encoded strings', () => {
+    const results: AgentTestResultsResponse = {
+      status: 'COMPLETED',
+      startTime: '2024-01-01T00:00:00Z',
+      subjectName: 'TestBot',
+      testCases: [
+        {
+          status: 'COMPLETED',
+          startTime: '2024-01-01T00:00:00Z',
+          testNumber: 1,
+          inputs: {
+            utterance: 'Regular string with no HTML entities',
+          },
+          generatedData: {
+            actionsSequence: [],
+            outcome: '',
+            topic: '',
+          },
+          testResults: [
+            {
+              name: 'test1',
+              actualValue: 'Plain text response',
+              expectedValue: 'Expected plain text',
+              score: 1,
+              result: 'PASS',
+              metricLabel: 'Accuracy',
+              metricExplainability: '',
+              status: 'COMPLETED',
+              startTime: '2024-01-01T00:00:00Z',
+            },
+          ],
+        },
+      ],
+    };
+
+    const normalized = normalizeResults(results);
+
+    expect(normalized.testCases[0].inputs.utterance).to.equal('Regular string with no HTML entities');
+    expect(normalized.testCases[0].testResults[0].actualValue).to.equal('Plain text response');
+    expect(normalized.testCases[0].testResults[0].expectedValue).to.equal('Expected plain text');
   });
 });

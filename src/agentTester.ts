@@ -10,7 +10,7 @@ import { Connection, Lifecycle, PollingClient, SfError, StatusResult } from '@sa
 import { Duration, env } from '@salesforce/kit';
 import { ComponentSetBuilder, DeployResult, FileProperties, RequestStatus } from '@salesforce/source-deploy-retrieve';
 import { parse, stringify } from 'yaml';
-import { XMLBuilder } from 'fast-xml-parser';
+import { XMLBuilder, XMLParser } from 'fast-xml-parser';
 import { MaybeMock } from './maybe-mock';
 
 export type TestStatus = 'NEW' | 'IN_PROGRESS' | 'COMPLETED' | 'ERROR' | 'TERMINATED';
@@ -69,9 +69,9 @@ export type AvailableDefinition = Omit<FileProperties, 'manageableState' | 'name
 
 export type TestCase = {
   utterance: string;
-  expectedActions: string[];
-  expectedOutcome: string;
-  expectedTopic: string;
+  expectedActions: string[] | undefined;
+  expectedOutcome: string | undefined;
+  expectedTopic: string | undefined;
 };
 
 export type TestSpec = {
@@ -81,6 +81,25 @@ export type TestSpec = {
   subjectName: string;
   subjectVersion?: string;
   testCases: TestCase[];
+};
+
+type AiEvaluationDefinition = {
+  AiEvaluationDefinition: {
+    description?: string;
+    name: string;
+    subjectType: 'AGENT';
+    subjectName: string;
+    subjectVersion?: string;
+    testCase: Array<{
+      expectation: Array<{
+        name: string;
+        expectedValue: string;
+      }>;
+      inputs: {
+        utterance: string;
+      };
+    }>;
+  };
 };
 
 export const AgentTestCreateLifecycleStages = {
@@ -107,17 +126,16 @@ export class AgentTester {
   }
 
   /**
-   * Starts an AI evaluation run based on the provided name or ID.
+   * Initiates an AI evaluation run.
    *
-   * @param nameOrId - The name or ID of the AI evaluation definition.
-   * @param type - Specifies whether the provided identifier is a 'name' or 'id'. Defaults to 'name'. If 'name' is provided, nameOrId is treated as the name of the AiEvaluationDefinition. If 'id' is provided, nameOrId is treated as the unique ID of the AiEvaluationDefinition.
-   * @returns A promise that resolves to an object containing the ID of the started AI evaluation run.
+   * @param aiEvalDefName - The name of the AI evaluation definition to run.
+   * @returns Promise that resolves with the response from starting the test.
    */
-  public async start(nameOrId: string, type: 'name' | 'id' = 'name'): Promise<AgentTestStartResponse> {
+  public async start(aiEvalDefName: string): Promise<AgentTestStartResponse> {
     const url = '/einstein/ai-evaluations/runs';
 
     return this.maybeMock.request<AgentTestStartResponse>('POST', url, {
-      [type === 'name' ? 'aiEvaluationDefinitionName' : 'aiEvaluationDefinitionVersionId']: nameOrId,
+      aiEvaluationDefinitionName: aiEvalDefName,
     });
   }
 
@@ -205,7 +223,8 @@ export class AgentTester {
   public async results(jobId: string): Promise<AgentTestResultsResponse> {
     const url = `/einstein/ai-evaluations/runs/${jobId}/results`;
 
-    return this.maybeMock.request<AgentTestResultsResponse>('GET', url);
+    const results = await this.maybeMock.request<AgentTestResultsResponse>('GET', url);
+    return normalizeResults(results);
   }
 
   /**
@@ -223,43 +242,33 @@ export class AgentTester {
   /**
    * Creates and deploys an AiEvaluationDefinition from a specification file.
    *
+   * @param apiName - The API name of the AiEvaluationDefinition to create
    * @param specFilePath - The path to the specification file to create the definition from
    * @param options - Configuration options for creating the definition
    * @param options.outputDir - The directory where the AiEvaluationDefinition file will be written
    * @param options.preview - If true, writes the AiEvaluationDefinition file to <api-name>-preview-<timestamp>.xml in the current working directory and does not deploy it
-   * @param options.confirmationCallback - Optional callback function to confirm overwriting existing definitions
    *
    * @returns Promise containing:
    * - path: The filesystem path to the created AiEvaluationDefinition file
    * - contents: The AiEvaluationDefinition contents as a string
    * - deployResult: The deployment result (if not in preview mode)
    *
-   * @throws {SfError} When a definition with the same name already exists and is not confirmed to be overwritten
    * @throws {SfError} When deployment fails
    */
   public async create(
+    apiName: string,
     specFilePath: string,
-    options: { outputDir: string; preview?: boolean; confirmationCallback?: (spec: TestSpec) => Promise<boolean> }
+    options: { outputDir: string; preview?: boolean }
   ): Promise<{ path: string; contents: string; deployResult?: DeployResult }> {
     const parsed = parse(await readFile(specFilePath, 'utf-8')) as TestSpec;
-    const existingDefinitions = await this.list();
-
-    if (existingDefinitions.some((d) => d.fullName === parsed.name)) {
-      const getConfirmation = options.confirmationCallback ?? (async (): Promise<boolean> => Promise.resolve(false));
-      const confirmation = await getConfirmation(parsed);
-      if (!confirmation) {
-        throw new SfError(`An AiEvaluationDefinition with the name ${parsed.name} already exists in the org.`);
-      }
-    }
-
     const lifecycle = Lifecycle.getInstance();
     await lifecycle.emit(AgentTestCreateLifecycleStages.CreatingLocalMetadata, {});
     const preview = options.preview ?? false;
     // outputDir is overridden if preview is true
     const outputDir = preview ? process.cwd() : options.outputDir;
     const filename = preview
-      ? `${parsed.name}-preview-${new Date().toISOString()}.xml`
-      : `${parsed.name}.aiEvaluationDefinition-meta.xml`;
+      ? `${apiName}-preview-${new Date().toISOString()}.xml`
+      : `${apiName}.aiEvaluationDefinition-meta.xml`;
     const definitionPath = join(outputDir, filename);
 
     const builder = new XMLBuilder({
@@ -288,7 +297,7 @@ export class AgentTester {
             },
             {
               name: 'action_sequence_match',
-              expectedValue: `[${tc.expectedActions.map((v) => `"${v}"`).join(',')}]`,
+              expectedValue: `[${(tc.expectedActions ?? []).map((v) => `"${v}"`).join(',')}]`,
             },
             {
               name: 'bot_response_rating',
@@ -348,14 +357,47 @@ export async function convertTestResultsToFormat(
 }
 
 /**
- * Clean a string by replacing HTML entities with their respective characters. Implementation done by copilot.
+ * Normalizes test results by decoding HTML entities in utterances and test result values.
  *
- * This is only required until W-17594913 is resolved by SF Eval
+ * @param results - The agent test results response object to normalize
+ * @returns A new AgentTestResultsResponse with decoded HTML entities
+ *
+ * @example
+ * const results = {
+ *   testCases: [{
+ *     inputs: { utterance: "&quot;hello&quot;" },
+ *     testResults: [{
+ *       actualValue: "&amp;test",
+ *       expectedValue: "&lt;value&gt;"
+ *     }]
+ *   }]
+ * };
+ * const normalized = normalizeResults(results);
+ */
+export function normalizeResults(results: AgentTestResultsResponse): AgentTestResultsResponse {
+  return {
+    ...results,
+    testCases: results.testCases.map((tc) => ({
+      ...tc,
+      inputs: {
+        utterance: decodeHtmlEntities(tc.inputs.utterance),
+      },
+      testResults: tc.testResults.map((r) => ({
+        ...r,
+        actualValue: decodeHtmlEntities(r.actualValue),
+        expectedValue: decodeHtmlEntities(r.expectedValue),
+      })),
+    })),
+  };
+}
+
+/**
+ * Clean a string by replacing HTML entities with their respective characters.
  *
  * @param str - The string to clean.
  * @returns The cleaned string with all HTML entities replaced with their respective characters.
  */
-function decodeHtmlEntities(str: string): string {
+function decodeHtmlEntities(str: string = ''): string {
   const entities: { [key: string]: string } = {
     '&quot;': '"',
     '&apos;': "'",
@@ -363,6 +405,30 @@ function decodeHtmlEntities(str: string): string {
     '&lt;': '<',
     '&gt;': '>',
     '&#39;': "'",
+    '&deg;': '°',
+    '&nbsp;': ' ',
+    '&ndash;': '–',
+    '&mdash;': '—',
+    '&rsquo;': '’',
+    '&lsquo;': '‘',
+    '&ldquo;': '“',
+    '&rdquo;': '”',
+    '&hellip;': '…',
+    '&trade;': '™',
+    '&copy;': '©',
+    '&reg;': '®',
+    '&euro;': '€',
+    '&pound;': '£',
+    '&yen;': '¥',
+    '&cent;': '¢',
+    '&times;': '×',
+    '&divide;': '÷',
+    '&plusmn;': '±',
+    '&micro;': 'µ',
+    '&para;': '¶',
+    '&sect;': '§',
+    '&bull;': '•',
+    '&middot;': '·',
   };
 
   return str.replace(/&[a-zA-Z0-9#]+;/g, (entity) => entities[entity] || entity);
@@ -451,8 +517,8 @@ async function tapFormat(results: AgentTestResultsResponse): Promise<string> {
         lines.push('  ---');
         lines.push(`  message: ${result.errorMessage ?? 'Unknown error'}`);
         lines.push(`  expectation: ${result.name}`);
-        lines.push(`  actual: ${decodeHtmlEntities(result.actualValue)}`);
-        lines.push(`  expected: ${decodeHtmlEntities(result.expectedValue)}`);
+        lines.push(`  actual: ${result.actualValue}`);
+        lines.push(`  expected: ${result.expectedValue}`);
         lines.push('  ...');
       }
     }
@@ -461,17 +527,75 @@ async function tapFormat(results: AgentTestResultsResponse): Promise<string> {
   return Promise.resolve(`Tap Version 14\n1..${expectationCount}\n${lines.join('\n')}`);
 }
 
+function transformStringToArray(str: string | undefined): string[] {
+  try {
+    if (!str) return [];
+    // Remove any whitespace and ensure proper JSON format
+    const cleaned = str.replace(/\s+/g, '');
+    return JSON.parse(cleaned) as string[];
+  } catch {
+    return [];
+  }
+}
+
+function castArray<T>(value: T | T[]): T[] {
+  return Array.isArray(value) ? value : [value];
+}
+
 /**
- * Generate a test spec file from a TestSpec object
+ * Generate a test specification file in YAML format.
+ * This function takes a test specification object, cleans it by removing undefined and empty string values,
+ * converts it to YAML format, and writes it to the specified output file.
+ *
+ * @param spec - The test specification object to be converted to YAML.
+ * @param outputFile - The file path where the YAML output should be written.
+ * @throws {Error} - May throw an error if file operations fail.
+ * @returns A Promise that resolves when the file has been written.
  */
-export async function generateTestSpec(spec: TestSpec, outputFile: string): Promise<void> {
+export async function writeTestSpec(spec: TestSpec, outputFile: string): Promise<void> {
   // strip out undefined values and empty strings
   const clean = Object.entries(spec).reduce<Partial<TestSpec>>((acc, [key, value]) => {
     if (value !== undefined && value !== '') return { ...acc, [key]: value };
     return acc;
   }, {});
 
-  const yml = stringify(clean);
+  const yml = stringify(clean, undefined, {
+    minContentWidth: 0,
+    lineWidth: 0,
+  });
   await mkdir(dirname(outputFile), { recursive: true });
   await writeFile(outputFile, yml);
+}
+
+/**
+ * Generates a TestSpec object from an AI Evaluation Definition XML file.
+ *
+ * @param path - The file path to the AI Evaluation Definition XML file.
+ * @returns Promise that resolves to a TestSpec object containing the parsed evaluation definition data.
+ * @description Reads and parses an XML file containing AIEvaluationDefinition, converting it into a structured TestSpec format.
+ *
+ * @throws {Error} If the file cannot be read or parsed.
+ */
+export async function generateTestSpecFromAiEvalDefinition(path: string): Promise<TestSpec> {
+  const xml = await readFile(path, 'utf-8');
+  const parser = new XMLParser();
+  const parsed = parser.parse(xml) as AiEvaluationDefinition;
+  return {
+    name: parsed.AiEvaluationDefinition.name,
+    description: parsed.AiEvaluationDefinition.description,
+    subjectType: parsed.AiEvaluationDefinition.subjectType,
+    subjectName: parsed.AiEvaluationDefinition.subjectName,
+    subjectVersion: parsed.AiEvaluationDefinition.subjectVersion,
+    testCases: castArray(parsed.AiEvaluationDefinition.testCase).map((tc) => {
+      const expectations = castArray(tc.expectation);
+      return {
+        utterance: tc.inputs.utterance,
+        expectedTopic: expectations.find((e) => e.name === 'topic_sequence_match')?.expectedValue,
+        expectedActions: transformStringToArray(
+          expectations.find((e) => e.name === 'action_sequence_match')?.expectedValue
+        ),
+        expectedOutcome: expectations.find((e) => e.name === 'bot_response_rating')?.expectedValue,
+      };
+    }),
+  };
 }
