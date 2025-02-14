@@ -9,51 +9,23 @@
  * An agent job spec is a list of job titles and descriptions
  * to be performed by the agent.
  */
-export type AgentJobSpec = [
-  {
-    jobTitle: string;
-    jobDescription: string;
-  }
-];
-
-export type AgentJobSpecV2 = AgentJobSpecCreateConfigV2 & {
+export type AgentJobSpec = AgentJobSpecCreateConfig & {
   topics: DraftAgentTopics;
 };
 
-/**
- * The body POST'd to /services/data/{api-version}/connect/attach-agent-topics
- */
-export type AttachAgentTopicsBody = {
-  plannerId: string;
-  role: string;
-  companyName: string;
-  companyDescription: string;
-  agentType: string;
-  agentJobSpecs: AgentJobSpec;
-};
+export type AgentType = 'customer' | 'internal';
+
+export type AgentTone = 'casual' | 'formal' | 'neutral';
 
 /**
  * The parameters used to generate an agent spec.
  */
 export type AgentJobSpecCreateConfig = {
-  // this name is not created with 'agent create spec'
-  name: string;
-  type: 'customer' | 'internal';
-  role: string;
-  companyName: string;
-  companyDescription: string;
-  companyWebsite?: string;
-};
-
-/**
- * The parameters used to generate an agent spec V2.
- */
-export type AgentJobSpecCreateConfigV2 = {
   /**
    * Internal type is copilots; used by customers' employees.
    * Customer type is agents; used by customers' customers.
    */
-  agentType: 'customer' | 'internal';
+  agentType: AgentType;
   role: string;
   companyName: string;
   companyDescription: string;
@@ -73,16 +45,7 @@ export type AgentJobSpecCreateConfigV2 = {
   groundingContext?: string;
 };
 
-/**
- * The parameters used to generate an agent in an org.
- *
- * NOTE: This is likely to change with planned serverside APIs.
- */
-export type AgentCreateConfig = AgentJobSpecCreateConfig & {
-  jobSpec: AgentJobSpec;
-};
-
-export type AgentCreateConfigV2 = DraftAgentTopicsBody & {
+export type AgentCreateConfig = DraftAgentTopicsBody & {
   generationInfo: {
     defaultInfo: {
       /**
@@ -137,7 +100,7 @@ export type AgentCreateConfigV2 = DraftAgentTopicsBody & {
      *
      * Default: casual
      */
-    tone?: 'casual' | 'formal' | 'neutral';
+    tone?: AgentTone;
     /**
      * The language your agent uses in conversations. Agent currently
      * supports English only.
@@ -152,7 +115,7 @@ export type AgentCreateConfigV2 = DraftAgentTopicsBody & {
  * The request body to send to the `draft-agent-topics` API.
  */
 export type DraftAgentTopicsBody = {
-  agentType: 'customer' | 'internal';
+  agentType: AgentType;
   generationInfo: {
     defaultInfo: {
       role: string;
@@ -170,32 +133,7 @@ export type DraftAgentTopicsBody = {
   };
 };
 
-/**
- * An interface for working with Agents.
- */
-export type SfAgent = {
-  create(config: AgentCreateConfig): Promise<AgentCreateResponse>;
-  createSpec(config: AgentJobSpecCreateConfig): Promise<AgentJobSpec>;
-};
-
-/**
- * The response from the `agent-job-spec` API.
- */
-export type AgentJobSpecCreateResponse = {
-  isSuccess: boolean;
-  errorMessage?: string;
-  jobSpecs?: AgentJobSpec;
-};
-
-/**
- * The response from the `attach-agent-topics` API.
- */
 export type AgentCreateResponse = {
-  isSuccess: boolean;
-  errorMessage?: string;
-};
-
-export type AgentCreateResponseV2 = {
   isSuccess: boolean;
   errorMessage?: string;
   /**
