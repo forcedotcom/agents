@@ -1,9 +1,60 @@
-# [0.10.0](https://github.com/forcedotcom/agents/compare/0.9.7...0.10.0) (2025-02-13)
+# [0.11.0](https://github.com/forcedotcom/agents/compare/0.9.8-dev.2...0.11.0) (2025-02-14)
+
+
+
+# [0.10.0](https://github.com/forcedotcom/agents/compare/0.9.8-dev.0...0.10.0) (2025-02-13)
 
 
 ### Features
 
 * **W-17767554:** bundling ([8624203](https://github.com/forcedotcom/agents/commit/862420311d32938176dfb6d731846d67a4f242bd))
+
+
+
+## [0.9.8-dev.2](https://github.com/forcedotcom/agents/compare/0.9.8-dev.1...0.9.8-dev.2) (2025-02-14)
+
+
+### Bug Fixes
+
+* handle missing fields from server ([e244449](https://github.com/forcedotcom/agents/commit/e244449dba59d138c6e2b7a839742d8cc3ad7ce0))
+
+
+
+## [0.9.8-dev.1](https://github.com/forcedotcom/agents/compare/0.10.0...0.9.8-dev.1) (2025-02-13)
+
+
+### Features
+
+* add generateTestSpecFromAiEvalDefinition ([0c27e25](https://github.com/forcedotcom/agents/commit/0c27e25dbbc948e2b199af0e2c8b746ad05aa14d))
+
+
+
+## [0.9.8-dev.0](https://github.com/forcedotcom/agents/compare/0.9.7...0.9.8-dev.0) (2025-02-12)
+
+
+### Bug Fixes
+
+* decode html entities ([f697fee](https://github.com/forcedotcom/agents/commit/f697fee43ebfddd7ff8d10d70fafc8e97dc56524))
+* dont wrap yaml files ([e3ab7ae](https://github.com/forcedotcom/agents/commit/e3ab7ae0e3b9bd2dfb76407ae7a2de1ae9c733c1))
+
+
+
+# [0.10.0](https://github.com/forcedotcom/agents/compare/0.9.8-dev.0...0.10.0) (2025-02-13)
+
+
+### Features
+
+* **W-17767554:** bundling ([8624203](https://github.com/forcedotcom/agents/commit/862420311d32938176dfb6d731846d67a4f242bd))
+
+
+
+## [0.9.8-dev.0](https://github.com/forcedotcom/agents/compare/0.9.7...0.9.8-dev.0) (2025-02-12)
+
+
+### Bug Fixes
+
+* decode html entities ([f697fee](https://github.com/forcedotcom/agents/commit/f697fee43ebfddd7ff8d10d70fafc8e97dc56524))
+* dont wrap yaml files ([e3ab7ae](https://github.com/forcedotcom/agents/commit/e3ab7ae0e3b9bd2dfb76407ae7a2de1ae9c733c1))
 
 
 
