@@ -1,3 +1,12 @@
+# [0.10.0](https://github.com/forcedotcom/agents/compare/0.9.7...0.10.0) (2025-02-13)
+
+
+### Features
+
+* **W-17767554:** bundling ([8624203](https://github.com/forcedotcom/agents/commit/862420311d32938176dfb6d731846d67a4f242bd))
+
+
+
 ## [0.9.7](https://github.com/forcedotcom/agents/compare/0.9.6...0.9.7) (2025-02-08)
 
 

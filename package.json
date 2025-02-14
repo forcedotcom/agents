@@ -1,7 +1,7 @@
 {
   "name": "@salesforce/agents",
   "description": "Client side APIs for working with Salesforce agents",
-  "version": "0.9.8-dev.2",
+  "version": "0.10.0",
   "license": "BSD-3-Clause",
   "author": "Salesforce",
   "main": "lib/index",
@@ -19,9 +19,10 @@
     "yaml": "^2.7.0"
   },
   "devDependencies": {
-    "@salesforce/cli-plugins-testkit": "^5.3.38",
-    "@salesforce/dev-scripts": "^10.2.10",
+    "@salesforce/cli-plugins-testkit": "^5.3.39",
+    "@salesforce/dev-scripts": "^10.2.11",
     "ts-node": "^10.9.2",
+    "typedoc": "^0.27.7",
     "typescript": "^5.7.3"
   },
   "engines": {
@@ -52,8 +53,6 @@
     "lint": "wireit",
     "lint-fix": "yarn sf-lint --fix",
     "postcompile": "tsc -p test",
-    "prepack": "sf-prepack",
-    "prepare": "sf-install",
     "test": "wireit",
     "test:nuts": "echo 'No tests to run'",
     "test:only": "wireit"
