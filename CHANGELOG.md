@@ -1,3 +1,12 @@
+# [0.12.0](https://github.com/forcedotcom/agents/compare/0.11.0...0.12.0) (2025-02-14)
+
+
+### Features
+
+* remove v1 legacy code and rename v2 code ([23aa615](https://github.com/forcedotcom/agents/commit/23aa6151c602dd601a24e1f7a749003a6f922f09))
+
+
+
 # [0.11.0](https://github.com/forcedotcom/agents/compare/0.9.8-dev.2...0.11.0) (2025-02-14)
 
 
