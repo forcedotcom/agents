@@ -1,3 +1,12 @@
+## [0.12.1](https://github.com/forcedotcom/agents/compare/0.12.0...0.12.1) (2025-02-17)
+
+
+### Bug Fixes
+
+* build hard messages into lib ([de2671c](https://github.com/forcedotcom/agents/commit/de2671ca4060e254b0fb46bd56710657a0d78249))
+
+
+
 # [0.12.0](https://github.com/forcedotcom/agents/compare/0.11.0...0.12.0) (2025-02-14)
 
 
