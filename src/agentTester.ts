@@ -356,6 +356,7 @@ export async function convertTestResultsToFormat(
   }
 }
 
+/* eslint-disable-next-line jsdoc/check-indentation */
 /**
  * Normalizes test results by decoding HTML entities in utterances and test result values.
  *
