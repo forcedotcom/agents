@@ -29,7 +29,7 @@ const analyzeFile = (filePath) => {
 
   funcCalls.forEach((callExpression) => {
     const exp = callExpression.getExpression();
-    if (exp.getText().startsWith('fs.read')) {
+    if (exp.getText().startsWith('fs.read') || exp.getText().startsWith('fs.promises.read')) {
       detected = true;
       console.warn(
         `Warning: Usage of "${exp.getText()}" in file "${filePath}" at line ${callExpression.getStartLineNumber()}.\n`
@@ -45,7 +45,7 @@ if (detected) {
   console.log(`Avoid reading local artifacts with "fs.read*" since esbuild cannot bundle the artifacts together.`);
   console.log('Consider using import instead or reach out to Platform CLI team');
 } else {
-  console.log('No fs.read* usages detected.');
+  console.log('No fs.read* / fs.promises.read* usages detected.');
 }
 
 console.log('Scan complete');
