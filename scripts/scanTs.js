@@ -43,7 +43,7 @@ scanDirectory(SRC_DIR);
 if (detected) {
   console.log('The warnings above do not mean the usages are wrong.');
   console.log(`Avoid reading local artifacts with "fs.read*" since esbuild cannot bundle the artifacts together.`);
-  console.log('Consider using import instead or reach out to IDEx Foundations team');
+  console.log('Consider using import instead or reach out to Platform CLI team');
 } else {
   console.log('No fs.read* usages detected.');
 }

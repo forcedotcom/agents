@@ -1,6 +1,6 @@
 /**
- * NOTE: This file does NOT really generate a bundle version of sdr
- * sdr is bundled directly in salesforcedx-vscode
+ * NOTE: This file does NOT really generate a bundle version of Agents
+ * Agents is bundled directly in vscode-agents
  * The file is only used to detect any potential risks to esbuild.
  **/
 const { build } = require('esbuild');
