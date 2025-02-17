@@ -1,10 +1,10 @@
-/* eslint-disable jsdoc/check-indentation */
 /*
  * Copyright (c) 2024, salesforce.com, inc.
  * All rights reserved.
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
+/* eslint-disable jsdoc/check-indentation */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { Connection, Lifecycle, PollingClient, SfError, StatusResult } from '@salesforce/core';
