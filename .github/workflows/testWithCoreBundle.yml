@@ -5,5 +5,5 @@ on:
 
 jobs:
   build-and-test:
-    uses: forcedotcom/bundle-publish-scripts/.github/workflows/validateBundleForDependents.yml@main
+    uses: forcedotcom/bundle-publish-scripts/.github/workflows/validateBuildWithCoreBundle.yml@main
     secrets: inherit

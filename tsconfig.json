@@ -4,5 +4,6 @@
     "outDir": "lib",
     "rootDir": "src"
   },
+  "plugins": [{ "transform": "@salesforce/core/messageTransformer", "import": "messageTransformer" }],
   "include": ["./src/**/*.ts"]
 }
