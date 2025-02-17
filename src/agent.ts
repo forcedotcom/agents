@@ -18,7 +18,7 @@ import {
   type DraftAgentTopicsResponse,
 } from './types.js';
 import { MaybeMock } from './maybe-mock';
-import { decodeHtmlEntities } from './utils.js';
+import { decodeHtmlEntities } from './utils';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agents');
