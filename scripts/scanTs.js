@@ -29,7 +29,7 @@ const analyzeFile = (filePath) => {
 
   funcCalls.forEach((callExpression) => {
     const exp = callExpression.getExpression();
-    if (exp.getText().startsWith('fs.read') || exp.getText().startsWith('fs.promises.read')) {
+    if (exp.getText().toLowerCase().includes('readdir') || exp.getText().toLowerCase().includes('readfile')) {
       detected = true;
       console.warn(
         `Warning: Usage of "${exp.getText()}" in file "${filePath}" at line ${callExpression.getStartLineNumber()}.\n`
