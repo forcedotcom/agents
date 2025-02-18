@@ -14,7 +14,9 @@ import {
   AgentTestResultsResponse,
   AgentTester,
   convertTestResultsToFormat,
-  generateTestSpec,
+  writeTestSpec,
+  generateTestSpecFromAiEvalDefinition,
+  normalizeResults,
 } from '../src/agentTester';
 
 describe('AgentTester', () => {
@@ -52,7 +54,7 @@ describe('AgentTester', () => {
       const output = await tester.status('4KBSM000000003F4AQ');
       expect(output).to.be.ok;
       expect(output).to.deep.equal({
-        status: 'IN_PROGRESS',
+        status: 'NEW',
         startTime: '2024-11-13T15:00:00.000Z',
       });
     });
@@ -65,7 +67,7 @@ describe('AgentTester', () => {
       const response = await tester.poll('4KBSM000000003F4AQ');
       expect(response).to.be.ok;
       // TODO: make these assertions more meaningful
-      expect(response.testSet.testCases[0].status).to.equal('COMPLETED');
+      expect(response.testCases[0].status).to.equal('COMPLETED');
     });
   });
 
@@ -120,12 +122,13 @@ testCases:
       const tester = new AgentTester(connection);
       sinon.stub(fs, 'readFile').resolves(yml);
       sinon.stub(tester, 'list').resolves([]);
-      const { contents } = await tester.create('test.yaml', {
+      const { contents } = await tester.create('MyTest', 'test.yaml', {
         outputDir: 'tmp',
         preview: true,
       });
 
-      expect(contents).to.equal(`<AiEvaluationDefinition xmlns="http://soap.sforce.com/2006/04/metadata">
+      expect(contents).to.equal(`<?xml version="1.0" encoding="UTF-8"?>
+<AiEvaluationDefinition xmlns="http://soap.sforce.com/2006/04/metadata">
   <description>Test</description>
   <name>Test</name>
   <subjectType>AGENT</subjectType>
@@ -136,15 +139,15 @@ testCases:
       <utterance>List contact names associated with Acme account</utterance>
     </inputs>
     <expectation>
-      <name>expectedTopic</name>
+      <name>topic_sequence_match</name>
       <expectedValue>GeneralCRM</expectedValue>
     </expectation>
     <expectation>
-      <name>expectedActions</name>
+      <name>action_sequence_match</name>
       <expectedValue>[&quot;IdentifyRecordByName&quot;,&quot;QueryRecords&quot;]</expectedValue>
     </expectation>
     <expectation>
-      <name>expectedOutcome</name>
+      <name>bot_response_rating</name>
       <expectedValue>contacts available name available with Acme are listed</expectedValue>
     </expectation>
   </testCase>
@@ -154,15 +157,15 @@ testCases:
       <utterance>List contact emails associated with Acme account</utterance>
     </inputs>
     <expectation>
-      <name>expectedTopic</name>
+      <name>topic_sequence_match</name>
       <expectedValue>GeneralCRM</expectedValue>
     </expectation>
     <expectation>
-      <name>expectedActions</name>
+      <name>action_sequence_match</name>
       <expectedValue>[&quot;IdentifyRecordByName&quot;,&quot;QueryRecords&quot;]</expectedValue>
     </expectation>
     <expectation>
-      <name>expectedOutcome</name>
+      <name>bot_response_rating</name>
       <expectedValue>contacts available emails available with Acme are listed</expectedValue>
     </expectation>
   </testCase>
@@ -172,29 +175,20 @@ testCases:
   });
 });
 
-describe('human format', () => {
-  it('should transform test results to human readable format', async () => {
-    const raw = await readFile('./test/mocks/einstein_ai-evaluations_runs_4KBSM000000003F4AQ_results.json', 'utf8');
-    const input = JSON.parse(raw) as AgentTestResultsResponse;
-    const output = await convertTestResultsToFormat(input, 'human');
-    expect(output).to.be.ok;
-  });
-});
-
 describe('junit formatter', () => {
   it('should transform test results to JUnit format', async () => {
-    const raw = await readFile('./test/mocks/einstein_ai-evaluations_runs_4KBSM000000003F4AQ_results.json', 'utf8');
+    const raw = await readFile('./test/mocks/einstein_ai-evaluations_runs_4KBSM000000003F4AQ_results/4.json', 'utf8');
     const input = JSON.parse(raw) as AgentTestResultsResponse;
     const output = await convertTestResultsToFormat(input, 'junit');
-    expect(output).to.deep.equal(`<?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="Copilot_for_Salesforce" tests="2" failures="1" time="20000">
+    expect(output).to.equal(`<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="Guest_Experience_Agent" tests="3" failures="1" time="30000">
   <property name="status" value="COMPLETED"></property>
-  <property name="start-time" value="2024-11-28T12:00:00Z"></property>
-  <property name="end-time" value="2024-11-28T12:00:48.56Z"></property>
-  <testsuite name="CRM_Sanity_v1.1" time="10000" assertions="3"></testsuite>
-  <testsuite name="CRM_Sanity_v1.2" time="10000" assertions="3">
-    <failure message="Actual response does not match the expected response" name="expectedActions"></failure>
-    <failure message="Actual response does not match the expected response" name="expectedOutcome"></failure>
+  <property name="start-time" value="2025-01-07T12:00:00Z"></property>
+  <property name="end-time" value="2025-01-07T12:00:10.35Z"></property>
+  <testsuite name="1" time="10000" assertions="3"></testsuite>
+  <testsuite name="2" time="10000" assertions="3"></testsuite>
+  <testsuite name="3" time="10000" assertions="3">
+    <failure message="An Apex error occurred: System.CalloutException: Bad Response: System.HttpResponse[Status=Not Found, StatusCode=404]" name="bot_response_rating"></failure>
   </testsuite>
 </testsuites>`);
   });
@@ -202,33 +196,30 @@ describe('junit formatter', () => {
 
 describe('tap formatter', () => {
   it('should transform test results to TAP format', async () => {
-    const raw = await readFile('./test/mocks/einstein_ai-evaluations_runs_4KBSM000000003F4AQ_results.json', 'utf8');
+    const raw = await readFile('./test/mocks/einstein_ai-evaluations_runs_4KBSM000000003F4AQ_results/4.json', 'utf8');
     const input = JSON.parse(raw) as AgentTestResultsResponse;
     const output = await convertTestResultsToFormat(input, 'tap');
-    expect(output).to.deep.equal(`Tap Version 14
-1..6
-ok 1 CRM_Sanity_v1.1
-ok 2 CRM_Sanity_v1.1
-ok 3 CRM_Sanity_v1.1
-ok 4 CRM_Sanity_v1.2
-not ok 5 CRM_Sanity_v1.2
+    expect(output).to.equal(`Tap Version 14
+1..9
+ok 1 1.topic_sequence_match
+ok 2 1.action_sequence_match
+ok 3 1.bot_response_rating
+ok 4 2.topic_sequence_match
+ok 5 2.action_sequence_match
+ok 6 2.bot_response_rating
+ok 7 3.topic_sequence_match
+ok 8 3.action_sequence_match
+not ok 9 3.bot_response_rating
   ---
-  message: Actual response does not match the expected response
-  expectation: expectedActions
-  actual: ["IdentifyRecordByName","QueryRecords"]
-  expected: ["IdentifyRecordByName","QueryRecords","GetActivitiesTimeline"]
-  ...
-not ok 6 CRM_Sanity_v1.2
-  ---
-  message: Actual response does not match the expected response
-  expectation: expectedOutcome
-  actual: It looks like I am unable to find the information you are looking for due to access restrictions. How else can I assist you?
-  expected: Summary of open cases and activities associated with timeline
+  message: An Apex error occurred: System.CalloutException: Bad Response: System.HttpResponse[Status=Not Found, StatusCode=404]
+  expectation: bot_response_rating
+  actual: It looks like I am unable to check the weather. There's something wrong with the Weather Service. How else can I assist you?
+  expected: The answer should start by describing expected conditions, for example "clear skies" or "50% chance of rain" and conclude with a range of high and low temperatures in degrees fahrenheit.
   ...`);
   });
 });
 
-describe('generateTestSpec', () => {
+describe('writeTestSpec', () => {
   let writeFileStub: sinon.SinonStub;
   beforeEach(() => {
     writeFileStub = sinon.stub(fs, 'writeFile');
@@ -239,7 +230,7 @@ describe('generateTestSpec', () => {
   });
 
   it('should generate a yaml file', async () => {
-    await generateTestSpec(
+    await writeTestSpec(
       {
         name: 'Test',
         description: 'Test',
@@ -286,7 +277,7 @@ testCases:
   });
 
   it('should remove empty strings', async () => {
-    await generateTestSpec(
+    await writeTestSpec(
       {
         name: 'Test',
         description: '',
@@ -320,7 +311,7 @@ testCases:
   });
 
   it('should remove undefined values', async () => {
-    await generateTestSpec(
+    await writeTestSpec(
       {
         name: 'Test',
         description: undefined,
@@ -351,5 +342,290 @@ testCases:
     expectedTopic: GeneralCRM
 `,
     ]);
+  });
+});
+
+describe('generateTestSpecFromAiEvalDefinition', () => {
+  let readFileStub: sinon.SinonStub;
+
+  beforeEach(() => {
+    readFileStub = sinon.stub(fs, 'readFile');
+  });
+
+  afterEach(() => {
+    sinon.restore();
+  });
+
+  it('should parse AiEvaluationDefinition XML into TestSpec', async () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+    <AiEvaluationDefinition xmlns="http://soap.sforce.com/2006/04/metadata">
+      <description>Test Description</description>
+      <name>TestSpec</name>
+      <subjectType>AGENT</subjectType>
+      <subjectName>WeatherBot</subjectName>
+      <subjectVersion>1</subjectVersion>
+      <testCase>
+        <inputs>
+          <utterance>What's the weather like?</utterance>
+        </inputs>
+        <expectation>
+          <name>topic_sequence_match</name>
+          <expectedValue>Weather</expectedValue>
+        </expectation>
+        <expectation>
+          <name>action_sequence_match</name>
+          <expectedValue>["GetLocation","GetWeather"]</expectedValue>
+        </expectation>
+        <expectation>
+          <name>bot_response_rating</name>
+          <expectedValue>Sunny with a high of 75F</expectedValue>
+        </expectation>
+      </testCase>
+    </AiEvaluationDefinition>`;
+
+    readFileStub.resolves(xml);
+
+    const result = await generateTestSpecFromAiEvalDefinition('test.xml');
+
+    expect(result).to.deep.equal({
+      name: 'TestSpec',
+      description: 'Test Description',
+      subjectType: 'AGENT',
+      subjectName: 'WeatherBot',
+      subjectVersion: 1,
+      testCases: [
+        {
+          utterance: "What's the weather like?",
+          expectedTopic: 'Weather',
+          expectedActions: ['GetLocation', 'GetWeather'],
+          expectedOutcome: 'Sunny with a high of 75F',
+        },
+      ],
+    });
+  });
+
+  it('should handle missing optional fields', async () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+    <AiEvaluationDefinition xmlns="http://soap.sforce.com/2006/04/metadata">
+      <name>TestSpec</name>
+      <subjectType>AGENT</subjectType>
+      <subjectName>WeatherBot</subjectName>
+      <testCase>
+        <inputs>
+          <utterance>What's the weather like?</utterance>
+        </inputs>
+        <expectation>
+          <name>topic_sequence_match</name>
+          <expectedValue>Weather</expectedValue>
+        </expectation>
+      </testCase>
+    </AiEvaluationDefinition>`;
+
+    readFileStub.resolves(xml);
+
+    const result = await generateTestSpecFromAiEvalDefinition('test.xml');
+
+    expect(result).to.deep.equal({
+      description: undefined,
+      name: 'TestSpec',
+      subjectType: 'AGENT',
+      subjectName: 'WeatherBot',
+      subjectVersion: undefined,
+      testCases: [
+        {
+          utterance: "What's the weather like?",
+          expectedTopic: 'Weather',
+          expectedActions: [],
+          expectedOutcome: undefined,
+        },
+      ],
+    });
+  });
+
+  it('should handle multiple test cases', async () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+    <AiEvaluationDefinition xmlns="http://soap.sforce.com/2006/04/metadata">
+      <name>TestSpec</name>
+      <subjectType>AGENT</subjectType>
+      <subjectName>WeatherBot</subjectName>
+      <testCase>
+        <inputs>
+          <utterance>What's the weather like?</utterance>
+        </inputs>
+        <expectation>
+          <name>action_sequence_match</name>
+          <expectedValue>["GetWeather"]</expectedValue>
+        </expectation>
+      </testCase>
+      <testCase>
+        <inputs>
+          <utterance>Will it rain tomorrow?</utterance>
+        </inputs>
+        <expectation>
+          <name>action_sequence_match</name>
+          <expectedValue>["GetForecast"]</expectedValue>
+        </expectation>
+      </testCase>
+    </AiEvaluationDefinition>`;
+
+    readFileStub.resolves(xml);
+
+    const result = await generateTestSpecFromAiEvalDefinition('test.xml');
+
+    expect(result.testCases).to.have.length(2);
+    expect(result.testCases[0].expectedActions).to.deep.equal(['GetWeather']);
+    expect(result.testCases[1].expectedActions).to.deep.equal(['GetForecast']);
+  });
+
+  it('should handle malformed action sequence JSON', async () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+    <AiEvaluationDefinition xmlns="http://soap.sforce.com/2006/04/metadata">
+      <name>TestSpec</name>
+      <subjectType>AGENT</subjectType>
+      <subjectName>WeatherBot</subjectName>
+      <testCase>
+        <inputs>
+          <utterance>Test</utterance>
+        </inputs>
+        <expectation>
+          <name>action_sequence_match</name>
+          <expectedValue>invalid json</expectedValue>
+        </expectation>
+      </testCase>
+    </AiEvaluationDefinition>`;
+
+    readFileStub.resolves(xml);
+
+    const result = await generateTestSpecFromAiEvalDefinition('test.xml');
+
+    expect(result.testCases[0].expectedActions).to.deep.equal([]);
+  });
+});
+
+describe('normalizeResults', () => {
+  it('should decode HTML entities in utterances and test results', () => {
+    const results: AgentTestResultsResponse = {
+      status: 'COMPLETED',
+      startTime: '2024-01-01T00:00:00Z',
+      subjectName: 'TestBot',
+      testCases: [
+        {
+          status: 'COMPLETED',
+          startTime: '2024-01-01T00:00:00Z',
+          testNumber: 1,
+          inputs: {
+            utterance: 'What&apos;s the weather like in &quot;San Francisco&quot;?',
+          },
+          generatedData: {
+            actionsSequence: [],
+            outcome: '',
+            topic: '',
+          },
+          testResults: [
+            {
+              name: 'test1',
+              actualValue: 'The temperature is &gt; 75&deg;F',
+              expectedValue: 'Expect &lt; 80&deg;F',
+              score: 1,
+              result: 'PASS',
+              metricLabel: 'Accuracy',
+              metricExplainability: '',
+              status: 'COMPLETED',
+              startTime: '2024-01-01T00:00:00Z',
+            },
+          ],
+        },
+      ],
+    };
+
+    const normalized = normalizeResults(results);
+
+    expect(normalized.testCases[0].inputs.utterance).to.equal('What\'s the weather like in "San Francisco"?');
+    expect(normalized.testCases[0].testResults[0].actualValue).to.equal('The temperature is > 75°F');
+    expect(normalized.testCases[0].testResults[0].expectedValue).to.equal('Expect < 80°F');
+  });
+
+  it('should handle undefined or empty values', () => {
+    const results: AgentTestResultsResponse = {
+      status: 'COMPLETED',
+      startTime: '2024-01-01T00:00:00Z',
+      subjectName: 'TestBot',
+      testCases: [
+        {
+          status: 'COMPLETED',
+          startTime: '2024-01-01T00:00:00Z',
+          testNumber: 1,
+          // @ts-expect-error because we want to test undefined values
+          inputs: {},
+          generatedData: {
+            actionsSequence: [],
+            outcome: '',
+            topic: '',
+          },
+          testResults: [
+            {
+              name: 'test1',
+              actualValue: '',
+              // @ts-expect-error because we want to test undefined values
+              expectedValue: undefined,
+              score: 1,
+              result: 'PASS',
+              metricLabel: 'Accuracy',
+              metricExplainability: '',
+              status: 'COMPLETED',
+              startTime: '2024-01-01T00:00:00Z',
+            },
+          ],
+        },
+      ],
+    };
+
+    const normalized = normalizeResults(results);
+
+    expect(normalized.testCases[0].inputs.utterance).to.equal('');
+    expect(normalized.testCases[0].testResults[0].actualValue).to.equal('');
+    expect(normalized.testCases[0].testResults[0].expectedValue).to.equal('');
+  });
+
+  it('should preserve non-encoded strings', () => {
+    const results: AgentTestResultsResponse = {
+      status: 'COMPLETED',
+      startTime: '2024-01-01T00:00:00Z',
+      subjectName: 'TestBot',
+      testCases: [
+        {
+          status: 'COMPLETED',
+          startTime: '2024-01-01T00:00:00Z',
+          testNumber: 1,
+          inputs: {
+            utterance: 'Regular string with no HTML entities',
+          },
+          generatedData: {
+            actionsSequence: [],
+            outcome: '',
+            topic: '',
+          },
+          testResults: [
+            {
+              name: 'test1',
+              actualValue: 'Plain text response',
+              expectedValue: 'Expected plain text',
+              score: 1,
+              result: 'PASS',
+              metricLabel: 'Accuracy',
+              metricExplainability: '',
+              status: 'COMPLETED',
+              startTime: '2024-01-01T00:00:00Z',
+            },
+          ],
+        },
+      ],
+    };
+
+    const normalized = normalizeResults(results);
+
+    expect(normalized.testCases[0].inputs.utterance).to.equal('Regular string with no HTML entities');
+    expect(normalized.testCases[0].testResults[0].actualValue).to.equal('Plain text response');
+    expect(normalized.testCases[0].testResults[0].expectedValue).to.equal('Expected plain text');
   });
 });

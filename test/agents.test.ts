@@ -10,7 +10,7 @@ import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection, SfProject } from '@salesforce/core';
 import { ComponentSetBuilder, ComponentSet, MetadataApiRetrieve } from '@salesforce/source-deploy-retrieve';
 import { Agent, generateAgentApiName } from '../src/agent';
-import type { AgentJobSpecCreateConfig, AgentCreateConfigV2 } from '../src/types';
+import { type AgentCreateConfig } from '../src/types';
 
 describe('Agents', () => {
   const $$ = new TestContext();
@@ -31,27 +31,12 @@ describe('Agents', () => {
     delete process.env.SF_MOCK_DIR;
   });
 
-  it('createSpec', async () => {
-    const sfProject = SfProject.getInstance();
-    const agent = new Agent(connection, sfProject);
-    const output = await agent.createSpec({
-      name: 'MyFirstAgent',
-      type: 'customer',
-      role: 'answer questions about vacation_rentals',
-      companyName: 'Coral Cloud Enterprises',
-      companyDescription: 'Provide vacation rentals and activities',
-    });
-
-    // TODO: make this assertion more meaningful
-    expect(output).to.be.ok;
-  });
-
-  it('createSpecV2 (mock behavior) should return a spec', async () => {
+  it('createSpec (mock behavior) should return a spec', async () => {
     const sfProject = SfProject.getInstance();
     const agent = new Agent(connection, sfProject);
     const agentType = 'customer';
     const companyName = 'Coral Cloud Enterprises';
-    const output = await agent.createSpecV2({
+    const output = await agent.createSpec({
       agentType,
       role: 'answer questions about vacation_rentals',
       companyName,
@@ -65,7 +50,7 @@ describe('Agents', () => {
     expect(output.topics[0]).to.have.property('name', 'Guest_Experience_Enhancement');
   });
 
-  it('createV2 save agent', async () => {
+  it('create save agent', async () => {
     process.env.SF_MOCK_DIR = join('test', 'mocks', 'createAgent-Save');
     const sfProject = SfProject.getInstance();
 
@@ -84,7 +69,7 @@ describe('Agents', () => {
     const csbStub = $$.SANDBOX.stub(ComponentSetBuilder, 'build').resolves(compSet);
 
     const agent = new Agent(connection, sfProject);
-    const config: AgentCreateConfigV2 = {
+    const config: AgentCreateConfig = {
       agentType: 'customer',
       saveAgent: true,
       agentSettings: {
@@ -101,7 +86,7 @@ describe('Agents', () => {
         maxNumOfTopics: 10,
       },
     };
-    const response = await agent.createV2(config);
+    const response = await agent.create(config);
     expect(response).to.have.property('isSuccess', true);
     expect(response).to.have.property('agentId');
     expect(response).to.have.property('agentDefinition');
@@ -111,11 +96,11 @@ describe('Agents', () => {
     expect(config.agentSettings?.agentApiName).to.equal('My_First_Agent');
   });
 
-  it('createV2 preview agent', async () => {
+  it('create preview agent', async () => {
     process.env.SF_MOCK_DIR = join('test', 'mocks', 'createAgent-Preview');
     const sfProject = SfProject.getInstance();
     const agent = new Agent(connection, sfProject);
-    const config: AgentCreateConfigV2 = {
+    const config: AgentCreateConfig = {
       agentType: 'customer',
       saveAgent: false,
       generationInfo: {
@@ -129,30 +114,10 @@ describe('Agents', () => {
         maxNumOfTopics: 10,
       },
     };
-    const response = await agent.createV2(config);
+    const response = await agent.create(config);
     expect(response).to.have.property('isSuccess', true);
     expect(response).to.not.have.property('agentId');
     expect(response).to.have.property('agentDefinition');
-  });
-
-  it('create', async () => {
-    const sfProject = SfProject.getInstance();
-    const agent = new Agent(connection, sfProject);
-    const opts: AgentJobSpecCreateConfig = {
-      name: 'MyFirstAgent',
-      type: 'customer',
-      role: 'answer questions about vacation rentals',
-      companyName: 'Coral Cloud Enterprises',
-      companyDescription: 'Provide vacation rentals and activities',
-    };
-    const jobSpec = await agent.createSpec(opts);
-    expect(jobSpec).to.be.ok;
-    const output = agent.create({
-      ...opts,
-      jobSpec,
-    });
-    // TODO: make this assertion more meaningful
-    expect(output).to.be.ok;
   });
 });
 
