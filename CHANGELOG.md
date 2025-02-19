@@ -1,3 +1,12 @@
+## [0.12.2](https://github.com/forcedotcom/agents/compare/0.12.1...0.12.2) (2025-02-19)
+
+
+### Bug Fixes
+
+* decode html entities in ai-assist API responses ([a0cebae](https://github.com/forcedotcom/agents/commit/a0cebae214f8ffdbf4053762e9d17ce0e1d7b1a1))
+
+
+
 ## [0.12.1](https://github.com/forcedotcom/agents/compare/0.12.0...0.12.1) (2025-02-17)
 
 
