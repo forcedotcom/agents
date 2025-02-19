@@ -18,6 +18,7 @@ import {
   type DraftAgentTopicsResponse,
 } from './types.js';
 import { MaybeMock } from './maybe-mock';
+import { decodeHtmlEntities } from './utils';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agents');
@@ -68,7 +69,9 @@ export class Agent {
         `Previewing agent creation using config: ${inspect(config)} in project: ${this.project.getPath()}`
       );
       await Lifecycle.getInstance().emit(AgentCreateLifecycleStages.Previewing, {});
-      return this.maybeMock.request<AgentCreateResponse>('POST', url, config);
+
+      const response = await this.maybeMock.request<AgentCreateResponse>('POST', url, config);
+      return decodeResponse(response);
     }
 
     if (!config.agentSettings?.agentName) {
@@ -127,7 +130,7 @@ export class Agent {
       }
     }
 
-    return response;
+    return decodeResponse(response);
   }
 
   /**
@@ -164,13 +167,15 @@ export class Agent {
     }
 
     const response = await this.maybeMock.request<DraftAgentTopicsResponse>('POST', url, body);
+    const htmlDecodedResponse = decodeResponse<DraftAgentTopicsResponse>(response);
 
-    if (response.isSuccess && response.topicDrafts) {
-      return { ...config, topics: response.topicDrafts };
+    if (htmlDecodedResponse.isSuccess) {
+      return { ...config, topics: htmlDecodedResponse.topicDrafts };
     } else {
       throw SfError.create({
         name: 'AgentJobSpecCreateError',
-        message: response.errorMessage ?? 'unknown',
+        message: htmlDecodedResponse.errorMessage ?? 'unknown',
+        data: htmlDecodedResponse,
       });
     }
   }
@@ -202,3 +207,7 @@ export const generateAgentApiName = (agentName: string): string => {
   logger.debug(`Generated Agent API name: [${apiName}] from Agent name: [${agentName}]`);
   return apiName;
 };
+
+// Decodes all HTML entities in ai-assist API responses.
+const decodeResponse = <T extends object>(response: T): T =>
+  JSON.parse(decodeHtmlEntities(JSON.stringify(response))) as T;
