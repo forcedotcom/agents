@@ -13,6 +13,7 @@ import { ComponentSetBuilder, DeployResult, FileProperties, RequestStatus } from
 import { parse, stringify } from 'yaml';
 import { XMLBuilder, XMLParser } from 'fast-xml-parser';
 import { MaybeMock } from './maybe-mock';
+import { decodeHtmlEntities } from './utils';
 
 export type TestStatus = 'NEW' | 'IN_PROGRESS' | 'COMPLETED' | 'ERROR' | 'TERMINATED';
 
@@ -275,6 +276,7 @@ export class AgentTester {
     const builder = new XMLBuilder({
       format: true,
       attributeNamePrefix: '$',
+      indentBy: '    ',
       ignoreAttributes: false,
     });
 
@@ -283,28 +285,28 @@ export class AgentTester {
         $xmlns: 'http://soap.sforce.com/2006/04/metadata',
         ...(parsed.description && { description: parsed.description }),
         name: parsed.name,
-        subjectType: parsed.subjectType,
         subjectName: parsed.subjectName,
+        subjectType: parsed.subjectType,
         ...(parsed.subjectVersion && { subjectVersion: parsed.subjectVersion }),
         testCase: parsed.testCases.map((tc) => ({
-          number: parsed.testCases.indexOf(tc) + 1,
+          expectation: [
+            {
+              expectedValue: tc.expectedTopic,
+              name: 'topic_sequence_match',
+            },
+            {
+              expectedValue: `[${(tc.expectedActions ?? []).map((v) => `"${v}"`).join(',')}]`,
+              name: 'action_sequence_match',
+            },
+            {
+              expectedValue: tc.expectedOutcome,
+              name: 'bot_response_rating',
+            },
+          ],
           inputs: {
             utterance: tc.utterance,
           },
-          expectation: [
-            {
-              name: 'topic_sequence_match',
-              expectedValue: tc.expectedTopic,
-            },
-            {
-              name: 'action_sequence_match',
-              expectedValue: `[${(tc.expectedActions ?? []).map((v) => `"${v}"`).join(',')}]`,
-            },
-            {
-              name: 'bot_response_rating',
-              expectedValue: tc.expectedOutcome,
-            },
-          ],
+          number: parsed.testCases.indexOf(tc) + 1,
         })),
       },
     }) as string;
@@ -390,49 +392,6 @@ export function normalizeResults(results: AgentTestResultsResponse): AgentTestRe
       })),
     })),
   };
-}
-
-/**
- * Clean a string by replacing HTML entities with their respective characters.
- *
- * @param str - The string to clean.
- * @returns The cleaned string with all HTML entities replaced with their respective characters.
- */
-function decodeHtmlEntities(str: string = ''): string {
-  const entities: { [key: string]: string } = {
-    '&quot;': '"',
-    '&apos;': "'",
-    '&amp;': '&',
-    '&lt;': '<',
-    '&gt;': '>',
-    '&#39;': "'",
-    '&deg;': '°',
-    '&nbsp;': ' ',
-    '&ndash;': '–',
-    '&mdash;': '—',
-    '&rsquo;': '’',
-    '&lsquo;': '‘',
-    '&ldquo;': '“',
-    '&rdquo;': '”',
-    '&hellip;': '…',
-    '&trade;': '™',
-    '&copy;': '©',
-    '&reg;': '®',
-    '&euro;': '€',
-    '&pound;': '£',
-    '&yen;': '¥',
-    '&cent;': '¢',
-    '&times;': '×',
-    '&divide;': '÷',
-    '&plusmn;': '±',
-    '&micro;': 'µ',
-    '&para;': '¶',
-    '&sect;': '§',
-    '&bull;': '•',
-    '&middot;': '·',
-  };
-
-  return str.replace(/&[a-zA-Z0-9#]+;/g, (entity) => entities[entity] || entity);
 }
 
 async function jsonFormat(results: AgentTestResultsResponse): Promise<string> {

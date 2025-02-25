@@ -129,46 +129,46 @@ testCases:
 
       expect(contents).to.equal(`<?xml version="1.0" encoding="UTF-8"?>
 <AiEvaluationDefinition xmlns="http://soap.sforce.com/2006/04/metadata">
-  <description>Test</description>
-  <name>Test</name>
-  <subjectType>AGENT</subjectType>
-  <subjectName>MyAgent</subjectName>
-  <testCase>
-    <number>1</number>
-    <inputs>
-      <utterance>List contact names associated with Acme account</utterance>
-    </inputs>
-    <expectation>
-      <name>topic_sequence_match</name>
-      <expectedValue>GeneralCRM</expectedValue>
-    </expectation>
-    <expectation>
-      <name>action_sequence_match</name>
-      <expectedValue>[&quot;IdentifyRecordByName&quot;,&quot;QueryRecords&quot;]</expectedValue>
-    </expectation>
-    <expectation>
-      <name>bot_response_rating</name>
-      <expectedValue>contacts available name available with Acme are listed</expectedValue>
-    </expectation>
-  </testCase>
-  <testCase>
-    <number>2</number>
-    <inputs>
-      <utterance>List contact emails associated with Acme account</utterance>
-    </inputs>
-    <expectation>
-      <name>topic_sequence_match</name>
-      <expectedValue>GeneralCRM</expectedValue>
-    </expectation>
-    <expectation>
-      <name>action_sequence_match</name>
-      <expectedValue>[&quot;IdentifyRecordByName&quot;,&quot;QueryRecords&quot;]</expectedValue>
-    </expectation>
-    <expectation>
-      <name>bot_response_rating</name>
-      <expectedValue>contacts available emails available with Acme are listed</expectedValue>
-    </expectation>
-  </testCase>
+    <description>Test</description>
+    <name>Test</name>
+    <subjectName>MyAgent</subjectName>
+    <subjectType>AGENT</subjectType>
+    <testCase>
+        <expectation>
+            <expectedValue>GeneralCRM</expectedValue>
+            <name>topic_sequence_match</name>
+        </expectation>
+        <expectation>
+            <expectedValue>[&quot;IdentifyRecordByName&quot;,&quot;QueryRecords&quot;]</expectedValue>
+            <name>action_sequence_match</name>
+        </expectation>
+        <expectation>
+            <expectedValue>contacts available name available with Acme are listed</expectedValue>
+            <name>bot_response_rating</name>
+        </expectation>
+        <inputs>
+            <utterance>List contact names associated with Acme account</utterance>
+        </inputs>
+        <number>1</number>
+    </testCase>
+    <testCase>
+        <expectation>
+            <expectedValue>GeneralCRM</expectedValue>
+            <name>topic_sequence_match</name>
+        </expectation>
+        <expectation>
+            <expectedValue>[&quot;IdentifyRecordByName&quot;,&quot;QueryRecords&quot;]</expectedValue>
+            <name>action_sequence_match</name>
+        </expectation>
+        <expectation>
+            <expectedValue>contacts available emails available with Acme are listed</expectedValue>
+            <name>bot_response_rating</name>
+        </expectation>
+        <inputs>
+            <utterance>List contact emails associated with Acme account</utterance>
+        </inputs>
+        <number>2</number>
+    </testCase>
 </AiEvaluationDefinition>
 `);
     });

@@ -1,3 +1,48 @@
+## [0.12.6](https://github.com/forcedotcom/agents/compare/0.12.5...0.12.6) (2025-02-25)
+
+
+### Bug Fixes
+
+* order aiEvalDefs in server-order ([56cde25](https://github.com/forcedotcom/agents/commit/56cde25b2f1850fa223560d1059890d20215af83))
+
+
+
+## [0.12.5](https://github.com/forcedotcom/agents/compare/0.12.4...0.12.5) (2025-02-23)
+
+
+### Bug Fixes
+
+* **deps:** bump @salesforce/source-deploy-retrieve ([7993e19](https://github.com/forcedotcom/agents/commit/7993e19818bfcafdf546a7c10e54d5aec5d1e92d))
+
+
+
+## [0.12.4](https://github.com/forcedotcom/agents/compare/0.12.3...0.12.4) (2025-02-22)
+
+
+### Bug Fixes
+
+* **deps:** bump fast-xml-parser from 4.5.1 to 4.5.3 ([8922c90](https://github.com/forcedotcom/agents/commit/8922c908cdff50eafe55a8084fb4a792bc301429))
+
+
+
+## [0.12.3](https://github.com/forcedotcom/agents/compare/0.12.2...0.12.3) (2025-02-22)
+
+
+### Bug Fixes
+
+* **deps:** bump @salesforce/core from 8.8.2 to 8.8.3 ([20ac335](https://github.com/forcedotcom/agents/commit/20ac3354a688563c5a072879cce38ca542d91d81))
+
+
+
+## [0.12.2](https://github.com/forcedotcom/agents/compare/0.12.1...0.12.2) (2025-02-19)
+
+
+### Bug Fixes
+
+* decode html entities in ai-assist API responses ([a0cebae](https://github.com/forcedotcom/agents/commit/a0cebae214f8ffdbf4053762e9d17ce0e1d7b1a1))
+
+
+
 ## [0.12.1](https://github.com/forcedotcom/agents/compare/0.12.0...0.12.1) (2025-02-17)
 
 ### Bug Fixes
