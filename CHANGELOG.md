@@ -1,3 +1,12 @@
+## [0.12.6](https://github.com/forcedotcom/agents/compare/0.12.5...0.12.6) (2025-02-25)
+
+
+### Bug Fixes
+
+* order aiEvalDefs in server-order ([56cde25](https://github.com/forcedotcom/agents/commit/56cde25b2f1850fa223560d1059890d20215af83))
+
+
+
 ## [0.12.5](https://github.com/forcedotcom/agents/compare/0.12.4...0.12.5) (2025-02-23)
 
 
