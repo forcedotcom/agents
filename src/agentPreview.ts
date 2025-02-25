@@ -5,14 +5,24 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
+import { randomUUID } from 'node:crypto';
 import { Connection } from '@salesforce/core';
-import { RequestPreview } from './request-preview';
+import { MaybeMock } from './maybe-mock';
 
 type ApiStatus = {
   status: 'UP' | 'DOWN';
 };
 
 type Href = { href: string };
+
+export type AgentPreviewError = {
+  status: number;
+  path: string;
+  requestId: string;
+  error: string;
+  message: string;
+  timestamp: number;
+};
 
 export type AgentPreviewMessageLinks = {
   self: Href | null;
@@ -64,50 +74,40 @@ export type AgentPreviewEndResponse = {
 type EndReason = 'UserRequest' | 'Transfer' | 'Expiration' | 'Error' | 'Other';
 
 export class AgentPreview {
-  private got: RequestPreview;
-  private headers;
+  private apiBase: string;
   private instanceUrl: string;
-  private tempApiBase = process.env.AFDX_TEMP_AGENT_API_BASE as string;
+  private maybeMock: MaybeMock;
 
   public constructor(connection: Connection) {
-    this.got = new RequestPreview();
-    const auth = process.env.AFDX_TEMP_AGENT_API_KEY as string;
-    const env = process.env.AFDX_TEMP_AGENT_ENV as string;
-
+    this.apiBase = 'https://api.salesforce.com/einstein/ai-agent/v1';
     this.instanceUrl = connection.instanceUrl;
-
-    this.headers = {
-      'x-sfdc-tenant-id': `core/${env}/${connection.getAuthInfoFields().orgId as string}`,
-      'x-salesforce-region': process.env.AFDX_TEMP_AGENT_REGION as string,
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      Authorization: `API_KEY ${auth}`,
-    };
+    this.maybeMock = new MaybeMock(connection);
   }
 
   public async start(botId: string): Promise<AgentPreviewStartResponse> {
-    const url = `${this.tempApiBase}/einstein/ai-agent/v1/agents/${botId}/sessions`;
+    const url = `${this.apiBase}/agents/${botId}/sessions`;
 
     const body = {
-      // TODO: this needs to generate a unique guid
-      externalSessionKey: '44736288-030b-4080-b477-975a60f00a12',
+      externalSessionKey: randomUUID(),
       instanceConfig: {
-        endpoint: `${this.instanceUrl}/`,
+        endpoint: this.instanceUrl,
       },
       streamingCapabilities: {
         chunkTypes: ['Text'],
       },
-      variables: [],
+      bypassUser: true,
     };
 
-    return this.got.request<AgentPreviewStartResponse>('POST', url, body, this.headers);
+    return this.maybeMock.request<AgentPreviewStartResponse>('POST', url, body);
   }
 
   public async send(sessionId: string, message: string): Promise<AgentPreviewSendResponse> {
-    const url = `${this.tempApiBase}/einstein/ai-agent/v1/sessions/${sessionId}/messages`;
+    const url = `${this.apiBase}/sessions/${sessionId}/messages`;
 
     const body = {
       message: {
+        // https://developer.salesforce.com/docs/einstein/genai/guide/agent-api-examples.html#send-synchronous-messages
+        // > A number that you provide to represent the sequence ID. Increase this number for each subsequent message in this session.
         sequenceId: Date.now(),
         type: 'Text',
         text: message,
@@ -115,14 +115,14 @@ export class AgentPreview {
       variables: [],
     };
 
-    return this.got.request<AgentPreviewSendResponse>('POST', url, body, this.headers);
+    return this.maybeMock.request<AgentPreviewSendResponse>('POST', url, body);
   }
 
   public async end(sessionId: string, reason: EndReason): Promise<AgentPreviewEndResponse> {
-    const url = `${this.tempApiBase}/einstein/ai-agent/v1/sessions/${sessionId}`;
+    const url = `${this.apiBase}/sessions/${sessionId}`;
 
-    return this.got.request<AgentPreviewEndResponse>('DELETE', url, undefined, {
-      ...this.headers,
+    // https://developer.salesforce.com/docs/einstein/genai/guide/agent-api-examples.html#end-session
+    return this.maybeMock.request<AgentPreviewEndResponse>('DELETE', url, undefined, {
       'x-session-end-reason': reason,
     });
   }
@@ -132,6 +132,6 @@ export class AgentPreview {
     const base = 'https://test.api.salesforce.com';
     const url = `${base}/einstein/ai-agent/v1/status`;
 
-    return this.got.request<ApiStatus>('GET', url, undefined, this.headers);
+    return this.maybeMock.request<ApiStatus>('GET', url);
   }
 }
