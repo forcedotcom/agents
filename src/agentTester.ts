@@ -330,6 +330,9 @@ export class AgentTester {
     });
 
     deploy.onFinish((result) => {
+      // small deploys like this, 1 file, can happen without an 'update' event being fired
+      // onFinish, emit the update, and then the done event to create proper output
+      void lifecycle.emit(AgentTestCreateLifecycleStages.DeployingMetadata, result);
       void lifecycle.emit(AgentTestCreateLifecycleStages.Done, result);
     });
 
