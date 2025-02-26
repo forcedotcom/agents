@@ -1,3 +1,12 @@
+## [0.12.7](https://github.com/forcedotcom/agents/compare/0.12.6...0.12.7) (2025-02-26)
+
+
+### Bug Fixes
+
+* reduce retries from 10->3 ([0314ac2](https://github.com/forcedotcom/agents/commit/0314ac277bee67bcd00e830d1cd4f7176a1e8d5a))
+
+
+
 ## [0.12.6](https://github.com/forcedotcom/agents/compare/0.12.5...0.12.6) (2025-02-25)
 
 
