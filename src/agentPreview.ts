@@ -6,6 +6,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { SfError } from '@salesforce/core';
 import { Connection } from '@salesforce/core';
 import { MaybeMock } from './maybe-mock';
 
@@ -31,8 +32,20 @@ export type AgentPreviewMessageLinks = {
   end: Href | null;
 };
 
+export type MessageType =
+  | 'Inform'
+  | 'TextChunk'
+  | 'ProgressIndicator'
+  | 'Inquire'
+  | 'Confirm'
+  | 'Failure'
+  | 'Escalate'
+  | 'SessionEnded'
+  | 'EndOfTurn'
+  | 'Error';
+
 export type AgentPreviewMessage = {
-  type: string;
+  type: MessageType;
   id: string;
   feedbackId: string;
   planId: string;
@@ -98,7 +111,12 @@ export class AgentPreview {
       bypassUser: true,
     };
 
-    return this.maybeMock.request<AgentPreviewStartResponse>('POST', url, body);
+    try {
+      return await this.maybeMock.request<AgentPreviewStartResponse>('POST', url, body);
+    } catch (err) {
+      const error = err as Error;
+      throw new SfError(error.message, 'AgentPreviewStartError', undefined, error);
+    }
   }
 
   public async send(sessionId: string, message: string): Promise<AgentPreviewSendResponse> {
@@ -115,16 +133,26 @@ export class AgentPreview {
       variables: [],
     };
 
-    return this.maybeMock.request<AgentPreviewSendResponse>('POST', url, body);
+    try {
+      return await this.maybeMock.request<AgentPreviewSendResponse>('POST', url, body);
+    } catch (err) {
+      const error = err as Error;
+      throw new SfError(error.message, 'AgentPreviewSendError', undefined, error);
+    }
   }
 
   public async end(sessionId: string, reason: EndReason): Promise<AgentPreviewEndResponse> {
     const url = `${this.apiBase}/sessions/${sessionId}`;
 
-    // https://developer.salesforce.com/docs/einstein/genai/guide/agent-api-examples.html#end-session
-    return this.maybeMock.request<AgentPreviewEndResponse>('DELETE', url, undefined, {
-      'x-session-end-reason': reason,
-    });
+    try {
+      // https://developer.salesforce.com/docs/einstein/genai/guide/agent-api-examples.html#end-session
+      return await this.maybeMock.request<AgentPreviewEndResponse>('DELETE', url, undefined, {
+        'x-session-end-reason': reason,
+      });
+    } catch (err) {
+      const error = err as Error;
+      throw new SfError(error.message, 'AgentPreviewEndError', undefined, error);
+    }
   }
 
   // Get the status of the Agent API (UP | DOWN)
@@ -132,6 +160,11 @@ export class AgentPreview {
     const base = 'https://test.api.salesforce.com';
     const url = `${base}/einstein/ai-agent/v1/status`;
 
-    return this.maybeMock.request<ApiStatus>('GET', url);
+    try {
+      return await this.maybeMock.request<ApiStatus>('GET', url);
+    } catch (err) {
+      const error = err as Error;
+      throw new SfError(error.message, 'AgentPreviewStatusError', undefined, error);
+    }
   }
 }
