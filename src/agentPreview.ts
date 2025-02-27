@@ -114,8 +114,7 @@ export class AgentPreview {
     try {
       return await this.maybeMock.request<AgentPreviewStartResponse>('POST', url, body);
     } catch (err) {
-      const error = err as Error;
-      throw new SfError(error.message, 'AgentPreviewStartError', undefined, error);
+      throw SfError.wrap(err);
     }
   }
 
@@ -136,8 +135,7 @@ export class AgentPreview {
     try {
       return await this.maybeMock.request<AgentPreviewSendResponse>('POST', url, body);
     } catch (err) {
-      const error = err as Error;
-      throw new SfError(error.message, 'AgentPreviewSendError', undefined, error);
+      throw SfError.wrap(err);
     }
   }
 
@@ -150,8 +148,7 @@ export class AgentPreview {
         'x-session-end-reason': reason,
       });
     } catch (err) {
-      const error = err as Error;
-      throw new SfError(error.message, 'AgentPreviewEndError', undefined, error);
+      throw SfError.wrap(err);
     }
   }
 
@@ -163,8 +160,7 @@ export class AgentPreview {
     try {
       return await this.maybeMock.request<ApiStatus>('GET', url);
     } catch (err) {
-      const error = err as Error;
-      throw new SfError(error.message, 'AgentPreviewStatusError', undefined, error);
+      throw SfError.wrap(err);
     }
   }
 }
