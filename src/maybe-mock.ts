@@ -12,6 +12,9 @@ import { Connection, Logger, SfError } from '@salesforce/core';
 import { env } from '@salesforce/kit';
 import nock from 'nock';
 
+type HttpHeaders = {
+  [name: string]: string;
+};
 /**
  * If the `SF_MOCK_DIR` environment variable is set, resolve to an absolute path
  * and ensure the directory exits, then return the path.
@@ -137,9 +140,10 @@ export class MaybeMock {
    * @returns {Promise<T>}
    */
   public async request<T extends nock.Body>(
-    method: 'GET' | 'POST',
+    method: 'GET' | 'POST' | 'DELETE',
     url: string,
-    body: nock.RequestBodyMatcher = {}
+    body: nock.RequestBodyMatcher = {},
+    headers: HttpHeaders = {}
   ): Promise<T> {
     if (this.mockDir) {
       this.logger.debug(`Mocking ${method} request to ${url} using ${this.mockDir}`);
@@ -158,6 +162,9 @@ export class MaybeMock {
             scope.post(url, body).reply(200, response);
           }
           break;
+        case 'DELETE':
+          // Support mocked DELETE when needed
+          break;
       }
     }
 
@@ -173,6 +180,16 @@ export class MaybeMock {
           });
         }
         return this.connection.requestPost<T>(url, body, { retry: { maxRetries: 3 } });
+      case 'DELETE':
+        // We use .request() rather than .requestDelete() so that we can pass in the headers
+        return this.connection.request<T>(
+          {
+            method: 'DELETE',
+            url,
+            headers,
+          },
+          { retry: { maxRetries: 3 } }
+        );
     }
   }
 }
