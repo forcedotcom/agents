@@ -171,7 +171,7 @@ export class MaybeMock {
     this.logger.debug(`Making ${method} request to ${url}`);
     switch (method) {
       case 'GET':
-        return this.connection.requestGet<T>(url, { retry: { maxRetries: 10 } });
+        return this.connection.requestGet<T>(url, { retry: { maxRetries: 3 } });
       case 'POST':
         if (!body) {
           throw SfError.create({

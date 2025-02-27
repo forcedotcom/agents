@@ -1,3 +1,21 @@
+## [0.12.8](https://github.com/forcedotcom/agents/compare/0.12.7...0.12.8) (2025-02-27)
+
+
+### Bug Fixes
+
+* emit additional deploy event, even when done ([f1b6999](https://github.com/forcedotcom/agents/commit/f1b69997aca78215f3b7f0a8d00cc9eaf9effff0))
+
+
+
+## [0.12.7](https://github.com/forcedotcom/agents/compare/0.12.6...0.12.7) (2025-02-26)
+
+
+### Bug Fixes
+
+* reduce retries from 10->3 ([0314ac2](https://github.com/forcedotcom/agents/commit/0314ac277bee67bcd00e830d1cd4f7176a1e8d5a))
+
+
+
 ## [0.12.6](https://github.com/forcedotcom/agents/compare/0.12.5...0.12.6) (2025-02-25)
 
 
