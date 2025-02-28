@@ -1,3 +1,12 @@
+## [0.12.10](https://github.com/forcedotcom/agents/compare/0.12.9...0.12.10) (2025-02-28)
+
+
+### Bug Fixes
+
+* agent preview tests ([c3731a0](https://github.com/forcedotcom/agents/commit/c3731a0e0729283c9fdf698922caf30b3789798b))
+
+
+
 ## [0.12.9](https://github.com/forcedotcom/agents/compare/0.12.8...0.12.9) (2025-02-27)
 
 
