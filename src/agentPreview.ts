@@ -74,13 +74,15 @@ export type AgentPreviewSendResponse = {
   _links: AgentPreviewMessageLinks;
 };
 
+export type AgentPreviewEndMessage = {
+  type: string;
+  id: string;
+  reason: string;
+  feedbackId: string;
+};
+
 export type AgentPreviewEndResponse = {
-  messages: {
-    type: string;
-    id: string;
-    reason: string;
-    feedbackId: string;
-  };
+  messages: AgentPreviewEndMessage[];
   _links: AgentPreviewMessageLinks;
 };
 
@@ -120,7 +122,6 @@ export class AgentPreview {
 
   public async send(sessionId: string, message: string): Promise<AgentPreviewSendResponse> {
     const url = `${this.apiBase}/sessions/${sessionId}/messages`;
-
     const body = {
       message: {
         // https://developer.salesforce.com/docs/einstein/genai/guide/agent-api-examples.html#send-synchronous-messages

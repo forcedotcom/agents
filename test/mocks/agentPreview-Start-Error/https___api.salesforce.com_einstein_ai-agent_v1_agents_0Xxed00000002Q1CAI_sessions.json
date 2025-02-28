@@ -1,0 +1,10 @@
+{
+  "status": 500,
+  "path": "v6.0.0/agents/sfd/sessions",
+  "mode": "unknown",
+  "requestId": "adae6d09-a517-48a0-b501-5bbcac1c22c3",
+  "error": "HttpServerErrorException",
+  "message": "500 [{\"message\":\"An unexpected error occurred. Please include this ErrorId if you contact support: 12345678-1234 (123456787)\",\"errorCode\":\"UNKNOWN_EXCEPTION\"}]",
+  "timestamp": 1740710748115,
+  "expected": false
+}

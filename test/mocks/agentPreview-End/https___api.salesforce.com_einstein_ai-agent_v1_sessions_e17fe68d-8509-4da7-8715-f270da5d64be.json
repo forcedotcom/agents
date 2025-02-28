@@ -1,0 +1,25 @@
+{
+  "messages": [
+    {
+      "type": "SessionEnded",
+      "id": "86b7fba9-1295-4125-90df-50984cbc0048",
+      "reason": "ClientRequest",
+      "feedbackId": "6ee5a14f-420c-4ed6-9ab8-40d676f87b9d"
+    }
+  ],
+  "_links": {
+    "self": null,
+    "messages": {
+      "href": "https://api.salesforce.com/einstein/ai-agent/v1/sessions/e17fe68d-8509-4da7-8715-f270da5d64be/messages"
+    },
+    "messagesStream": {
+      "href": "https://api.salesforce.com/einstein/ai-agent/v1/sessions/e17fe68d-8509-4da7-8715-f270da5d64be/messages/stream"
+    },
+    "session": {
+      "href": "https://api.salesforce.com/einstein/ai-agent/v1/agents/0Xxed00000002Q1CAI/sessions"
+    },
+    "end": {
+      "href": "https://api.salesforce.com/einstein/ai-agent/v1/sessions/e17fe68d-8509-4da7-8715-f270da5d64be"
+    }
+  }
+}
