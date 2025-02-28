@@ -1,0 +1,10 @@
+{
+  "status": 404,
+  "path": "v6.0.0/sessions/71bcf43a-a234-4936-a1c8-f85265e7cf94",
+  "mode": "unknown",
+  "requestId": "30ac4229-6732-4f1c-b99a-cc13957f0fc5",
+  "error": "NotFoundException",
+  "message": "V6Session not found for sessionId: 71bcf43a-a234-4936-a1c8-f85265e7cf94",
+  "timestamp": 1740762627208,
+  "expected": true
+}

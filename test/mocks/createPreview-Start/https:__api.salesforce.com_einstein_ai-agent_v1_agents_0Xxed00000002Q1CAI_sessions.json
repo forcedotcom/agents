@@ -1,0 +1,30 @@
+{
+  "sessionId": "e17fe68d-8509-4da7-8715-f270da5d64be",
+  "_links": {
+    "self": null,
+    "messages": {
+      "href": "https://api.salesforce.com/einstein/ai-agent/v1/sessions/e17fe68d-8509-4da7-8715-f270da5d64be/messages"
+    },
+    "messagesStream": {
+      "href": "https://api.salesforce.com/einstein/ai-agent/v1/sessions/e17fe68d-8509-4da7-8715-f270da5d64be/messages/stream"
+    },
+    "session": {
+      "href": "https://api.salesforce.com/einstein/ai-agent/v1/agents/0Xxed00000002Q1CAI/sessions"
+    },
+    "end": {
+      "href": "https://api.salesforce.com/einstein/ai-agent/v1/sessions/e17fe68d-8509-4da7-8715-f270da5d64be"
+    }
+  },
+  "messages": [
+    {
+      "type": "Inform",
+      "id": "0adc259f-fdfd-42f7-9b1d-e2e0a0ec98be",
+      "feedbackId": "",
+      "planId": "",
+      "isContentSafe": true,
+      "message": "Hi, I'm an AI service assistant. How can I help you?",
+      "result": [],
+      "citedReferences": []
+    }
+  ]
+}

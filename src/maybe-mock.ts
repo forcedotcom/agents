@@ -134,7 +134,7 @@ export class MaybeMock {
    * Will either use mocked responses, or the real server response, as the library/APIs become more feature complete,
    * there will be fewer mocks and more real responses
    *
-   * @param {"GET" | "POST"} method
+   * @param {"GET" | "POST" | "DELETE"} method
    * @param {string} url
    * @param {nock.RequestBodyMatcher} body
    * @returns {Promise<T>}
@@ -150,20 +150,30 @@ export class MaybeMock {
       const responses = await readResponses<T>(this.mockDir, url, this.logger);
       const baseUrl = this.connection.baseUrl();
       const scope = this.scopes.get(baseUrl) ?? nock(baseUrl);
+      // Look up status code to determine if it's successful or not
+      // Be have to assert this is a number because AgentTester has a status that is non-numeric
+      const getCode = (response: T): number =>
+        typeof response === 'object' && 'status' in response && typeof response.status === 'number'
+          ? response.status
+          : 200;
+      // This is a hack to work with SFAP endpoints
+      url = url.replace('https://api.salesforce.com', '');
       this.scopes.set(baseUrl, scope);
       switch (method) {
         case 'GET':
           for (const response of responses) {
-            scope.get(url).reply(200, response);
+            scope.get(url).reply(getCode(response), response);
           }
           break;
         case 'POST':
           for (const response of responses) {
-            scope.post(url, body).reply(200, response);
+            scope.post(url, body).reply(getCode(response), response);
           }
           break;
         case 'DELETE':
-          // Support mocked DELETE when needed
+          for (const response of responses) {
+            scope.delete(url).reply(getCode(response), response);
+          }
           break;
       }
     }
