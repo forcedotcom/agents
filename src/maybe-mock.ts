@@ -74,7 +74,7 @@ async function readDirectory<T extends nock.Body>(path: string): Promise<T[] | u
 }
 
 async function readResponses<T extends nock.Body>(mockDir: string, url: string, logger: Logger): Promise<T[]> {
-  const mockResponseName = url.replace(/\//g, '_').replace(/^_/, '').split('?')[0];
+  const mockResponseName = url.replace(/\//g, '_').replace(/:/g, '_').replace(/^_/, '').split('?')[0];
   const mockResponsePath = join(mockDir, mockResponseName);
 
   // Try all possibilities for the mock response file
