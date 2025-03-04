@@ -59,8 +59,8 @@ export class Agent {
   /**
    * List all agents in the current project.
    */
-  public async list(): Promise<string[]> {
-    const projectDirs = this.project.getPackageDirectories();
+  public static async list(project: SfProject): Promise<string[]> {
+    const projectDirs = project.getPackageDirectories();
     const bots: string[] = [];
 
     for (const pkgDir of projectDirs) {
@@ -70,17 +70,13 @@ export class Agent {
         // eslint-disable-next-line no-await-in-loop
         const dirStat = await stat(botsPath);
         if (!dirStat.isDirectory()) {
-          this.logger.debug(`${botsPath} is not a directory.`);
+          continue
         }
 
         // eslint-disable-next-line no-await-in-loop
         bots.push(...(await readdir(botsPath)));
-      } catch (err) {
-        if (err instanceof Error) {
-          this.logger.debug(`Failed to read bots at ${botsPath} due to: \n${err.message}\n`);
-        } else {
-          throw err;
-        }
+      } catch (_err) {
+        continue
       }
     }
 
