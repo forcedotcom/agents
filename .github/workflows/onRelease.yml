@@ -36,4 +36,5 @@ jobs:
     needs: [getDistTag, npm]
     with:
       branch: 'main'
+      tag: ${{ needs.getDistTag.outputs.tag  }}
     secrets: inherit
