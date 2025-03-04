@@ -63,21 +63,24 @@ export class Agent {
     const projectDirs = project.getPackageDirectories();
     const bots: string[] = [];
 
-    for (const pkgDir of projectDirs) {
-      const botsPath = path.join(pkgDir.fullPath, 'main', 'default', 'bots');
-
+    const collectBots = async (botPath: string): Promise<void> => {
       try {
-        // eslint-disable-next-line no-await-in-loop
-        const dirStat = await stat(botsPath);
+        const dirStat = await stat(botPath);
         if (!dirStat.isDirectory()) {
-          continue
+          return;
         }
 
-        // eslint-disable-next-line no-await-in-loop
-        bots.push(...(await readdir(botsPath)));
+        bots.push(...(await readdir(botPath)));
       } catch (_err) {
-        continue
+        // eslint-disable-next-line no-unused-vars
       }
+    };
+
+    for (const pkgDir of projectDirs) {
+      // eslint-disable-next-line no-await-in-loop
+      await collectBots(path.join(pkgDir.fullPath, 'bots'));
+      // eslint-disable-next-line no-await-in-loop
+      await collectBots(path.join(pkgDir.fullPath, 'main', 'default', 'bots'));
     }
 
     return bots;
