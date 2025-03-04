@@ -7,6 +7,12 @@ on:
         type: string
         required: false
         default: 'main'
+      tag:
+        required: false
+        type: string
+        default: 'latest'
+        description: 'tag to publish under, default: latest'
+
   workflow_dispatch:
     inputs:
       branch:
@@ -14,6 +20,11 @@ on:
         type: string
         required: false
         default: 'main'
+      tag:
+        required: false
+        type: string
+        default: 'latest'
+        description: 'tag to publish under, default: latest'
 
 jobs:
   call-release-workflow:
@@ -22,3 +33,4 @@ jobs:
     secrets: inherit
     with:
       branch: ${{ inputs.branch }}
+      tag: ${{ inputs.tag }}
