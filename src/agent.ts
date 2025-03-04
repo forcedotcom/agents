@@ -6,6 +6,8 @@
  */
 
 import { inspect } from 'node:util';
+import * as path from 'node:path';
+import { stat, readdir } from 'node:fs/promises';
 import { Connection, Lifecycle, Logger, Messages, SfError, SfProject } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { Duration } from '@salesforce/kit';
@@ -52,6 +54,37 @@ export class Agent {
     this.logger = Logger.childFromRoot(this.constructor.name);
     this.maybeMock = new MaybeMock(connection);
     this.connection = connection;
+  }
+
+  /**
+   * List all agents in the current project.
+   */
+  public async list(): Promise<string[]> {
+    const projectDirs = this.project.getPackageDirectories();
+    const bots: string[] = [];
+
+    for (const pkgDir of projectDirs) {
+      const botsPath = path.join(pkgDir.fullPath, 'main', 'default', 'bots');
+
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        const dirStat = await stat(botsPath);
+        if (!dirStat.isDirectory()) {
+          this.logger.debug(`${botsPath} is not a directory.`);
+        }
+
+        // eslint-disable-next-line no-await-in-loop
+        bots.push(...(await readdir(botsPath)));
+      } catch (err) {
+        if (err instanceof Error) {
+          this.logger.debug(`Failed to read bots at ${botsPath} due to: \n${err.message}\n`);
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    return bots;
   }
 
   /**
