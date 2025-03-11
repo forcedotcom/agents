@@ -6,6 +6,8 @@
  */
 
 import { inspect } from 'node:util';
+import * as path from 'node:path';
+import { stat, readdir } from 'node:fs/promises';
 import { Connection, Lifecycle, Logger, Messages, SfError, SfProject } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { Duration } from '@salesforce/kit';
@@ -52,6 +54,36 @@ export class Agent {
     this.logger = Logger.childFromRoot(this.constructor.name);
     this.maybeMock = new MaybeMock(connection);
     this.connection = connection;
+  }
+
+  /**
+   * List all agents in the current project.
+   */
+  public static async list(project: SfProject): Promise<string[]> {
+    const projectDirs = project.getPackageDirectories();
+    const bots: string[] = [];
+
+    const collectBots = async (botPath: string): Promise<void> => {
+      try {
+        const dirStat = await stat(botPath);
+        if (!dirStat.isDirectory()) {
+          return;
+        }
+
+        bots.push(...(await readdir(botPath)));
+      } catch (_err) {
+        // eslint-disable-next-line no-unused-vars
+      }
+    };
+
+    for (const pkgDir of projectDirs) {
+      // eslint-disable-next-line no-await-in-loop
+      await collectBots(path.join(pkgDir.fullPath, 'bots'));
+      // eslint-disable-next-line no-await-in-loop
+      await collectBots(path.join(pkgDir.fullPath, 'main', 'default', 'bots'));
+    }
+
+    return bots;
   }
 
   /**
