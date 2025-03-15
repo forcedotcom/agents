@@ -21,7 +21,7 @@
   "devDependencies": {
     "@salesforce/cli-plugins-testkit": "^5.3.39",
     "@salesforce/dev-scripts": "^10.2.11",
-    "esbuild": "^0.25.0",
+    "esbuild": "^0.25.1",
     "ts-morph": "^24.0.0",
     "ts-node": "^10.9.2",
     "ts-patch": "^3.3.0",
