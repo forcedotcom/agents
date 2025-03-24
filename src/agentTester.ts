@@ -456,12 +456,17 @@ async function junitFormat(results: AgentTestResultsResponse): Promise<string> {
 }
 
 export function humanFriendlyName(name: string): string {
+  // topic_sequence_match, action_sequence_match, and bot_response_rating have all changed
+  // eventually we can remove them
   switch (name) {
     case 'topic_sequence_match':
+    case 'topic_assertion':
       return 'Topic';
     case 'action_sequence_match':
+    case 'actions_assertion':
       return 'Action';
     case 'bot_response_rating':
+    case 'output_validation':
       return 'Outcome';
     default:
       return name;

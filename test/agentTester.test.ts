@@ -17,6 +17,7 @@ import {
   writeTestSpec,
   generateTestSpecFromAiEvalDefinition,
   normalizeResults,
+  humanFriendlyName,
 } from '../src/agentTester';
 
 describe('AgentTester', () => {
@@ -57,6 +58,21 @@ describe('AgentTester', () => {
         status: 'NEW',
         startTime: '2024-11-13T15:00:00.000Z',
       });
+    });
+  });
+
+  describe('humanFriendlyName', () => {
+    it('handles current api responses', () => {
+      expect(humanFriendlyName('bot_response_rating')).to.equal('Outcome');
+      expect(humanFriendlyName('action_sequence_match')).to.equal('Action');
+      expect(humanFriendlyName('topic_sequence_match')).to.equal('Topic');
+      // an unknown value will return itself
+      expect(humanFriendlyName('unknown_sequence_match')).to.equal('unknown_sequence_match');
+
+      // it will handle the upcoming api changes
+      expect(humanFriendlyName('output_validation')).to.equal('Outcome');
+      expect(humanFriendlyName('actions_assertion')).to.equal('Action');
+      expect(humanFriendlyName('topic_assertion')).to.equal('Topic');
     });
   });
 
