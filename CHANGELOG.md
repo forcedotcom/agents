@@ -1,3 +1,12 @@
+## [0.13.5](https://github.com/forcedotcom/agents/compare/0.13.4...0.13.5) (2025-04-01)
+
+
+### Bug Fixes
+
+* update humanFriendlyNames to fix upcoming changes ([fb08531](https://github.com/forcedotcom/agents/commit/fb0853134344d3ca28400c094af20f7276740970))
+
+
+
 ## [0.13.4](https://github.com/forcedotcom/agents/compare/0.13.3...0.13.4) (2025-03-29)
 
 
