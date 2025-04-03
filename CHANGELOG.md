@@ -1,3 +1,12 @@
+## [0.13.6](https://github.com/forcedotcom/agents/compare/0.13.5...0.13.6) (2025-04-03)
+
+
+### Bug Fixes
+
+* allow reading from new MD format ([#72](https://github.com/forcedotcom/agents/issues/72)) ([0a941fb](https://github.com/forcedotcom/agents/commit/0a941fb0be9a5bff00f12173b8ea551dd6f82919))
+
+
+
 ## [0.13.5](https://github.com/forcedotcom/agents/compare/0.13.4...0.13.5) (2025-04-01)
 
 
