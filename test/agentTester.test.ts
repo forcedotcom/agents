@@ -419,6 +419,53 @@ describe('generateTestSpecFromAiEvalDefinition', () => {
       ],
     });
   });
+  it('should parse 258 AiEvaluationDefinition XML into TestSpec', async () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+    <AiEvaluationDefinition xmlns="http://soap.sforce.com/2006/04/metadata">
+      <description>Test Description</description>
+      <name>TestSpec</name>
+      <subjectType>AGENT</subjectType>
+      <subjectName>WeatherBot</subjectName>
+      <subjectVersion>1</subjectVersion>
+      <testCase>
+        <inputs>
+          <utterance>What's the weather like?</utterance>
+        </inputs>
+        <expectation>
+          <name>topic_assertion</name>
+          <expectedValue>Weather</expectedValue>
+        </expectation>
+        <expectation>
+          <name>actions_assertion</name>
+          <expectedValue>["GetLocation","GetWeather"]</expectedValue>
+        </expectation>
+        <expectation>
+          <name>output_validation</name>
+          <expectedValue>Sunny with a high of 75F</expectedValue>
+        </expectation>
+      </testCase>
+    </AiEvaluationDefinition>`;
+
+    readFileStub.resolves(xml);
+
+    const result = await generateTestSpecFromAiEvalDefinition('test.xml');
+
+    expect(result).to.deep.equal({
+      name: 'TestSpec',
+      description: 'Test Description',
+      subjectType: 'AGENT',
+      subjectName: 'WeatherBot',
+      subjectVersion: 1,
+      testCases: [
+        {
+          utterance: "What's the weather like?",
+          expectedTopic: 'Weather',
+          expectedActions: ['GetLocation', 'GetWeather'],
+          expectedOutcome: 'Sunny with a high of 75F',
+        },
+      ],
+    });
+  });
 
   it('should handle missing optional fields', async () => {
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
