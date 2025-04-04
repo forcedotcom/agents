@@ -35,4 +35,4 @@ Pull request merging is restricted to squash and merge only.
 
 ## Releasing
 
-- A new version of this library (`@salesforce/packaging`) will be published upon merging PRs to `main`, with the version number increment based on commitizen rules. E.g., if any commit message begins with, "feat:" the minor version will be bumped. If any commit message begins with, "fix:" the patch version will be bumped.
+- A new version of this library (`@salesforce/agents`) will be published upon merging PRs to `main`, with the version number increment based on commitizen rules. E.g., if any commit message begins with, "feat:" the minor version will be bumped. If any commit message begins with, "fix:" the patch version will be bumped.
