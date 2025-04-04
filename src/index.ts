@@ -10,11 +10,23 @@ export {
   type AgentCreateResponse,
   type AgentJobSpec,
   type AgentJobSpecCreateConfig,
+  type AgentOptions,
   type AgentTone,
   type AgentType,
+  type AgentPreviewMessageLinks,
+  type AgentPreviewMessage,
+  type AgentPreviewStartResponse,
+  type AgentPreviewSendResponse,
+  type AgentPreviewEndResponse,
   type DraftAgentTopics,
   type DraftAgentTopicsBody,
   type DraftAgentTopicsResponse,
+  type AvailableDefinition,
+  type AgentTestResultsResponse,
+  type AgentTestStartResponse,
+  type AgentTestStatusResponse,
+  type TestCaseResult,
+  type TestStatus,
 } from './types';
 export { Agent, AgentCreateLifecycleStages, generateAgentApiName } from './agent';
 export {
@@ -24,18 +36,5 @@ export {
   writeTestSpec,
   generateTestSpecFromAiEvalDefinition,
   humanFriendlyName,
-  type AvailableDefinition,
-  type AgentTestResultsResponse,
-  type AgentTestStartResponse,
-  type AgentTestStatusResponse,
-  type TestCaseResult,
-  type TestStatus,
 } from './agentTester';
-export {
-  AgentPreview,
-  type AgentPreviewMessageLinks,
-  type AgentPreviewMessage,
-  type AgentPreviewStartResponse,
-  type AgentPreviewSendResponse,
-  type AgentPreviewEndResponse,
-} from './agentPreview';
+export { AgentPreview } from './agentPreview';

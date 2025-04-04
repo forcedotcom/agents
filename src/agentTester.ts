@@ -4,106 +4,28 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-/* eslint-disable jsdoc/check-indentation */
+
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { Connection, Lifecycle, PollingClient, SfError, StatusResult } from '@salesforce/core';
 import { Duration, env } from '@salesforce/kit';
-import { ComponentSetBuilder, DeployResult, FileProperties, RequestStatus } from '@salesforce/source-deploy-retrieve';
+import { ComponentSetBuilder, DeployResult, RequestStatus } from '@salesforce/source-deploy-retrieve';
 import { parse, stringify } from 'yaml';
 import { XMLBuilder, XMLParser } from 'fast-xml-parser';
 import { MaybeMock } from './maybe-mock';
 import { decodeHtmlEntities } from './utils';
+import {
+  type AvailableDefinition,
+  type AgentTestStartResponse,
+  type AgentTestStatusResponse,
+  type AgentTestResultsResponse,
+  type AiEvaluationDefinition,
+  type TestSpec,
+} from './types.js';
 
-export type TestStatus = 'NEW' | 'IN_PROGRESS' | 'COMPLETED' | 'ERROR' | 'TERMINATED';
-
-export type AgentTestStartResponse = {
-  runId: string;
-  status: TestStatus;
-};
-
-export type AgentTestStatusResponse = {
-  status: TestStatus;
-  startTime: string;
-  endTime?: string;
-  errorMessage?: string;
-};
-
-export type TestCaseResult = {
-  status: TestStatus;
-  startTime: string;
-  endTime?: string;
-  inputs: {
-    utterance: string;
-  };
-  generatedData: {
-    actionsSequence: string[];
-    outcome: string;
-    topic: string;
-  };
-  testResults: Array<{
-    name: string;
-    actualValue: string;
-    expectedValue: string;
-    score: number;
-    result: 'PASS' | 'FAILURE';
-    metricLabel: 'Accuracy' | 'Precision';
-    metricExplainability: string;
-    status: TestStatus;
-    startTime: string;
-    endTime?: string;
-    errorCode?: string;
-    errorMessage?: string;
-  }>;
-  testNumber: number;
-};
-
-export type AgentTestResultsResponse = {
-  status: TestStatus;
-  startTime: string;
-  endTime?: string;
-  errorMessage?: string;
-  subjectName: string;
-  testCases: TestCaseResult[];
-};
-
-export type AvailableDefinition = Omit<FileProperties, 'manageableState' | 'namespacePrefix'>;
-
-export type TestCase = {
-  utterance: string;
-  expectedActions: string[] | undefined;
-  expectedOutcome: string | undefined;
-  expectedTopic: string | undefined;
-};
-
-export type TestSpec = {
-  name: string;
-  description?: string;
-  subjectType: string;
-  subjectName: string;
-  subjectVersion?: string;
-  testCases: TestCase[];
-};
-
-type AiEvaluationDefinition = {
-  AiEvaluationDefinition: {
-    description?: string;
-    name: string;
-    subjectType: 'AGENT';
-    subjectName: string;
-    subjectVersion?: string;
-    testCase: Array<{
-      expectation: Array<{
-        name: string;
-        expectedValue: string;
-      }>;
-      inputs: {
-        utterance: string;
-      };
-    }>;
-  };
-};
-
+/**
+ * Events emitted during agent test creation for consumers to listen to and keep track of progress.
+ */
 export const AgentTestCreateLifecycleStages = {
   CreatingLocalMetadata: 'Creating Local Metadata',
   Waiting: 'Waiting for the org to respond',
@@ -112,10 +34,30 @@ export const AgentTestCreateLifecycleStages = {
 };
 
 /**
- * AgentTester class to test Agents
+ * A service for testing agents using `AiEvaluationDefinition` metadata. Start asynchronous
+ * test runs, get or poll for test status, and get detailed test results.
+ *
+ * **Examples**
+ *
+ * Create an instance of the service:
+ *
+ * `const agentTester = new AgentTester(connection);`
+ *
+ * Start a test run:
+ *
+ * `const startResponse = await agentTester.start(aiEvalDef);`
+ *
+ * Get the status for a test run:
+ *
+ * `const status = await agentTester.status(startResponse.runId);`
+ *
+ * Get detailed results for a test run:
+ *
+ * `const results = await agentTester.results(startResponse.runId);`
  */
 export class AgentTester {
   private maybeMock: MaybeMock;
+
   public constructor(private connection: Connection) {
     this.maybeMock = new MaybeMock(connection);
   }
@@ -128,7 +70,7 @@ export class AgentTester {
   }
 
   /**
-   * Initiates an AI evaluation run.
+   * Initiates a test run (i.e., AI evaluation).
    *
    * @param aiEvalDefName - The name of the AI evaluation definition to run.
    * @returns Promise that resolves with the response from starting the test.
@@ -142,7 +84,7 @@ export class AgentTester {
   }
 
   /**
-   * Get the status of a test run
+   * Get the status of a test run.
    *
    * @param {string} jobId
    * @returns {Promise<AgentTestStatusResponse>}
@@ -154,7 +96,7 @@ export class AgentTester {
   }
 
   /**
-   * Poll for a test run to complete
+   * Poll the status of a test run until the tests are complete or the timeout is reached.
    *
    * @param {string} jobId
    * @param {Duration} timeout
@@ -217,7 +159,7 @@ export class AgentTester {
   }
 
   /**
-   * Request test run details
+   * Get detailed test run results.
    *
    * @param {string} jobId
    * @returns {Promise<AgentTestResultsResponse>}
@@ -230,7 +172,7 @@ export class AgentTester {
   }
 
   /**
-   * Cancel an in-progress test run
+   * Cancel an in-progress test run.
    *
    * @param {string} jobId
    * @returns {Promise<{success: boolean}>}
@@ -346,6 +288,13 @@ export class AgentTester {
   }
 }
 
+/**
+ * Convert the raw, detailed test results to another format.
+ *
+ * @param results The detailed results from a test run.
+ * @param format The desired format. One of: json, junit, or tap.
+ * @returns
+ */
 export async function convertTestResultsToFormat(
   results: AgentTestResultsResponse,
   format: 'json' | 'junit' | 'tap'
