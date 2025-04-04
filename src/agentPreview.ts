@@ -9,85 +9,36 @@ import { randomUUID } from 'node:crypto';
 import { SfError } from '@salesforce/core';
 import { Connection } from '@salesforce/core';
 import { MaybeMock } from './maybe-mock';
+import {
+  type AgentPreviewEndResponse,
+  type AgentPreviewStartResponse,
+  type AgentPreviewSendResponse,
+  type ApiStatus,
+  type EndReason,
+} from './types.js';
 
-type ApiStatus = {
-  status: 'UP' | 'DOWN';
-};
-
-type Href = { href: string };
-
-export type AgentPreviewError = {
-  status: number;
-  path: string;
-  requestId: string;
-  error: string;
-  message: string;
-  timestamp: number;
-};
-
-export type AgentPreviewMessageLinks = {
-  self: Href | null;
-  messages: Href | null;
-  session: Href | null;
-  end: Href | null;
-};
-
-export type MessageType =
-  | 'Inform'
-  | 'TextChunk'
-  | 'ProgressIndicator'
-  | 'Inquire'
-  | 'Confirm'
-  | 'Failure'
-  | 'Escalate'
-  | 'SessionEnded'
-  | 'EndOfTurn'
-  | 'Error';
-
-export type AgentPreviewMessage = {
-  type: MessageType;
-  id: string;
-  feedbackId: string;
-  planId: string;
-  isContentSafe: boolean;
-  message: string;
-  result: {
-    type: string;
-    property: string;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    value: any;
-  };
-  citedReferences: {
-    type: string;
-    value: string;
-  };
-};
-
-export type AgentPreviewStartResponse = {
-  sessionId: string;
-  _links: AgentPreviewMessageLinks;
-  messages: AgentPreviewMessage[];
-};
-
-export type AgentPreviewSendResponse = {
-  messages: AgentPreviewMessage[];
-  _links: AgentPreviewMessageLinks;
-};
-
-export type AgentPreviewEndMessage = {
-  type: string;
-  id: string;
-  reason: string;
-  feedbackId: string;
-};
-
-export type AgentPreviewEndResponse = {
-  messages: AgentPreviewEndMessage[];
-  _links: AgentPreviewMessageLinks;
-};
-
-type EndReason = 'UserRequest' | 'Transfer' | 'Expiration' | 'Error' | 'Other';
-
+/**
+ * A service to interact with an agent. Start an interactive session,
+ * send messages to the agent, and end the session.
+ *
+ * **Examples**
+ *
+ * Create an instance of the service:
+ *
+ * `const agentPreview = new AgentPreview(connection);`
+ *
+ * Start an interactive session:
+ *
+ * `const { sessionId } = await agentPreview.start(botId);`
+ *
+ * Send a message to the agent using the session ID from the startResponse:
+ *
+ * `const sendResponse = await agentPreview.send(sessionId, message);`
+ *
+ * End an interactive session:
+ *
+ * `await agentPreview.end(sessionId, 'UserRequest');`
+ */
 export class AgentPreview {
   private apiBase: string;
   private instanceUrl: string;
@@ -99,6 +50,12 @@ export class AgentPreview {
     this.maybeMock = new MaybeMock(connection);
   }
 
+  /**
+   * Start an interactive session with the provided agent.
+   *
+   * @param botId The ID of the agent (`Bot` ID).
+   * @returns `AgentPreviewStartResponse`, which includes a session ID needed for other actions.
+   */
   public async start(botId: string): Promise<AgentPreviewStartResponse> {
     const url = `${this.apiBase}/agents/${botId}/sessions`;
 
@@ -120,6 +77,13 @@ export class AgentPreview {
     }
   }
 
+  /**
+   * Send a message to the agent using the session ID obtained by calling `start()`.
+   *
+   * @param sessionId A session ID provided by first calling `agentPreview.start()`.
+   * @param message A message to send to the agent.
+   * @returns `AgentPreviewSendResponse`
+   */
   public async send(sessionId: string, message: string): Promise<AgentPreviewSendResponse> {
     const url = `${this.apiBase}/sessions/${sessionId}/messages`;
     const body = {
@@ -140,6 +104,13 @@ export class AgentPreview {
     }
   }
 
+  /**
+   * Ends an interactive session with the agent.
+   *
+   * @param sessionId A session ID provided by first calling `agentPreview.start()`.
+   * @param reason A reason why the interactive session was ended.
+   * @returns `AgentPreviewEndResponse`
+   */
   public async end(sessionId: string, reason: EndReason): Promise<AgentPreviewEndResponse> {
     const url = `${this.apiBase}/sessions/${sessionId}`;
 
@@ -153,7 +124,11 @@ export class AgentPreview {
     }
   }
 
-  // Get the status of the Agent API (UP | DOWN)
+  /**
+   * Get the status of the Agent API (UP | DOWN).
+   *
+   * @returns `ApiStatus`
+   */
   public async status(): Promise<ApiStatus> {
     const base = 'https://test.api.salesforce.com';
     const url = `${base}/einstein/ai-agent/v1/status`;

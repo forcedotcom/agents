@@ -26,6 +26,8 @@ yarn build
 
 ## Testing
 
+All changes must have associated tests. This library uses a combination of unit testing and NUTs (non-unit tests).
+
 ### Running the test suite
 
 Runs the suite and output code coverage as a text summary:
@@ -57,3 +59,37 @@ The library can also be installed to another local project as a regular NPM modu
 ```
 yarn local:install /path/to/other/package
 ```
+
+## Debugging
+
+If you need to debug library code or tests you should refer to the excellent documentation on this topic in the [Plugin Developer Guide](https://github.com/salesforcecli/cli/wiki/Debug-Your-Plugin).
+
+## Useful yarn commands
+
+#### `yarn install`
+
+This downloads all NPM dependencies into the node_modules directory.
+
+#### `yarn compile`
+
+This compiles the typescript to javascript.
+
+#### `yarn lint`
+
+This lints all the typescript using eslint.
+
+#### `yarn build`
+
+This compiles and lints all the typescript (e.g., `yarn compile && yarn lint`).
+
+#### `yarn clean`
+
+This cleans all generated files and directories. Run `yarn clean-all` to also clean up the node_module directories.
+
+#### `yarn test`
+
+This runs unit tests (mocha) for the project using ts-node.
+
+#### `yarn test:nuts`
+
+This runs NUTs (non-unit tests) for the project using ts-node.

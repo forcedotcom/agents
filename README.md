@@ -1,8 +1,8 @@
-# Salesforce Agents
+# Salesforce Agents - BETA
 
 ---
 
-### :warning: THIS LIBRARY IS UNDER DEVELOPMENT AND IS NOT MEANT FOR PRODUCTION USAGE. :warning:
+### :warning: All APIs are beta. :warning:
 
 ---
 

@@ -11,7 +11,6 @@ import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection } from '@salesforce/core';
 import {
-  AgentTestResultsResponse,
   AgentTester,
   convertTestResultsToFormat,
   writeTestSpec,
@@ -19,6 +18,7 @@ import {
   normalizeResults,
   humanFriendlyName,
 } from '../src/agentTester';
+import { type AgentTestResultsResponse } from '../src/types';
 
 describe('AgentTester', () => {
   const $$ = new TestContext();
