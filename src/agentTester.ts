@@ -318,6 +318,7 @@ export async function convertTestResultsToFormat(
  * @returns A new AgentTestResultsResponse with decoded HTML entities
  *
  * @example
+ * ```
  * const results = {
  *   testCases: [{
  *     inputs: { utterance: "&quot;hello&quot;" },
@@ -328,6 +329,7 @@ export async function convertTestResultsToFormat(
  *   }]
  * };
  * const normalized = normalizeResults(results);
+ * ```
  */
 export function normalizeResults(results: AgentTestResultsResponse): AgentTestResultsResponse {
   return {
