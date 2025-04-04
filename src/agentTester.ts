@@ -507,11 +507,14 @@ export async function generateTestSpecFromAiEvalDefinition(path: string): Promis
       const expectations = castArray(tc.expectation);
       return {
         utterance: tc.inputs.utterance,
-        expectedTopic: expectations.find((e) => e.name === 'topic_sequence_match')?.expectedValue,
+        // TODO: remove old names once removed in 258 (topic_sequence_match, action_sequence_match, bot_response_rating)
+        expectedTopic: expectations.find((e) => e.name === 'topic_sequence_match' || e.name === 'topic_assertion')
+          ?.expectedValue,
         expectedActions: transformStringToArray(
-          expectations.find((e) => e.name === 'action_sequence_match')?.expectedValue
+          expectations.find((e) => e.name === 'action_sequence_match' || e.name === 'actions_assertion')?.expectedValue
         ),
-        expectedOutcome: expectations.find((e) => e.name === 'bot_response_rating')?.expectedValue,
+        expectedOutcome: expectations.find((e) => e.name === 'bot_response_rating' || e.name === 'output_validation')
+          ?.expectedValue,
       };
     }),
   };

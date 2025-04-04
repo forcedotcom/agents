@@ -245,7 +245,7 @@ export type TestCaseResult = {
     actualValue: string;
     expectedValue: string;
     score: number;
-    result: 'PASS' | 'FAILURE';
+    result: null | 'PASS' | 'FAILURE';
     metricLabel: 'Accuracy' | 'Precision';
     metricExplainability: string;
     status: TestStatus;
