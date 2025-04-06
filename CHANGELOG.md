@@ -1,3 +1,12 @@
+## [0.13.8](https://github.com/forcedotcom/agents/compare/0.13.7...0.13.8) (2025-04-06)
+
+
+### Bug Fixes
+
+* **deps:** bump yaml from 2.7.0 to 2.7.1 ([f75cc95](https://github.com/forcedotcom/agents/commit/f75cc9583fe77e7523562bd0f428bd3db9ff138c))
+
+
+
 ## [0.13.7](https://github.com/forcedotcom/agents/compare/0.13.6...0.13.7) (2025-04-06)
 
 
