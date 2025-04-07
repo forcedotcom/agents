@@ -16,6 +16,7 @@ import {
   type AgentCreateResponse,
   type AgentJobSpec,
   type AgentJobSpecCreateConfig,
+  type AgentOptions,
   type DraftAgentTopicsBody,
   type DraftAgentTopicsResponse,
 } from './types.js';
@@ -24,6 +25,14 @@ import { decodeHtmlEntities } from './utils';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agents');
+
+let logger: Logger;
+const getLogger = (): Logger => {
+  if (!logger) {
+    logger = Logger.childFromRoot('Agent');
+  }
+  return logger;
+};
 
 /**
  * Events emitted during Agent.create() for consumers to listen to and keep track of progress
@@ -37,27 +46,38 @@ export const AgentCreateLifecycleStages = {
 };
 
 /**
- * Class for creating Agents and agent specs.
+ * A client side representation of an agent within an org. Also provides utilities
+ * such as creating agents, listing agents, and creating agent specs.
+ *
+ * **Examples**
+ *
+ * Create a new instance and get the ID (uses the `Bot` ID):
+ *
+ * `const id = new Agent({connection, name}).getId();`
+ *
+ * Create a new agent in the org:
+ *
+ * `const myAgent = await Agent.create(connection, project, options);`
+ *
+ * List all agents in the local project:
+ *
+ * `const agentList = await Agent.list(project);`
  */
 export class Agent {
-  private logger: Logger;
-  private maybeMock: MaybeMock;
-  private readonly connection: Connection;
+  private id?: string;
 
   /**
-   * Create an Agent instance
+   * Create an instance of an agent in an org. Must provide a connection to an org
+   * and the agent (Bot) API name as part of `AgentOptions`.
    *
-   * @param {Connection} connection
-   * @param {SfProject} project
+   * @param {options} AgentOptions
    */
-  public constructor(connection: Connection, private project: SfProject) {
-    this.logger = Logger.childFromRoot(this.constructor.name);
-    this.maybeMock = new MaybeMock(connection);
-    this.connection = connection;
-  }
+  public constructor(private options: AgentOptions) {}
 
   /**
    * List all agents in the current project.
+   *
+   * @param project a `SfProject` for a local DX project.
    */
   public static async list(project: SfProject): Promise<string[]> {
     const projectDirs = project.getPackageDirectories();
@@ -89,20 +109,25 @@ export class Agent {
   /**
    * Creates an agent from a configuration, optionally saving the agent in an org.
    *
-   * @param config a configuration for creating or previewing an agent
+   * @param connection a `Connection` to an org.
+   * @param project a `SfProject` for a local DX project.
+   * @param config a configuration for creating or previewing an agent.
    * @returns the agent definition
    */
-  public async create(config: AgentCreateConfig): Promise<AgentCreateResponse> {
+  public static async create(
+    connection: Connection,
+    project: SfProject,
+    config: AgentCreateConfig
+  ): Promise<AgentCreateResponse> {
     const url = '/connect/ai-assist/create-agent';
+    const maybeMock = new MaybeMock(connection);
 
     // When previewing agent creation just return the response.
     if (!config.saveAgent) {
-      this.logger.debug(
-        `Previewing agent creation using config: ${inspect(config)} in project: ${this.project.getPath()}`
-      );
+      getLogger().debug(`Previewing agent creation using config: ${inspect(config)} in project: ${project.getPath()}`);
       await Lifecycle.getInstance().emit(AgentCreateLifecycleStages.Previewing, {});
 
-      const response = await this.maybeMock.request<AgentCreateResponse>('POST', url, config);
+      const response = await maybeMock.request<AgentCreateResponse>('POST', url, config);
       return decodeResponse(response);
     }
 
@@ -110,17 +135,17 @@ export class Agent {
       throw messages.createError('missingAgentName');
     }
 
-    this.logger.debug(`Creating agent using config: ${inspect(config)} in project: ${this.project.getPath()}`);
+    getLogger().debug(`Creating agent using config: ${inspect(config)} in project: ${project.getPath()}`);
     await Lifecycle.getInstance().emit(AgentCreateLifecycleStages.Creating, {});
     if (!config.agentSettings.agentApiName) {
       config.agentSettings.agentApiName = generateAgentApiName(config.agentSettings?.agentName);
     }
-    const response = await this.maybeMock.request<AgentCreateResponse>('POST', url, config);
+    const response = await maybeMock.request<AgentCreateResponse>('POST', url, config);
 
     // When saving agent creation we need to retrieve the created metadata.
     if (response.isSuccess) {
       await Lifecycle.getInstance().emit(AgentCreateLifecycleStages.Retrieving, {});
-      const defaultPackagePath = this.project.getDefaultPackage().path ?? 'force-app';
+      const defaultPackagePath = project.getDefaultPackage().path ?? 'force-app';
       try {
         const cs = await ComponentSetBuilder.build({
           metadata: {
@@ -128,12 +153,12 @@ export class Agent {
             directoryPaths: [defaultPackagePath],
           },
           org: {
-            username: this.connection.getUsername() as string,
+            username: connection.getUsername() as string,
             exclude: [],
           },
         });
         const retrieve = await cs.retrieve({
-          usernameOrConnection: this.connection,
+          usernameOrConnection: connection,
           merge: true,
           format: 'source',
           output: defaultPackagePath,
@@ -168,10 +193,13 @@ export class Agent {
   /**
    * Create an agent spec from provided data.
    *
+   * @param connection a `Connection` to an org.
    * @param config The configuration used to generate an agent spec.
+   * @returns the agent job spec
    */
-  public async createSpec(config: AgentJobSpecCreateConfig): Promise<AgentJobSpec> {
-    this.verifyAgentSpecConfig(config);
+  public static async createSpec(connection: Connection, config: AgentJobSpecCreateConfig): Promise<AgentJobSpec> {
+    const maybeMock = new MaybeMock(connection);
+    verifyAgentSpecConfig(config);
 
     const url = '/connect/ai-assist/draft-agent-topics';
 
@@ -198,7 +226,7 @@ export class Agent {
       }
     }
 
-    const response = await this.maybeMock.request<DraftAgentTopicsResponse>('POST', url, body);
+    const response = await maybeMock.request<DraftAgentTopicsResponse>('POST', url, body);
     const htmlDecodedResponse = decodeResponse<DraftAgentTopicsResponse>(response);
 
     if (htmlDecodedResponse.isSuccess) {
@@ -212,14 +240,27 @@ export class Agent {
     }
   }
 
-  // eslint-disable-next-line class-methods-use-this
-  private verifyAgentSpecConfig(config: AgentJobSpecCreateConfig): void {
-    const { agentType, role, companyName, companyDescription } = config;
-    if (!agentType || !role || !companyName || !companyDescription) {
-      throw messages.createError('invalidAgentSpecConfig');
+  /**
+   * Returns the ID for this agent.
+   *
+   * @returns The ID of the agent (The `Bot` ID).
+   */
+  public async getId(): Promise<string> {
+    if (!this.id) {
+      const query = `SELECT Id FROM BotDefinition WHERE DeveloperName = '${this.options.name}'`;
+      this.id = (await this.options.connection.singleRecordQuery<{ Id: string }>(query)).Id;
     }
+    return this.id;
   }
 }
+
+// private function used by Agent.createSpec()
+const verifyAgentSpecConfig = (config: AgentJobSpecCreateConfig): void => {
+  const { agentType, role, companyName, companyDescription } = config;
+  if (!agentType || !role || !companyName || !companyDescription) {
+    throw messages.createError('invalidAgentSpecConfig');
+  }
+};
 
 /**
  * Generate an API name from an agent name. Matches what the UI does.
@@ -235,8 +276,8 @@ export const generateAgentApiName = (agentName: string): string => {
     .replace(/(^\d+)/, 'X$1')
     .slice(0, maxLength)
     .replace(/_$/, '');
-  const logger = Logger.childFromRoot('Agent-GenApiName');
-  logger.debug(`Generated Agent API name: [${apiName}] from Agent name: [${agentName}]`);
+  const genLogger = Logger.childFromRoot('Agent-GenApiName');
+  genLogger.debug(`Generated Agent API name: [${apiName}] from Agent name: [${agentName}]`);
   return apiName;
 };
 

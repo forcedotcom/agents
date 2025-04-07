@@ -32,11 +32,9 @@ describe('Agents', () => {
   });
 
   it('createSpec (mock behavior) should return a spec', async () => {
-    const sfProject = SfProject.getInstance();
-    const agent = new Agent(connection, sfProject);
     const agentType = 'customer';
     const companyName = 'Coral Cloud Enterprises';
-    const output = await agent.createSpec({
+    const output = await Agent.createSpec(connection, {
       agentType,
       role: 'answer questions about vacation_rentals',
       companyName,
@@ -68,7 +66,6 @@ describe('Agents', () => {
     const retrieveStub = $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
     const csbStub = $$.SANDBOX.stub(ComponentSetBuilder, 'build').resolves(compSet);
 
-    const agent = new Agent(connection, sfProject);
     const config: AgentCreateConfig = {
       agentType: 'customer',
       saveAgent: true,
@@ -86,7 +83,7 @@ describe('Agents', () => {
         maxNumOfTopics: 10,
       },
     };
-    const response = await agent.create(config);
+    const response = await Agent.create(connection, sfProject, config);
     expect(response).to.have.property('isSuccess', true);
     expect(response).to.have.property('agentId');
     expect(response).to.have.property('agentDefinition');
@@ -99,7 +96,6 @@ describe('Agents', () => {
   it('create preview agent', async () => {
     process.env.SF_MOCK_DIR = join('test', 'mocks', 'createAgent-Preview');
     const sfProject = SfProject.getInstance();
-    const agent = new Agent(connection, sfProject);
     const config: AgentCreateConfig = {
       agentType: 'customer',
       saveAgent: false,
@@ -114,7 +110,7 @@ describe('Agents', () => {
         maxNumOfTopics: 10,
       },
     };
-    const response = await agent.create(config);
+    const response = await Agent.create(connection, sfProject, config);
     expect(response).to.have.property('isSuccess', true);
     expect(response).to.not.have.property('agentId');
     expect(response).to.have.property('agentDefinition');
