@@ -465,6 +465,10 @@ export function humanFriendlyName(name: string): string {
     case 'action_sequence_match':
     case 'actions_assertion':
       return 'Action';
+    case 'output_latency_milliseconds':
+      return 'Output Latency';
+    case 'instruction_following':
+      return 'Instruction Following';
     case 'bot_response_rating':
     case 'output_validation':
       return 'Outcome';

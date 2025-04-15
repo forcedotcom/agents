@@ -73,6 +73,9 @@ describe('AgentTester', () => {
       expect(humanFriendlyName('output_validation')).to.equal('Outcome');
       expect(humanFriendlyName('actions_assertion')).to.equal('Action');
       expect(humanFriendlyName('topic_assertion')).to.equal('Topic');
+      // it will handle new metrics
+      expect(humanFriendlyName('output_latency_milliseconds')).to.equal('Output Latency');
+      expect(humanFriendlyName('instruction_following')).to.equal('Instruction Following');
     });
   });
 
