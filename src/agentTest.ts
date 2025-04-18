@@ -174,7 +174,7 @@ export class AgentTest {
     if (this.config.name) {
       if (connection) {
         // @ts-expect-error jsForce types don't know about AiEvaluationDefinition yet
-        this.data = (await connection.metadata.read(
+        this.data = (await connection.metadata.read<AiEvaluationDefinition>(
           'AiEvaluationDefinition',
           this.config.name
         )) as AiEvaluationDefinition;
@@ -220,7 +220,7 @@ export class AgentTest {
     if (this.config.name) {
       if (connection) {
         // @ts-expect-error jsForce types don't know about AiEvaluationDefinition yet
-        this.data = (await connection.metadata.read(
+        this.data = (await connection.metadata.read<AiEvaluationDefinition>(
           'AiEvaluationDefinition',
           this.config.name
         )) as AiEvaluationDefinition;
