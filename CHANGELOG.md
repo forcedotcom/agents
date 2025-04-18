@@ -1,3 +1,12 @@
+## [0.14.3](https://github.com/forcedotcom/agents/compare/0.14.2...0.14.3) (2025-04-18)
+
+
+### Bug Fixes
+
+* add more options to humanFriendlyName ([9f2deec](https://github.com/forcedotcom/agents/commit/9f2deecd19e753a97efd953d6c38924d2b545fcb))
+
+
+
 ## [0.14.2](https://github.com/forcedotcom/agents/compare/0.14.1...0.14.2) (2025-04-12)
 
 
