@@ -6,7 +6,7 @@
  */
 import { readFile } from 'node:fs/promises';
 import { expect } from 'chai';
-import { convertTestResultsToFormat } from '../src/agentTestResults';
+import { convertTestResultsToFormat, humanFriendlyName } from '../src/agentTestResults';
 import type { AgentTestResultsResponse } from '../src/types';
 
 describe('junit formatter', () => {
@@ -50,5 +50,23 @@ not ok 9 3.bot_response_rating
   actual: It looks like I am unable to check the weather. There's something wrong with the Weather Service. How else can I assist you?
   expected: The answer should start by describing expected conditions, for example "clear skies" or "50% chance of rain" and conclude with a range of high and low temperatures in degrees fahrenheit.
   ...`);
+  });
+});
+
+describe('humanFriendlyName', () => {
+  it('handles current api responses', () => {
+    expect(humanFriendlyName('bot_response_rating')).to.equal('Outcome');
+    expect(humanFriendlyName('action_sequence_match')).to.equal('Action');
+    expect(humanFriendlyName('topic_sequence_match')).to.equal('Topic');
+    // an unknown value will return itself
+    expect(humanFriendlyName('unknown_sequence_match')).to.equal('unknown_sequence_match');
+
+    // it will handle the upcoming api changes
+    expect(humanFriendlyName('output_validation')).to.equal('Outcome');
+    expect(humanFriendlyName('actions_assertion')).to.equal('Action');
+    expect(humanFriendlyName('topic_assertion')).to.equal('Topic');
+    // it will handle new metrics
+    expect(humanFriendlyName('output_latency_milliseconds')).to.equal('Output Latency');
+    expect(humanFriendlyName('instruction_following')).to.equal('Instruction Following');
   });
 });
