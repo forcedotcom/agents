@@ -56,14 +56,18 @@ export class AgentTest {
    * 1. AiEvaluationDefinition API name.
    * 2. Path to a local AiEvaluationDefinition metadata file.
    * 3. Path to a local agent test spec file.
+   * 4. Agent test spec data.
    *
    * @param config AgentTestConfig
    */
   public constructor(private config: AgentTestConfig) {
-    const { name, mdPath, specPath } = config;
+    const { name, mdPath, specPath, specData } = config;
 
-    if (!name && !mdPath && !specPath) {
+    if (!name && !mdPath && !specPath && !specData) {
       throw messages.createError('invalidAgentTestConfig');
+    }
+    if (specData) {
+      this.specData = specData;
     }
   }
 

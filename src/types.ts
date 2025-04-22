@@ -229,6 +229,11 @@ export type AgentTestConfig = {
    * The local file path of an agent test spec file.
    */
   specPath?: string;
+
+  /**
+   * The agent test spec data.
+   */
+  specData?: TestSpec;
 };
 
 export type TestStatus = 'NEW' | 'IN_PROGRESS' | 'COMPLETED' | 'ERROR' | 'TERMINATED';

@@ -1,6 +1,6 @@
 # invalidAgentTestConfig
 
-Must provide one of: [ name, mdPath, specPath ] when instantiating an AgentTest.
+Must provide one of: [ name, mdPath, specPath, specData ] when instantiating an AgentTest.
 
 # missingConnection
 
