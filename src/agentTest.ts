@@ -81,6 +81,7 @@ export class AgentTest {
   /**
    * Creates and deploys an AiEvaluationDefinition from a specification file.
    *
+   * @param connection - Connection to the org where the agent test will be created.
    * @param apiName - The API name of the AiEvaluationDefinition to create
    * @param specFilePath - The path to the specification file to create the definition from
    * @param options - Configuration options for creating the definition
