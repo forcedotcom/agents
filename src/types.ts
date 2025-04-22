@@ -214,6 +214,28 @@ export type DraftAgentTopicsResponse = {
 // ====================================================
 //               Agent Testing Types
 // ====================================================
+export type AgentTestConfig = {
+  /**
+   * The API name of a AiEvaluationDefinition.
+   */
+  name?: string;
+
+  /**
+   * The local file path of a AiEvaluationDefinition metadata file.
+   */
+  mdPath?: string;
+
+  /**
+   * The local file path of an agent test spec file.
+   */
+  specPath?: string;
+
+  /**
+   * The agent test spec data.
+   */
+  specData?: TestSpec;
+};
+
 export type TestStatus = 'NEW' | 'IN_PROGRESS' | 'COMPLETED' | 'ERROR' | 'TERMINATED';
 
 export type AgentTestStartResponse = {
@@ -278,29 +300,27 @@ export type TestCase = {
 export type TestSpec = {
   name: string;
   description?: string;
-  subjectType: string;
+  subjectType: 'AGENT';
   subjectName: string;
   subjectVersion?: string;
   testCases: TestCase[];
 };
 
 export type AiEvaluationDefinition = {
-  AiEvaluationDefinition: {
-    description?: string;
-    name: string;
-    subjectType: 'AGENT';
-    subjectName: string;
-    subjectVersion?: string;
-    testCase: Array<{
-      expectation: Array<{
-        name: string;
-        expectedValue: string;
-      }>;
-      inputs: {
-        utterance: string;
-      };
+  description?: string;
+  name: string;
+  subjectType: 'AGENT';
+  subjectName: string;
+  subjectVersion?: string;
+  testCase: Array<{
+    expectation: Array<{
+      name: string;
+      expectedValue: string;
     }>;
-  };
+    inputs: {
+      utterance: string;
+    };
+  }>;
 };
 
 // ====================================================

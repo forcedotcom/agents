@@ -1,0 +1,365 @@
+/*
+ * Copyright (c) 2024, salesforce.com, inc.
+ * All rights reserved.
+ * Licensed under the BSD 3-Clause license.
+ * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
+ */
+
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { Connection, Lifecycle, Messages, SfError } from '@salesforce/core';
+import { Duration, ensureArray } from '@salesforce/kit';
+import { ComponentSetBuilder, DeployResult, RequestStatus } from '@salesforce/source-deploy-retrieve';
+import { parse, stringify } from 'yaml';
+import { XMLBuilder, XMLParser } from 'fast-xml-parser';
+import { type AvailableDefinition, type AgentTestConfig, type AiEvaluationDefinition, type TestSpec } from './types.js';
+
+Messages.importMessagesDirectory(__dirname);
+const messages = Messages.loadMessages('@salesforce/agents', 'agentTest');
+
+/**
+ * Events emitted during agent test creation for consumers to listen to and keep track of progress.
+ */
+export const AgentTestCreateLifecycleStages = {
+  CreatingLocalMetadata: 'Creating Local Metadata',
+  Waiting: 'Waiting for the org to respond',
+  DeployingMetadata: 'Deploying Metadata',
+  Done: 'Done',
+};
+
+/**
+ * A client side representation of an agent test (AiEvaluationDefinition) within an org.
+ * Also provides utilities such as creating and listing agent tests, and converting between
+ * agent test spec and AiEvaluationDefinition.
+ *
+ * **Examples**
+ *
+ * Create a new instance from an agent test spec:
+ *
+ * `const agentTest = new AgentTest({ specPath: path/to/specfile });`
+ *
+ * Get the metadata content of an agent test:
+ *
+ * `const metadataContent = await agentTest.getMetadata();`
+ *
+ * Write the metadata content to a file:
+ *
+ * `await agentTest.writeMetadata('path/to/metadataFile');`
+ */
+export class AgentTest {
+  private specData?: TestSpec;
+  private data?: AiEvaluationDefinition;
+
+  /**
+   * Create an AgentTest based on one of:
+   *
+   * 1. AiEvaluationDefinition API name.
+   * 2. Path to a local AiEvaluationDefinition metadata file.
+   * 3. Path to a local agent test spec file.
+   * 4. Agent test spec data.
+   *
+   * @param config AgentTestConfig
+   */
+  public constructor(private config: AgentTestConfig) {
+    const { name, mdPath, specPath, specData } = config;
+
+    if (!name && !mdPath && !specPath && !specData) {
+      throw messages.createError('invalidAgentTestConfig');
+    }
+    if (specData) {
+      this.specData = specData;
+    }
+  }
+
+  /**
+   * List the AiEvaluationDefinitions available in the org.
+   */
+  public static async list(connection: Connection): Promise<AvailableDefinition[]> {
+    return connection.metadata.list({ type: 'AiEvaluationDefinition' });
+  }
+
+  /**
+   * Creates and deploys an AiEvaluationDefinition from a specification file.
+   *
+   * @param connection - Connection to the org where the agent test will be created.
+   * @param apiName - The API name of the AiEvaluationDefinition to create
+   * @param specFilePath - The path to the specification file to create the definition from
+   * @param options - Configuration options for creating the definition
+   * @param options.outputDir - The directory where the AiEvaluationDefinition file will be written
+   * @param options.preview - If true, writes the AiEvaluationDefinition file to <api-name>-preview-<timestamp>.xml in the current working directory and does not deploy it
+   *
+   * @returns Promise containing:
+   * - path: The filesystem path to the created AiEvaluationDefinition file
+   * - contents: The AiEvaluationDefinition contents as a string
+   * - deployResult: The deployment result (if not in preview mode)
+   *
+   * @throws {SfError} When deployment fails
+   */
+  public static async create(
+    connection: Connection,
+    apiName: string,
+    specFilePath: string,
+    options: { outputDir: string; preview?: boolean }
+  ): Promise<{ path: string; contents: string; deployResult?: DeployResult }> {
+    const agentTestSpec = parse(await readFile(specFilePath, 'utf-8')) as TestSpec;
+    const lifecycle = Lifecycle.getInstance();
+    await lifecycle.emit(AgentTestCreateLifecycleStages.CreatingLocalMetadata, {});
+    const preview = options.preview ?? false;
+    // outputDir is overridden if preview is true
+    const outputDir = preview ? process.cwd() : options.outputDir;
+    const filename = preview
+      ? `${apiName}-preview-${new Date().toISOString()}.xml`
+      : `${apiName}.aiEvaluationDefinition-meta.xml`;
+    const definitionPath = join(outputDir, filename);
+
+    const xml = buildMetadataXml(convertToMetadata(agentTestSpec));
+    await mkdir(outputDir, { recursive: true });
+    await writeFile(definitionPath, xml);
+
+    if (preview) {
+      return { path: definitionPath, contents: xml };
+    }
+
+    const cs = await ComponentSetBuilder.build({ sourcepath: [definitionPath] });
+    const deploy = await cs.deploy({ usernameOrConnection: connection });
+    deploy.onUpdate((status) => {
+      if (status.status === RequestStatus.Pending) {
+        void lifecycle.emit(AgentTestCreateLifecycleStages.Waiting, status);
+      } else {
+        void lifecycle.emit(AgentTestCreateLifecycleStages.DeployingMetadata, status);
+      }
+    });
+
+    deploy.onFinish((result) => {
+      // small deploys like this, 1 file, can happen without an 'update' event being fired
+      // onFinish, emit the update, and then the done event to create proper output
+      void lifecycle.emit(AgentTestCreateLifecycleStages.DeployingMetadata, result);
+      void lifecycle.emit(AgentTestCreateLifecycleStages.Done, result);
+    });
+
+    const result = await deploy.pollStatus({ timeout: Duration.minutes(10_000), frequency: Duration.seconds(1) });
+
+    if (!result.response.success) {
+      throw new SfError(result.response.errorMessage ?? `Unable to deploy ${result.response.id}`);
+    }
+
+    return { path: definitionPath, contents: xml, deployResult: result };
+  }
+
+  /**
+   * Get the specification for this agent test.
+   *
+   * Returns the test spec data if already generated. Otherwise it will generate the spec by:
+   *
+   * 1. Read from an existing local spec file.
+   * 2. Read from an existing local AiEvaluationDefinition metadata file and convert it.
+   * 3. Use the provided org connection to read the remote AiEvaluationDefinition metadata.
+   *
+   * @param connection Org connection to use if this AgentTest only has an AiEvaluationDefinition API name.
+   * @returns Promise<TestSpec>
+   */
+  public async getTestSpec(connection?: Connection): Promise<TestSpec> {
+    if (this.specData) {
+      return this.specData;
+    }
+    if (this.data) {
+      this.specData = convertToSpec(this.data);
+      return this.specData;
+    }
+    if (this.config.specPath) {
+      this.specData = parse(await readFile(this.config.specPath, 'utf-8')) as TestSpec;
+      return this.specData;
+    }
+    if (this.config.mdPath) {
+      this.data = await parseAgentTestXml(this.config.mdPath);
+      this.specData = convertToSpec(this.data);
+      return this.specData;
+    }
+    // read from the server if we have a connection and an API name only
+    if (this.config.name) {
+      if (connection) {
+        // @ts-expect-error jsForce types don't know about AiEvaluationDefinition yet
+        this.data = (await connection.metadata.read<AiEvaluationDefinition>(
+          'AiEvaluationDefinition',
+          this.config.name
+        )) as AiEvaluationDefinition;
+        this.specData = convertToSpec(this.data);
+        return this.specData;
+      } else {
+        throw messages.createError('missingConnection');
+      }
+    }
+    throw messages.createError('missingTestSpecData');
+  }
+
+  /**
+   * Get the metadata content for this agent test.
+   *
+   * Returns the AiEvaluationDefinition metadata if already generated. Otherwise it will get it by:
+   *
+   * 1. Read from an existing local AiEvaluationDefinition metadata file.
+   * 2. Read from an existing local spec file and convert it.
+   * 3. Use the provided org connection to read the remote AiEvaluationDefinition metadata.
+   *
+   * @param connection Org connection to use if this AgentTest only has an AiEvaluationDefinition API name.
+   * @returns Promise<TestSpec>
+   */
+  public async getMetadata(connection?: Connection): Promise<AiEvaluationDefinition> {
+    if (this.data) {
+      return this.data;
+    }
+    if (this.specData) {
+      this.data = convertToMetadata(this.specData);
+      return this.data;
+    }
+    if (this.config.mdPath) {
+      this.data = await parseAgentTestXml(this.config.mdPath);
+      return this.data;
+    }
+    if (this.config.specPath) {
+      this.specData = parse(await readFile(this.config.specPath, 'utf-8')) as TestSpec;
+      this.data = convertToMetadata(this.specData);
+      return this.data;
+    }
+    // read from the server if we have a connection and an API name only
+    if (this.config.name) {
+      if (connection) {
+        // @ts-expect-error jsForce types don't know about AiEvaluationDefinition yet
+        this.data = (await connection.metadata.read<AiEvaluationDefinition>(
+          'AiEvaluationDefinition',
+          this.config.name
+        )) as AiEvaluationDefinition;
+        return this.data;
+      } else {
+        throw messages.createError('missingConnection');
+      }
+    }
+    throw messages.createError('missingTestSpecData');
+  }
+
+  /**
+   * Write a test specification file in YAML format.
+   *
+   * @param outputFile The file path where the YAML test spec should be written.
+   */
+  public async writeTestSpec(outputFile: string): Promise<void> {
+    const spec = await this.getTestSpec();
+
+    // strip out undefined values and empty strings
+    const clean = Object.entries(spec).reduce<Partial<TestSpec>>((acc, [key, value]) => {
+      if (value !== undefined && value !== '') return { ...acc, [key]: value };
+      return acc;
+    }, {});
+
+    const yml = stringify(clean, undefined, {
+      minContentWidth: 0,
+      lineWidth: 0,
+    });
+    await mkdir(dirname(outputFile), { recursive: true });
+    await writeFile(outputFile, yml);
+  }
+
+  /**
+   * Write AiEvaluationDefinition metadata file.
+   *
+   * @param outputFile The file path where the metadata file should be written.
+   */
+  public async writeMetadata(outputFile: string): Promise<void> {
+    const xml = buildMetadataXml(await this.getMetadata());
+    await mkdir(dirname(outputFile), { recursive: true });
+    await writeFile(outputFile, xml);
+  }
+}
+
+// Convert AiEvaluationDefinition metadata XML content to a YAML test spec object.
+const convertToSpec = (data: AiEvaluationDefinition): TestSpec => ({
+  name: data.name,
+  description: data.description,
+  subjectType: data.subjectType,
+  subjectName: data.subjectName,
+  subjectVersion: data.subjectVersion,
+  testCases: ensureArray(data.testCase).map((tc) => {
+    const expectations = ensureArray(tc.expectation);
+    return {
+      utterance: tc.inputs.utterance,
+      // TODO: remove old names once removed in 258 (topic_sequence_match, action_sequence_match, bot_response_rating)
+      expectedTopic: expectations.find((e) => e.name === 'topic_sequence_match' || e.name === 'topic_assertion')
+        ?.expectedValue,
+      expectedActions: transformStringToArray(
+        expectations.find((e) => e.name === 'action_sequence_match' || e.name === 'actions_assertion')?.expectedValue
+      ),
+      expectedOutcome: expectations.find((e) => e.name === 'bot_response_rating' || e.name === 'output_validation')
+        ?.expectedValue,
+    };
+  }),
+});
+
+// Convert a YAML test spec object to AiEvaluationDefinition metadata XML content.
+const convertToMetadata = (spec: TestSpec): AiEvaluationDefinition => ({
+  ...(spec.description && { description: spec.description }),
+  name: spec.name,
+  subjectName: spec.subjectName,
+  subjectType: spec.subjectType,
+  ...(spec.subjectVersion && { subjectVersion: spec.subjectVersion }),
+  testCase: spec.testCases.map((tc) => ({
+    expectation: [
+      {
+        expectedValue: tc.expectedTopic as string,
+        name: 'topic_sequence_match',
+      },
+      {
+        expectedValue: `[${(tc.expectedActions ?? []).map((v) => `"${v}"`).join(',')}]`,
+        name: 'action_sequence_match',
+      },
+      {
+        expectedValue: tc.expectedOutcome as string,
+        name: 'bot_response_rating',
+      },
+    ],
+    inputs: {
+      utterance: tc.utterance,
+    },
+    number: spec.testCases.indexOf(tc) + 1,
+  })),
+});
+
+function transformStringToArray(str: string | undefined): string[] {
+  try {
+    if (!str) return [];
+    // Remove any whitespace and ensure proper JSON format
+    const cleaned = str.replace(/\s+/g, '');
+    return JSON.parse(cleaned) as string[];
+  } catch {
+    return [];
+  }
+}
+
+type AiEvaluationDefinitionXml = {
+  AiEvaluationDefinition: AiEvaluationDefinition;
+};
+const parseAgentTestXml = async (mdPath: string): Promise<AiEvaluationDefinition> => {
+  const xml = await readFile(mdPath, 'utf-8');
+  const parser = new XMLParser();
+  const xmlContent = parser.parse(xml) as AiEvaluationDefinitionXml;
+  return xmlContent.AiEvaluationDefinition;
+};
+
+const buildMetadataXml = (data: AiEvaluationDefinition): string => {
+  const aiEvalXml = {
+    AiEvaluationDefinition: {
+      $xmlns: 'http://soap.sforce.com/2006/04/metadata',
+      ...data,
+    },
+  };
+
+  const builder = new XMLBuilder({
+    format: true,
+    attributeNamePrefix: '$',
+    indentBy: '    ',
+    ignoreAttributes: false,
+  });
+
+  const xml = builder.build(aiEvalXml) as string;
+
+  return `<?xml version="1.0" encoding="UTF-8"?>\n${xml}`;
+};
