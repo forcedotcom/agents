@@ -82,12 +82,19 @@ testCases:
       - QueryRecords
     expectedOutcome: contacts available name available with Acme are listed
     expectedTopic: GeneralCRM
+    metrics:
+      - coherence
+      - output_latency_milliseconds
   - utterance: List contact emails associated with Acme account
     expectedActions:
       - IdentifyRecordByName
       - QueryRecords
     expectedOutcome: contacts available emails available with Acme are listed
     expectedTopic: GeneralCRM
+    metrics:
+      - coherence
+      - factuality
+      - instruction_following
 `,
       ]);
     });
@@ -124,6 +131,7 @@ testCases:
       - QueryRecords
     expectedOutcome: contacts available name available with Acme are listed
     expectedTopic: GeneralCRM
+    metrics: []
 `,
       ]);
     });
@@ -228,6 +236,7 @@ testCases:
             expectedTopic: 'Weather',
             expectedActions: ['GetLocation', 'GetWeather'],
             expectedOutcome: 'Sunny with a high of 75F',
+            metrics: ['completeness', 'coherence'],
           },
         ],
       });
@@ -287,6 +296,7 @@ testCases:
             expectedTopic: 'Weather',
             expectedActions: ['GetLocation', 'GetWeather'],
             expectedOutcome: 'Sunny with a high of 75F',
+            metrics: ['completeness', 'conciseness', 'output_latency_milliseconds'],
           },
         ],
       });
@@ -326,6 +336,7 @@ testCases:
             utterance: "What's the weather like?",
             expectedTopic: 'Weather',
             expectedActions: [],
+            metrics: [],
             expectedOutcome: undefined,
           },
         ],
@@ -471,6 +482,12 @@ testCases:
         <expectation>
             <expectedValue>contacts available emails available with Acme are listed</expectedValue>
             <name>bot_response_rating</name>
+        </expectation>
+        <expectation>
+            <name>completeness</name>
+        </expectation>
+        <expectation>
+            <name>coherence</name>
         </expectation>
         <inputs>
             <utterance>List contact emails associated with Acme account</utterance>

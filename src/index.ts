@@ -28,6 +28,7 @@ export {
   type TestCaseResult,
   type TestStatus,
 } from './types.js';
+export { metric } from './utils';
 export { Agent, AgentCreateLifecycleStages, generateAgentApiName } from './agent';
 export { AgentTester } from './agentTester';
 export { AgentTest, AgentTestCreateLifecycleStages } from './agentTest';

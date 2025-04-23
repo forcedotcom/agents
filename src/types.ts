@@ -7,6 +7,7 @@
 
 import { Connection, SfProject } from '@salesforce/core';
 import { FileProperties } from '@salesforce/source-deploy-retrieve';
+import { metric } from './utils';
 
 // ====================================================
 //               Agent Creation Types
@@ -289,15 +290,6 @@ export type AgentTestResultsResponse = {
 };
 
 export type AvailableDefinition = Omit<FileProperties, 'manageableState' | 'namespacePrefix'>;
-
-export const metric = [
-  'completeness',
-  'coherence',
-  'conciseness',
-  'output_latency_milliseconds',
-  'instruction_following',
-  'factuality',
-] as const;
 
 export type TestCase = {
   utterance: string;

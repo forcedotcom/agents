@@ -12,13 +12,8 @@ import { Duration, ensureArray } from '@salesforce/kit';
 import { ComponentSetBuilder, DeployResult, RequestStatus } from '@salesforce/source-deploy-retrieve';
 import { parse, stringify } from 'yaml';
 import { XMLBuilder, XMLParser } from 'fast-xml-parser';
-import {
-  type AvailableDefinition,
-  type AgentTestConfig,
-  type AiEvaluationDefinition,
-  type TestSpec,
-  metric,
-} from './types.js';
+import type { AvailableDefinition, AgentTestConfig, AiEvaluationDefinition, TestSpec } from './types.js';
+import { metric } from './utils';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agentTest');
