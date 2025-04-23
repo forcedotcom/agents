@@ -12,7 +12,13 @@ import { Duration, ensureArray } from '@salesforce/kit';
 import { ComponentSetBuilder, DeployResult, RequestStatus } from '@salesforce/source-deploy-retrieve';
 import { parse, stringify } from 'yaml';
 import { XMLBuilder, XMLParser } from 'fast-xml-parser';
-import { type AvailableDefinition, type AgentTestConfig, type AiEvaluationDefinition, type TestSpec } from './types.js';
+import {
+  type AvailableDefinition,
+  type AgentTestConfig,
+  type AiEvaluationDefinition,
+  type TestSpec,
+  metric,
+} from './types.js';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agentTest');
@@ -290,6 +296,9 @@ const convertToSpec = (data: AiEvaluationDefinition): TestSpec => ({
       ),
       expectedOutcome: expectations.find((e) => e.name === 'bot_response_rating' || e.name === 'output_validation')
         ?.expectedValue,
+      metrics: expectations
+        .filter((e) => metric.includes(e.name as (typeof metric)[number]))
+        .map((e) => e.name as (typeof metric)[number]),
     };
   }),
 });
@@ -315,6 +324,7 @@ const convertToMetadata = (spec: TestSpec): AiEvaluationDefinition => ({
         expectedValue: tc.expectedOutcome as string,
         name: 'bot_response_rating',
       },
+      ...ensureArray(tc.metrics).map((m) => ({ name: m })),
     ],
     inputs: {
       utterance: tc.utterance,

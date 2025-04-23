@@ -9,7 +9,7 @@ import sinon from 'sinon';
 import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection } from '@salesforce/core';
-import { AgentTest } from '../src/agentTest';
+import { AgentTest } from '../src';
 import type { TestSpec } from '../src/types';
 
 describe('AgentTest', () => {
@@ -54,12 +54,14 @@ describe('AgentTest', () => {
             expectedActions: ['IdentifyRecordByName', 'QueryRecords'],
             expectedOutcome: 'contacts available name available with Acme are listed',
             expectedTopic: 'GeneralCRM',
+            metrics: ['coherence', 'output_latency_milliseconds'],
           },
           {
             utterance: 'List contact emails associated with Acme account',
             expectedActions: ['IdentifyRecordByName', 'QueryRecords'],
             expectedOutcome: 'contacts available emails available with Acme are listed',
             expectedTopic: 'GeneralCRM',
+            metrics: ['coherence', 'factuality', 'instruction_following'],
           },
         ],
       };
@@ -103,6 +105,7 @@ testCases:
             expectedActions: ['IdentifyRecordByName', 'QueryRecords'],
             expectedOutcome: 'contacts available name available with Acme are listed',
             expectedTopic: 'GeneralCRM',
+            metrics: [],
           },
         ],
       };
@@ -138,6 +141,7 @@ testCases:
             expectedActions: ['IdentifyRecordByName', 'QueryRecords'],
             expectedOutcome: 'contacts available name available with Acme are listed',
             expectedTopic: 'GeneralCRM',
+            metrics: undefined,
           },
         ],
       };
@@ -196,6 +200,12 @@ testCases:
             <expectedValue>["GetLocation","GetWeather"]</expectedValue>
           </expectation>
           <expectation>
+            <name>completeness</name>
+          </expectation>
+          <expectation>
+            <name>coherence</name>
+          </expectation>
+          <expectation>
             <name>bot_response_rating</name>
             <expectedValue>Sunny with a high of 75F</expectedValue>
           </expectation>
@@ -245,6 +255,15 @@ testCases:
             <name>actions_assertion</name>
             <expectedValue>["GetLocation","GetWeather"]</expectedValue>
           </expectation>
+          <expectation>
+            <name>completeness</name>
+          </expectation>
+        <expectation>
+            <name>conciseness</name>
+        </expectation>
+        <expectation>
+            <name>output_latency_milliseconds</name>
+        </expectation>
           <expectation>
             <name>output_validation</name>
             <expectedValue>Sunny with a high of 75F</expectedValue>
@@ -395,6 +414,9 @@ testCases:
       - QueryRecords
     expectedOutcome: contacts available emails available with Acme are listed
     expectedTopic: GeneralCRM
+    metrics:
+      - completeness
+      - coherence
 `;
     beforeEach(() => {
       sinon.stub(fs, 'writeFile').resolves();

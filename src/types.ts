@@ -290,11 +290,21 @@ export type AgentTestResultsResponse = {
 
 export type AvailableDefinition = Omit<FileProperties, 'manageableState' | 'namespacePrefix'>;
 
+export const metric = [
+  'completeness',
+  'coherence',
+  'conciseness',
+  'output_latency_milliseconds',
+  'instruction_following',
+  'factuality',
+] as const;
+
 export type TestCase = {
   utterance: string;
   expectedActions: string[] | undefined;
   expectedOutcome: string | undefined;
   expectedTopic: string | undefined;
+  metrics?: Array<(typeof metric)[number]>;
 };
 
 export type TestSpec = {
@@ -315,7 +325,7 @@ export type AiEvaluationDefinition = {
   testCase: Array<{
     expectation: Array<{
       name: string;
-      expectedValue: string;
+      expectedValue?: string;
     }>;
     inputs: {
       utterance: string;
