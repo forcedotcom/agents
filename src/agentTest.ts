@@ -246,6 +246,8 @@ export class AgentTest {
   public async writeTestSpec(outputFile: string): Promise<void> {
     const spec = await this.getTestSpec();
 
+    // by default, add the OOTB metrics to the spec, so generated MD will have it
+    spec.testCases.forEach((tc) => (tc.metrics = tc.metrics ?? Array.from(metric)));
     // strip out undefined values and empty strings
     const clean = Object.entries(spec).reduce<Partial<TestSpec>>((acc, [key, value]) => {
       if (value !== undefined && value !== '') return { ...acc, [key]: value };

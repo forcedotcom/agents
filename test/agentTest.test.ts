@@ -169,6 +169,13 @@ testCases:
       - QueryRecords
     expectedOutcome: contacts available name available with Acme are listed
     expectedTopic: GeneralCRM
+    metrics:
+      - completeness
+      - coherence
+      - conciseness
+      - output_latency_milliseconds
+      - instruction_following
+      - factuality
 `,
       ]);
     });
