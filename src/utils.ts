@@ -5,6 +5,15 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
+export const metric = [
+  'completeness',
+  'coherence',
+  'conciseness',
+  'output_latency_milliseconds',
+  'instruction_following',
+  'factuality',
+] as const;
+
 /**
  * Clean a string by replacing HTML entities with their respective characters.
  *

@@ -9,7 +9,7 @@ import sinon from 'sinon';
 import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection } from '@salesforce/core';
-import { AgentTest } from '../src/agentTest';
+import { AgentTest } from '../src';
 import type { TestSpec } from '../src/types';
 
 describe('AgentTest', () => {
@@ -54,12 +54,14 @@ describe('AgentTest', () => {
             expectedActions: ['IdentifyRecordByName', 'QueryRecords'],
             expectedOutcome: 'contacts available name available with Acme are listed',
             expectedTopic: 'GeneralCRM',
+            metrics: ['coherence', 'output_latency_milliseconds'],
           },
           {
             utterance: 'List contact emails associated with Acme account',
             expectedActions: ['IdentifyRecordByName', 'QueryRecords'],
             expectedOutcome: 'contacts available emails available with Acme are listed',
             expectedTopic: 'GeneralCRM',
+            metrics: ['coherence', 'factuality', 'instruction_following'],
           },
         ],
       };
@@ -80,12 +82,19 @@ testCases:
       - QueryRecords
     expectedOutcome: contacts available name available with Acme are listed
     expectedTopic: GeneralCRM
+    metrics:
+      - coherence
+      - output_latency_milliseconds
   - utterance: List contact emails associated with Acme account
     expectedActions:
       - IdentifyRecordByName
       - QueryRecords
     expectedOutcome: contacts available emails available with Acme are listed
     expectedTopic: GeneralCRM
+    metrics:
+      - coherence
+      - factuality
+      - instruction_following
 `,
       ]);
     });
@@ -103,6 +112,7 @@ testCases:
             expectedActions: ['IdentifyRecordByName', 'QueryRecords'],
             expectedOutcome: 'contacts available name available with Acme are listed',
             expectedTopic: 'GeneralCRM',
+            metrics: [],
           },
         ],
       };
@@ -121,6 +131,7 @@ testCases:
       - QueryRecords
     expectedOutcome: contacts available name available with Acme are listed
     expectedTopic: GeneralCRM
+    metrics: []
 `,
       ]);
     });
@@ -138,6 +149,7 @@ testCases:
             expectedActions: ['IdentifyRecordByName', 'QueryRecords'],
             expectedOutcome: 'contacts available name available with Acme are listed',
             expectedTopic: 'GeneralCRM',
+            metrics: undefined,
           },
         ],
       };
@@ -157,6 +169,13 @@ testCases:
       - QueryRecords
     expectedOutcome: contacts available name available with Acme are listed
     expectedTopic: GeneralCRM
+    metrics:
+      - completeness
+      - coherence
+      - conciseness
+      - output_latency_milliseconds
+      - instruction_following
+      - factuality
 `,
       ]);
     });
@@ -196,6 +215,12 @@ testCases:
             <expectedValue>["GetLocation","GetWeather"]</expectedValue>
           </expectation>
           <expectation>
+            <name>completeness</name>
+          </expectation>
+          <expectation>
+            <name>coherence</name>
+          </expectation>
+          <expectation>
             <name>bot_response_rating</name>
             <expectedValue>Sunny with a high of 75F</expectedValue>
           </expectation>
@@ -218,6 +243,7 @@ testCases:
             expectedTopic: 'Weather',
             expectedActions: ['GetLocation', 'GetWeather'],
             expectedOutcome: 'Sunny with a high of 75F',
+            metrics: ['completeness', 'coherence'],
           },
         ],
       });
@@ -246,6 +272,15 @@ testCases:
             <expectedValue>["GetLocation","GetWeather"]</expectedValue>
           </expectation>
           <expectation>
+            <name>completeness</name>
+          </expectation>
+        <expectation>
+            <name>conciseness</name>
+        </expectation>
+        <expectation>
+            <name>output_latency_milliseconds</name>
+        </expectation>
+          <expectation>
             <name>output_validation</name>
             <expectedValue>Sunny with a high of 75F</expectedValue>
           </expectation>
@@ -268,6 +303,7 @@ testCases:
             expectedTopic: 'Weather',
             expectedActions: ['GetLocation', 'GetWeather'],
             expectedOutcome: 'Sunny with a high of 75F',
+            metrics: ['completeness', 'conciseness', 'output_latency_milliseconds'],
           },
         ],
       });
@@ -307,6 +343,7 @@ testCases:
             utterance: "What's the weather like?",
             expectedTopic: 'Weather',
             expectedActions: [],
+            metrics: [],
             expectedOutcome: undefined,
           },
         ],
@@ -395,6 +432,9 @@ testCases:
       - QueryRecords
     expectedOutcome: contacts available emails available with Acme are listed
     expectedTopic: GeneralCRM
+    metrics:
+      - completeness
+      - coherence
 `;
     beforeEach(() => {
       sinon.stub(fs, 'writeFile').resolves();
@@ -449,6 +489,12 @@ testCases:
         <expectation>
             <expectedValue>contacts available emails available with Acme are listed</expectedValue>
             <name>bot_response_rating</name>
+        </expectation>
+        <expectation>
+            <name>completeness</name>
+        </expectation>
+        <expectation>
+            <name>coherence</name>
         </expectation>
         <inputs>
             <utterance>List contact emails associated with Acme account</utterance>

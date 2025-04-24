@@ -12,7 +12,8 @@ import { Duration, ensureArray } from '@salesforce/kit';
 import { ComponentSetBuilder, DeployResult, RequestStatus } from '@salesforce/source-deploy-retrieve';
 import { parse, stringify } from 'yaml';
 import { XMLBuilder, XMLParser } from 'fast-xml-parser';
-import { type AvailableDefinition, type AgentTestConfig, type AiEvaluationDefinition, type TestSpec } from './types.js';
+import type { AvailableDefinition, AgentTestConfig, AiEvaluationDefinition, TestSpec } from './types.js';
+import { metric } from './utils';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agentTest');
@@ -245,6 +246,8 @@ export class AgentTest {
   public async writeTestSpec(outputFile: string): Promise<void> {
     const spec = await this.getTestSpec();
 
+    // by default, add the OOTB metrics to the spec, so generated MD will have it
+    spec.testCases.forEach((tc) => (tc.metrics = tc.metrics ?? Array.from(metric)));
     // strip out undefined values and empty strings
     const clean = Object.entries(spec).reduce<Partial<TestSpec>>((acc, [key, value]) => {
       if (value !== undefined && value !== '') return { ...acc, [key]: value };
@@ -290,6 +293,9 @@ const convertToSpec = (data: AiEvaluationDefinition): TestSpec => ({
       ),
       expectedOutcome: expectations.find((e) => e.name === 'bot_response_rating' || e.name === 'output_validation')
         ?.expectedValue,
+      metrics: expectations
+        .filter((e) => metric.includes(e.name as (typeof metric)[number]))
+        .map((e) => e.name as (typeof metric)[number]),
     };
   }),
 });
@@ -315,6 +321,7 @@ const convertToMetadata = (spec: TestSpec): AiEvaluationDefinition => ({
         expectedValue: tc.expectedOutcome as string,
         name: 'bot_response_rating',
       },
+      ...ensureArray(tc.metrics).map((m) => ({ name: m })),
     ],
     inputs: {
       utterance: tc.utterance,

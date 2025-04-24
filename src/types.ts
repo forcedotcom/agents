@@ -7,6 +7,7 @@
 
 import { Connection, SfProject } from '@salesforce/core';
 import { FileProperties } from '@salesforce/source-deploy-retrieve';
+import { metric } from './utils';
 
 // ====================================================
 //               Agent Creation Types
@@ -295,6 +296,7 @@ export type TestCase = {
   expectedActions: string[] | undefined;
   expectedOutcome: string | undefined;
   expectedTopic: string | undefined;
+  metrics?: Array<(typeof metric)[number]>;
 };
 
 export type TestSpec = {
@@ -315,7 +317,7 @@ export type AiEvaluationDefinition = {
   testCase: Array<{
     expectation: Array<{
       name: string;
-      expectedValue: string;
+      expectedValue?: string;
     }>;
     inputs: {
       utterance: string;
