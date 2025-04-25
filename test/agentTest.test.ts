@@ -55,6 +55,16 @@ describe('AgentTest', () => {
             expectedOutcome: 'contacts available name available with Acme are listed',
             expectedTopic: 'GeneralCRM',
             metrics: ['coherence', 'output_latency_milliseconds'],
+            contextVariable: [
+              {
+                variableName: 'myVariable',
+                variableValue: 'myValue',
+              },
+              {
+                variableName: 'myVariable2',
+                variableValue: 'myValue2',
+              },
+            ],
           },
           {
             utterance: 'List contact emails associated with Acme account',
@@ -85,6 +95,11 @@ testCases:
     metrics:
       - coherence
       - output_latency_milliseconds
+    contextVariable:
+      - variableName: myVariable
+        variableValue: myValue
+      - variableName: myVariable2
+        variableValue: myValue2
   - utterance: List contact emails associated with Acme account
     expectedActions:
       - IdentifyRecordByName
@@ -112,6 +127,7 @@ testCases:
             expectedActions: ['IdentifyRecordByName', 'QueryRecords'],
             expectedOutcome: 'contacts available name available with Acme are listed',
             expectedTopic: 'GeneralCRM',
+            contextVariable: [],
             metrics: [],
           },
         ],
@@ -131,6 +147,7 @@ testCases:
       - QueryRecords
     expectedOutcome: contacts available name available with Acme are listed
     expectedTopic: GeneralCRM
+    contextVariable: []
     metrics: []
 `,
       ]);
@@ -150,6 +167,7 @@ testCases:
             expectedOutcome: 'contacts available name available with Acme are listed',
             expectedTopic: 'GeneralCRM',
             metrics: undefined,
+            contextVariable: undefined,
           },
         ],
       };
@@ -205,6 +223,10 @@ testCases:
         <testCase>
           <inputs>
             <utterance>What's the weather like?</utterance>
+            <contextVariable>
+                <variableName>myVariable</variableName>
+                <variableValue>myValue</variableValue>
+            </contextVariable>
           </inputs>
           <expectation>
             <name>topic_sequence_match</name>
@@ -239,6 +261,10 @@ testCases:
         subjectVersion: 1,
         testCases: [
           {
+            contextVariable: {
+              variableName: 'myVariable',
+              variableValue: 'myValue',
+            },
             utterance: "What's the weather like?",
             expectedTopic: 'Weather',
             expectedActions: ['GetLocation', 'GetWeather'],
@@ -262,6 +288,14 @@ testCases:
         <testCase>
           <inputs>
             <utterance>What's the weather like?</utterance>
+             <contextVariable>
+                <variableName>myVariable</variableName>
+                <variableValue>myValue</variableValue>
+            </contextVariable>
+            <contextVariable>
+                <variableName>myVariable2</variableName>
+                <variableValue>myValue2</variableValue>
+            </contextVariable>
           </inputs>
           <expectation>
             <name>topic_assertion</name>
@@ -300,6 +334,16 @@ testCases:
         testCases: [
           {
             utterance: "What's the weather like?",
+            contextVariable: [
+              {
+                variableName: 'myVariable',
+                variableValue: 'myValue',
+              },
+              {
+                variableName: 'myVariable2',
+                variableValue: 'myValue2',
+              },
+            ],
             expectedTopic: 'Weather',
             expectedActions: ['GetLocation', 'GetWeather'],
             expectedOutcome: 'Sunny with a high of 75F',
@@ -341,6 +385,7 @@ testCases:
         testCases: [
           {
             utterance: "What's the weather like?",
+            contextVariable: undefined,
             expectedTopic: 'Weather',
             expectedActions: [],
             metrics: [],
@@ -361,6 +406,10 @@ testCases:
         <testCase>
           <inputs>
             <utterance>What's the weather like?</utterance>
+            <contextVariable>
+              <variableName>myVariable</variableName>
+              <variableValue>myValue</variableValue>
+            </contextVariable>
           </inputs>
           <expectation>
             <name>action_sequence_match</name>
@@ -369,6 +418,10 @@ testCases:
         </testCase>
         <testCase>
           <inputs>
+             <contextVariable>
+                <variableName>myVariable</variableName>
+                <variableValue>myValue</variableValue>
+            </contextVariable>
             <utterance>Will it rain tomorrow?</utterance>
           </inputs>
           <expectation>

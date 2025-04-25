@@ -285,6 +285,7 @@ const convertToSpec = (data: AiEvaluationDefinition): TestSpec => ({
     const expectations = ensureArray(tc.expectation);
     return {
       utterance: tc.inputs.utterance,
+      contextVariable: tc.inputs.contextVariable,
       // TODO: remove old names once removed in 258 (topic_sequence_match, action_sequence_match, bot_response_rating)
       expectedTopic: expectations.find((e) => e.name === 'topic_sequence_match' || e.name === 'topic_assertion')
         ?.expectedValue,
@@ -325,6 +326,7 @@ const convertToMetadata = (spec: TestSpec): AiEvaluationDefinition => ({
     ],
     inputs: {
       utterance: tc.utterance,
+      contextVariable: tc.contextVariable,
     },
     number: spec.testCases.indexOf(tc) + 1,
   })),

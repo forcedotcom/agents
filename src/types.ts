@@ -297,6 +297,7 @@ export type TestCase = {
   expectedOutcome: string | undefined;
   expectedTopic: string | undefined;
   metrics?: Array<(typeof metric)[number]>;
+  contextVariable?: Array<{ variableName: string; variableValue: string }>;
 };
 
 export type TestSpec = {
@@ -320,6 +321,7 @@ export type AiEvaluationDefinition = {
       expectedValue?: string;
     }>;
     inputs: {
+      contextVariable?: Array<{ variableName: string; variableValue: string }>;
       utterance: string;
     };
   }>;
