@@ -25,7 +25,7 @@
     "ts-morph": "^24.0.0",
     "ts-node": "^10.9.2",
     "ts-patch": "^3.3.0",
-    "typedoc": "^0.28.2",
+    "typedoc": "^0.28.3",
     "typescript": "^5.8.3"
   },
   "engines": {
