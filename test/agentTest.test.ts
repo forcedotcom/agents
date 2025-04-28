@@ -55,14 +55,14 @@ describe('AgentTest', () => {
             expectedOutcome: 'contacts available name available with Acme are listed',
             expectedTopic: 'GeneralCRM',
             metrics: ['coherence', 'output_latency_milliseconds'],
-            contextVariable: [
+            contextVariables: [
               {
-                variableName: 'myVariable',
-                variableValue: 'myValue',
+                name: 'myVariable',
+                value: 'myValue',
               },
               {
-                variableName: 'myVariable2',
-                variableValue: 'myValue2',
+                name: 'myVariable2',
+                value: 'myValue2',
               },
             ],
           },
@@ -95,11 +95,11 @@ testCases:
     metrics:
       - coherence
       - output_latency_milliseconds
-    contextVariable:
-      - variableName: myVariable
-        variableValue: myValue
-      - variableName: myVariable2
-        variableValue: myValue2
+    contextVariables:
+      - name: myVariable
+        value: myValue
+      - name: myVariable2
+        value: myValue2
   - utterance: List contact emails associated with Acme account
     expectedActions:
       - IdentifyRecordByName
@@ -127,7 +127,7 @@ testCases:
             expectedActions: ['IdentifyRecordByName', 'QueryRecords'],
             expectedOutcome: 'contacts available name available with Acme are listed',
             expectedTopic: 'GeneralCRM',
-            contextVariable: [],
+            contextVariables: [],
             metrics: [],
           },
         ],
@@ -147,7 +147,7 @@ testCases:
       - QueryRecords
     expectedOutcome: contacts available name available with Acme are listed
     expectedTopic: GeneralCRM
-    contextVariable: []
+    contextVariables: []
     metrics: []
 `,
       ]);
@@ -167,7 +167,7 @@ testCases:
             expectedOutcome: 'contacts available name available with Acme are listed',
             expectedTopic: 'GeneralCRM',
             metrics: undefined,
-            contextVariable: undefined,
+            contextVariables: undefined,
           },
         ],
       };
@@ -224,8 +224,8 @@ testCases:
           <inputs>
             <utterance>What's the weather like?</utterance>
             <contextVariable>
-                <variableName>myVariable</variableName>
-                <variableValue>myValue</variableValue>
+                <name>myVariable</name>
+                <value>myValue</value>
             </contextVariable>
           </inputs>
           <expectation>
@@ -262,8 +262,8 @@ testCases:
         testCases: [
           {
             contextVariable: {
-              variableName: 'myVariable',
-              variableValue: 'myValue',
+              name: 'myVariable',
+              value: 'myValue',
             },
             utterance: "What's the weather like?",
             expectedTopic: 'Weather',
@@ -289,12 +289,12 @@ testCases:
           <inputs>
             <utterance>What's the weather like?</utterance>
              <contextVariable>
-                <variableName>myVariable</variableName>
-                <variableValue>myValue</variableValue>
+                <name>myVariable</name>
+                <value>myValue</value>
             </contextVariable>
             <contextVariable>
-                <variableName>myVariable2</variableName>
-                <variableValue>myValue2</variableValue>
+                <name>myVariable2</name>
+                <value>myValue2</value>
             </contextVariable>
           </inputs>
           <expectation>
@@ -336,12 +336,12 @@ testCases:
             utterance: "What's the weather like?",
             contextVariable: [
               {
-                variableName: 'myVariable',
-                variableValue: 'myValue',
+                name: 'myVariable',
+                value: 'myValue',
               },
               {
-                variableName: 'myVariable2',
-                variableValue: 'myValue2',
+                name: 'myVariable2',
+                value: 'myValue2',
               },
             ],
             expectedTopic: 'Weather',
@@ -407,8 +407,8 @@ testCases:
           <inputs>
             <utterance>What's the weather like?</utterance>
             <contextVariable>
-              <variableName>myVariable</variableName>
-              <variableValue>myValue</variableValue>
+              <name>myVariable</name>
+              <value>myValue</value>
             </contextVariable>
           </inputs>
           <expectation>
@@ -419,8 +419,8 @@ testCases:
         <testCase>
           <inputs>
              <contextVariable>
-                <variableName>myVariable</variableName>
-                <variableValue>myValue</variableValue>
+                <name>myVariable</name>
+                <value>myValue</value>
             </contextVariable>
             <utterance>Will it rain tomorrow?</utterance>
           </inputs>

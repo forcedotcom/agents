@@ -326,7 +326,7 @@ const convertToMetadata = (spec: TestSpec): AiEvaluationDefinition => ({
     ],
     inputs: {
       utterance: tc.utterance,
-      contextVariable: tc.contextVariable,
+      contextVariable: tc.contextVariables?.map((cv) => ({ variableName: cv.name, variableValue: cv.value })),
     },
     number: spec.testCases.indexOf(tc) + 1,
   })),

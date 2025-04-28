@@ -297,9 +297,10 @@ export type TestCase = {
   expectedOutcome: string | undefined;
   expectedTopic: string | undefined;
   metrics?: Array<(typeof metric)[number]>;
-  contextVariable?: Array<{ variableName: string; variableValue: string }>;
+  contextVariables?: Array<{ name: string; value: string }>;
 };
 
+// yaml representation
 export type TestSpec = {
   name: string;
   description?: string;
@@ -309,6 +310,7 @@ export type TestSpec = {
   testCases: TestCase[];
 };
 
+// metadata xml
 export type AiEvaluationDefinition = {
   description?: string;
   name: string;
