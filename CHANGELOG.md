@@ -1,3 +1,12 @@
+## [0.14.8](https://github.com/forcedotcom/agents/compare/0.14.7...0.14.8) (2025-04-28)
+
+
+### Bug Fixes
+
+* create expected actions with ' instead of " ([a11a8d5](https://github.com/forcedotcom/agents/commit/a11a8d5288186e51a9674ecdfd8bf41693bed0e7))
+
+
+
 ## [0.14.7](https://github.com/forcedotcom/agents/compare/0.14.6...0.14.7) (2025-04-26)
 
 
