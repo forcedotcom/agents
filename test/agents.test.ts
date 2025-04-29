@@ -9,8 +9,7 @@ import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection, SfProject } from '@salesforce/core';
 import { ComponentSetBuilder, ComponentSet, MetadataApiRetrieve } from '@salesforce/source-deploy-retrieve';
-import { Agent, generateAgentApiName } from '../src/agent';
-import { type AgentCreateConfig } from '../src/types';
+import { Agent, type AgentCreateConfig } from '../src';
 
 describe('Agents', () => {
   const $$ = new TestContext();
@@ -114,26 +113,5 @@ describe('Agents', () => {
     expect(response).to.have.property('isSuccess', true);
     expect(response).to.not.have.property('agentId');
     expect(response).to.have.property('agentDefinition');
-  });
-});
-
-describe('generateAgentApiName', () => {
-  it('should create valid agent API name with spaces', () => {
-    expect(generateAgentApiName('My Test Agent')).to.equal('My_Test_Agent');
-  });
-  it('should create valid agent API name with no spaces', () => {
-    expect(generateAgentApiName('MyTestAgent')).to.equal('MyTestAgent');
-  });
-  it('should create valid agent API name with beginning underscore', () => {
-    expect(generateAgentApiName('_My Test Agent')).to.equal('My_Test_Agent');
-  });
-  it('should create valid agent API name with multiple beginning underscores', () => {
-    expect(generateAgentApiName('___My Test Agent')).to.equal('My_Test_Agent');
-  });
-  it('should create valid agent API name with special characters', () => {
-    expect(generateAgentApiName('My ()*&^$% Test @!""; Agent')).to.equal('My_Test_Agent');
-  });
-  it('should create valid agent API name with weird spacing', () => {
-    expect(generateAgentApiName(' My   Test Agent  ')).to.equal('My_Test_Agent');
   });
 });

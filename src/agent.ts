@@ -8,7 +8,7 @@
 import { inspect } from 'node:util';
 import * as path from 'node:path';
 import { stat, readdir } from 'node:fs/promises';
-import { Connection, Lifecycle, Logger, Messages, SfError, SfProject } from '@salesforce/core';
+import { Connection, Lifecycle, Logger, Messages, SfError, SfProject, generateApiName } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { Duration } from '@salesforce/kit';
 import {
@@ -138,7 +138,7 @@ export class Agent {
     getLogger().debug(`Creating agent using config: ${inspect(config)} in project: ${project.getPath()}`);
     await Lifecycle.getInstance().emit(AgentCreateLifecycleStages.Creating, {});
     if (!config.agentSettings.agentApiName) {
-      config.agentSettings.agentApiName = generateAgentApiName(config.agentSettings?.agentName);
+      config.agentSettings.agentApiName = generateApiName(config.agentSettings?.agentName);
     }
     const response = await maybeMock.request<AgentCreateResponse>('POST', url, config);
 
@@ -260,25 +260,6 @@ const verifyAgentSpecConfig = (config: AgentJobSpecCreateConfig): void => {
   if (!agentType || !role || !companyName || !companyDescription) {
     throw messages.createError('invalidAgentSpecConfig');
   }
-};
-
-/**
- * Generate an API name from an agent name. Matches what the UI does.
- */
-export const generateAgentApiName = (agentName: string): string => {
-  const maxLength = 255;
-  let apiName = agentName;
-  apiName = apiName.replace(/[\W_]+/g, '_');
-  if (apiName.charAt(0).match(/_/i)) {
-    apiName = apiName.slice(1);
-  }
-  apiName = apiName
-    .replace(/(^\d+)/, 'X$1')
-    .slice(0, maxLength)
-    .replace(/_$/, '');
-  const genLogger = Logger.childFromRoot('Agent-GenApiName');
-  genLogger.debug(`Generated Agent API name: [${apiName}] from Agent name: [${agentName}]`);
-  return apiName;
 };
 
 // Decodes all HTML entities in ai-assist API responses.
