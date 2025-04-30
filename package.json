@@ -11,7 +11,7 @@
     "url": "https://github.com/forcedotcom/agents.git"
   },
   "dependencies": {
-    "@salesforce/core": "^8.10.0",
+    "@salesforce/core": "^8.10.1",
     "@salesforce/kit": "^3.2.3",
     "@salesforce/source-deploy-retrieve": "^12.19.3",
     "fast-xml-parser": "^4.5.3",
