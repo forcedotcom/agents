@@ -12,7 +12,13 @@ import { Duration, ensureArray } from '@salesforce/kit';
 import { ComponentSetBuilder, DeployResult, RequestStatus } from '@salesforce/source-deploy-retrieve';
 import { parse, stringify } from 'yaml';
 import { XMLBuilder, XMLParser } from 'fast-xml-parser';
-import type { AvailableDefinition, AgentTestConfig, AiEvaluationDefinition, TestSpec } from './types.js';
+import {
+  AvailableDefinition,
+  AgentTestConfig,
+  AiEvaluationDefinition,
+  TestSpec,
+  MetadataExpectation,
+} from './types.js';
 import { metric } from './utils';
 
 Messages.importMessagesDirectory(__dirname);
@@ -286,15 +292,27 @@ const convertToSpec = (data: AiEvaluationDefinition): TestSpec => ({
     return {
       utterance: tc.inputs.utterance,
       contextVariable: tc.inputs.contextVariable,
-      customEvaluation: expectations.filter((e) => 'parameter' in e),
+      customEvaluations: expectations
+        .filter((e) => 'parameter' in e)
+        .map((ce) => ({ name: ce.name, label: ce.label, parameters: ce.parameter })),
       // TODO: remove old names once removed in 258 (topic_sequence_match, action_sequence_match, bot_response_rating)
-      expectedTopic: expectations.find((e) => e.name === 'topic_sequence_match' || e.name === 'topic_assertion')
-        ?.expectedValue,
+      expectedTopic: (
+        expectations.find(
+          (e) => e.name === 'topic_sequence_match' || e.name === 'topic_assertion'
+        ) as MetadataExpectation
+      )?.expectedValue,
       expectedActions: transformStringToArray(
-        expectations.find((e) => e.name === 'action_sequence_match' || e.name === 'actions_assertion')?.expectedValue
+        (
+          expectations.find(
+            (e) => e.name === 'action_sequence_match' || e.name === 'actions_assertion'
+          ) as MetadataExpectation
+        )?.expectedValue
       ),
-      expectedOutcome: expectations.find((e) => e.name === 'bot_response_rating' || e.name === 'output_validation')
-        ?.expectedValue,
+      expectedOutcome: (
+        expectations.find(
+          (e) => e.name === 'bot_response_rating' || e.name === 'output_validation'
+        ) as MetadataExpectation
+      )?.expectedValue,
       metrics: expectations
         .filter((e) => metric.includes(e.name as (typeof metric)[number]))
         .map((e) => e.name as (typeof metric)[number]),
@@ -311,6 +329,11 @@ const convertToMetadata = (spec: TestSpec): AiEvaluationDefinition => ({
   ...(spec.subjectVersion && { subjectVersion: spec.subjectVersion }),
   testCase: spec.testCases.map((tc) => ({
     expectation: [
+      ...ensureArray(tc.customEvaluations).map((ce) => ({
+        name: ce.name,
+        label: ce.label,
+        parameter: ce.parameters,
+      })),
       {
         expectedValue: tc.expectedTopic as string,
         name: 'topic_sequence_match',

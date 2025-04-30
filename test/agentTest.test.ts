@@ -51,7 +51,7 @@ describe('AgentTest', () => {
         testCases: [
           {
             utterance: 'List contact names associated with Acme account',
-            customEvaluation: [
+            customEvaluations: [
               {
                 name: 'has_the_rhythm',
                 label: 'has the real rhythm',
@@ -103,7 +103,7 @@ subjectType: AGENT
 subjectName: MyAgent
 testCases:
   - utterance: List contact names associated with Acme account
-    customEvaluation:
+    customEvaluations:
       - name: has_the_rhythm
         label: has the real rhythm
         parameters:
@@ -197,7 +197,7 @@ testCases:
             expectedTopic: 'GeneralCRM',
             metrics: undefined,
             contextVariables: undefined,
-            customEvaluation: undefined,
+            customEvaluations: undefined,
           },
         ],
       };
@@ -316,11 +316,11 @@ testCases:
             },
             utterance: "What's the weather like?",
             expectedTopic: 'Weather',
-            customEvaluation: [
+            customEvaluations: [
               {
                 label: 'my Custom Comparison',
                 name: 'string_comparisson',
-                parameter: [
+                parameters: [
                   {
                     isReference: false,
                     name: 'operator',
@@ -438,11 +438,11 @@ testCases:
             ],
             expectedTopic: 'Weather',
             expectedActions: ['GetLocation', 'GetWeather'],
-            customEvaluation: [
+            customEvaluations: [
               {
                 label: 'my Custom Comparison',
                 name: 'string_comparisson',
-                parameter: [
+                parameters: [
                   {
                     isReference: false,
                     name: 'operator',
@@ -502,7 +502,7 @@ testCases:
           {
             utterance: "What's the weather like?",
             contextVariable: undefined,
-            customEvaluation: [],
+            customEvaluations: [],
             expectedTopic: 'Weather',
             expectedActions: [],
             metrics: [],

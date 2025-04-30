@@ -291,7 +291,7 @@ export type AgentTestResultsResponse = {
 
 export type AvailableDefinition = Omit<FileProperties, 'manageableState' | 'namespacePrefix'>;
 
-// yaml type
+// yaml type representation
 export type TestCase = {
   utterance: string;
   expectedActions: string[] | undefined;
@@ -299,10 +299,14 @@ export type TestCase = {
   expectedTopic: string | undefined;
   metrics?: Array<(typeof metric)[number]>;
   contextVariables?: Array<{ name: string; value: string }>;
-  customEvaluation?: Array<{
-    label?: string;
+  customEvaluations?: Array<{
+    label: string;
     name: string;
-    parameters?: Array<{ name: string; value: string; isReference: boolean }>;
+    parameters: Array<
+      | { name: 'operator'; value: string; isReference: false }
+      | { name: 'actual'; value: string; isReference: true }
+      | { name: 'expected'; value: string; isReference: boolean }
+    >;
   }>;
 };
 
@@ -316,6 +320,32 @@ export type TestSpec = {
   testCases: TestCase[];
 };
 
+// Metadata XML representation of what's required for a metric (just name)
+export type MetadataMetric = { name: string };
+// Metadata XML representation of evaluation (name / expectedValue)
+export type MetadataExpectation = {
+  // topic/action/outcome matching
+  name:
+    | 'topic_sequence_match'
+    | 'topic_assertion'
+    | 'action_sequence_match'
+    | 'actions_assertion'
+    | 'bot_response_rating'
+    | 'output_validation';
+  expectedValue: string;
+};
+
+export type MetadataCustomEvaluation = {
+  // custom evaluators
+  name: string;
+  label: string;
+  parameter: Array<
+    | { name: 'operator'; value: string; isReference: false }
+    | { name: 'actual'; value: string; isReference: true }
+    | { name: 'expected'; value: string; isReference: boolean }
+  >;
+};
+
 // metadata xml
 export type AiEvaluationDefinition = {
   description?: string;
@@ -324,58 +354,13 @@ export type AiEvaluationDefinition = {
   subjectName: string;
   subjectVersion?: string;
   testCase: Array<{
-    expectation: Array<{
-      name: string;
-      expectedValue?: string;
-      label?: string;
-      parameter?: Array<{ name: string; value: string; isReference: boolean }>;
-    }>;
+    expectation: Array<MetadataMetric | MetadataExpectation | MetadataCustomEvaluation>;
     inputs: {
       contextVariable?: Array<{ variableName: string; variableValue: string }>;
       utterance: string;
     };
   }>;
 };
-
-// export type AiEvaluationDefinition = {
-//   description?: string;
-//   name: string;
-//   subjectType: 'AGENT';
-//   subjectName: string;
-//   subjectVersion?: string;
-//   testCase: Array<{
-//     expectation: Array<
-//       | {
-//           // OOTB metrics
-//           name: string;
-//         }
-//       | {
-//           // topic/action/outcome matching
-//           name:
-//             | 'topic_sequence_match'
-//             | 'topic_assertion'
-//             | 'action_sequence_match'
-//             | 'actions_assertion'
-//             | 'bot_response_rating'
-//             | 'output_validation';
-//           expectedValue: string;
-//         }
-//       | {
-//           // custom evaluators
-//           name: string;
-//           label: string;
-//           parameter: Array<{ name: string; value: string; isReference: boolean }>;
-//           //        | { name: 'operator'; value: string; isReference: false }
-//           //         | { name: 'actual'; value: string; isReference: true }
-//           //         | { name: 'expected'; value: string; isReference: boolean }
-//         }
-//     >;
-//     inputs: {
-//       contextVariable?: Array<{ variableName: string; variableValue: string }>;
-//       utterance: string;
-//     };
-//   }>;
-// };
 
 // ====================================================
 //               Agent Preview Types
