@@ -286,6 +286,7 @@ const convertToSpec = (data: AiEvaluationDefinition): TestSpec => ({
     return {
       utterance: tc.inputs.utterance,
       contextVariable: tc.inputs.contextVariable,
+      customEvaluation: expectations.filter((e) => 'parameter' in e),
       // TODO: remove old names once removed in 258 (topic_sequence_match, action_sequence_match, bot_response_rating)
       expectedTopic: expectations.find((e) => e.name === 'topic_sequence_match' || e.name === 'topic_assertion')
         ?.expectedValue,

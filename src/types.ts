@@ -291,6 +291,7 @@ export type AgentTestResultsResponse = {
 
 export type AvailableDefinition = Omit<FileProperties, 'manageableState' | 'namespacePrefix'>;
 
+// yaml type
 export type TestCase = {
   utterance: string;
   expectedActions: string[] | undefined;
@@ -298,6 +299,11 @@ export type TestCase = {
   expectedTopic: string | undefined;
   metrics?: Array<(typeof metric)[number]>;
   contextVariables?: Array<{ name: string; value: string }>;
+  customEvaluation?: Array<{
+    label?: string;
+    name: string;
+    parameters?: Array<{ name: string; value: string; isReference: boolean }>;
+  }>;
 };
 
 // yaml representation
@@ -321,6 +327,8 @@ export type AiEvaluationDefinition = {
     expectation: Array<{
       name: string;
       expectedValue?: string;
+      label?: string;
+      parameter?: Array<{ name: string; value: string; isReference: boolean }>;
     }>;
     inputs: {
       contextVariable?: Array<{ variableName: string; variableValue: string }>;
@@ -328,6 +336,46 @@ export type AiEvaluationDefinition = {
     };
   }>;
 };
+
+// export type AiEvaluationDefinition = {
+//   description?: string;
+//   name: string;
+//   subjectType: 'AGENT';
+//   subjectName: string;
+//   subjectVersion?: string;
+//   testCase: Array<{
+//     expectation: Array<
+//       | {
+//           // OOTB metrics
+//           name: string;
+//         }
+//       | {
+//           // topic/action/outcome matching
+//           name:
+//             | 'topic_sequence_match'
+//             | 'topic_assertion'
+//             | 'action_sequence_match'
+//             | 'actions_assertion'
+//             | 'bot_response_rating'
+//             | 'output_validation';
+//           expectedValue: string;
+//         }
+//       | {
+//           // custom evaluators
+//           name: string;
+//           label: string;
+//           parameter: Array<{ name: string; value: string; isReference: boolean }>;
+//           //        | { name: 'operator'; value: string; isReference: false }
+//           //         | { name: 'actual'; value: string; isReference: true }
+//           //         | { name: 'expected'; value: string; isReference: boolean }
+//         }
+//     >;
+//     inputs: {
+//       contextVariable?: Array<{ variableName: string; variableValue: string }>;
+//       utterance: string;
+//     };
+//   }>;
+// };
 
 // ====================================================
 //               Agent Preview Types

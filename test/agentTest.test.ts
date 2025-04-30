@@ -51,6 +51,22 @@ describe('AgentTest', () => {
         testCases: [
           {
             utterance: 'List contact names associated with Acme account',
+            customEvaluation: [
+              {
+                name: 'has_the_rhythm',
+                label: 'has the real rhythm',
+                parameters: [
+                  { name: 'operator', value: 'equals', isReference: false },
+                  { name: 'expected', value: 'Jerry', isReference: false },
+                  {
+                    name: 'actual',
+                    isReference: true,
+                    value:
+                      "$.generatedData.invokedActions[*][?(@.function.name == 'SvcCopilotTmpl__SendEmailVerificationCode')].function.input.customerToVerify",
+                  },
+                ],
+              },
+            ],
             expectedActions: ['IdentifyRecordByName', 'QueryRecords'],
             expectedOutcome: 'contacts available name available with Acme are listed',
             expectedTopic: 'GeneralCRM',
@@ -79,14 +95,27 @@ describe('AgentTest', () => {
 
       await agentTest.writeTestSpec('test-spec.yaml');
 
-      expect(writeFileStub.firstCall.args).to.deep.equal([
-        'test-spec.yaml',
+      expect(writeFileStub.firstCall.args[0]).to.equal('test-spec.yaml');
+      expect(writeFileStub.firstCall.args[1]).to.equal(
         `name: Test
 description: Test
 subjectType: AGENT
 subjectName: MyAgent
 testCases:
   - utterance: List contact names associated with Acme account
+    customEvaluation:
+      - name: has_the_rhythm
+        label: has the real rhythm
+        parameters:
+          - name: operator
+            value: equals
+            isReference: false
+          - name: expected
+            value: Jerry
+            isReference: false
+          - name: actual
+            isReference: true
+            value: $.generatedData.invokedActions[*][?(@.function.name == 'SvcCopilotTmpl__SendEmailVerificationCode')].function.input.customerToVerify
     expectedActions:
       - IdentifyRecordByName
       - QueryRecords
@@ -110,8 +139,8 @@ testCases:
       - coherence
       - factuality
       - instruction_following
-`,
-      ]);
+`
+      );
     });
 
     it('should remove empty strings', async () => {
@@ -168,6 +197,7 @@ testCases:
             expectedTopic: 'GeneralCRM',
             metrics: undefined,
             contextVariables: undefined,
+            customEvaluation: undefined,
           },
         ],
       };
@@ -229,6 +259,25 @@ testCases:
             </contextVariable>
           </inputs>
           <expectation>
+            <name>string_comparisson</name>
+            <label>my Custom Comparison</label>
+            <parameter>
+                <name>operator</name>
+                <value>equals</value>
+                <isReference>false</isReference>
+            </parameter>
+            <parameter>
+                <name>actual</name>
+                <value>$.generatedData.invokedActions[*][?(@.function.name == 'SvcCopilotTmpl__SendEmailVerificationCode')].function.input.customerToVerify</value>
+                <isReference>true</isReference>
+            </parameter>
+            <parameter>
+                <name>expected</name>
+                <value>Jerry</value>
+                <isReference>false</isReference>
+            </parameter>
+        </expectation>
+          <expectation>
             <name>topic_sequence_match</name>
             <expectedValue>Weather</expectedValue>
           </expectation>
@@ -267,6 +316,30 @@ testCases:
             },
             utterance: "What's the weather like?",
             expectedTopic: 'Weather',
+            customEvaluation: [
+              {
+                label: 'my Custom Comparison',
+                name: 'string_comparisson',
+                parameter: [
+                  {
+                    isReference: false,
+                    name: 'operator',
+                    value: 'equals',
+                  },
+                  {
+                    isReference: true,
+                    name: 'actual',
+                    value:
+                      "$.generatedData.invokedActions[*][?(@.function.name == 'SvcCopilotTmpl__SendEmailVerificationCode')].function.input.customerToVerify",
+                  },
+                  {
+                    isReference: false,
+                    name: 'expected',
+                    value: 'Jerry',
+                  },
+                ],
+              },
+            ],
             expectedActions: ['GetLocation', 'GetWeather'],
             expectedOutcome: 'Sunny with a high of 75F',
             metrics: ['completeness', 'coherence'],
@@ -300,6 +373,25 @@ testCases:
           <expectation>
             <name>topic_assertion</name>
             <expectedValue>Weather</expectedValue>
+          </expectation>
+          <expectation>
+            <name>string_comparisson</name>
+            <label>my Custom Comparison</label>
+            <parameter>
+                <name>operator</name>
+                <value>equals</value>
+                <isReference>false</isReference>
+            </parameter>
+            <parameter>
+                <name>actual</name>
+                <value>$.generatedData.invokedActions[*][?(@.function.name == 'SvcCopilotTmpl__SendEmailVerificationCode')].function.input.customerToVerify</value>
+                <isReference>true</isReference>
+            </parameter>
+            <parameter>
+                <name>expected</name>
+                <value>Jerry</value>
+                <isReference>false</isReference>
+            </parameter>
           </expectation>
           <expectation>
             <name>actions_assertion</name>
@@ -346,6 +438,30 @@ testCases:
             ],
             expectedTopic: 'Weather',
             expectedActions: ['GetLocation', 'GetWeather'],
+            customEvaluation: [
+              {
+                label: 'my Custom Comparison',
+                name: 'string_comparisson',
+                parameter: [
+                  {
+                    isReference: false,
+                    name: 'operator',
+                    value: 'equals',
+                  },
+                  {
+                    isReference: true,
+                    name: 'actual',
+                    value:
+                      "$.generatedData.invokedActions[*][?(@.function.name == 'SvcCopilotTmpl__SendEmailVerificationCode')].function.input.customerToVerify",
+                  },
+                  {
+                    isReference: false,
+                    name: 'expected',
+                    value: 'Jerry',
+                  },
+                ],
+              },
+            ],
             expectedOutcome: 'Sunny with a high of 75F',
             metrics: ['completeness', 'conciseness', 'output_latency_milliseconds'],
           },
@@ -386,6 +502,7 @@ testCases:
           {
             utterance: "What's the weather like?",
             contextVariable: undefined,
+            customEvaluation: [],
             expectedTopic: 'Weather',
             expectedActions: [],
             metrics: [],
