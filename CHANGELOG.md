@@ -1,3 +1,13 @@
+## [0.14.9](https://github.com/forcedotcom/agents/compare/0.14.8...0.14.9) (2025-04-30)
+
+
+### Bug Fixes
+
+* use generateApiName from core ([09af5c8](https://github.com/forcedotcom/agents/commit/09af5c82d55d711b63bfdd69c2a8d4ee7f7623cd))
+* use generateApiName from core ([6f2658e](https://github.com/forcedotcom/agents/commit/6f2658e7368a5f9bbb1a162a14b70e70cc82771d))
+
+
+
 ## [0.14.8](https://github.com/forcedotcom/agents/compare/0.14.7...0.14.8) (2025-04-28)
 
 
