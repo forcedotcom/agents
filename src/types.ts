@@ -291,6 +291,7 @@ export type AgentTestResultsResponse = {
 
 export type AvailableDefinition = Omit<FileProperties, 'manageableState' | 'namespacePrefix'>;
 
+// yaml type representation
 export type TestCase = {
   utterance: string;
   expectedActions: string[] | undefined;
@@ -298,6 +299,15 @@ export type TestCase = {
   expectedTopic: string | undefined;
   metrics?: Array<(typeof metric)[number]>;
   contextVariables?: Array<{ name: string; value: string }>;
+  customEvaluations?: Array<{
+    label: string;
+    name: string;
+    parameters: Array<
+      | { name: 'operator'; value: string; isReference: false }
+      | { name: 'actual'; value: string; isReference: true }
+      | { name: 'expected'; value: string; isReference: boolean }
+    >;
+  }>;
 };
 
 // yaml representation
@@ -310,6 +320,32 @@ export type TestSpec = {
   testCases: TestCase[];
 };
 
+// Metadata XML representation of what's required for a metric (just name)
+export type MetadataMetric = { name: string };
+// Metadata XML representation of evaluation (name / expectedValue)
+export type MetadataExpectation = {
+  // topic/action/outcome matching
+  name:
+    | 'topic_sequence_match'
+    | 'topic_assertion'
+    | 'action_sequence_match'
+    | 'actions_assertion'
+    | 'bot_response_rating'
+    | 'output_validation';
+  expectedValue: string;
+};
+
+export type MetadataCustomEvaluation = {
+  // custom evaluators
+  name: string;
+  label: string;
+  parameter: Array<
+    | { name: 'operator'; value: string; isReference: false }
+    | { name: 'actual'; value: string; isReference: true }
+    | { name: 'expected'; value: string; isReference: boolean }
+  >;
+};
+
 // metadata xml
 export type AiEvaluationDefinition = {
   description?: string;
@@ -318,10 +354,7 @@ export type AiEvaluationDefinition = {
   subjectName: string;
   subjectVersion?: string;
   testCase: Array<{
-    expectation: Array<{
-      name: string;
-      expectedValue?: string;
-    }>;
+    expectation: Array<MetadataMetric | MetadataExpectation | MetadataCustomEvaluation>;
     inputs: {
       contextVariable?: Array<{ variableName: string; variableValue: string }>;
       utterance: string;
