@@ -27,9 +27,9 @@ export {
   type AgentTestStatusResponse,
   type TestCaseResult,
   type TestStatus,
-} from './types.js';
+} from './types';
 export { metric } from './utils';
-export { Agent, AgentCreateLifecycleStages, generateAgentApiName } from './agent';
+export { Agent, AgentCreateLifecycleStages } from './agent';
 export { AgentTester } from './agentTester';
 export { AgentTest, AgentTestCreateLifecycleStages } from './agentTest';
 export { convertTestResultsToFormat, humanFriendlyName } from './agentTestResults';

@@ -339,7 +339,7 @@ const convertToMetadata = (spec: TestSpec): AiEvaluationDefinition => ({
         name: 'topic_sequence_match',
       },
       {
-        expectedValue: `[${(tc.expectedActions ?? []).map((v) => `"${v}"`).join(',')}]`,
+        expectedValue: `[${(tc.expectedActions ?? []).map((v) => `'${v}'`).join(',')}]`,
         name: 'action_sequence_match',
       },
       {

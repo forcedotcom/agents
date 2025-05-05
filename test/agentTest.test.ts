@@ -635,7 +635,7 @@ testCases:
             <name>topic_sequence_match</name>
         </expectation>
         <expectation>
-            <expectedValue>[&quot;IdentifyRecordByName&quot;,&quot;QueryRecords&quot;]</expectedValue>
+            <expectedValue>[&apos;IdentifyRecordByName&apos;,&apos;QueryRecords&apos;]</expectedValue>
             <name>action_sequence_match</name>
         </expectation>
         <expectation>
@@ -653,7 +653,7 @@ testCases:
             <name>topic_sequence_match</name>
         </expectation>
         <expectation>
-            <expectedValue>[&quot;IdentifyRecordByName&quot;,&quot;QueryRecords&quot;]</expectedValue>
+            <expectedValue>[&apos;IdentifyRecordByName&apos;,&apos;QueryRecords&apos;]</expectedValue>
             <name>action_sequence_match</name>
         </expectation>
         <expectation>
