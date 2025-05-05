@@ -147,7 +147,11 @@ export class AgentTest {
     const result = await deploy.pollStatus({ timeout: Duration.minutes(10_000), frequency: Duration.seconds(1) });
 
     if (!result.response.success) {
-      throw new SfError(result.response.errorMessage ?? `Unable to deploy ${result.response.id}`);
+      throw new SfError(
+        ensureArray(result.response.details.componentFailures)
+          .map((failure) => failure.problem)
+          .join()
+      );
     }
 
     return { path: definitionPath, contents: xml, deployResult: result };
