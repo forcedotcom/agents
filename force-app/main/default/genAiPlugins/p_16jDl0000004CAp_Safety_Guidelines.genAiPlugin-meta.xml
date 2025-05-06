@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<GenAiPlugin xmlns="http://soap.sforce.com/2006/04/metadata" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <canEscalate>false</canEscalate>
+    <description>Explain the safety protocols and guidelines for climbers at the gym.</description>
+    <developerName>p_16jDl0000004CAp_Safety_Guidelines</developerName>
+    <genAiFunctions>
+        <functionName>EmployeeCopilot__AnswerQuestionsWithKnowledge</functionName>
+    </genAiFunctions>
+    <genAiPluginInstructions>
+        <description>If the query is about safety guidelines, use EmployeeCopilot__AnswerQuestionsWithKnowledge.</description>
+        <developerName>instruction_0</developerName>
+        <language xsi:nil="true"/>
+        <masterLabel>instruction_0</masterLabel>
+    </genAiPluginInstructions>
+    <language>en_US</language>
+    <masterLabel>Safety Guidelines</masterLabel>
+    <pluginType>Topic</pluginType>
+    <scope>Your job is to only provide information on safety protocols and guidelines for climbers. You aren&apos;t able to enforce these guidelines or handle complaints.</scope>
+</GenAiPlugin>

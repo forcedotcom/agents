@@ -57,7 +57,7 @@
     "lint-fix": "yarn sf-lint --fix",
     "postcompile": "tsc -p test",
     "test": "wireit",
-    "test:nuts": "echo 'No tests to run'",
+    "test:nuts": "nyc mocha \"**/*.nut.ts\"  --slow 4500 --timeout 1200000 --parallel --retries 0 --jobs 10",
     "test:only": "wireit"
   },
   "publishConfig": {

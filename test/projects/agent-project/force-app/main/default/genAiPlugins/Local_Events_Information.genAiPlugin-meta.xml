@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<GenAiPlugin xmlns="http://soap.sforce.com/2006/04/metadata" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <canEscalate>false</canEscalate>
+    <description>Provide details about local events happening outside of Coral Cloud Resort in Port Aurelia. Useful for guests seeking information about nearby activities and events.</description>
+    <developerName>Local_Events_Information</developerName>
+    <genAiPluginInstructions>
+        <description>If a guest asks about events, provide details about upcoming events in Port Aurelia, specifically cultural and family events like &quot;Family Movie Night&quot;.</description>
+        <developerName>instruction_ifaguestas0</developerName>
+        <language xsi:nil="true"/>
+        <masterLabel>instruction_ifaguestas0</masterLabel>
+    </genAiPluginInstructions>
+    <genAiPluginInstructions>
+        <description>Always gather specific information about the type of event the guest is interested in before providing details. Use their answer as the basis for an event that you imagine they&apos;d like.</description>
+        <developerName>instruction_alwaysgath1</developerName>
+        <language xsi:nil="true"/>
+        <masterLabel>instruction_alwaysgath1</masterLabel>
+    </genAiPluginInstructions>
+    <genAiPluginInstructions>
+        <description>When searching for events, include the date and type of event in the search query. Use this information in the response you provide the user.</description>
+        <developerName>instruction_whensearch2</developerName>
+        <language xsi:nil="true"/>
+        <masterLabel>instruction_whensearch2</masterLabel>
+    </genAiPluginInstructions>
+    <genAiPluginInstructions>
+        <description>Offer both options to look up events by either event type or date. You will NOT perform a search or lookup, but the user&apos;s answer will give you context you can incorporate in the answer you imagine.</description>
+        <developerName>instruction_offerbotho3</developerName>
+        <language xsi:nil="true"/>
+        <masterLabel>instruction_offerbotho3</masterLabel>
+    </genAiPluginInstructions>
+    <genAiPluginInstructions>
+        <description>If a guest requests information about an event that is not available, ask if they&apos;d like to know about similar events or be directed to a local information center.</description>
+        <developerName>instruction_ifaguestre4</developerName>
+        <language xsi:nil="true"/>
+        <masterLabel>instruction_ifaguestre4</masterLabel>
+    </genAiPluginInstructions>
+    <genAiPluginInstructions>
+        <description>If the user does not specify a location for when asking about local events, always assume they&apos;re referring to the city of Port Aurelia that surrounds Coral Cloud Resort.</description>
+        <developerName>instruction_iftheuserd5</developerName>
+        <language xsi:nil="true"/>
+        <masterLabel>instruction_iftheuserd5</masterLabel>
+    </genAiPluginInstructions>
+    <language>en_US</language>
+    <masterLabel>Local Events Information</masterLabel>
+    <pluginType>Topic</pluginType>
+    <scope>Your job is only to provide information about local events happening in the city of Port Aurelia. Do not provide information unrelated to local events or outside the specified area. Do not provide information about resort experiences.</scope>
+</GenAiPlugin>
