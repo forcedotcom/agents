@@ -14,8 +14,9 @@ import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { sleep } from '@salesforce/kit';
 import { Agent, type AgentJobSpec, type AgentJobSpecCreateConfig } from '../../src/index';
 
-describe('agent NUTs', () => {
+/* eslint-disable no-console */
 
+describe('agent NUTs', () => {
   const agentName = 'The Campus Agent Test';
   let session: TestSession;
   let connection: Connection;
@@ -48,7 +49,7 @@ describe('agent NUTs', () => {
   });
 
   after(async () => {
-    // await session?.clean();
+    await session?.clean();
   });
 
   // skipping because the server API is not reliable enough to run in CI
@@ -62,14 +63,14 @@ describe('agent NUTs', () => {
     };
     try {
       agentSpec = await Agent.createSpec(connection, agentConfig);
-    } catch(err) {
+    } catch (err) {
       const errMsg = err instanceof Error ? err.message : 'err';
       console.log('error creating agent spec attempt 1. Waiting 10 seconds and trying again.', errMsg);
       // If the agent spec fails during creation, try again.
       await sleep(10_000);
       agentSpec = await Agent.createSpec(connection, agentConfig);
     }
-    
+
     expect(agentSpec).to.be.ok;
     expect(agentSpec.agentType).to.equal(agentConfig.agentType);
     expect(agentSpec.role).to.equal(agentConfig.role);
@@ -105,7 +106,7 @@ describe('agent NUTs', () => {
     expect(agentResponse.isSuccess).to.equal(true);
     expect(agentResponse.agentDefinition).to.be.ok;
     expect(agentResponse.agentId?.botId).to.be.ok;
-    agentResponse.agentDefinition.agentDescription
+    agentResponse.agentDefinition.agentDescription;
 
     // verify agent metadata files are retrieved to the project
     const sourceDir = join(session.project.dir, 'force-app', 'main', 'default');
@@ -115,14 +116,13 @@ describe('agent NUTs', () => {
   });
 
   describe('getBotMetadata()', () => {
-
     let botId: string;
     const botApiName = 'Local_Info_Agent';
-  
+
     before(async () => {
       // Query for the agent user profile
       const queryResult = await connection.singleRecordQuery<{ Id: string }>(
-        'SELECT Id FROM Profile WHERE Name=\'Einstein Agent User\''
+        "SELECT Id FROM Profile WHERE Name='Einstein Agent User'"
       );
       const profileId = queryResult.Id;
 
