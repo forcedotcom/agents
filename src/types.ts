@@ -356,7 +356,7 @@ export type AiEvaluationDefinition = {
   testCase: Array<{
     expectation: Array<MetadataMetric | MetadataExpectation | MetadataCustomEvaluation>;
     inputs: {
-      contextVariable?: Array<{ variableName: string; variableValue: string }>;
+      contextVariables?: Array<{ variableName: string; variableValue: string }>;
       utterance: string;
     };
   }>;

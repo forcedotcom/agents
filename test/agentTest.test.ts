@@ -253,10 +253,10 @@ testCases:
         <testCase>
           <inputs>
             <utterance>What's the weather like?</utterance>
-            <contextVariable>
-                <name>myVariable</name>
-                <value>myValue</value>
-            </contextVariable>
+            <contextVariables>
+                <variableName>myVariable</variableName>
+                <variableValue>myValue</variableValue>
+            </contextVariables>
           </inputs>
           <expectation>
             <name>string_comparisson</name>
@@ -310,10 +310,12 @@ testCases:
         subjectVersion: 1,
         testCases: [
           {
-            contextVariable: {
-              name: 'myVariable',
-              value: 'myValue',
-            },
+            contextVariables: [
+              {
+                name: 'myVariable',
+                value: 'myValue',
+              },
+            ],
             utterance: "What's the weather like?",
             expectedTopic: 'Weather',
             customEvaluations: [
@@ -361,14 +363,14 @@ testCases:
         <testCase>
           <inputs>
             <utterance>What's the weather like?</utterance>
-             <contextVariable>
-                <name>myVariable</name>
-                <value>myValue</value>
-            </contextVariable>
-            <contextVariable>
-                <name>myVariable2</name>
-                <value>myValue2</value>
-            </contextVariable>
+             <contextVariables>
+                <variableName>myVariable</variableName>
+                <variableValue>myValue</variableValue>
+            </contextVariables>
+            <contextVariables>
+                <variableName>myVariable2</variableName>
+                <variableValue>myValue2</variableValue>
+            </contextVariables>
           </inputs>
           <expectation>
             <name>topic_assertion</name>
@@ -426,7 +428,7 @@ testCases:
         testCases: [
           {
             utterance: "What's the weather like?",
-            contextVariable: [
+            contextVariables: [
               {
                 name: 'myVariable',
                 value: 'myValue',
@@ -501,7 +503,7 @@ testCases:
         testCases: [
           {
             utterance: "What's the weather like?",
-            contextVariable: undefined,
+            contextVariables: [],
             customEvaluations: [],
             expectedTopic: 'Weather',
             expectedActions: [],
@@ -523,10 +525,10 @@ testCases:
         <testCase>
           <inputs>
             <utterance>What's the weather like?</utterance>
-            <contextVariable>
+            <contextVariables>
               <name>myVariable</name>
               <value>myValue</value>
-            </contextVariable>
+            </contextVariables>
           </inputs>
           <expectation>
             <name>action_sequence_match</name>
@@ -535,10 +537,10 @@ testCases:
         </testCase>
         <testCase>
           <inputs>
-             <contextVariable>
+             <contextVariables>
                 <name>myVariable</name>
                 <value>myValue</value>
-            </contextVariable>
+            </contextVariables>
             <utterance>Will it rain tomorrow?</utterance>
           </inputs>
           <expectation>
@@ -594,6 +596,9 @@ testCases:
     expectedActions:
       - IdentifyRecordByName
       - QueryRecords
+    contextVariables:
+      - name : myCVname
+        value: myCVvalue
     expectedOutcome: contacts available name available with Acme are listed
     expectedTopic: GeneralCRM
   - utterance: List contact emails associated with Acme account
@@ -644,6 +649,10 @@ testCases:
         </expectation>
         <inputs>
             <utterance>List contact names associated with Acme account</utterance>
+            <contextVariables>
+                <variableName>myCVname</variableName>
+                <variableValue>myCVvalue</variableValue>
+            </contextVariables>
         </inputs>
         <number>1</number>
     </testCase>

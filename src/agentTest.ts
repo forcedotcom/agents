@@ -295,7 +295,10 @@ const convertToSpec = (data: AiEvaluationDefinition): TestSpec => ({
     const expectations = ensureArray(tc.expectation);
     return {
       utterance: tc.inputs.utterance,
-      contextVariable: tc.inputs.contextVariable,
+      contextVariables: ensureArray(tc.inputs.contextVariables).map((cv) => ({
+        name: cv.variableName,
+        value: cv.variableValue,
+      })),
       customEvaluations: expectations
         .filter((e) => 'parameter' in e)
         .map((ce) => ({ name: ce.name, label: ce.label, parameters: ce.parameter })),
@@ -354,7 +357,7 @@ const convertToMetadata = (spec: TestSpec): AiEvaluationDefinition => ({
     ],
     inputs: {
       utterance: tc.utterance,
-      contextVariable: tc.contextVariables?.map((cv) => ({ variableName: cv.name, variableValue: cv.value })),
+      contextVariables: tc.contextVariables?.map((cv) => ({ variableName: cv.name, variableValue: cv.value })),
     },
     number: spec.testCases.indexOf(tc) + 1,
   })),
