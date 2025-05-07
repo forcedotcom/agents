@@ -253,10 +253,10 @@ testCases:
         <testCase>
           <inputs>
             <utterance>What's the weather like?</utterance>
-            <contextVariables>
+            <contextVariable>
                 <variableName>myVariable</variableName>
                 <variableValue>myValue</variableValue>
-            </contextVariables>
+            </contextVariable>
           </inputs>
           <expectation>
             <name>string_comparisson</name>
@@ -363,14 +363,14 @@ testCases:
         <testCase>
           <inputs>
             <utterance>What's the weather like?</utterance>
-             <contextVariables>
+             <contextVariable>
                 <variableName>myVariable</variableName>
                 <variableValue>myValue</variableValue>
-            </contextVariables>
-            <contextVariables>
+            </contextVariable>
+            <contextVariable>
                 <variableName>myVariable2</variableName>
                 <variableValue>myValue2</variableValue>
-            </contextVariables>
+            </contextVariable>
           </inputs>
           <expectation>
             <name>topic_assertion</name>
@@ -649,10 +649,10 @@ testCases:
         </expectation>
         <inputs>
             <utterance>List contact names associated with Acme account</utterance>
-            <contextVariables>
+            <contextVariable>
                 <variableName>myCVname</variableName>
                 <variableValue>myCVvalue</variableValue>
-            </contextVariables>
+            </contextVariable>
         </inputs>
         <number>1</number>
     </testCase>
