@@ -12,7 +12,14 @@ import { Duration, ensureArray } from '@salesforce/kit';
 import { ComponentSetBuilder, DeployResult, RequestStatus } from '@salesforce/source-deploy-retrieve';
 import { parse, stringify } from 'yaml';
 import { XMLBuilder, XMLParser } from 'fast-xml-parser';
-import { type AvailableDefinition, type AgentTestConfig, type AiEvaluationDefinition, type TestSpec } from './types.js';
+import {
+  AvailableDefinition,
+  AgentTestConfig,
+  AiEvaluationDefinition,
+  TestSpec,
+  MetadataExpectation,
+} from './types.js';
+import { metric } from './utils';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agentTest');
@@ -140,7 +147,11 @@ export class AgentTest {
     const result = await deploy.pollStatus({ timeout: Duration.minutes(10_000), frequency: Duration.seconds(1) });
 
     if (!result.response.success) {
-      throw new SfError(result.response.errorMessage ?? `Unable to deploy ${result.response.id}`);
+      throw new SfError(
+        ensureArray(result.response.details.componentFailures)
+          .map((failure) => failure.problem)
+          .join()
+      );
     }
 
     return { path: definitionPath, contents: xml, deployResult: result };
@@ -245,6 +256,8 @@ export class AgentTest {
   public async writeTestSpec(outputFile: string): Promise<void> {
     const spec = await this.getTestSpec();
 
+    // by default, add the OOTB metrics to the spec, so generated MD will have it
+    spec.testCases.forEach((tc) => (tc.metrics = tc.metrics ?? Array.from(metric)));
     // strip out undefined values and empty strings
     const clean = Object.entries(spec).reduce<Partial<TestSpec>>((acc, [key, value]) => {
       if (value !== undefined && value !== '') return { ...acc, [key]: value };
@@ -282,14 +295,34 @@ const convertToSpec = (data: AiEvaluationDefinition): TestSpec => ({
     const expectations = ensureArray(tc.expectation);
     return {
       utterance: tc.inputs.utterance,
+      contextVariables: ensureArray(tc.inputs.contextVariable).map((cv) => ({
+        name: cv.variableName,
+        value: cv.variableValue,
+      })),
+      customEvaluations: expectations
+        .filter((e) => 'parameter' in e)
+        .map((ce) => ({ name: ce.name, label: ce.label, parameters: ce.parameter })),
       // TODO: remove old names once removed in 258 (topic_sequence_match, action_sequence_match, bot_response_rating)
-      expectedTopic: expectations.find((e) => e.name === 'topic_sequence_match' || e.name === 'topic_assertion')
-        ?.expectedValue,
+      expectedTopic: (
+        expectations.find(
+          (e) => e.name === 'topic_sequence_match' || e.name === 'topic_assertion'
+        ) as MetadataExpectation
+      )?.expectedValue,
       expectedActions: transformStringToArray(
-        expectations.find((e) => e.name === 'action_sequence_match' || e.name === 'actions_assertion')?.expectedValue
+        (
+          expectations.find(
+            (e) => e.name === 'action_sequence_match' || e.name === 'actions_assertion'
+          ) as MetadataExpectation
+        )?.expectedValue
       ),
-      expectedOutcome: expectations.find((e) => e.name === 'bot_response_rating' || e.name === 'output_validation')
-        ?.expectedValue,
+      expectedOutcome: (
+        expectations.find(
+          (e) => e.name === 'bot_response_rating' || e.name === 'output_validation'
+        ) as MetadataExpectation
+      )?.expectedValue,
+      metrics: expectations
+        .filter((e) => metric.includes(e.name as (typeof metric)[number]))
+        .map((e) => e.name as (typeof metric)[number]),
     };
   }),
 });
@@ -303,6 +336,11 @@ const convertToMetadata = (spec: TestSpec): AiEvaluationDefinition => ({
   ...(spec.subjectVersion && { subjectVersion: spec.subjectVersion }),
   testCase: spec.testCases.map((tc) => ({
     expectation: [
+      ...ensureArray(tc.customEvaluations).map((ce) => ({
+        name: ce.name,
+        label: ce.label,
+        parameter: ce.parameters,
+      })),
       {
         expectedValue: tc.expectedTopic as string,
         name: 'topic_sequence_match',
@@ -315,9 +353,11 @@ const convertToMetadata = (spec: TestSpec): AiEvaluationDefinition => ({
         expectedValue: tc.expectedOutcome as string,
         name: 'bot_response_rating',
       },
+      ...ensureArray(tc.metrics).map((m) => ({ name: m })),
     ],
     inputs: {
       utterance: tc.utterance,
+      contextVariable: tc.contextVariables?.map((cv) => ({ variableName: cv.name, variableValue: cv.value })),
     },
     number: spec.testCases.indexOf(tc) + 1,
   })),
