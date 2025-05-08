@@ -1,4 +1,57 @@
-## [0.14.9](https://github.com/forcedotcom/agents/compare/0.14.8...0.14.9) (2025-04-30)
+## [0.14.11](https://github.com/forcedotcom/agents/compare/0.14.9-preview.5...0.14.11) (2025-05-08)
+
+
+
+## [0.14.9-preview.5](https://github.com/forcedotcom/agents/compare/0.14.9-preview.4...0.14.9-preview.5) (2025-05-07)
+
+
+
+## [0.14.9-preview.4](https://github.com/forcedotcom/agents/compare/0.14.9-preview.3...0.14.9-preview.4) (2025-05-07)
+
+
+### Bug Fixes
+
+* refactor to contextVariables (with s) in MD ([c718072](https://github.com/forcedotcom/agents/commit/c718072c63b3cd3f5eef1a5a1e6d56d3a6aeed01))
+
+
+
+## [0.14.9-preview.3](https://github.com/forcedotcom/agents/compare/0.14.9...0.14.9-preview.3) (2025-05-05)
+
+
+### Bug Fixes
+
+* when deploy fails, show correct error message ([b183afe](https://github.com/forcedotcom/agents/commit/b183afef44f660f97d75ba7132f68df8cb88a031))
+
+
+
+## [0.14.7-preview.2](https://github.com/forcedotcom/agents/compare/0.14.7-preview.1...0.14.7-preview.2) (2025-04-30)
+
+
+### Bug Fixes
+
+* first pass at custom evals ([4f0e0a4](https://github.com/forcedotcom/agents/commit/4f0e0a4a9d7e2944a30af315f42de6b6cd31e8df))
+
+
+
+## [0.14.7-preview.1](https://github.com/forcedotcom/agents/compare/0.14.8...0.14.7-preview.1) (2025-04-28)
+
+
+### Bug Fixes
+
+* add context variables to spec,types,metadata ([b8fd99b](https://github.com/forcedotcom/agents/commit/b8fd99bfd2d781889c1696009883ed9abc47c068))
+
+
+
+## [0.14.7-preview.0](https://github.com/forcedotcom/agents/compare/0.14.6...0.14.7-preview.0) (2025-04-24)
+
+
+### Bug Fixes
+
+* extend types for metrics,update yaml gen/reading, MD gen/reading ([7f7ba4d](https://github.com/forcedotcom/agents/commit/7f7ba4dd51e8a1360c333ca5f78dee01eedb52ad))
+
+
+
+## [0.14.9](https://github.com/forcedotcom/agents/compare/0.14.7-preview.2...0.14.9) (2025-04-30)
 
 
 ### Bug Fixes
@@ -17,12 +70,66 @@
 
 
 
-## [0.14.7](https://github.com/forcedotcom/agents/compare/0.14.6...0.14.7) (2025-04-26)
+## [0.14.7](https://github.com/forcedotcom/agents/compare/0.14.7-preview.0...0.14.7) (2025-04-26)
 
 
 ### Bug Fixes
 
 * **deps:** bump @salesforce/core from 8.9.1 to 8.10.0 ([61f471e](https://github.com/forcedotcom/agents/commit/61f471e6855180fdede0fb9ab8f8a780d9a0534c))
+
+
+
+## [0.14.7-preview.2](https://github.com/forcedotcom/agents/compare/0.14.7-preview.1...0.14.7-preview.2) (2025-04-30)
+
+
+### Bug Fixes
+
+* first pass at custom evals ([4f0e0a4](https://github.com/forcedotcom/agents/commit/4f0e0a4a9d7e2944a30af315f42de6b6cd31e8df))
+
+
+
+## [0.14.7-preview.1](https://github.com/forcedotcom/agents/compare/0.14.8...0.14.7-preview.1) (2025-04-28)
+
+
+### Bug Fixes
+
+* add context variables to spec,types,metadata ([b8fd99b](https://github.com/forcedotcom/agents/commit/b8fd99bfd2d781889c1696009883ed9abc47c068))
+
+
+
+## [0.14.7-preview.0](https://github.com/forcedotcom/agents/compare/0.14.6...0.14.7-preview.0) (2025-04-24)
+
+
+### Bug Fixes
+
+* extend types for metrics,update yaml gen/reading, MD gen/reading ([7f7ba4d](https://github.com/forcedotcom/agents/commit/7f7ba4dd51e8a1360c333ca5f78dee01eedb52ad))
+
+
+
+## [0.14.8](https://github.com/forcedotcom/agents/compare/0.14.7...0.14.8) (2025-04-28)
+
+
+### Bug Fixes
+
+* create expected actions with ' instead of " ([a11a8d5](https://github.com/forcedotcom/agents/commit/a11a8d5288186e51a9674ecdfd8bf41693bed0e7))
+
+
+
+## [0.14.7](https://github.com/forcedotcom/agents/compare/0.14.7-preview.0...0.14.7) (2025-04-26)
+
+
+### Bug Fixes
+
+* **deps:** bump @salesforce/core from 8.9.1 to 8.10.0 ([61f471e](https://github.com/forcedotcom/agents/commit/61f471e6855180fdede0fb9ab8f8a780d9a0534c))
+
+
+
+## [0.14.7-preview.0](https://github.com/forcedotcom/agents/compare/0.14.6...0.14.7-preview.0) (2025-04-24)
+
+
+### Bug Fixes
+
+* extend types for metrics,update yaml gen/reading, MD gen/reading ([7f7ba4d](https://github.com/forcedotcom/agents/commit/7f7ba4dd51e8a1360c333ca5f78dee01eedb52ad))
 
 
 

@@ -1,7 +1,7 @@
 {
   "name": "@salesforce/agents",
   "description": "Client side APIs for working with Salesforce agents",
-  "version": "0.14.9",
+  "version": "0.14.11",
   "license": "BSD-3-Clause",
   "author": "Salesforce",
   "main": "lib/index",
@@ -11,7 +11,7 @@
     "url": "https://github.com/forcedotcom/agents.git"
   },
   "dependencies": {
-    "@salesforce/core": "^8.10.1",
+    "@salesforce/core": "^8.10.2",
     "@salesforce/kit": "^3.2.3",
     "@salesforce/source-deploy-retrieve": "^12.19.3",
     "fast-xml-parser": "^4.5.3",
