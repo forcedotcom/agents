@@ -17,6 +17,7 @@ import {
   type AgentJobSpec,
   type AgentJobSpecCreateConfig,
   type AgentOptions,
+  type BotMetadata,
   type DraftAgentTopicsBody,
   type DraftAgentTopicsResponse,
 } from './types.js';
@@ -64,15 +65,30 @@ export const AgentCreateLifecycleStages = {
  * `const agentList = await Agent.list(project);`
  */
 export class Agent {
+  // The ID of the agent (Bot)
   private id?: string;
+  // The name of the agent (Bot)
+  private name?: string;
+  // The metadata fields for the agent (Bot)
+  private botMetadata?: BotMetadata;
 
   /**
    * Create an instance of an agent in an org. Must provide a connection to an org
-   * and the agent (Bot) API name as part of `AgentOptions`.
+   * and the agent (Bot) API name or ID as part of `AgentOptions`.
    *
    * @param {options} AgentOptions
    */
-  public constructor(private options: AgentOptions) {}
+  public constructor(private options: AgentOptions) {
+    if (!options.nameOrId) {
+      throw messages.createError('missingAgentNameOrId');
+    }
+
+    if (options.nameOrId.startsWith('0Xx') && [15,18].includes(options.nameOrId.length)) {
+      this.id = options.nameOrId;
+    } else {
+      this.name = options.nameOrId;
+    }
+  }
 
   /**
    * List all agents in the current project.
@@ -247,10 +263,26 @@ export class Agent {
    */
   public async getId(): Promise<string> {
     if (!this.id) {
-      const query = `SELECT Id FROM BotDefinition WHERE DeveloperName = '${this.options.name}'`;
-      this.id = (await this.options.connection.singleRecordQuery<{ Id: string }>(query)).Id;
+      await this.getBotMetadata();
     }
-    return this.id;
+    return this.id!; // getBotMetadata() ensures this.id is not undefined
+  }
+
+  /**
+   * Queries BotDefinition for the bot metadata and assigns:
+   * 1. this.id
+   * 2. this.name
+   * 3. this.botMetadata
+   */
+  public async getBotMetadata(): Promise<BotMetadata> {
+    if (!this.botMetadata) {
+      const whereClause = this.id ? `Id = '${this.id}'` : `DeveloperName = '${this.name as string}'`;
+      const query = `SELECT FIELDS(ALL) FROM BotDefinition WHERE ${whereClause} LIMIT 1`;
+      this.botMetadata = await this.options.connection.singleRecordQuery<BotMetadata>(query);
+      this.id = this.botMetadata.Id;
+      this.name = this.botMetadata.DeveloperName;
+    }
+    return this.botMetadata;
   }
 }
 

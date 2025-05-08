@@ -13,3 +13,7 @@ Unable to retrieve newly created Agent metadata. Due to: %s
 # agentRetrievalErrorActions
 
 Retrieve the agent metadata using the "project retrieve start" command.
+
+# missingAgentNameOrId
+
+The "nameOrId" agent option is required when creating an Agent instance.
