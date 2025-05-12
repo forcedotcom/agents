@@ -36,8 +36,8 @@ describe('AgentPreview', () => {
     it('should start a session and return an AgentPreviewStartResponse', async () => {
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'agentPreview-Start');
 
-      const agentPreview = new AgentPreview(connection);
-      const result = await agentPreview.start(agentId);
+      const agentPreview = new AgentPreview(connection, agentId);
+      const result = await agentPreview.start();
 
       expect(result.sessionId).to.deep.equal(session);
       expect(result.messages[0].type).to.deep.equal('Inform');
@@ -46,9 +46,9 @@ describe('AgentPreview', () => {
 
     it('should wrap errors in SfError on start', async () => {
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'agentPreview-Start-Error');
-      const agentPreview = new AgentPreview(connection);
+      const agentPreview = new AgentPreview(connection, agentId);
       try {
-        await agentPreview.start(agentId);
+        await agentPreview.start();
         expect.fail('Expected error to be thrown');
       } catch (err) {
         expect(err).to.be.instanceOf(SfError);
@@ -62,7 +62,7 @@ describe('AgentPreview', () => {
     it('should send a message and return an AgentPreviewSendResponse', async () => {
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'agentPreview-Send');
 
-      const agentPreview = new AgentPreview(connection);
+      const agentPreview = new AgentPreview(connection, agentId);
       const message = 'Hello, Agent!';
       const result = await agentPreview.send(session, message);
 
@@ -74,7 +74,7 @@ describe('AgentPreview', () => {
 
     it('should wrap errors in SfError on start', async () => {
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'agentPreview-Send-Error');
-      const agentPreview = new AgentPreview(connection);
+      const agentPreview = new AgentPreview(connection, agentId);
 
       try {
         const message = 'Hello, Agent!';
@@ -91,7 +91,7 @@ describe('AgentPreview', () => {
   describe('end', () => {
     it('should end a session and return an AgentPreviewEndResponse', async () => {
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'agentPreview-End');
-      const agentPreview = new AgentPreview(connection);
+      const agentPreview = new AgentPreview(connection, agentId);
       const reason = 'UserRequest' as const;
       const result = await agentPreview.end(session, reason);
 
@@ -102,7 +102,7 @@ describe('AgentPreview', () => {
 
     it('should wrap errors in SfError on end', async () => {
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'agentPreview-End-Error');
-      const agentPreview = new AgentPreview(connection);
+      const agentPreview = new AgentPreview(connection, agentId);
 
       try {
         await agentPreview.end(session, 'UserRequest');

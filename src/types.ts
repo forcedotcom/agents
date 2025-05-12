@@ -7,6 +7,7 @@
 
 import { Connection, SfProject } from '@salesforce/core';
 import { FileProperties } from '@salesforce/source-deploy-retrieve';
+import { type ApexLog } from '@salesforce/types/tooling';
 import { metric } from './utils';
 
 // ====================================================
@@ -447,6 +448,7 @@ export type AgentPreviewStartResponse = {
 export type AgentPreviewSendResponse = {
   messages: AgentPreviewMessage[];
   _links: AgentPreviewMessageLinks;
+  apexDebugLog?: ApexLog;
 };
 
 export type AgentPreviewEndMessage = {
