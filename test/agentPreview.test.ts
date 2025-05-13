@@ -84,9 +84,12 @@ describe('AgentPreview', () => {
       $$.SANDBOX.stub(AgentPreview.prototype, 'ensureTraceFlag').resolves();
       $$.SANDBOX.stub(connection.tooling, 'query').resolves(queryResult);
       $$.SANDBOX.stub(Date, 'now')
-        .onFirstCall().returns(123456789)
-        .onSecondCall().returns(1747047600000)
-        .onCall(4).returns(1747054800000);
+        .onFirstCall()
+        .returns(123_456_789)
+        .onSecondCall()
+        .returns(1_747_047_600_000)
+        .onCall(4)
+        .returns(1_747_054_800_000);
 
       const agentPreview = new AgentPreview(connection, agentId);
       agentPreview.toggleApexDebugMode(true);
@@ -111,9 +114,12 @@ describe('AgentPreview', () => {
       $$.SANDBOX.stub(AgentPreview.prototype, 'ensureTraceFlag').resolves();
       $$.SANDBOX.stub(connection.tooling, 'query').resolves(queryResult);
       $$.SANDBOX.stub(Date, 'now')
-        .onFirstCall().returns(123456789)
-        .onSecondCall().returns(1747047600000)
-        .onCall(4).returns(1747049000000);
+        .onFirstCall()
+        .returns(123_456_789)
+        .onSecondCall()
+        .returns(1_747_047_600_000)
+        .onCall(4)
+        .returns(1_747_049_000_000);
 
       const agentPreview = new AgentPreview(connection, agentId);
       agentPreview.toggleApexDebugMode(true);
@@ -137,9 +143,12 @@ describe('AgentPreview', () => {
       $$.SANDBOX.stub(AgentPreview.prototype, 'ensureTraceFlag').resolves();
       $$.SANDBOX.stub(connection.tooling, 'query').resolves(queryResult);
       $$.SANDBOX.stub(Date, 'now')
-        .onFirstCall().returns(123456789)
-        .onSecondCall().returns(1747047600000)
-        .onCall(4).returns(1747054800000);
+        .onFirstCall()
+        .returns(123_456_789)
+        .onSecondCall()
+        .returns(1_747_047_600_000)
+        .onCall(4)
+        .returns(1_747_054_800_000);
 
       const agentPreview = new AgentPreview(connection, agentId);
       agentPreview.toggleApexDebugMode(true);

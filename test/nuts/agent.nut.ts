@@ -129,8 +129,9 @@ describe('agent NUTs', () => {
       // create a new unique bot user
       const username = genUniqueString('botUser_%s@test.org');
       const botUser = await User.create({ org: defaultOrg });
-      // @ts-expect-error - private method
-      const { userId } = await botUser.createUserInternal({
+      // @ts-expect-error - private method. Must use this to prevent the auth flow that happens with the createUser method
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      const { userId } = (await botUser.createUserInternal({
         username,
         lastName: 'AgentUser',
         alias: 'botUser',
@@ -140,7 +141,7 @@ describe('agent NUTs', () => {
         languageLocaleKey: 'en_US',
         localeSidKey: 'en_US',
         profileId,
-      } as UserFields);
+      } as UserFields)) as { userId: string };
 
       await botUser.assignPermissionSets(userId, ['AgentforceServiceAgentUser']);
 
