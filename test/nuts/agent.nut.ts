@@ -8,8 +8,8 @@
 import { join } from 'node:path';
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { expect } from 'chai';
-import { TestSession, genUniqueString } from '@salesforce/cli-plugins-testkit';
-import { Connection, Org, SfProject, User, type UserFields } from '@salesforce/core';
+import { genUniqueString, TestSession } from '@salesforce/cli-plugins-testkit';
+import { Connection, Org, SfProject, User, UserFields } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { sleep } from '@salesforce/kit';
 import { Agent, type AgentJobSpec, type AgentJobSpecCreateConfig } from '../../src/index';
@@ -128,9 +128,9 @@ describe('agent NUTs', () => {
 
       // create a new unique bot user
       const username = genUniqueString('botUser_%s@test.org');
-      console.log(`creating a new bot user with profile Id: ${profileId} and username: ${username}`);
       const botUser = await User.create({ org: defaultOrg });
-      await botUser.createUser({
+      // @ts-expect-error - private method
+      const { userId } = await botUser.createUserInternal({
         username,
         lastName: 'AgentUser',
         alias: 'botUser',
@@ -141,6 +141,8 @@ describe('agent NUTs', () => {
         localeSidKey: 'en_US',
         profileId,
       } as UserFields);
+
+      await botUser.assignPermissionSets(userId, ['AgentforceServiceAgentUser']);
 
       // Replace the botUser with the current user's username
       const botDir = join(session.project.dir, 'force-app', 'main', 'default', 'bots', botApiName);
@@ -154,14 +156,12 @@ describe('agent NUTs', () => {
       });
       const deploy = await compSet.deploy({ usernameOrConnection: connection });
       const deployResult = await deploy.pollStatus();
-      // console.dir(deployResult.response, { depth: 10 });
       expect(deployResult.response.success, 'expected deploy to succeed').to.equal(true);
     });
 
     it('should get agent bot metadata by bot developer name', async () => {
       const agent = new Agent({ connection, nameOrId: botApiName });
       const botMetadata = await agent.getBotMetadata();
-      // console.dir(botMetadata, { depth: 10 });
       expect(botMetadata).to.be.an('object');
       expect(botMetadata.Id).to.be.a('string');
       expect(botMetadata.BotUserId).to.be.a('string');
@@ -173,7 +173,6 @@ describe('agent NUTs', () => {
     it('should get agent bot metadata by botId', async () => {
       const agent = new Agent({ connection, nameOrId: botId });
       const botMetadata = await agent.getBotMetadata();
-      // console.dir(botMetadata, { depth: 10 });
       expect(botMetadata).to.be.an('object');
       expect(botMetadata.Id).to.equal(botId);
       expect(botMetadata.BotUserId).to.be.a('string');
