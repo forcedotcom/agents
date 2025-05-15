@@ -187,6 +187,7 @@ export function normalizeResults(results: AgentTestResultsResponse): AgentTestRe
         ...r,
         actualValue: decodeHtmlEntities(r.actualValue),
         expectedValue: decodeHtmlEntities(r.expectedValue),
+        metricExplainability: decodeHtmlEntities(r.metricExplainability),
       })),
     })),
   };
