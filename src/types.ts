@@ -7,6 +7,7 @@
 
 import { Connection, SfProject } from '@salesforce/core';
 import { FileProperties } from '@salesforce/source-deploy-retrieve';
+import { type ApexLog } from '@salesforce/types/tooling';
 import { metric } from './utils';
 
 // ====================================================
@@ -18,7 +19,27 @@ import { metric } from './utils';
 export type AgentOptions = {
   connection: Connection;
   project?: SfProject;
-  name: string;
+  /**
+   * The API name or ID of the agent (Bot) that exists in the org.
+   */
+  nameOrId: string;
+};
+
+export type BotMetadata = {
+  Id: string;
+  IsDeleted: false;
+  DeveloperName: string;
+  MasterLabel: string;
+  CreatedDate: string; // eg., "2025-02-13T18:25:17.000+0000",
+  CreatedById: string;
+  LastModifiedDate: string; // eg., "2025-02-13T18:27:30.000+0000",
+  LastModifiedById: string;
+  SystemModstamp: string; // eg., "2025-02-13T18:27:30.000+0000",
+  BotUserId: string;
+  Description: string;
+  Type: string;
+  AgentType: string;
+  AgentTemplate: null | string;
 };
 
 /**
@@ -427,6 +448,7 @@ export type AgentPreviewStartResponse = {
 export type AgentPreviewSendResponse = {
   messages: AgentPreviewMessage[];
   _links: AgentPreviewMessageLinks;
+  apexDebugLog?: ApexLog;
 };
 
 export type AgentPreviewEndMessage = {

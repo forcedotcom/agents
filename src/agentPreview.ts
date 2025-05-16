@@ -6,8 +6,8 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { SfError } from '@salesforce/core';
-import { Connection } from '@salesforce/core';
+import { Connection, Logger, Messages, SfError } from '@salesforce/core';
+import { Agent } from './agent';
 import { MaybeMock } from './maybe-mock';
 import {
   type AgentPreviewEndResponse,
@@ -16,6 +16,10 @@ import {
   type ApiStatus,
   type EndReason,
 } from './types.js';
+import { createTraceFlag, findTraceFlag, getDebugLog, type ApexTraceFlag } from './apexUtils';
+
+Messages.importMessagesDirectory(__dirname);
+const messages = Messages.loadMessages('@salesforce/agents', 'agentPreview');
 
 /**
  * A service to interact with an agent. Start an interactive session,
@@ -25,11 +29,11 @@ import {
  *
  * Create an instance of the service:
  *
- * `const agentPreview = new AgentPreview(connection);`
+ * `const agentPreview = new AgentPreview(connection, botId);`
  *
  * Start an interactive session:
  *
- * `const { sessionId } = await agentPreview.start(botId);`
+ * `const { sessionId } = await agentPreview.start();`
  *
  * Send a message to the agent using the session ID from the startResponse:
  *
@@ -38,31 +42,49 @@ import {
  * End an interactive session:
  *
  * `await agentPreview.end(sessionId, 'UserRequest');`
+ *
+ * Enable Apex Debug Mode:
+ *
+ * `agentPreview.toggleApexDebugMode(true);`
  */
 export class AgentPreview {
-  private apiBase: string;
-  private instanceUrl: string;
+  private readonly apiBase = 'https://api.salesforce.com/einstein/ai-agent/v1';
+  private connection: Connection;
+  private logger: Logger;
   private maybeMock: MaybeMock;
+  private apexDebugMode?: boolean;
+  private apexTraceFlag?: ApexTraceFlag;
+  private botId: string;
 
-  public constructor(connection: Connection) {
-    this.apiBase = 'https://api.salesforce.com/einstein/ai-agent/v1';
-    this.instanceUrl = connection.instanceUrl;
+  /**
+   * Create an instance of the service.
+   *
+   * @param connection The connection to use to make requests.
+   * @param botId The ID of the agent (`Bot` ID).
+   */
+  public constructor(connection: Connection, botId: string) {
+    this.connection = connection;
+    this.logger = Logger.childFromRoot(this.constructor.name);
     this.maybeMock = new MaybeMock(connection);
+    if (!botId.startsWith('0Xx') || ![15, 18].includes(botId.length)) {
+      throw messages.createError('invalidBotId', [botId]);
+    }
+    this.botId = botId;
   }
 
   /**
-   * Start an interactive session with the provided agent.
+   * Start an interactive session with the agent.
    *
-   * @param botId The ID of the agent (`Bot` ID).
    * @returns `AgentPreviewStartResponse`, which includes a session ID needed for other actions.
    */
-  public async start(botId: string): Promise<AgentPreviewStartResponse> {
-    const url = `${this.apiBase}/agents/${botId}/sessions`;
+  public async start(): Promise<AgentPreviewStartResponse> {
+    const url = `${this.apiBase}/agents/${this.botId}/sessions`;
+    this.logger.debug(`Starting agent preview session for botId: ${this.botId}`);
 
     const body = {
       externalSessionKey: randomUUID(),
       instanceConfig: {
-        endpoint: this.instanceUrl,
+        endpoint: this.connection.instanceUrl,
       },
       streamingCapabilities: {
         chunkTypes: ['Text'],
@@ -96,9 +118,30 @@ export class AgentPreview {
       },
       variables: [],
     };
+    this.logger.debug(
+      `Sending message to botId: ${this.botId} with apexDebugMode ${this.apexDebugMode ? 'enabled' : 'disabled'}`
+    );
 
     try {
-      return await this.maybeMock.request<AgentPreviewSendResponse>('POST', url, body);
+      // If apex debug mode is enabled, ensure we have a trace flag for the bot user and
+      // if there isn't one, create one.
+      const start = Date.now();
+      if (this.apexDebugMode) {
+        await this.ensureTraceFlag();
+      }
+      const response = await this.maybeMock.request<AgentPreviewSendResponse>('POST', url, body);
+      if (this.apexDebugMode) {
+        // get apex debug logs and look for a log within the start and end time
+        const apexLog = await getDebugLog(this.connection, start, Date.now());
+        if (apexLog) {
+          if (apexLog.Id) this.logger.debug(`Apex debug log ID for message is ${apexLog.Id}`);
+          response.apexDebugLog = apexLog;
+        } else {
+          this.logger.debug('No apex debug log found for this message');
+        }
+      }
+
+      return response;
     } catch (err) {
       throw SfError.wrap(err);
     }
@@ -113,7 +156,7 @@ export class AgentPreview {
    */
   public async end(sessionId: string, reason: EndReason): Promise<AgentPreviewEndResponse> {
     const url = `${this.apiBase}/sessions/${sessionId}`;
-
+    this.logger.debug(`Ending agent preview session for botId: ${this.botId} with sessionId: ${sessionId}`);
     try {
       // https://developer.salesforce.com/docs/einstein/genai/guide/agent-api-examples.html#end-session
       return await this.maybeMock.request<AgentPreviewEndResponse>('DELETE', url, undefined, {
@@ -137,6 +180,49 @@ export class AgentPreview {
       return await this.maybeMock.request<ApiStatus>('GET', url);
     } catch (err) {
       throw SfError.wrap(err);
+    }
+  }
+
+  /**
+   * Enable or disable Apex Debug Mode, which will enable trace flags for the Bot user
+   * and create apex debug logs for use within VS Code's Apex Replay Debugger.
+   *
+   * @param enable Whether to enable or disable Apex Debug Mode.
+   */
+  public toggleApexDebugMode(enable: boolean): void {
+    this.apexDebugMode = enable;
+    this.logger.debug(`Apex Debug Mode is now ${enable ? 'enabled' : 'disabled'}`);
+  }
+
+  private async getBotUserId(): Promise<string | null> {
+    const agent = new Agent({ connection: this.connection, nameOrId: this.botId });
+    const botMetadata = await agent.getBotMetadata();
+    return botMetadata.BotUserId;
+  }
+
+  // If apex debug mode is enabled, ensure we have a trace flag for the bot user
+  // that is not expired checking in this order:
+  // 1. instance var (this.apexTraceFlag)
+  // 2. query the org
+  // 3. create a new trace flag
+  private async ensureTraceFlag(): Promise<void> {
+    if (this.apexTraceFlag) {
+      const expDate = this.apexTraceFlag.ExpirationDate;
+      if (expDate && new Date(expDate) > new Date()) {
+        this.logger.debug(`Using cached apexTraceFlag with ExpirationDate of ${expDate}`);
+        return;
+      } else {
+        this.logger.debug('Cached apex trace flag is expired');
+      }
+    }
+
+    const userId = await this.getBotUserId();
+    if (!userId) {
+      throw messages.createError('agentApexDebuggingError');
+    }
+    this.apexTraceFlag = await findTraceFlag(this.connection, userId);
+    if (!this.apexTraceFlag) {
+      await createTraceFlag(this.connection, userId);
     }
   }
 }

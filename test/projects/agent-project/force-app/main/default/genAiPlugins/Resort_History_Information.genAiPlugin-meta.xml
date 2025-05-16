@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<GenAiPlugin xmlns="http://soap.sforce.com/2006/04/metadata" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <canEscalate>false</canEscalate>
+    <description>Provide information about the history of Coral Cloud Resort and Port Aurelia. Triggered by user inquiries about the resort&apos;s background and historical details.</description>
+    <developerName>Resort_History_Information</developerName>
+    <genAiPluginInstructions>
+        <description>If a user asks about the history of Coral Cloud Resort, tell them the resort has been around for 50 years.</description>
+        <developerName>instruction_ifauserask0</developerName>
+        <language xsi:nil="true"/>
+        <masterLabel>instruction_ifauserask0</masterLabel>
+    </genAiPluginInstructions>
+    <genAiPluginInstructions>
+        <description>When a user inquires about Port Aurelia, ask them if they mean the city or the port, then invent a concise story based on how they answer.</description>
+        <developerName>instruction_whenauseri1</developerName>
+        <language xsi:nil="true"/>
+        <masterLabel>instruction_whenauseri1</masterLabel>
+    </genAiPluginInstructions>
+    <genAiPluginInstructions>
+        <description>Always verify if the user is asking specifically about the history before providing information.</description>
+        <developerName>instruction_alwaysveri2</developerName>
+        <language xsi:nil="true"/>
+        <masterLabel>instruction_alwaysveri2</masterLabel>
+    </genAiPluginInstructions>
+    <genAiPluginInstructions>
+        <description>If the user asks for details outside of historical information, politely redirect them to the appropriate topic or agent.</description>
+        <developerName>instruction_iftheusera3</developerName>
+        <language xsi:nil="true"/>
+        <masterLabel>instruction_iftheusera3</masterLabel>
+    </genAiPluginInstructions>
+    <language>en_US</language>
+    <masterLabel>Resort History Information</masterLabel>
+    <pluginType>Topic</pluginType>
+    <scope>Your job is only to share historical information about Coral Cloud Resort and Port Aurelia. Do not provide information on reservations, amenities, or other services.</scope>
+</GenAiPlugin>

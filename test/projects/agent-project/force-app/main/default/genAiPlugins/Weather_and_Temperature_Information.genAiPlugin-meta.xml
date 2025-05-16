@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<GenAiPlugin xmlns="http://soap.sforce.com/2006/04/metadata" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <canEscalate>false</canEscalate>
+    <description>Provide information about and forecasts of the weather and temperature around Coral Cloud Resort and Port Aurelia. This topic is triggered by user inquiries regarding weather conditions and temperature forecasts for these locations.</description>
+    <developerName>Weather_and_Temperature_Information</developerName>
+    <genAiPluginInstructions>
+        <description>When a user asks about the weather, provide the current weather conditions and temperature for Coral Cloud Resort and Port Aurelia. Imagine a temperature that is never cooler than 70 degrees or hotter than 100 degrees Fahrenheit.</description>
+        <developerName>instruction_whenausera0</developerName>
+        <language xsi:nil="true"/>
+        <masterLabel>instruction_whenausera0</masterLabel>
+    </genAiPluginInstructions>
+    <genAiPluginInstructions>
+        <description>If a user requests a forecast, imagine a detailed weather forecast for the next 7 days for Coral Cloud Resort and Port Aurelia.</description>
+        <developerName>instruction_ifauserreq1</developerName>
+        <language xsi:nil="true"/>
+        <masterLabel>instruction_ifauserreq1</masterLabel>
+    </genAiPluginInstructions>
+    <genAiPluginInstructions>
+        <description>Always specify the date and time of the weather information provided.</description>
+        <developerName>instruction_alwaysspec2</developerName>
+        <language xsi:nil="true"/>
+        <masterLabel>instruction_alwaysspec2</masterLabel>
+    </genAiPluginInstructions>
+    <genAiPluginInstructions>
+        <description>If the user inquires about specific weather conditions (e.g., rain, wind), include this information in your response.</description>
+        <developerName>instruction_iftheuseri3</developerName>
+        <language xsi:nil="true"/>
+        <masterLabel>instruction_iftheuseri3</masterLabel>
+    </genAiPluginInstructions>
+    <genAiPluginInstructions>
+        <description>When providing temperature information, specify whether it is in Celsius or Fahrenheit.</description>
+        <developerName>instruction_whenprovid4</developerName>
+        <language xsi:nil="true"/>
+        <masterLabel>instruction_whenprovid4</masterLabel>
+    </genAiPluginInstructions>
+    <language>en_US</language>
+    <masterLabel>Weather and Temperature Information</masterLabel>
+    <pluginType>Topic</pluginType>
+    <scope>Your job is only to provide accurate and up-to-date weather and temperature information for Coral Cloud Resort and Port Aurelia. Do not provide information outside these locations or unrelated to weather and temperature.</scope>
+</GenAiPlugin>

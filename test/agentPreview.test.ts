@@ -36,8 +36,8 @@ describe('AgentPreview', () => {
     it('should start a session and return an AgentPreviewStartResponse', async () => {
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'agentPreview-Start');
 
-      const agentPreview = new AgentPreview(connection);
-      const result = await agentPreview.start(agentId);
+      const agentPreview = new AgentPreview(connection, agentId);
+      const result = await agentPreview.start();
 
       expect(result.sessionId).to.deep.equal(session);
       expect(result.messages[0].type).to.deep.equal('Inform');
@@ -46,9 +46,9 @@ describe('AgentPreview', () => {
 
     it('should wrap errors in SfError on start', async () => {
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'agentPreview-Start-Error');
-      const agentPreview = new AgentPreview(connection);
+      const agentPreview = new AgentPreview(connection, agentId);
       try {
-        await agentPreview.start(agentId);
+        await agentPreview.start();
         expect.fail('Expected error to be thrown');
       } catch (err) {
         expect(err).to.be.instanceOf(SfError);
@@ -62,7 +62,7 @@ describe('AgentPreview', () => {
     it('should send a message and return an AgentPreviewSendResponse', async () => {
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'agentPreview-Send');
 
-      const agentPreview = new AgentPreview(connection);
+      const agentPreview = new AgentPreview(connection, agentId);
       const message = 'Hello, Agent!';
       const result = await agentPreview.send(session, message);
 
@@ -72,9 +72,98 @@ describe('AgentPreview', () => {
       );
     });
 
+    it('should send a message and return with apex debug log in debug mode', async () => {
+      const fakeApexLog = { Id: '123', StartTime: '2025-05-12T12:00:00.000Z' };
+      const queryResult = {
+        records: [fakeApexLog],
+        done: true,
+        totalSize: 1,
+      };
+      process.env.SF_MOCK_DIR = join('test', 'mocks', 'agentPreview-Send');
+      // @ts-expect-error - private method
+      $$.SANDBOX.stub(AgentPreview.prototype, 'ensureTraceFlag').resolves();
+      $$.SANDBOX.stub(connection.tooling, 'query').resolves(queryResult);
+      $$.SANDBOX.stub(Date, 'now')
+        .onFirstCall()
+        .returns(123_456_789)
+        .onSecondCall()
+        .returns(1_747_047_600_000)
+        .onCall(4)
+        .returns(1_747_054_800_000);
+
+      const agentPreview = new AgentPreview(connection, agentId);
+      agentPreview.toggleApexDebugMode(true);
+      // @ts-expect-error - private property
+      expect(agentPreview.apexDebugMode).to.be.true;
+      // @ts-expect-error - private property
+      expect(agentPreview.botId).to.equal(agentId);
+      const message = 'Hello, Agent!';
+      const result = await agentPreview.send(session, message);
+      expect(result.apexDebugLog).to.deep.equal(fakeApexLog);
+    });
+
+    it('should send a message and return with no apex debug log when time is not in range', async () => {
+      const fakeApexLog = { Id: '123', StartTime: '2025-05-12T12:00:00.000Z' };
+      const queryResult = {
+        records: [fakeApexLog],
+        done: true,
+        totalSize: 1,
+      };
+      process.env.SF_MOCK_DIR = join('test', 'mocks', 'agentPreview-Send');
+      // @ts-expect-error - private method
+      $$.SANDBOX.stub(AgentPreview.prototype, 'ensureTraceFlag').resolves();
+      $$.SANDBOX.stub(connection.tooling, 'query').resolves(queryResult);
+      $$.SANDBOX.stub(Date, 'now')
+        .onFirstCall()
+        .returns(123_456_789)
+        .onSecondCall()
+        .returns(1_747_047_600_000)
+        .onCall(4)
+        .returns(1_747_049_000_000);
+
+      const agentPreview = new AgentPreview(connection, agentId);
+      agentPreview.toggleApexDebugMode(true);
+      // @ts-expect-error - private property
+      expect(agentPreview.apexDebugMode).to.be.true;
+      // @ts-expect-error - private property
+      expect(agentPreview.botId).to.equal(agentId);
+      const message = 'Hello, Agent!';
+      const result = await agentPreview.send(session, message);
+      expect(result.apexDebugLog).to.equal(undefined);
+    });
+
+    it('should send a message and return with no apex debug log when no log returned', async () => {
+      const queryResult = {
+        records: [],
+        done: true,
+        totalSize: 0,
+      };
+      process.env.SF_MOCK_DIR = join('test', 'mocks', 'agentPreview-Send');
+      // @ts-expect-error - private method
+      $$.SANDBOX.stub(AgentPreview.prototype, 'ensureTraceFlag').resolves();
+      $$.SANDBOX.stub(connection.tooling, 'query').resolves(queryResult);
+      $$.SANDBOX.stub(Date, 'now')
+        .onFirstCall()
+        .returns(123_456_789)
+        .onSecondCall()
+        .returns(1_747_047_600_000)
+        .onCall(4)
+        .returns(1_747_054_800_000);
+
+      const agentPreview = new AgentPreview(connection, agentId);
+      agentPreview.toggleApexDebugMode(true);
+      // @ts-expect-error - private property
+      expect(agentPreview.apexDebugMode).to.be.true;
+      // @ts-expect-error - private property
+      expect(agentPreview.botId).to.equal(agentId);
+      const message = 'Hello, Agent!';
+      const result = await agentPreview.send(session, message);
+      expect(result.apexDebugLog).to.equal(undefined);
+    });
+
     it('should wrap errors in SfError on start', async () => {
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'agentPreview-Send-Error');
-      const agentPreview = new AgentPreview(connection);
+      const agentPreview = new AgentPreview(connection, agentId);
 
       try {
         const message = 'Hello, Agent!';
@@ -91,7 +180,7 @@ describe('AgentPreview', () => {
   describe('end', () => {
     it('should end a session and return an AgentPreviewEndResponse', async () => {
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'agentPreview-End');
-      const agentPreview = new AgentPreview(connection);
+      const agentPreview = new AgentPreview(connection, agentId);
       const reason = 'UserRequest' as const;
       const result = await agentPreview.end(session, reason);
 
@@ -102,7 +191,7 @@ describe('AgentPreview', () => {
 
     it('should wrap errors in SfError on end', async () => {
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'agentPreview-End-Error');
-      const agentPreview = new AgentPreview(connection);
+      const agentPreview = new AgentPreview(connection, agentId);
 
       try {
         await agentPreview.end(session, 'UserRequest');
