@@ -113,6 +113,18 @@ describe('normalizeResults', () => {
               status: 'COMPLETED',
               startTime: '2024-01-01T00:00:00Z',
             },
+            {
+              endTime: '2025-05-15T20:06:04Z',
+              metricExplainability: 'The answer does not provide any weather information, which is the main request. It only provides a general response without addressing the user&#39;s query.',
+              metricLabel: 'Precision',
+              name: 'completeness',
+              result: 'FAILURE',
+              score: 0.2,
+              startTime: '2025-05-15T20:05:48Z',
+              status: 'COMPLETED',
+              actualValue: '',
+              expectedValue: ''
+            }
           ],
         },
       ],
@@ -123,6 +135,7 @@ describe('normalizeResults', () => {
     expect(normalized.testCases[0].inputs.utterance).to.equal('What\'s the weather like in "San Francisco"?');
     expect(normalized.testCases[0].testResults[0].actualValue).to.equal('The temperature is > 75°F');
     expect(normalized.testCases[0].testResults[0].expectedValue).to.equal('Expect < 80°F');
+    expect(normalized.testCases[0].testResults[1].metricExplainability).to.equal("The answer does not provide any weather information, which is the main request. It only provides a general response without addressing the user's query.");
   });
 
   it('should handle undefined or empty values', () => {
@@ -165,6 +178,7 @@ describe('normalizeResults', () => {
     expect(normalized.testCases[0].inputs.utterance).to.equal('');
     expect(normalized.testCases[0].testResults[0].actualValue).to.equal('');
     expect(normalized.testCases[0].testResults[0].expectedValue).to.equal('');
+    expect(normalized.testCases[0].testResults[0].metricExplainability).to.equal('');
   });
 
   it('should preserve non-encoded strings', () => {
@@ -193,7 +207,7 @@ describe('normalizeResults', () => {
               score: 1,
               result: 'PASS',
               metricLabel: 'Accuracy',
-              metricExplainability: '',
+              metricExplainability: 'Regular string with no HTML entities for metric explainability',
               status: 'COMPLETED',
               startTime: '2024-01-01T00:00:00Z',
             },
@@ -207,5 +221,6 @@ describe('normalizeResults', () => {
     expect(normalized.testCases[0].inputs.utterance).to.equal('Regular string with no HTML entities');
     expect(normalized.testCases[0].testResults[0].actualValue).to.equal('Plain text response');
     expect(normalized.testCases[0].testResults[0].expectedValue).to.equal('Expected plain text');
+    expect(normalized.testCases[0].testResults[0].metricExplainability).to.equal('Regular string with no HTML entities for metric explainability');
   });
 });
