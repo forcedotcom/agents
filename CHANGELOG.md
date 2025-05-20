@@ -1,3 +1,12 @@
+## [0.15.1](https://github.com/forcedotcom/agents/compare/0.15.0...0.15.1) (2025-05-20)
+
+
+### Bug Fixes
+
+* escape encoded characters in metricExplainability property from test results ([7d82592](https://github.com/forcedotcom/agents/commit/7d82592844f9dc3876521be4f78ed3aa7d1efb59))
+
+
+
 # [0.15.0](https://github.com/forcedotcom/agents/compare/0.14.13...0.15.0) (2025-05-16)
 
 
