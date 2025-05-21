@@ -343,15 +343,15 @@ const convertToMetadata = (spec: TestSpec): AiEvaluationDefinition => ({
       })),
       {
         expectedValue: tc.expectedTopic as string,
-        name: 'topic_sequence_match',
+        name: 'topic_assertion',
       },
       {
         expectedValue: `[${(tc.expectedActions ?? []).map((v) => `'${v}'`).join(',')}]`,
-        name: 'action_sequence_match',
+        name: 'actions_assertion',
       },
       {
         expectedValue: tc.expectedOutcome as string,
-        name: 'bot_response_rating',
+        name: 'output_validation',
       },
       ...ensureArray(tc.metrics).map((m) => ({ name: m })),
     ],
