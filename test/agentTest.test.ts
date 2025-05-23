@@ -278,11 +278,11 @@ testCases:
             </parameter>
         </expectation>
           <expectation>
-            <name>topic_sequence_match</name>
+            <name>topic_assertion</name>
             <expectedValue>Weather</expectedValue>
           </expectation>
           <expectation>
-            <name>action_sequence_match</name>
+            <name>actions_assertion</name>
             <expectedValue>["GetLocation","GetWeather"]</expectedValue>
           </expectation>
           <expectation>
@@ -292,7 +292,7 @@ testCases:
             <name>coherence</name>
           </expectation>
           <expectation>
-            <name>bot_response_rating</name>
+            <name>output_validation</name>
             <expectedValue>Sunny with a high of 75F</expectedValue>
           </expectation>
         </testCase>
@@ -484,7 +484,7 @@ testCases:
             <utterance>What's the weather like?</utterance>
           </inputs>
           <expectation>
-            <name>topic_sequence_match</name>
+            <name>topic_assertion</name>
             <expectedValue>Weather</expectedValue>
           </expectation>
         </testCase>
@@ -531,7 +531,7 @@ testCases:
             </contextVariables>
           </inputs>
           <expectation>
-            <name>action_sequence_match</name>
+            <name>actions_assertion</name>
             <expectedValue>["GetWeather"]</expectedValue>
           </expectation>
         </testCase>
@@ -544,7 +544,7 @@ testCases:
             <utterance>Will it rain tomorrow?</utterance>
           </inputs>
           <expectation>
-            <name>action_sequence_match</name>
+            <name>actions_assertion</name>
             <expectedValue>["GetForecast"]</expectedValue>
           </expectation>
         </testCase>
@@ -572,7 +572,7 @@ testCases:
             <utterance>Test</utterance>
           </inputs>
           <expectation>
-            <name>action_sequence_match</name>
+            <name>actions_assertion</name>
             <expectedValue>invalid json</expectedValue>
           </expectation>
         </testCase>
@@ -637,15 +637,15 @@ testCases:
     <testCase>
         <expectation>
             <expectedValue>GeneralCRM</expectedValue>
-            <name>topic_sequence_match</name>
+            <name>topic_assertion</name>
         </expectation>
         <expectation>
             <expectedValue>[&apos;IdentifyRecordByName&apos;,&apos;QueryRecords&apos;]</expectedValue>
-            <name>action_sequence_match</name>
+            <name>actions_assertion</name>
         </expectation>
         <expectation>
             <expectedValue>contacts available name available with Acme are listed</expectedValue>
-            <name>bot_response_rating</name>
+            <name>output_validation</name>
         </expectation>
         <inputs>
             <utterance>List contact names associated with Acme account</utterance>
@@ -659,15 +659,15 @@ testCases:
     <testCase>
         <expectation>
             <expectedValue>GeneralCRM</expectedValue>
-            <name>topic_sequence_match</name>
+            <name>topic_assertion</name>
         </expectation>
         <expectation>
             <expectedValue>[&apos;IdentifyRecordByName&apos;,&apos;QueryRecords&apos;]</expectedValue>
-            <name>action_sequence_match</name>
+            <name>actions_assertion</name>
         </expectation>
         <expectation>
             <expectedValue>contacts available emails available with Acme are listed</expectedValue>
-            <name>bot_response_rating</name>
+            <name>output_validation</name>
         </expectation>
         <expectation>
             <name>completeness</name>
