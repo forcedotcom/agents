@@ -1,3 +1,12 @@
+## [0.15.2](https://github.com/forcedotcom/agents/compare/0.15.1...0.15.2) (2025-05-23)
+
+
+### Bug Fixes
+
+* update agentTest to generate the xml file with the new expectation property names ([4e5f4fc](https://github.com/forcedotcom/agents/commit/4e5f4fcdf6847da1d6ea94e261f7ed6d41192f20))
+
+
+
 ## [0.15.1](https://github.com/forcedotcom/agents/compare/0.15.0...0.15.1) (2025-05-20)
 
 
