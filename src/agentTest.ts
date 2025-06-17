@@ -368,7 +368,11 @@ function transformStringToArray(str: string | undefined): string[] {
     if (!str) return [];
     // Remove any whitespace and ensure proper JSON format
     const cleaned = str.replace(/\s+/g, '');
-    return JSON.parse(cleaned) as string[];
+    // Extract the array content between square brackets
+    const match = cleaned.match(/\[(.*)]/);
+    if (!match) return [];
+    // Split by comma and clean up each item
+    return match[1].split(',').map((item) => item.trim().replace(/['"]/g, ''));
   } catch {
     return [];
   }
@@ -379,7 +383,13 @@ type AiEvaluationDefinitionXml = {
 };
 const parseAgentTestXml = async (mdPath: string): Promise<AiEvaluationDefinition> => {
   const xml = await readFile(mdPath, 'utf-8');
-  const parser = new XMLParser();
+  const parser = new XMLParser({
+    ignoreAttributes: false,
+    attributeNamePrefix: '$',
+    isArray: (name) => name === 'testCase' || name === 'expectation' || name === 'contextVariable',
+    processEntities: true, // Enable entity processing
+    htmlEntities: true, // Enable HTML entity processing
+  });
   const xmlContent = parser.parse(xml) as AiEvaluationDefinitionXml;
   return xmlContent.AiEvaluationDefinition;
 };
