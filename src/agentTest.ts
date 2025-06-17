@@ -379,13 +379,7 @@ type AiEvaluationDefinitionXml = {
 };
 const parseAgentTestXml = async (mdPath: string): Promise<AiEvaluationDefinition> => {
   const xml = await readFile(mdPath, 'utf-8');
-  const parser = new XMLParser({
-    ignoreAttributes: false,
-    attributeNamePrefix: '$',
-    isArray: (name) => name === 'testCase' || name === 'expectation' || name === 'contextVariable',
-    processEntities: true, // Enable entity processing
-    htmlEntities: true, // Enable HTML entity processing
-  });
+  const parser = new XMLParser();
   const xmlContent = parser.parse(xml) as AiEvaluationDefinitionXml;
   return xmlContent.AiEvaluationDefinition;
 };

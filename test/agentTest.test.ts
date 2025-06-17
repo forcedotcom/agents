@@ -518,7 +518,7 @@ testCases:
           </expectation>
           <expectation>
             <name>actions_assertion</name>
-            <expectedValue>[&apos;GetLocation&apos;,&apos;GetWeather&apos;]</expectedValue>
+            <expectedValue>[&apos;GetLocation&apos;,&apos;GetWeather&apos;, 'myWeather', "myWeatherResponse"]</expectedValue>
           </expectation>
           <expectation>
             <name>completeness</name>
@@ -560,7 +560,7 @@ testCases:
               },
             ],
             expectedTopic: 'Weather',
-            expectedActions: ['GetLocation', 'GetWeather'],
+            expectedActions: ['GetLocation', 'GetWeather', 'myWeather', 'myWeatherResponse'],
             customEvaluations: [
               {
                 label: 'my Custom Comparison',
