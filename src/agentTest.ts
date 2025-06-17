@@ -367,12 +367,8 @@ function transformStringToArray(str: string | undefined): string[] {
   try {
     if (!str) return [];
     // Remove any whitespace and ensure proper JSON format
-    const cleaned = str.replace(/\s+/g, '');
-    // Extract the array content between square brackets
-    const match = cleaned.match(/\[(.*)]/);
-    if (!match) return [];
-    // Split by comma and clean up each item
-    return match[1].split(',').map((item) => item.trim().replace(/['"]/g, ''));
+    const cleaned = str.replace(/\s+/g, '').replaceAll(/'/g, '"');
+    return JSON.parse(cleaned) as string[];
   } catch {
     return [];
   }
