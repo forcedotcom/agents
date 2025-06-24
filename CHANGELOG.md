@@ -1,3 +1,12 @@
+## [0.15.3](https://github.com/forcedotcom/agents/compare/0.15.2...0.15.3) (2025-06-24)
+
+
+### Bug Fixes
+
+* working with " or ' ([fddbbb2](https://github.com/forcedotcom/agents/commit/fddbbb23658a2c5f323a0fe5c1bb8b640a627362))
+
+
+
 ## [0.15.2](https://github.com/forcedotcom/agents/compare/0.15.1...0.15.2) (2025-05-23)
 
 
