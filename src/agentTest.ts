@@ -367,7 +367,7 @@ function transformStringToArray(str: string | undefined): string[] {
   try {
     if (!str) return [];
     // Remove any whitespace and ensure proper JSON format
-    const cleaned = str.replace(/\s+/g, '');
+    const cleaned = str.replace(/\s+/g, '').replaceAll(/'/g, '"');
     return JSON.parse(cleaned) as string[];
   } catch {
     return [];

@@ -471,6 +471,127 @@ testCases:
       });
     });
 
+    it('should parse encoded AiEvaluationDefinition XML into TestSpec', async () => {
+      const agentTest = new AgentTest({ mdPath: 'path/to/metadataFile' });
+
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+      <AiEvaluationDefinition xmlns="http://soap.sforce.com/2006/04/metadata">
+        <description>Test Description</description>
+        <name>TestSpec</name>
+        <subjectType>AGENT</subjectType>
+        <subjectName>WeatherBot</subjectName>
+        <subjectVersion>1</subjectVersion>
+        <testCase>
+          <inputs>
+            <utterance>What's the weather like?</utterance>
+             <contextVariable>
+                <variableName>myVariable</variableName>
+                <variableValue>myValue</variableValue>
+            </contextVariable>
+            <contextVariable>
+                <variableName>myVariable2</variableName>
+                <variableValue>myValue2</variableValue>
+            </contextVariable>
+          </inputs>
+          <expectation>
+            <name>topic_assertion</name>
+            <expectedValue>Weather</expectedValue>
+          </expectation>
+          <expectation>
+            <name>string_comparisson</name>
+            <label>my Custom Comparison</label>
+            <parameter>
+                <name>operator</name>
+                <value>equals</value>
+                <isReference>false</isReference>
+            </parameter>
+            <parameter>
+                <name>actual</name>
+                <value>$.generatedData.invokedActions[*][?(@.function.name == 'SvcCopilotTmpl__SendEmailVerificationCode')].function.input.customerToVerify</value>
+                <isReference>true</isReference>
+            </parameter>
+            <parameter>
+                <name>expected</name>
+                <value>Jerry</value>
+                <isReference>false</isReference>
+            </parameter>
+          </expectation>
+          <expectation>
+            <name>actions_assertion</name>
+            <expectedValue>[&apos;GetLocation&apos;,&apos;GetWeather&apos;, 'myWeather', "myWeatherResponse"]</expectedValue>
+          </expectation>
+          <expectation>
+            <name>completeness</name>
+          </expectation>
+        <expectation>
+            <name>conciseness</name>
+        </expectation>
+        <expectation>
+            <name>output_latency_milliseconds</name>
+        </expectation>
+          <expectation>
+            <name>output_validation</name>
+            <expectedValue>Sunny with a high of 75F</expectedValue>
+          </expectation>
+        </testCase>
+      </AiEvaluationDefinition>`;
+
+      readFileStub.resolves(xml);
+
+      const result = await agentTest.getTestSpec();
+
+      expect(result).to.deep.equal({
+        name: 'TestSpec',
+        description: 'Test Description',
+        subjectType: 'AGENT',
+        subjectName: 'WeatherBot',
+        subjectVersion: 1,
+        testCases: [
+          {
+            utterance: "What's the weather like?",
+            contextVariables: [
+              {
+                name: 'myVariable',
+                value: 'myValue',
+              },
+              {
+                name: 'myVariable2',
+                value: 'myValue2',
+              },
+            ],
+            expectedTopic: 'Weather',
+            expectedActions: ['GetLocation', 'GetWeather', 'myWeather', 'myWeatherResponse'],
+            customEvaluations: [
+              {
+                label: 'my Custom Comparison',
+                name: 'string_comparisson',
+                parameters: [
+                  {
+                    isReference: false,
+                    name: 'operator',
+                    value: 'equals',
+                  },
+                  {
+                    isReference: true,
+                    name: 'actual',
+                    value:
+                      "$.generatedData.invokedActions[*][?(@.function.name == 'SvcCopilotTmpl__SendEmailVerificationCode')].function.input.customerToVerify",
+                  },
+                  {
+                    isReference: false,
+                    name: 'expected',
+                    value: 'Jerry',
+                  },
+                ],
+              },
+            ],
+            expectedOutcome: 'Sunny with a high of 75F',
+            metrics: ['completeness', 'conciseness', 'output_latency_milliseconds'],
+          },
+        ],
+      });
+    });
+
     it('should handle missing optional fields', async () => {
       const agentTest = new AgentTest({ mdPath: 'path/to/metadataFile' });
 
