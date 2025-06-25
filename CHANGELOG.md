@@ -1,3 +1,12 @@
+## [0.15.4](https://github.com/forcedotcom/agents/compare/0.15.3...0.15.4) (2025-06-25)
+
+
+### Bug Fixes
+
+* enable nuts and fix agent md retrieval ([9bfd8b3](https://github.com/forcedotcom/agents/commit/9bfd8b357f564ca9862d3270ea83bccb967c81ee))
+
+
+
 ## [0.15.3](https://github.com/forcedotcom/agents/compare/0.15.2...0.15.3) (2025-06-24)
 
 
