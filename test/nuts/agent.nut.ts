@@ -52,69 +52,6 @@ describe('agent NUTs', () => {
     await session?.clean();
   });
 
-  // skipping because the server API is not reliable enough to run in CI
-  it.skip('should create an agent spec', async () => {
-    const agentConfig: AgentJobSpecCreateConfig = {
-      agentType: 'customer',
-      role: 'answer questions about the climbing gym',
-      companyName: 'The Campus',
-      companyDescription: 'A climbing gym built by climbers for climbers',
-      maxNumOfTopics: 5,
-    };
-    try {
-      agentSpec = await Agent.createSpec(connection, agentConfig);
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : 'err';
-      console.log('error creating agent spec attempt 1. Waiting 10 seconds and trying again.', errMsg);
-      // If the agent spec fails during creation, try again.
-      await sleep(10_000);
-      agentSpec = await Agent.createSpec(connection, agentConfig);
-    }
-
-    expect(agentSpec).to.be.ok;
-    expect(agentSpec.agentType).to.equal(agentConfig.agentType);
-    expect(agentSpec.role).to.equal(agentConfig.role);
-    expect(agentSpec.companyName).to.equal(agentConfig.companyName);
-    expect(agentSpec.companyDescription).to.equal(agentConfig.companyDescription);
-    expect(agentSpec.maxNumOfTopics).to.equal(agentConfig.maxNumOfTopics);
-    expect(agentSpec.topics).to.have.lengthOf(5);
-  });
-
-  // skipping because the server API is not reliable enough to run in CI
-  it.skip('should create an agent from a spec', async () => {
-    console.log('session.project.dir', session.project.dir);
-    const project = await SfProject.resolve(session.project.dir);
-    const agentResponse = await Agent.create(connection, project, {
-      agentType: agentSpec.agentType,
-      saveAgent: true,
-      agentSettings: {
-        agentName,
-      },
-      generationInfo: {
-        defaultInfo: {
-          role: agentSpec.role,
-          companyName: agentSpec.companyName,
-          companyDescription: agentSpec.companyDescription,
-          preDefinedTopics: agentSpec.topics,
-        },
-      },
-      generationSettings: {
-        maxNumOfTopics: agentSpec.maxNumOfTopics,
-      },
-    });
-    expect(agentResponse).to.be.ok;
-    expect(agentResponse.isSuccess).to.equal(true);
-    expect(agentResponse.agentDefinition).to.be.ok;
-    expect(agentResponse.agentId?.botId).to.be.ok;
-    agentResponse.agentDefinition.agentDescription;
-
-    // verify agent metadata files are retrieved to the project
-    const sourceDir = join(session.project.dir, 'force-app', 'main', 'default');
-    expect(readdirSync(join(sourceDir, 'bots'))).to.have.lengthOf(1);
-    expect(readdirSync(join(sourceDir, 'genAiPlanners'))).to.have.lengthOf(1);
-    expect(readdirSync(join(sourceDir, 'genAiPlugins'))).to.have.lengthOf(5);
-  });
-
   describe('getBotMetadata()', () => {
     let botId: string;
     const botApiName = 'Local_Info_Agent';
@@ -157,6 +94,9 @@ describe('agent NUTs', () => {
       });
       const deploy = await compSet.deploy({ usernameOrConnection: connection });
       const deployResult = await deploy.pollStatus();
+      if (!deployResult.response.success) {
+        console.dir(deployResult.response, { depth: 10 });
+      }
       expect(deployResult.response.success, 'expected deploy to succeed').to.equal(true);
     });
 
@@ -179,6 +119,80 @@ describe('agent NUTs', () => {
       expect(botMetadata.BotUserId).to.be.a('string');
       expect(botMetadata.AgentType).to.equal('EinsteinServiceAgent');
       expect(botMetadata.DeveloperName).to.equal(botApiName);
+    });
+  });
+
+  describe('agent create', () => {
+    it('should create an agent spec', async () => {
+      const agentConfig: AgentJobSpecCreateConfig = {
+        agentType: 'customer',
+        role: 'answer questions about the climbing gym',
+        companyName: 'The Campus',
+        companyDescription: 'A climbing gym built by climbers for climbers',
+        maxNumOfTopics: 3,
+      };
+      try {
+        agentSpec = await Agent.createSpec(connection, agentConfig);
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : 'err';
+        console.log('error creating agent spec attempt 1. Waiting 2 minutes and trying again.', errMsg);
+        // If the agent spec fails during creation, try again.
+        await sleep(120_000);
+        try {
+          agentSpec = await Agent.createSpec(connection, agentConfig);
+        } catch (e) {
+          // If the agent spec fails again, try one more time
+          const eMsg = e instanceof Error ? e.message : 'err';
+          console.log('error creating agent spec attempt 2. Waiting 3 minutes and trying again.', eMsg);
+          // If the agent spec fails during creation, try again.
+          await sleep(180_000);
+          agentSpec = await Agent.createSpec(connection, agentConfig);
+        }
+      }
+
+      expect(agentSpec).to.be.ok;
+      expect(agentSpec.agentType).to.equal(agentConfig.agentType);
+      expect(agentSpec.role).to.equal(agentConfig.role);
+      expect(agentSpec.companyName).to.equal(agentConfig.companyName);
+      expect(agentSpec.companyDescription).to.equal(agentConfig.companyDescription);
+      expect(agentSpec.maxNumOfTopics).to.equal(agentConfig.maxNumOfTopics);
+      expect(agentSpec.topics).to.have.lengthOf(3);
+    });
+
+    it('should create an agent from a spec', async () => {
+      const project = await SfProject.resolve(session.project.dir);
+      const agentResponse = await Agent.create(connection, project, {
+        agentType: agentSpec.agentType,
+        saveAgent: true,
+        agentSettings: {
+          agentName,
+        },
+        generationInfo: {
+          defaultInfo: {
+            role: agentSpec.role,
+            companyName: agentSpec.companyName,
+            companyDescription: agentSpec.companyDescription,
+            preDefinedTopics: agentSpec.topics,
+          },
+        },
+        generationSettings: {
+          maxNumOfTopics: agentSpec.maxNumOfTopics,
+        },
+      });
+      expect(agentResponse).to.be.ok;
+      if (!agentResponse.isSuccess) {
+        console.dir(agentResponse, { depth: 10 });
+      }
+      expect(agentResponse.isSuccess).to.equal(true);
+      expect(agentResponse.agentDefinition).to.be.ok;
+      expect(agentResponse.agentId?.botId).to.be.ok;
+      agentResponse.agentDefinition.agentDescription;
+
+      // verify agent metadata files are retrieved to the project
+      const sourceDir = join(session.project.dir, 'force-app', 'main', 'default');
+      expect(readdirSync(join(sourceDir, 'bots'))).to.have.lengthOf(2);
+      expect(readdirSync(join(sourceDir, 'genAiPlannerBundles'))).to.have.lengthOf(2);
+      expect(readdirSync(join(sourceDir, 'genAiPlugins'))).to.have.lengthOf(6);
     });
   });
 });

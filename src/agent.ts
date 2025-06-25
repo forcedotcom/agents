@@ -83,7 +83,7 @@ export class Agent {
       throw messages.createError('missingAgentNameOrId');
     }
 
-    if (options.nameOrId.startsWith('0Xx') && [15,18].includes(options.nameOrId.length)) {
+    if (options.nameOrId.startsWith('0Xx') && [15, 18].includes(options.nameOrId.length)) {
       this.id = options.nameOrId;
     } else {
       this.name = options.nameOrId;
@@ -177,7 +177,7 @@ export class Agent {
           usernameOrConnection: connection,
           merge: true,
           format: 'source',
-          output: defaultPackagePath,
+          output: path.resolve(project.getPath(), defaultPackagePath),
         });
         const retrieveResult = await retrieve.pollStatus({
           frequency: Duration.milliseconds(200),
