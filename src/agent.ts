@@ -17,6 +17,7 @@ import {
   type AgentJobSpec,
   type AgentJobSpecCreateConfig,
   type AgentOptions,
+  type BotActivationResponse,
   type BotMetadata,
   type BotVersionMetadata,
   type DraftAgentTopicsBody,
@@ -346,7 +347,12 @@ export class Agent {
 
     const url = `/connect/bot-versions/${botVersionMetadata.Id}/activation`;
     const maybeMock = new MaybeMock(this.options.connection);
-    await maybeMock.request('POST', url, { status: desiredState });
+    const response = await maybeMock.request<BotActivationResponse>('POST', url, { status: desiredState });
+    if (response.success) {
+      this.botMetadata!.BotVersions.records[0].Status = response.isActivated ? 'Active' : 'Inactive';
+    } else {
+      throw messages.createError('agentActivationError', [response.messages?.toString() ?? 'unknown']);
+    }
   }
 }
 

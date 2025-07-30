@@ -52,7 +52,7 @@ describe('agent NUTs', () => {
     await session?.clean();
   });
 
-  describe('getBotMetadata()', () => {
+  describe('List and Get Bot Metadata', () => {
     let botId: string;
     const botApiName = 'Local_Info_Agent';
 
@@ -98,27 +98,90 @@ describe('agent NUTs', () => {
         console.dir(deployResult.response, { depth: 10 });
       }
       expect(deployResult.response.success, 'expected deploy to succeed').to.equal(true);
+
+      // wait for the agent to be provisioned
+      console.log('\nwaiting 2 minutes for agent to be provisioned...');
+      await sleep(120_000);
     });
 
-    it('should get agent bot metadata by bot developer name', async () => {
-      const agent = new Agent({ connection, nameOrId: botApiName });
-      const botMetadata = await agent.getBotMetadata();
-      expect(botMetadata).to.be.an('object');
-      expect(botMetadata.Id).to.be.a('string');
-      expect(botMetadata.BotUserId).to.be.a('string');
-      expect(botMetadata.AgentType).to.equal('EinsteinServiceAgent');
-      expect(botMetadata.DeveloperName).to.equal(botApiName);
-      botId = botMetadata.Id;
+    describe('getBotMetadata()', () => {
+      it('should get agent bot metadata by bot developer name', async () => {
+        const agent = new Agent({ connection, nameOrId: botApiName });
+        const botMetadata = await agent.getBotMetadata();
+        expect(botMetadata).to.be.an('object');
+        expect(botMetadata.Id).to.be.a('string');
+        expect(botMetadata.BotUserId).to.be.a('string');
+        expect(botMetadata.AgentType).to.equal('EinsteinServiceAgent');
+        expect(botMetadata.DeveloperName).to.equal(botApiName);
+        expect(botMetadata.BotVersions.records.length).to.equal(1);
+        botId = botMetadata.Id;
+        expect(botMetadata.BotVersions.records[0].BotDefinitionId).to.equal(botId);
+      });
+
+      it('should get agent bot metadata by botId', async () => {
+        const agent = new Agent({ connection, nameOrId: botId });
+        const botMetadata = await agent.getBotMetadata();
+        expect(botMetadata).to.be.an('object');
+        expect(botMetadata.Id).to.equal(botId);
+        expect(botMetadata.BotUserId).to.be.a('string');
+        expect(botMetadata.AgentType).to.equal('EinsteinServiceAgent');
+        expect(botMetadata.DeveloperName).to.equal(botApiName);
+        expect(botMetadata.BotVersions.records.length).to.equal(1);
+        expect(botMetadata.BotVersions.records[0].BotDefinitionId).to.equal(botId);
+      });
     });
 
-    it('should get agent bot metadata by botId', async () => {
-      const agent = new Agent({ connection, nameOrId: botId });
-      const botMetadata = await agent.getBotMetadata();
-      expect(botMetadata).to.be.an('object');
-      expect(botMetadata.Id).to.equal(botId);
-      expect(botMetadata.BotUserId).to.be.a('string');
-      expect(botMetadata.AgentType).to.equal('EinsteinServiceAgent');
-      expect(botMetadata.DeveloperName).to.equal(botApiName);
+    describe('getLatestBotVersionMetadata()', () => {
+      it('should get the latest agent bot version metadata by bot developer name', async () => {
+        const agent = new Agent({ connection, nameOrId: botApiName });
+        const botVersionMetadata = await agent.getLatestBotVersionMetadata();
+        expect(botVersionMetadata).to.be.an('object');
+        expect(botVersionMetadata.Id).to.be.a('string');
+        expect(botVersionMetadata.Status).to.be.a('string');
+        expect(botVersionMetadata.IsDeleted).to.equal(false);
+        expect(botVersionMetadata.DeveloperName).to.equal('v1');
+        expect(botVersionMetadata.BotDefinitionId).to.equal(botId);
+      });
+    });
+
+    describe('listRemote()', () => {
+      it('should list all agents in the org', async () => {
+        const agents = await Agent.listRemote(connection);
+        expect(agents).to.be.an('array');
+        expect(agents.length).to.equal(1);
+        expect(agents[0].DeveloperName).to.equal(botApiName);
+        expect(agents[0].Id).to.equal(botId);
+        expect(agents[0].BotVersions.records.length).to.equal(1);
+        expect(agents[0].BotVersions.records[0].BotDefinitionId).to.equal(botId);
+      });
+    });
+
+    describe('activate/deactivate', () => {
+      it('should activate the agent', async () => {
+        const agent = new Agent({ connection, nameOrId: botId });
+        let botMetadata = await agent.getBotMetadata();
+        expect(botMetadata.BotVersions.records[0].Status).to.equal('Inactive');
+        try {
+          await agent.activate();
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : 'err';
+          console.log('error activating agent. Waiting 2 minutes and trying again.', errMsg);
+          await sleep(120_000);
+          await agent.activate();
+        }
+
+        botMetadata = await agent.getBotMetadata();
+        expect(botMetadata.BotVersions.records[0].Status).to.equal('Active');
+      });
+
+      it('should deactivate the agent', async () => {
+        const agent = new Agent({ connection, nameOrId: botId });
+        let botMetadata = await agent.getBotMetadata();
+        expect(botMetadata.BotVersions.records[0].Status).to.equal('Active');
+        await agent.deactivate();
+        botMetadata = await agent.getBotMetadata();
+        expect(botMetadata.BotVersions.records[0].Status).to.equal('Inactive');
+      });
     });
   });
 

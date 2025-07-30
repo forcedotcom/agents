@@ -60,6 +60,12 @@ export type BotVersionMetadata = {
   CopilotSecondaryLanguages: null | string[];
 };
 
+export type BotActivationResponse = {
+  success: boolean;
+  isActivated: boolean;
+  messages?: string[];
+};
+
 /**
  * An agent job spec is a list of job titles and descriptions
  * to be performed by the agent.

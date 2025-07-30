@@ -21,3 +21,7 @@ The "nameOrId" agent option is required when creating an Agent instance.
 # agentIsDeleted
 
 The %s agent is deleted and cannot change activation state.
+
+# agentActivationError
+
+Changing agent activation status was unsuccessful due to %s.
