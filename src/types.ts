@@ -27,7 +27,7 @@ export type AgentOptions = {
 
 export type BotMetadata = {
   Id: string;
-  IsDeleted: false;
+  IsDeleted: boolean;
   DeveloperName: string;
   MasterLabel: string;
   CreatedDate: string; // eg., "2025-02-13T18:25:17.000+0000",
@@ -40,6 +40,24 @@ export type BotMetadata = {
   Type: string;
   AgentType: string;
   AgentTemplate: null | string;
+  BotVersions: { records: BotVersionMetadata[] };
+};
+
+export type BotVersionMetadata = {
+  Id: string;
+  Status: 'Active' | 'Inactive';
+  IsDeleted: boolean;
+  BotDefinitionId: string;
+  DeveloperName: string;
+  CreatedDate: string; // eg., "2025-06-02T23:16:20.000+0000",
+  CreatedById: string;
+  LastModifiedDate: string; // eg., "2025-06-02T23:16:21.000+0000",
+  LastModifiedById: string;
+  SystemModstamp: string; // eg., "2025-06-02T23:16:21.000+0000",
+  VersionNumber: number;
+  CopilotPrimaryLanguage: null | string;
+  ToneType: AgentTone;
+  CopilotSecondaryLanguages: null | string[];
 };
 
 /**
