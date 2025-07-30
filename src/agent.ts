@@ -361,9 +361,3 @@ const verifyAgentSpecConfig = (config: AgentJobSpecCreateConfig): void => {
 // Decodes all HTML entities in ai-assist API responses.
 const decodeResponse = <T extends object>(response: T): T =>
   JSON.parse(decodeHtmlEntities(JSON.stringify(response))) as T;
-
-// QUERY_RESULT=$(sf data query -q "SELECT Id, DeveloperName, (SELECT Status, Id FROM BotVersions) FROM BotDefinition WHERE IsDeleted = false AND DeveloperName='$AGENT_API_NAME'" --json)
-// BOT_VERSION_ID=$(echo "$QUERY_RESULT" | jq -r '.result.records[0].BotVersions.records[0].Id')
-// CURRENT_STATUS=$(echo "$QUERY_RESULT" | jq -r '.result.records[0].BotVersions.records[0].Status')
-
-// sf api request rest "/services/data/v60.0/connect/bot-versions/$BOT_VERSION_ID/activation"  --method POST --body '{"status": "'"${DESIRED_STATE}"'"}'
