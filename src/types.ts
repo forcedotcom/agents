@@ -320,6 +320,10 @@ export type TestCase = {
   expectedTopic: string | undefined;
   metrics?: Array<(typeof metric)[number]>;
   contextVariables?: Array<{ name: string; value: string }>;
+  conversationHistory?: Array<
+    | { role: 'user'; message: string; index?: number }
+    | { role: 'agent'; message: string; topic: string; index?: number }
+  >;
   customEvaluations?: Array<{
     label: string;
     name: string;
@@ -378,6 +382,10 @@ export type AiEvaluationDefinition = {
     expectation: Array<MetadataMetric | MetadataExpectation | MetadataCustomEvaluation>;
     inputs: {
       contextVariable?: Array<{ variableName: string; variableValue: string }>;
+      conversationHistory?: Array<
+        | { role: 'user'; message: string; index: number }
+        | { role: 'agent'; message: string; topic: string; index: number }
+      >;
       utterance: string;
     };
   }>;

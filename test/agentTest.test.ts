@@ -705,6 +705,62 @@ testCases:
 
       expect(result.testCases[0].expectedActions).to.deep.equal([]);
     });
+
+    it('should parse conversation history from XML into TestSpec', async () => {
+      const agentTest = new AgentTest({ mdPath: 'path/to/metadataFile' });
+
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+      <AiEvaluationDefinition xmlns="http://soap.sforce.com/2006/04/metadata">
+        <name>TestSpec</name>
+        <subjectType>AGENT</subjectType>
+        <subjectName>WeatherBot</subjectName>
+        <testCase>
+          <inputs>
+            <utterance>Summarize my listening preferences</utterance>
+            <conversationHistory>
+              <role>user</role>
+              <message>Show me my listened to album</message>
+              <index>0</index>
+            </conversationHistory>
+            <conversationHistory>
+              <role>agent</role>
+              <message>You listen to Europe '72 28 this last month, an impressive feat!</message>
+              <topic>EmployeeCopilot__AnswerQuestionsWithKnowledge</topic>
+              <index>1</index>
+            </conversationHistory>
+            <conversationHistory>
+              <role>user</role>
+              <message>What about my most played songs?</message>
+              <index>2</index>
+            </conversationHistory>
+          </inputs>
+          <expectation>
+            <name>topic_assertion</name>
+            <expectedValue>Music</expectedValue>
+          </expectation>
+        </testCase>
+      </AiEvaluationDefinition>`;
+
+      readFileStub.resolves(xml);
+
+      const result = await agentTest.getTestSpec();
+
+      expect(result.testCases[0].conversationHistory).to.deep.equal([
+        {
+          role: 'user',
+          message: 'Show me my listened to album',
+        },
+        {
+          role: 'agent',
+          message: "You listen to Europe '72 28 this last month, an impressive feat!",
+          topic: 'EmployeeCopilot__AnswerQuestionsWithKnowledge',
+        },
+        {
+          role: 'user',
+          message: 'What about my most played songs?',
+        },
+      ]);
+    });
   });
 
   describe('create', () => {
@@ -800,6 +856,88 @@ testCases:
             <utterance>List contact emails associated with Acme account</utterance>
         </inputs>
         <number>2</number>
+    </testCase>
+</AiEvaluationDefinition>
+`);
+    });
+
+    it('should generate XML with conversation history from YAML', async () => {
+      const ymlWithConversationHistory = `name: Test
+description: Test with conversation history
+subjectType: AGENT
+subjectName: MyAgent
+testCases:
+  - utterance: Summarize my listening preferences
+    conversationHistory:
+      - role: user
+        message: Show me my favorite artist
+      - role: agent
+        message: Your favorite artist is ACDC.
+        topic: EmployeeCopilot__AnswerQuestionsWithKnowledge
+      - role: user
+        message: What about my most played songs?
+    expectedActions:
+      - GetMusicPreferences
+      - SummarizeData
+    expectedOutcome: Here's a summary of your listening preferences based on your history
+    expectedTopic: Music
+    metrics:
+      - completeness
+      - coherence
+`;
+
+      sinon.stub(fs, 'readFile').resolves(ymlWithConversationHistory);
+      sinon.stub(AgentTest, 'list').resolves([]);
+      const { contents } = await AgentTest.create(connection, 'MyTestWithHistory', 'test.yaml', {
+        outputDir: 'tmp',
+        preview: true,
+      });
+
+      expect(contents).to.equal(`<?xml version="1.0" encoding="UTF-8"?>
+<AiEvaluationDefinition xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Test with conversation history</description>
+    <name>Test</name>
+    <subjectName>MyAgent</subjectName>
+    <subjectType>AGENT</subjectType>
+    <testCase>
+        <expectation>
+            <expectedValue>Music</expectedValue>
+            <name>topic_assertion</name>
+        </expectation>
+        <expectation>
+            <expectedValue>[&apos;GetMusicPreferences&apos;,&apos;SummarizeData&apos;]</expectedValue>
+            <name>actions_assertion</name>
+        </expectation>
+        <expectation>
+            <expectedValue>Here&apos;s a summary of your listening preferences based on your history</expectedValue>
+            <name>output_validation</name>
+        </expectation>
+        <expectation>
+            <name>completeness</name>
+        </expectation>
+        <expectation>
+            <name>coherence</name>
+        </expectation>
+        <inputs>
+            <utterance>Summarize my listening preferences</utterance>
+            <conversationHistory>
+                <role>user</role>
+                <message>Show me my favorite artist</message>
+                <index>0</index>
+            </conversationHistory>
+            <conversationHistory>
+                <role>agent</role>
+                <message>Your favorite artist is ACDC.</message>
+                <topic>EmployeeCopilot__AnswerQuestionsWithKnowledge</topic>
+                <index>1</index>
+            </conversationHistory>
+            <conversationHistory>
+                <role>user</role>
+                <message>What about my most played songs?</message>
+                <index>2</index>
+            </conversationHistory>
+        </inputs>
+        <number>1</number>
     </testCase>
 </AiEvaluationDefinition>
 `);

@@ -299,6 +299,13 @@ const convertToSpec = (data: AiEvaluationDefinition): TestSpec => ({
         name: cv.variableName,
         value: cv.variableValue,
       })),
+      ...(tc.inputs.conversationHistory && {
+        conversationHistory: ensureArray(tc.inputs.conversationHistory).map((ch) =>
+          ch.role === 'agent'
+            ? { role: ch.role, message: ch.message, topic: ch.topic }
+            : { role: ch.role, message: ch.message }
+        ),
+      }),
       customEvaluations: expectations
         .filter((e) => 'parameter' in e)
         .map((ce) => ({ name: ce.name, label: ce.label, parameters: ce.parameter })),
@@ -358,6 +365,13 @@ const convertToMetadata = (spec: TestSpec): AiEvaluationDefinition => ({
     inputs: {
       utterance: tc.utterance,
       contextVariable: tc.contextVariables?.map((cv) => ({ variableName: cv.name, variableValue: cv.value })),
+      ...(tc.conversationHistory && {
+        conversationHistory: tc.conversationHistory.map((ch, index) =>
+          ch.role === 'agent'
+            ? { role: ch.role, message: ch.message, topic: ch.topic, index: ch.index ?? index }
+            : { role: ch.role, message: ch.message, index: ch.index ?? index }
+        ),
+      }),
     },
     number: spec.testCases.indexOf(tc) + 1,
   })),
@@ -379,7 +393,14 @@ type AiEvaluationDefinitionXml = {
 };
 const parseAgentTestXml = async (mdPath: string): Promise<AiEvaluationDefinition> => {
   const xml = await readFile(mdPath, 'utf-8');
-  const parser = new XMLParser();
+  const parser = new XMLParser({
+    ignoreAttributes: false,
+    attributeNamePrefix: '$',
+    isArray: (name) =>
+      name === 'testCase' || name === 'expectation' || name === 'contextVariable' || name === 'conversationHistory',
+    processEntities: true,
+    htmlEntities: true,
+  });
   const xmlContent = parser.parse(xml) as AiEvaluationDefinitionXml;
   return xmlContent.AiEvaluationDefinition;
 };
