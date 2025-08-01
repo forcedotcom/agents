@@ -1,3 +1,12 @@
+# [0.16.0](https://github.com/forcedotcom/agents/compare/0.15.4...0.16.0) (2025-08-01)
+
+
+### Features
+
+* add conversation history to XML->YAML->XML conversion, auto-indexing ([28c9dd7](https://github.com/forcedotcom/agents/commit/28c9dd722350e686d376b216e7c652f63009cc9c))
+
+
+
 ## [0.15.4](https://github.com/forcedotcom/agents/compare/0.15.3...0.15.4) (2025-06-25)
 
 
