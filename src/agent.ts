@@ -17,7 +17,9 @@ import {
   type AgentJobSpec,
   type AgentJobSpecCreateConfig,
   type AgentOptions,
+  type BotActivationResponse,
   type BotMetadata,
+  type BotVersionMetadata,
   type DraftAgentTopicsBody,
   type DraftAgentTopicsResponse,
 } from './types.js';
@@ -69,7 +71,7 @@ export class Agent {
   private id?: string;
   // The name of the agent (Bot)
   private name?: string;
-  // The metadata fields for the agent (Bot)
+  // The metadata fields for the agent (Bot and BotVersion)
   private botMetadata?: BotMetadata;
 
   /**
@@ -120,6 +122,19 @@ export class Agent {
     }
 
     return bots;
+  }
+
+  /**
+   * Lists all agents in the org.
+   *
+   * @param connection a `Connection` to an org.
+   * @returns the list of agents
+   */
+  public static async listRemote(connection: Connection): Promise<BotMetadata[]> {
+    const agentsQuery = await connection.query<BotMetadata>(
+      'SELECT FIELDS(ALL), (SELECT FIELDS(ALL) FROM BotVersions LIMIT 10) FROM BotDefinition LIMIT 100'
+    );
+    return agentsQuery.records;
   }
 
   /**
@@ -269,20 +284,75 @@ export class Agent {
   }
 
   /**
-   * Queries BotDefinition for the bot metadata and assigns:
+   * Queries BotDefinition and BotVersions (limited to 10) for the bot metadata and assigns:
    * 1. this.id
    * 2. this.name
    * 3. this.botMetadata
+   * 4. this.botVersionMetadata
    */
   public async getBotMetadata(): Promise<BotMetadata> {
     if (!this.botMetadata) {
       const whereClause = this.id ? `Id = '${this.id}'` : `DeveloperName = '${this.name as string}'`;
-      const query = `SELECT FIELDS(ALL) FROM BotDefinition WHERE ${whereClause} LIMIT 1`;
+      const query = `SELECT FIELDS(ALL), (SELECT FIELDS(ALL) FROM BotVersions LIMIT 10) FROM BotDefinition WHERE ${whereClause} LIMIT 1`;
       this.botMetadata = await this.options.connection.singleRecordQuery<BotMetadata>(query);
       this.id = this.botMetadata.Id;
       this.name = this.botMetadata.DeveloperName;
     }
     return this.botMetadata;
+  }
+
+  /**
+   * Returns the latest bot version metadata.
+   *
+   * @returns the latest bot version metadata
+   */
+  public async getLatestBotVersionMetadata(): Promise<BotVersionMetadata> {
+    if (!this.botMetadata) {
+      this.botMetadata = await this.getBotMetadata();
+    }
+    const botVersions = this.botMetadata.BotVersions.records;
+    return botVersions[botVersions.length - 1];
+  }
+
+  /**
+   * Activates the agent.
+   *
+   * @returns void
+   */
+  public async activate(): Promise<void> {
+    return this.setAgentStatus('Active');
+  }
+
+  /**
+   * Deactivates the agent.
+   *
+   * @returns void
+   */
+  public async deactivate(): Promise<void> {
+    return this.setAgentStatus('Inactive');
+  }
+
+  private async setAgentStatus(desiredState: 'Active' | 'Inactive'): Promise<void> {
+    const botMetadata = await this.getBotMetadata();
+    const botVersionMetadata = await this.getLatestBotVersionMetadata();
+
+    if (botMetadata.IsDeleted) {
+      throw messages.createError('agentIsDeleted', [botMetadata.DeveloperName]);
+    }
+
+    if (botVersionMetadata.Status === desiredState) {
+      getLogger().debug(`Agent ${botMetadata.DeveloperName} is already ${desiredState}. Nothing to do.`);
+      return;
+    }
+
+    const url = `/connect/bot-versions/${botVersionMetadata.Id}/activation`;
+    const maybeMock = new MaybeMock(this.options.connection);
+    const response = await maybeMock.request<BotActivationResponse>('POST', url, { status: desiredState });
+    if (response.success) {
+      this.botMetadata!.BotVersions.records[0].Status = response.isActivated ? 'Active' : 'Inactive';
+    } else {
+      throw messages.createError('agentActivationError', [response.messages?.toString() ?? 'unknown']);
+    }
   }
 }
 

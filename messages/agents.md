@@ -17,3 +17,11 @@ Retrieve the agent metadata using the "project retrieve start" command.
 # missingAgentNameOrId
 
 The "nameOrId" agent option is required when creating an Agent instance.
+
+# agentIsDeleted
+
+The %s agent has been deleted and its activation state can't be changed.
+
+# agentActivationError
+
+Changing the agent's activation status was unsuccessful due to %s.

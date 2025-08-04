@@ -18,6 +18,8 @@ export {
   type AgentPreviewStartResponse,
   type AgentPreviewSendResponse,
   type AgentPreviewEndResponse,
+  type BotMetadata,
+  type BotVersionMetadata,
   type DraftAgentTopics,
   type DraftAgentTopicsBody,
   type DraftAgentTopicsResponse,
