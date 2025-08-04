@@ -1,3 +1,17 @@
+# [0.17.0](https://github.com/forcedotcom/agents/compare/0.16.0...0.17.0) (2025-08-04)
+
+
+### Bug Fixes
+
+* add tests and ensure correct botMetadata state ([58e716f](https://github.com/forcedotcom/agents/commit/58e716f16527fabbf597fe0dc864828f1498860a))
+
+
+### Features
+
+* add support for activating and deactivating agents ([71ca82b](https://github.com/forcedotcom/agents/commit/71ca82bfc9249f1b685b70057b4eab31e0cd9f3a))
+
+
+
 # [0.16.0](https://github.com/forcedotcom/agents/compare/0.15.4...0.16.0) (2025-08-01)
 
 
