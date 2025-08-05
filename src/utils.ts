@@ -23,6 +23,7 @@ export const metric = [
 export const decodeHtmlEntities = (str: string = ''): string => {
   const entities: { [key: string]: string } = {
     '&quot;': '"',
+    '&#92;': '\\',
     '&apos;': "'",
     '&amp;': '&',
     '&lt;': '<',
