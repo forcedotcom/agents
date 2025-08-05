@@ -99,6 +99,9 @@ describe('normalizeResults', () => {
           generatedData: {
             actionsSequence: [],
             outcome: '',
+            invokedActions:
+              '[[{&quot;function&quot;:{&quot;name&quot;:&quot;EmployeeCopilot__IdentifyRecordByName&quot;,&quot;input&quot;:{&quot;recordName&quot;:&quot;Dickenson Mobile Generators&quot;} &#92; "',
+            sessionId: '123',
             topic: '',
           },
           testResults: [
@@ -115,7 +118,8 @@ describe('normalizeResults', () => {
             },
             {
               endTime: '2025-05-15T20:06:04Z',
-              metricExplainability: 'The answer does not provide any weather information, which is the main request. It only provides a general response without addressing the user&#39;s query.',
+              metricExplainability:
+                'The answer does not provide any weather information, which is the main request. It only provides a general response without addressing the user&#39;s query.',
               metricLabel: 'Precision',
               name: 'completeness',
               result: 'FAILURE',
@@ -123,8 +127,8 @@ describe('normalizeResults', () => {
               startTime: '2025-05-15T20:05:48Z',
               status: 'COMPLETED',
               actualValue: '',
-              expectedValue: ''
-            }
+              expectedValue: '',
+            },
           ],
         },
       ],
@@ -135,7 +139,12 @@ describe('normalizeResults', () => {
     expect(normalized.testCases[0].inputs.utterance).to.equal('What\'s the weather like in "San Francisco"?');
     expect(normalized.testCases[0].testResults[0].actualValue).to.equal('The temperature is > 75°F');
     expect(normalized.testCases[0].testResults[0].expectedValue).to.equal('Expect < 80°F');
-    expect(normalized.testCases[0].testResults[1].metricExplainability).to.equal("The answer does not provide any weather information, which is the main request. It only provides a general response without addressing the user's query.");
+    expect(normalized.testCases[0].testResults[1].metricExplainability).to.equal(
+      "The answer does not provide any weather information, which is the main request. It only provides a general response without addressing the user's query."
+    );
+    expect(normalized.testCases[0].generatedData.invokedActions).to.equal(
+      '[[{"function":{"name":"EmployeeCopilot__IdentifyRecordByName","input":{"recordName":"Dickenson Mobile Generators"} \\ "'
+    );
   });
 
   it('should handle undefined or empty values', () => {
@@ -153,6 +162,8 @@ describe('normalizeResults', () => {
           generatedData: {
             actionsSequence: [],
             outcome: '',
+            invokedActions: '',
+            sessionId: '123',
             topic: '',
           },
           testResults: [
@@ -198,6 +209,8 @@ describe('normalizeResults', () => {
             actionsSequence: [],
             outcome: '',
             topic: '',
+            invokedActions: '',
+            sessionId: '123',
           },
           testResults: [
             {
@@ -221,6 +234,8 @@ describe('normalizeResults', () => {
     expect(normalized.testCases[0].inputs.utterance).to.equal('Regular string with no HTML entities');
     expect(normalized.testCases[0].testResults[0].actualValue).to.equal('Plain text response');
     expect(normalized.testCases[0].testResults[0].expectedValue).to.equal('Expected plain text');
-    expect(normalized.testCases[0].testResults[0].metricExplainability).to.equal('Regular string with no HTML entities for metric explainability');
+    expect(normalized.testCases[0].testResults[0].metricExplainability).to.equal(
+      'Regular string with no HTML entities for metric explainability'
+    );
   });
 });
