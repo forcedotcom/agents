@@ -305,6 +305,8 @@ export type TestCaseResult = {
   };
   generatedData: {
     actionsSequence: string[];
+    invokedActions: string;
+    sessionId: string;
     outcome: string;
     topic: string;
   };

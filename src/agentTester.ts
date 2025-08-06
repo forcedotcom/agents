@@ -180,6 +180,10 @@ export function normalizeResults(results: AgentTestResultsResponse): AgentTestRe
     ...results,
     testCases: results.testCases.map((tc) => ({
       ...tc,
+      generatedData: {
+        ...tc.generatedData,
+        invokedActions: decodeHtmlEntities(tc.generatedData.invokedActions),
+      },
       inputs: {
         utterance: decodeHtmlEntities(tc.inputs.utterance),
       },
