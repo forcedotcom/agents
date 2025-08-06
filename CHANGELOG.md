@@ -1,3 +1,12 @@
+## [0.17.1](https://github.com/forcedotcom/agents/compare/0.17.0...0.17.1) (2025-08-06)
+
+
+### Bug Fixes
+
+* update evaluation response type, export method ([522786e](https://github.com/forcedotcom/agents/commit/522786e95a6e67374e212cb85640c079a8bf0732))
+
+
+
 # [0.17.0](https://github.com/forcedotcom/agents/compare/0.16.0...0.17.0) (2025-08-04)
 
 
