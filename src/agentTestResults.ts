@@ -84,7 +84,7 @@ async function junitFormat(results: AgentTestResultsResponse): Promise<string> {
         };
       }),
     },
-  }) as string;
+  });
 
   return Promise.resolve(`<?xml version="1.0" encoding="UTF-8"?>\n${suites}`.trim());
 }
