@@ -26,6 +26,7 @@ export class AgentTrace {
    * @param connection The connection to use for making the API request
    * @param traceId The trace ID to retrieve trace data for
    * @returns Promise that resolves with the trace data response containing actions and their execution details
+   * @beta
    */
   public static async getTrace(connection: Connection, traceId: string): Promise<AgentTraceResponse> {
     const maybeMock = new MaybeMock(connection);
