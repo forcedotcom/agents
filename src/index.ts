@@ -18,6 +18,8 @@ export {
   type AgentPreviewStartResponse,
   type AgentPreviewSendResponse,
   type AgentPreviewEndResponse,
+  type AgentTraceResponse,
+  type AgentTraceStep,
   type BotMetadata,
   type BotVersionMetadata,
   type DraftAgentTopics,
@@ -34,6 +36,7 @@ export { metric } from './utils';
 export { Agent, AgentCreateLifecycleStages } from './agent';
 export { AgentTester } from './agentTester';
 export { AgentTest, AgentTestCreateLifecycleStages } from './agentTest';
+export { AgentTrace } from './agentTrace';
 export { convertTestResultsToFormat, humanFriendlyName } from './agentTestResults';
 export { AgentPreview } from './agentPreview';
 export { writeDebugLog } from './apexUtils';
