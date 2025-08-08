@@ -1,3 +1,12 @@
+## [0.17.2](https://github.com/forcedotcom/agents/compare/0.17.1...0.17.2) (2025-08-08)
+
+
+### Bug Fixes
+
+* add agentTrace class, guesstimate api response/parameters ([4d1367f](https://github.com/forcedotcom/agents/commit/4d1367f79cb39807f117ffcf3bdfb1bb56de47c7))
+
+
+
 ## [0.17.1](https://github.com/forcedotcom/agents/compare/0.17.0...0.17.1) (2025-08-06)
 
 
