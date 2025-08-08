@@ -1,3 +1,12 @@
+## [0.17.3](https://github.com/forcedotcom/agents/compare/0.17.2...0.17.3) (2025-08-08)
+
+
+### Bug Fixes
+
+* bump dependencies and fix lint errors ([a772e3a](https://github.com/forcedotcom/agents/commit/a772e3a6b159dd0d440e9448b26f16e16d397bfb))
+
+
+
 ## [0.17.2](https://github.com/forcedotcom/agents/compare/0.17.1...0.17.2) (2025-08-08)
 
 
