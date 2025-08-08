@@ -498,3 +498,90 @@ export type AgentPreviewEndResponse = {
 };
 
 export type EndReason = 'UserRequest' | 'Transfer' | 'Expiration' | 'Error' | 'Other';
+
+// ====================================================
+//               Agent Trace Types
+// ====================================================
+
+export type AgentTraceStep =
+  | UserInputStep
+  | LLMExecutionStep
+  | UpdateTopicStep
+  | EventStep
+  | ReasoningStep
+  | PlannerResponseStep;
+
+export type UserInputStep = {
+  type: 'UserInputStep';
+  message: string;
+};
+
+export type LLMExecutionStep = {
+  type: 'LLMExecutionStep';
+  promptName: string;
+  promptContent: string;
+  promptResponse: string;
+  executionLatency: number;
+  startExecutionTime: number;
+  endExecutionTime: number;
+};
+
+export type UpdateTopicStep = {
+  type: 'UpdateTopicStep';
+  topic: string;
+  description: string;
+  job: string;
+  instructions: string[];
+  availableFunctions: unknown[];
+};
+
+export type EventStep = {
+  type: 'EventStep';
+  eventName: string;
+  isError: boolean;
+  payload: {
+    oldTopic: string;
+    newTopic: string;
+  };
+};
+
+export type ReasoningStep = {
+  type: 'ReasoningStep';
+  reason: string;
+};
+
+export type PlannerResponseStep = {
+  type: 'PlannerResponseStep';
+  message: string;
+  responseType: string;
+  isContentSafe: boolean;
+  safetyScore: {
+    safety_score: number;
+    category_scores: {
+      toxicity: number;
+      hate: number;
+      identity: number;
+      violence: number;
+      physical: number;
+      sexual: number;
+      profanity: number;
+      biased: number;
+    };
+  };
+};
+
+export type AgentTraceResponse = {
+  actions: Array<{
+    id: string;
+    state: string;
+    returnValue: {
+      type: string;
+      planId: string;
+      sessionId: string;
+      intent: string;
+      topic: string;
+      plan: AgentTraceStep[];
+    };
+    error: unknown[];
+  }>;
+};
