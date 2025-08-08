@@ -420,7 +420,7 @@ const buildMetadataXml = (data: AiEvaluationDefinition): string => {
     ignoreAttributes: false,
   });
 
-  const xml = builder.build(aiEvalXml) as string;
+  const xml = builder.build(aiEvalXml);
 
   return `<?xml version="1.0" encoding="UTF-8"?>\n${xml}`;
 };
