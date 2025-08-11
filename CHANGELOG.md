@@ -1,3 +1,12 @@
+## [0.17.4](https://github.com/forcedotcom/agents/compare/0.17.3...0.17.4) (2025-08-11)
+
+
+### Bug Fixes
+
+* add AF Script mock ([979b262](https://github.com/forcedotcom/agents/commit/979b2620db8c85ff7f26e4e1472939a258e43d54))
+
+
+
 ## [0.17.3](https://github.com/forcedotcom/agents/compare/0.17.2...0.17.3) (2025-08-08)
 
 
