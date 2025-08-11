@@ -20,6 +20,7 @@ import {
   type BotActivationResponse,
   type BotMetadata,
   type BotVersionMetadata,
+  type CreateAfScriptResponse,
   type DraftAgentTopicsBody,
   type DraftAgentTopicsResponse,
 } from './types.js';
@@ -267,6 +268,32 @@ export class Agent {
         name: 'AgentJobSpecCreateError',
         message: htmlDecodedResponse.errorMessage ?? 'unknown',
         data: htmlDecodedResponse,
+      });
+    }
+  }
+
+  /**
+   * Creates agent AF Script using agent job spec data.
+   *
+   * @param connection The connection to the org
+   * @param agentJobSpec The agent specification data
+   * @returns Promise<string> The generated AF Script as a string
+   * @beta
+   */
+  public static async createAfScript(connection: Connection, agentJobSpec: AgentJobSpec): Promise<string> {
+    const url = '/connect/ai-assist/create-af-script';
+    const maybeMock = new MaybeMock(connection);
+
+    getLogger().debug(`Generating AF Script with agent spec data: ${JSON.stringify(agentJobSpec)}`);
+
+    const response = await maybeMock.request<CreateAfScriptResponse>('POST', url, agentJobSpec);
+    if (response.isSuccess && response.afScript) {
+      return response.afScript;
+    } else {
+      throw SfError.create({
+        name: 'CreateAfScriptError',
+        message: response.errorMessage ?? 'unknown',
+        data: response,
       });
     }
   }

@@ -257,6 +257,15 @@ export type DraftAgentTopicsResponse = {
   topicDrafts: DraftAgentTopics;
 };
 
+/**
+ * The response from the `create-af-script` API.
+ */
+export type CreateAfScriptResponse = {
+  isSuccess: boolean;
+  errorMessage?: string;
+  afScript?: string;
+};
+
 // ====================================================
 //               Agent Testing Types
 // ====================================================

@@ -47,6 +47,29 @@ describe('Agents', () => {
     expect(output.topics[0]).to.have.property('name', 'Guest_Experience_Enhancement');
   });
 
+  it('createAfScript (mock behavior) should return AF Script', async () => {
+    process.env.SF_MOCK_DIR = join('test', 'mocks', 'createAfScript');
+    const agentType = 'customer';
+    const companyName = 'Coral Cloud Enterprises';
+    const output = await Agent.createAfScript(connection, {
+      agentType,
+      role: 'answer questions about vacation_rentals',
+      companyName,
+      companyDescription: 'Provide vacation rentals and activities',
+      topics: [
+        {
+          name: 'Guest_Experience_Enhancement',
+          description: 'Enhance the guest experience',
+        },
+      ],
+    });
+
+    expect(output).to.be.a('string');
+    expect(output).to.include('# A simple weather assistant agent');
+    expect(output).to.include('topic weather_assistant:');
+    expect(output).to.include('agent_name: "ServiceBot"');
+  });
+
   it('create save agent', async () => {
     process.env.SF_MOCK_DIR = join('test', 'mocks', 'createAgent-Save');
     const sfProject = SfProject.getInstance();
