@@ -70,6 +70,14 @@ describe('Agents', () => {
     expect(output).to.include('agent_name: "ServiceBot"');
   });
 
+  it('createAgentDsl (mock behavior) should return full agent dsl', async () => {
+    process.env.SF_MOCK_DIR = join('test', 'mocks', 'createAgentDsl');
+    const output = await Agent.createAgentDsl(connection, 'AF Script string');
+    expect(output).to.have.property('schema_version', '1.0');
+    expect(output).to.have.property('global_configuration').and.be.an('object');
+    expect(output).to.have.property('agent_version').and.be.an('object');
+  });
+
   it('create save agent', async () => {
     process.env.SF_MOCK_DIR = join('test', 'mocks', 'createAgent-Save');
     const sfProject = SfProject.getInstance();
