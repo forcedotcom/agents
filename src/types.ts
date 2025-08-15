@@ -594,3 +594,24 @@ export type AgentTraceResponse = {
     error: unknown[];
   }>;
 };
+
+export type CreateAgentDslResponse = {
+  isSuccess: boolean;
+  errorMessage?: string;
+  agentDsl?: AgentDsl;
+};
+
+// This is not accurate but good enough for now
+export type AgentDsl = {
+  schema_version: string;
+  global_configuration: {
+    developer_name: string;
+    label: string;
+    description: string;
+    agent_type: string;
+  };
+  agent_version: {
+    developer_name: string;
+    planner_type: string;
+  };
+};
