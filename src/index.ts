@@ -40,4 +40,3 @@ export { AgentTrace } from './agentTrace';
 export { convertTestResultsToFormat, humanFriendlyName } from './agentTestResults';
 export { AgentPreview } from './agentPreview';
 export { writeDebugLog } from './apexUtils';
-export { MaybeMock } from './maybe-mock';

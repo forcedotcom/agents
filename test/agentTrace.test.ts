@@ -30,7 +30,7 @@ describe('AgentTrace', () => {
 
   describe('getTrace', () => {
     it('should return trace data for a given trace ID', async () => {
-      const traceId = 'test-trace-id';
+      const traceId = '123-trace-id-456';
       const result = await AgentTrace.getTrace(connection, traceId);
 
       // Basic structure validation - flexible since this may change
@@ -46,7 +46,7 @@ describe('AgentTrace', () => {
     });
 
     it('should handle the API call without throwing errors', async () => {
-      const traceId = 'test-trace-id';
+      const traceId = '123-trace-id-456';
 
       // Just verify the method can be called and returns a promise
       const result = AgentTrace.getTrace(connection, traceId);
@@ -58,7 +58,7 @@ describe('AgentTrace', () => {
 
     it('should work with different trace IDs', async () => {
       // Test with the trace ID format from the user's example
-      const traceId = '12-23-34';
+      const traceId = '123-trace-id-456';
 
       try {
         const result = await AgentTrace.getTrace(connection, traceId);

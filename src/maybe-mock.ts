@@ -73,7 +73,7 @@ async function readDirectory<T extends nock.Body>(path: string): Promise<T[] | u
   return (await Promise.all(promises)).filter((r): r is T => !!r);
 }
 
-async function readResponses<T extends nock.Body>(mockDir: string, url: string, logger: Logger): Promise<T[] | null> {
+async function readResponses<T extends nock.Body>(mockDir: string, url: string, logger: Logger): Promise<T[]> {
   const mockResponseName = url.replace(/\//g, '_').replace(/:/g, '_').replace(/^_/, '').split('?')[0];
   const mockResponsePath = join(mockDir, mockResponseName);
 
@@ -102,10 +102,9 @@ async function readResponses<T extends nock.Body>(mockDir: string, url: string, 
   )
     .filter((r): r is T[] => !!r)
     .flat();
-
   if (responses.length === 0) {
-    logger.debug(`No mock file found for ${mockResponsePath} - will use real API endpoint`);
-    return null;
+    logger.debug(`No mock file found for ${mockResponsePath} - will fall back to real API call`);
+    return [];
   }
 
   logger.debug(`Using responses: ${responses.map((r) => JSON.stringify(r)).join(', ')}`);
@@ -114,70 +113,19 @@ async function readResponses<T extends nock.Body>(mockDir: string, url: string, 
 }
 
 /**
- * A class to act as an intelligent proxy between your application and Salesforce APIs.
+ * A class to act as an in-between the library's request, and the orgs response
  *
- * **Behavior:**
- * - If `SF_MOCK_DIR` is set AND a mock file exists for the specific endpoint → Mock the response
- * - If `SF_MOCK_DIR` is set BUT no mock file exists for the endpoint → Make real API call
- * - If `SF_MOCK_DIR` is not set → Make real API calls
+ * if `SF_MOCK_DIR` is set it will read from the directory, resolving files as API responses with nock
  *
- * **VS Code Extension Friendly:**
- * Environment variables are checked at runtime, not import time. This allows VS Code extensions
- * to set `SF_MOCK_DIR` dynamically during debugging without import-time errors.
- *
- * This allows you to selectively mock only the endpoints you have mock files for,
- * while letting other endpoints hit the real API. Perfect for mixed development workflows.
- *
- * **Examples**
- *
- * Basic usage:
- * ```typescript
- * process.env.SF_MOCK_DIR = 'test/mocks';
- * const maybeMock = new MaybeMock(connection);
- *
- * // If test/mocks/api_trace_123.json exists → mocked
- * const trace = await maybeMock.request('GET', '/api/trace/123');
- *
- * // If test/mocks/einstein_ai-agent_v1_sessions.json exists → mocked
- * const session = await maybeMock.request('POST', '/einstein/ai-agent/v1/sessions', body);
- *
- * // If no mock file exists for this endpoint → real API call
- * const liveData = await maybeMock.request('GET', '/some/other/endpoint');
- * ```
- *
- * VS Code Extension usage:
- * ```typescript
- * import * as vscode from 'vscode';
- *
- * // Set environment variable at runtime (extension friendly!)
- * const debugCommand = vscode.commands.registerCommand('extension.debugWithMocks', () => {
- *   const mockDir = path.join(context.extensionPath, 'debug-mocks');
- *   process.env.SF_MOCK_DIR = mockDir;  // Runtime setting works!
- *
- *   const maybeMock = new MaybeMock(connection);  // No import-time errors
- *   // ... rest of debugging logic
- * });
- * ```
- *
- * **File Naming Convention:**
- * URLs are converted to filenames by replacing `/` with `_` and `:` with `_`:
- * - `/api/trace/123` → `api_trace_123.json`
- * - `https://api.salesforce.com/einstein/ai-agent/v1/sessions` → `https___api.salesforce.com_einstein_ai-agent_v1_sessions.json`
+ * if it is NOT set, it will hit the endpoint and use real server responses
  */
 export class MaybeMock {
+  private mockDir = getMockDir();
   private scopes = new Map<string, nock.Scope>();
   private logger: Logger;
 
   public constructor(private connection: Connection) {
     this.logger = Logger.childFromRoot(this.constructor.name);
-  }
-
-  /**
-   * Get the mock directory at runtime (VS Code extension friendly).
-   * This checks the SF_MOCK_DIR environment variable when called, not at import time.
-   */
-  private static getRuntimeMockDir(): string | undefined {
-    return getMockDir();
   }
 
   /**
@@ -195,55 +143,56 @@ export class MaybeMock {
     body: nock.RequestBodyMatcher = {},
     headers: HttpHeaders = {}
   ): Promise<T> {
-    // Check for mock directory at runtime (VS Code extension friendly)
-    const mockDir = MaybeMock.getRuntimeMockDir();
+    if (this.mockDir) {
+      this.logger.debug(`Checking for mock file for ${method} request to ${url} in ${this.mockDir}`);
+      const responses = await readResponses<T>(this.mockDir, url, this.logger);
 
-    if (mockDir) {
-      this.logger.debug(`Checking for mock file for ${method} request to ${url} in ${mockDir}`);
-      const responses = await readResponses<T>(mockDir, url, this.logger);
+      // Only set up nock interceptors if we have mock responses
+      if (responses.length > 0) {
+        this.logger.debug(`Setting up mock responses for ${method} ${url}`);
 
-      // If mock file exists, set up nock interceptor
-      if (responses) {
-        this.logger.debug(`Found mock file - setting up nock interceptor for ${url}`);
+        // Determine the correct base URL and path for nock
+        let nockBaseUrl: string;
+        let nockPath: string;
 
-        // For agent APIs, we need to use the api.salesforce.com base, not the org-specific URL
-        const baseUrl = url.startsWith('https://api.salesforce.com')
-          ? 'https://api.salesforce.com'
-          : this.connection.baseUrl();
+        if (url.startsWith('https://api.salesforce.com')) {
+          // For SFAP endpoints (like AgentPreview), use the full api.salesforce.com URL
+          nockBaseUrl = 'https://api.salesforce.com';
+          nockPath = url.replace('https://api.salesforce.com', '');
+        } else {
+          // For regular Salesforce org endpoints, use the connection's base URL
+          nockBaseUrl = this.connection.baseUrl();
+          nockPath = url;
+        }
 
-        const scope = this.scopes.get(baseUrl) ?? nock(baseUrl);
-
+        const scope = this.scopes.get(nockBaseUrl) ?? nock(nockBaseUrl);
         // Look up status code to determine if it's successful or not
+        // Be have to assert this is a number because AgentTester has a status that is non-numeric
         const getCode = (response: T): number =>
           typeof response === 'object' && 'status' in response && typeof response.status === 'number'
             ? response.status
             : 200;
 
-        // Handle SFAP endpoint formatting
-        const cleanUrl = url.replace('https://api.salesforce.com', '');
-        this.scopes.set(baseUrl, scope);
-
+        this.scopes.set(nockBaseUrl, scope);
         switch (method) {
           case 'GET':
             for (const response of responses) {
-              scope.get(cleanUrl).reply(getCode(response), response);
+              scope.get(nockPath).reply(getCode(response), response);
             }
             break;
           case 'POST':
             for (const response of responses) {
-              scope.post(cleanUrl, body).reply(getCode(response), response);
+              scope.post(nockPath, body).reply(getCode(response), response);
             }
             break;
           case 'DELETE':
             for (const response of responses) {
-              scope.delete(cleanUrl).reply(getCode(response), response);
+              scope.delete(nockPath).reply(getCode(response), response);
             }
             break;
         }
-
-        // Continue to make the request - nock will intercept it
       } else {
-        this.logger.debug(`No mock file found for ${url} - will make real API call`);
+        this.logger.debug(`No mock file found for ${method} ${url} - proceeding with real API call`);
       }
     }
 
