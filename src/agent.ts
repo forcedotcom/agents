@@ -14,6 +14,7 @@ import { Duration } from '@salesforce/kit';
 import {
   type AgentCreateConfig,
   type AgentCreateResponse,
+  type AgentDsl,
   type AgentJobSpec,
   type AgentJobSpecCreateConfig,
   type AgentOptions,
@@ -21,6 +22,7 @@ import {
   type BotMetadata,
   type BotVersionMetadata,
   type CreateAfScriptResponse,
+  type CreateAgentDslResponse,
   type DraftAgentTopicsBody,
   type DraftAgentTopicsResponse,
 } from './types.js';
@@ -273,7 +275,7 @@ export class Agent {
   }
 
   /**
-   * Creates agent AF Script using agent job spec data.
+   * Creates AF Script using agent job spec data.
    *
    * @param connection The connection to the org
    * @param agentJobSpec The agent specification data
@@ -292,6 +294,32 @@ export class Agent {
     } else {
       throw SfError.create({
         name: 'CreateAfScriptError',
+        message: response.errorMessage ?? 'unknown',
+        data: response,
+      });
+    }
+  }
+
+  /**
+   * Creates agent DSL using AF Script.
+   *
+   * @param connection The connection to the org
+   * @param afScript The agent AF Script as a string
+   * @returns Promise<string> The generated Agent DSL as a string
+   * @beta
+   */
+  public static async createAgentDsl(connection: Connection, afScript: string): Promise<AgentDsl> {
+    const url = '/connect/ai-assist/create-agent-dsl';
+    const maybeMock = new MaybeMock(connection);
+
+    getLogger().debug(`Generating Agent DSL with AF Script: ${afScript}`);
+
+    const response = await maybeMock.request<CreateAgentDslResponse>('POST', url, { afScript });
+    if (response.isSuccess && response.agentDsl) {
+      return response.agentDsl;
+    } else {
+      throw SfError.create({
+        name: 'CreateAgentDslError',
         message: response.errorMessage ?? 'unknown',
         data: response,
       });

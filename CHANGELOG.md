@@ -1,3 +1,12 @@
+## [0.17.5](https://github.com/forcedotcom/agents/compare/0.17.4...0.17.5) (2025-08-15)
+
+
+### Bug Fixes
+
+* add Agent DSL mock behavior ([bac4f73](https://github.com/forcedotcom/agents/commit/bac4f73fb9af6e51f5ea7e53a26aab5cbc80d329))
+
+
+
 ## [0.17.4](https://github.com/forcedotcom/agents/compare/0.17.3...0.17.4) (2025-08-11)
 
 

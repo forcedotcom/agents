@@ -1,0 +1,133 @@
+{
+  "isSuccess": true,
+  "agentDsl": {
+    "schema_version": "1.0",
+    "global_configuration": {
+      "developer_name": "simple_response_agent_001",
+      "label": "Simple Response Agent",
+      "description": "A simple agent that responds to user queries.",
+      "enable_enhanced_event_logs": false,
+      "agent_type": "AgentforceServiceAgent",
+      "template_name": null,
+      "default_agent_user": null,
+      "default_outbound_routing": null,
+      "context_variables": [
+        {
+          "developer_name": "some_id",
+          "label": "Some ID",
+          "description": "The some id",
+          "data_type": "string",
+          "field_mapping": null
+        }
+      ]
+    },
+    "agent_version": {
+      "developer_name": "simple_response_agent_001",
+      "planner_type": "Atlas__ConcurrentMultiAgentOrchestration",
+      "system_messages": [
+        {
+          "message": "Hello! I'm your SimpleResponseAgent. How can I help you today?",
+          "message_type": "Welcome"
+        },
+        {
+          "message": "I'm sorry, I'm having trouble processing your request. Please try again later.",
+          "message_type": "Error"
+        }
+      ],
+      "modality_parameters": {
+        "voice": null,
+        "language": {
+          "default_locale": "en-US",
+          "additional_locales": null,
+          "all_additional_locales": false
+        }
+      },
+      "additional_parameters": null,
+      "company": "A simple company that responds to user queries.",
+      "role": "A simple agent that responds to user queries.",
+      "state_variables": [
+        {
+          "developer_name": "user_query",
+          "label": "User Query",
+          "description": "The user's query",
+          "data_type": "string",
+          "is_list": false,
+          "default": "",
+          "visibility": "Internal"
+        },
+        {
+          "developer_name": "response",
+          "label": "Response",
+          "description": "The response to the user",
+          "data_type": "string",
+          "is_list": false,
+          "default": "",
+          "visibility": "Internal"
+        },
+        {
+          "developer_name": "processing_complete",
+          "label": "Processing Complete",
+          "description": "Whether processing is complete",
+          "data_type": "boolean",
+          "is_list": false,
+          "default": false,
+          "visibility": "Internal"
+        }
+      ],
+      "initial_node": "process_query",
+      "nodes": [
+        {
+          "type": "subagent",
+          "reasoning_type": "salesforce.default",
+          "description": "Process the user's query",
+          "before_reasoning": null,
+          "instructions": "\n  # CONTEXT\n  Name: {agent_name:-\"Einstein Copilot\"}\n  Description: {agent_description:-\"You are an AI assistant developed by Salesforce\"}\n  Role: {agent_label:-\"You are an AI assistant developed by Salesforce\"}\n  Tone: Maintain a {agent_planner_tone_type:-\"NEUTRAL\"} tone while being clear and helpful.\n  Company: {agent_company:-\"Salesforce\"}\n  Locale: {agent_locale:-\"English (United States)\"}\n  Location: {agent_user_location:-\"United States\"}\n  Current Date/Time: {current_date_time:-\"\"}\n ",
+          "focus_prompt": null,
+          "tools": [
+            {
+              "type": "action",
+              "target": "set_response_action",
+              "bound_inputs": {
+                "some_id": "context.some_id"
+              },
+              "llm_inputs": null,
+              "enabled": null,
+              "state_updates": [
+                {
+                  "response": "result.response"
+                },
+                {
+                  "processing_complete": "true"
+                }
+              ],
+              "name": "set_response",
+              "description": null,
+              "input_parameters": null
+            }
+          ],
+          "pre_tool_call": null,
+          "post_tool_call": null,
+          "after_reasoning": null,
+          "developer_name": "process_query",
+          "label": "Process Query",
+          "on_init": null,
+          "transitions": [
+            {
+              "target": "exit",
+              "condition": "state.processing_complete == true",
+              "alias": null,
+              "enabled": null,
+              "instruction": null,
+              "type": "handoff",
+              "mode": "manual"
+            }
+          ],
+          "on_exit": null,
+          "action_definitions": [],
+          "knowledge_definitions": null
+        }
+      ],
+      "knowledge_definitions": null
+    }
+  }
+}
