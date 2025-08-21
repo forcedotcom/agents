@@ -103,8 +103,10 @@ async function readResponses<T extends nock.Body>(mockDir: string, url: string, 
     .filter((r): r is T[] => !!r)
     .flat();
   if (responses.length === 0) {
-    logger.debug(`No mock file found for ${mockResponsePath} - will fall back to real API call`);
-    return [];
+    throw SfError.create({
+      name: 'MissingMockFile',
+      message: `SF_MOCK_DIR [${mockDir}] must contain a spec file with name ${mockResponsePath} or ${mockResponsePath}.json`,
+    });
   }
 
   logger.debug(`Using responses: ${responses.map((r) => JSON.stringify(r)).join(', ')}`);
@@ -144,55 +146,35 @@ export class MaybeMock {
     headers: HttpHeaders = {}
   ): Promise<T> {
     if (this.mockDir) {
-      this.logger.debug(`Checking for mock file for ${method} request to ${url} in ${this.mockDir}`);
+      this.logger.debug(`Mocking ${method} request to ${url} using ${this.mockDir}`);
       const responses = await readResponses<T>(this.mockDir, url, this.logger);
-
-      // Only set up nock interceptors if we have mock responses
-      if (responses.length > 0) {
-        this.logger.debug(`Setting up mock responses for ${method} ${url}`);
-
-        // Determine the correct base URL and path for nock
-        let nockBaseUrl: string;
-        let nockPath: string;
-
-        if (url.startsWith('https://api.salesforce.com')) {
-          // For SFAP endpoints (like AgentPreview), use the full api.salesforce.com URL
-          nockBaseUrl = 'https://api.salesforce.com';
-          nockPath = url.replace('https://api.salesforce.com', '');
-        } else {
-          // For regular Salesforce org endpoints, use the connection's base URL
-          nockBaseUrl = this.connection.baseUrl();
-          nockPath = url;
-        }
-
-        const scope = this.scopes.get(nockBaseUrl) ?? nock(nockBaseUrl);
-        // Look up status code to determine if it's successful or not
-        // Be have to assert this is a number because AgentTester has a status that is non-numeric
-        const getCode = (response: T): number =>
-          typeof response === 'object' && 'status' in response && typeof response.status === 'number'
-            ? response.status
-            : 200;
-
-        this.scopes.set(nockBaseUrl, scope);
-        switch (method) {
-          case 'GET':
-            for (const response of responses) {
-              scope.get(nockPath).reply(getCode(response), response);
-            }
-            break;
-          case 'POST':
-            for (const response of responses) {
-              scope.post(nockPath, body).reply(getCode(response), response);
-            }
-            break;
-          case 'DELETE':
-            for (const response of responses) {
-              scope.delete(nockPath).reply(getCode(response), response);
-            }
-            break;
-        }
-      } else {
-        this.logger.debug(`No mock file found for ${method} ${url} - proceeding with real API call`);
+      const baseUrl = this.connection.baseUrl();
+      const scope = this.scopes.get(baseUrl) ?? nock(baseUrl);
+      // Look up status code to determine if it's successful or not
+      // Be have to assert this is a number because AgentTester has a status that is non-numeric
+      const getCode = (response: T): number =>
+        typeof response === 'object' && 'status' in response && typeof response.status === 'number'
+          ? response.status
+          : 200;
+      // This is a hack to work with SFAP endpoints
+      url = url.replace('https://api.salesforce.com', '');
+      this.scopes.set(baseUrl, scope);
+      switch (method) {
+        case 'GET':
+          for (const response of responses) {
+            scope.get(url).reply(getCode(response), response);
+          }
+          break;
+        case 'POST':
+          for (const response of responses) {
+            scope.post(url, body).reply(getCode(response), response);
+          }
+          break;
+        case 'DELETE':
+          for (const response of responses) {
+            scope.delete(url).reply(getCode(response), response);
+          }
+          break;
       }
     }
 
