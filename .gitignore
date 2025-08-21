@@ -12,7 +12,7 @@ yarn-error.log
 
 # compile source
 lib
-
+dist
 # test artifacts
 *xunit.xml
 *checkstyle.xml
