@@ -1,3 +1,12 @@
+## [0.17.6](https://github.com/forcedotcom/agents/compare/0.17.5...0.17.6) (2025-08-27)
+
+
+### Bug Fixes
+
+* bump limit for remote agents ([f225b54](https://github.com/forcedotcom/agents/commit/f225b541b9c7e3e995a32d691b8761e60947180e))
+
+
+
 ## [0.17.5](https://github.com/forcedotcom/agents/compare/0.17.4...0.17.5) (2025-08-15)
 
 
