@@ -1,3 +1,12 @@
+## [0.17.7](https://github.com/forcedotcom/agents/compare/0.17.6...0.17.7) (2025-08-27)
+
+
+### Bug Fixes
+
+* selectively mock ([d31af61](https://github.com/forcedotcom/agents/commit/d31af61a482e8b310e53ca7a1e8ddd05c574393f))
+
+
+
 ## [0.17.6](https://github.com/forcedotcom/agents/compare/0.17.5...0.17.6) (2025-08-27)
 
 
