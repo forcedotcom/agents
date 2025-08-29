@@ -1,6 +1,7 @@
 {
   "extends": "@salesforce/dev-config/tsconfig-strict-esm",
   "compilerOptions": {
+    "resolveJsonModule": true,
     "outDir": "lib",
     "rootDir": "src",
     "plugins": [{ "transform": "@salesforce/core/messageTransformer", "import": "messageTransformer" }]
