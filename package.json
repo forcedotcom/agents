@@ -2,7 +2,7 @@
   "name": "@salesforce/agents",
   "description": "Client side APIs for working with Salesforce agents",
   "version": "0.17.7",
-  "license": "BSD-3-Clause",
+  "license": "Apache-2.0",
   "author": "Salesforce",
   "main": "lib/index",
   "types": "lib/index.d.ts",
@@ -20,14 +20,17 @@
     "yaml": "^2.8.1"
   },
   "devDependencies": {
-    "@salesforce/cli-plugins-testkit": "^5.3.39",
-    "@salesforce/dev-scripts": "^11.0.2",
+    "@salesforce/cli-plugins-testkit": "^5.3.41",
+    "@salesforce/dev-scripts": "^11.0.4",
     "esbuild": "^0.25.8",
     "ts-morph": "^24.0.0",
     "ts-node": "^10.9.2",
     "ts-patch": "^3.3.0",
     "typedoc": "^0.28.9",
     "typescript": "^5.9.2"
+  },
+  "resolutions": {
+    "string-width": "^4.2.3"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -60,7 +63,8 @@
     "test": "wireit",
     "test:nuts": "nyc mocha \"**/*.nut.ts\"  --slow 4500 --timeout 1200000 --parallel --retries 0 --jobs 10",
     "test:only": "wireit",
-    "test:bundle": "wireit"
+    "test:bundle": "wireit",
+    "fix-license": "eslint src test --fix --rule \"header/header: [2]\""
   },
   "publishConfig": {
     "access": "public"
