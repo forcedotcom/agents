@@ -1,3 +1,12 @@
+## [0.17.8](https://github.com/forcedotcom/agents/compare/0.17.7...0.17.8) (2025-09-05)
+
+
+### Bug Fixes
+
+* oss compliance ([809b19a](https://github.com/forcedotcom/agents/commit/809b19ad8698d06c35b8dcdc509f861a3cfc7c93))
+
+
+
 ## [0.17.7](https://github.com/forcedotcom/agents/compare/0.17.6...0.17.7) (2025-08-27)
 
 
