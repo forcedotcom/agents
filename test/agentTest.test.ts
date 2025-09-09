@@ -772,6 +772,52 @@ testCases:
     });
   });
 
+  describe('create with illegal characters', () => {
+    const yml = `name: Test
+description: Test
+subjectType: AGENT
+subjectName: MyAgent
+testCases:
+  - utterance: List contact names associated with Acme account
+    expectedActions:
+      - IdentifyRecordByName
+      - QueryRecords
+    expectedOutcome: contacts available name available with Acme are listed
+    expectedTopic: GeneralCRM`;
+
+    beforeEach(() => {
+      sinon.stub(fs, 'writeFile').resolves();
+      sinon.stub(fs, 'mkdir').resolves();
+      sinon.stub(fs, 'readFile').resolves(yml);
+      sinon.stub(AgentTest, 'list').resolves([]);
+    });
+
+    afterEach(() => {
+      sinon.restore();
+    });
+
+    it('should sanitize filenames with timestamps', async () => {
+      const { path } = await AgentTest.create(connection, 'My:Test', 'test.yaml', {
+        outputDir: 'tmp',
+        preview: true,
+      });
+
+      // Verify colons from timestamp are replaced
+      expect(path).to.match(/My_Test-preview-\d{4}-\d{2}-\d{2}T\d{2}_\d{2}_\d{2}\.\d{3}Z\.xml$/);
+      expect(path).to.not.include(':');
+    });
+
+    it('should sanitize filenames with special characters', async () => {
+      const { path } = await AgentTest.create(connection, 'My<Test>?*', 'test.yaml', {
+        outputDir: 'tmp',
+        preview: true,
+      });
+
+      expect(path).to.match(/My_Test___-preview-.*\.xml$/);
+      expect(path).to.not.match(/[<>?*]/);
+    });
+  });
+
   describe('create', () => {
     const yml = `name: Test
 description: Test
