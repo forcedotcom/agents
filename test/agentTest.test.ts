@@ -96,7 +96,7 @@ describe('AgentTest', () => {
             expectedActions: ['IdentifyRecordByName', 'QueryRecords'],
             expectedOutcome: 'contacts available emails available with Acme are listed',
             expectedTopic: 'GeneralCRM',
-            metrics: ['coherence', 'factuality', 'instruction_following'],
+            metrics: ['coherence'],
           },
         ],
       };
@@ -146,8 +146,6 @@ testCases:
     expectedTopic: GeneralCRM
     metrics:
       - coherence
-      - factuality
-      - instruction_following
 `
       );
     });
@@ -231,8 +229,6 @@ testCases:
       - coherence
       - conciseness
       - output_latency_milliseconds
-      - instruction_following
-      - factuality
 `,
       ]);
     });

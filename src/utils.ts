@@ -14,14 +14,7 @@
  * limitations under the License.
  */
 
-export const metric = [
-  'completeness',
-  'coherence',
-  'conciseness',
-  'output_latency_milliseconds',
-  'instruction_following',
-  'factuality',
-] as const;
+export const metric = ['completeness', 'coherence', 'conciseness', 'output_latency_milliseconds'] as const;
 
 /**
  * Sanitize a filename by removing or replacing illegal characters.
