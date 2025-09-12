@@ -14,14 +14,22 @@
  * limitations under the License.
  */
 
-export const metric = [
-  'completeness',
-  'coherence',
-  'conciseness',
-  'output_latency_milliseconds',
-  'instruction_following',
-  'factuality',
-] as const;
+export const metric = ['completeness', 'coherence', 'conciseness', 'output_latency_milliseconds'] as const;
+
+/**
+ * Sanitize a filename by removing or replacing illegal characters.
+ * This ensures the filename is valid across different operating systems.
+ *
+ * @param filename - The filename to sanitize
+ * @returns A sanitized filename safe for use across operating systems
+ */
+export const sanitizeFilename = (filename: string): string => {
+  if (!filename) return '';
+  // Replace colons from ISO timestamps with underscores
+  const sanitized = filename.replace(/:/g, '_');
+  // Replace other potentially problematic characters
+  return sanitized.replace(/[<>:"\\|?*]/g, '_');
+};
 
 /**
  * Clean a string by replacing HTML entities with their respective characters.
@@ -42,10 +50,10 @@ export const decodeHtmlEntities = (str: string = ''): string => {
     '&nbsp;': ' ',
     '&ndash;': '–',
     '&mdash;': '—',
-    '&rsquo;': '’',
-    '&lsquo;': '‘',
-    '&ldquo;': '“',
-    '&rdquo;': '”',
+    '&rsquo;': "'",
+    '&lsquo;': "'",
+    '&ldquo;': '"',
+    '&rdquo;': '"',
     '&hellip;': '…',
     '&trade;': '™',
     '&copy;': '©',

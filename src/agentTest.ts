@@ -28,7 +28,7 @@ import {
   TestSpec,
   MetadataExpectation,
 } from './types.js';
-import { metric } from './utils';
+import { metric, sanitizeFilename } from './utils';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agentTest');
@@ -126,7 +126,7 @@ export class AgentTest {
     const filename = preview
       ? `${apiName}-preview-${new Date().toISOString()}.xml`
       : `${apiName}.aiEvaluationDefinition-meta.xml`;
-    const definitionPath = join(outputDir, filename);
+    const definitionPath = sanitizeFilename(join(outputDir, filename));
 
     const xml = buildMetadataXml(convertToMetadata(agentTestSpec));
     await mkdir(outputDir, { recursive: true });
