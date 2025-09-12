@@ -23,7 +23,7 @@ import { Duration } from '@salesforce/kit';
 import {
   type AgentCreateConfig,
   type AgentCreateResponse,
-  type AgentDsl,
+  type AgentJson,
   type AgentJobSpec,
   type AgentJobSpecCreateConfig,
   type AgentOptions,
@@ -31,9 +31,10 @@ import {
   type BotMetadata,
   type BotVersionMetadata,
   type CreateAfScriptResponse,
-  type CreateAgentDslResponse,
+  type CreateAgentJsonResponse,
   type DraftAgentTopicsBody,
   type DraftAgentTopicsResponse,
+  PublishAgentJsonResponse,
 } from './types.js';
 import { MaybeMock } from './maybe-mock';
 import { decodeHtmlEntities } from './utils';
@@ -310,25 +311,58 @@ export class Agent {
   }
 
   /**
-   * Creates agent DSL using AF Script.
+   * Creates agent JSON from compiling AF Script on the server.
    *
    * @param connection The connection to the org
    * @param afScript The agent AF Script as a string
-   * @returns Promise<string> The generated Agent DSL as a string
+   * @returns Promise<string> The generated Agent JSON as a string
    * @beta
    */
-  public static async createAgentDsl(connection: Connection, afScript: string): Promise<AgentDsl> {
-    const url = '/connect/ai-assist/create-agent-dsl';
+  public static async compileAfScript(connection: Connection, afScript: string): Promise<AgentJson> {
+    const url = '/einstein/ai-agent/v1.1/authoring/compile';
     const maybeMock = new MaybeMock(connection);
 
-    getLogger().debug(`Generating Agent DSL with AF Script: ${afScript}`);
+    getLogger().debug(`Generating Agent JSON with AF Script: ${afScript}`);
 
-    const response = await maybeMock.request<CreateAgentDslResponse>('POST', url, { afScript });
-    if (response.isSuccess && response.agentDsl) {
-      return response.agentDsl;
+    const response = await maybeMock.request<CreateAgentJsonResponse>('POST', url, { afScript });
+    if (response.isSuccess && response.agentJson) {
+      return response.agentJson;
     } else {
       throw SfError.create({
-        name: 'CreateAgentDslError',
+        name: 'CreateAgentJsonError',
+        message: response.errorMessage ?? 'unknown',
+        data: response,
+      });
+    }
+  }
+
+  /**
+   * Publish an AgentJson representation to the org
+   *
+   * @beta
+   * @param {Connection} connection
+   * @param {AgentJson} agentJson
+   * @returns {Promise<PublishAgentJsonResponse>}
+   */
+  public static async publishAgentJson(
+    connection: Connection,
+    agentJson: AgentJson
+  ): Promise<PublishAgentJsonResponse> {
+    const url = '/einstein/ai-agent/v1.1/authoring/publish';
+    const maybeMock = new MaybeMock(connection);
+
+    getLogger().debug('Publishing AfScript');
+
+    const response = await maybeMock.request<PublishAgentJsonResponse>('POST', url, { agentJson });
+    if (response.isSuccess && response.botId) {
+      // we've published the AgentJson, now we need to
+      // 1. update the AuthoringBundle-meta.xml file with response.BotId
+      // 2. retrieve the new Agent metadata in the org
+
+      return response;
+    } else {
+      throw SfError.create({
+        name: 'CreateAgentJsonError',
         message: response.errorMessage ?? 'unknown',
         data: response,
       });

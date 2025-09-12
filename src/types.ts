@@ -604,14 +604,20 @@ export type AgentTraceResponse = {
   }>;
 };
 
-export type CreateAgentDslResponse = {
+export type CreateAgentJsonResponse = {
   isSuccess: boolean;
   errorMessage?: string;
-  agentDsl?: AgentDsl;
+  agentJson?: AgentJson;
+};
+
+export type PublishAgentJsonResponse = {
+  isSuccess: boolean;
+  errorMessage?: string;
+  botId?: string;
 };
 
 // This is not accurate but good enough for now
-export type AgentDsl = {
+export type AgentJson = {
   schema_version: string;
   global_configuration: {
     developer_name: string;

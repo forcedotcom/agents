@@ -1,6 +1,6 @@
 {
   "isSuccess": true,
-  "agentDsl": {
+  "agentJson": {
     "schema_version": "1.0",
     "global_configuration": {
       "developer_name": "simple_response_agent_001",
