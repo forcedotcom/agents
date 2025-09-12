@@ -613,7 +613,7 @@ export type CreateAgentJsonResponse = {
 export type PublishAgentJsonResponse = {
   isSuccess: boolean;
   errorMessage?: string;
-  botId?: string;
+  botDeveloperName?: string;
 };
 
 // This is not accurate but good enough for now

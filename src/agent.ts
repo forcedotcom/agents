@@ -16,7 +16,8 @@
 
 import { inspect } from 'node:util';
 import * as path from 'node:path';
-import { stat, readdir } from 'node:fs/promises';
+import { stat, readdir, readFile, writeFile } from 'node:fs/promises';
+import { XMLBuilder, XMLParser } from 'fast-xml-parser';
 import { Connection, Lifecycle, Logger, Messages, SfError, SfProject, generateApiName } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { Duration } from '@salesforce/kit';
@@ -340,13 +341,15 @@ export class Agent {
    * Publish an AgentJson representation to the org
    *
    * @beta
-   * @param {Connection} connection
-   * @param {AgentJson} agentJson
-   * @returns {Promise<PublishAgentJsonResponse>}
+   * @param {Connection} connection The connection to the org
+   * @param {SfProject} project The Salesforce project
+   * @param {AgentJson & { name: string }} agentJson The agent JSON with name
+   * @returns {Promise<PublishAgentJsonResponse>} The publish response
    */
   public static async publishAgentJson(
     connection: Connection,
-    agentJson: AgentJson
+    project: SfProject,
+    agentJson: AgentJson & { name: string }
   ): Promise<PublishAgentJsonResponse> {
     const url = '/einstein/ai-agent/v1.1/authoring/publish';
     const maybeMock = new MaybeMock(connection);
@@ -354,10 +357,67 @@ export class Agent {
     getLogger().debug('Publishing AfScript');
 
     const response = await maybeMock.request<PublishAgentJsonResponse>('POST', url, { agentJson });
-    if (response.isSuccess && response.botId) {
+    if (response.isSuccess && response.botDeveloperName) {
       // we've published the AgentJson, now we need to
       // 1. update the AuthoringBundle-meta.xml file with response.BotId
       // 2. retrieve the new Agent metadata in the org
+      const defaultPackagePath = project.getDefaultPackage().path ?? 'force-app';
+      const genAiPlannerBundlesPath = path.join(defaultPackagePath, 'main', 'default', 'genAiPlannerBundles');
+
+      try {
+        // First update the AuthoringBundle file with the new BotId
+        const authoringBundlePath = path.join(genAiPlannerBundlesPath, `${agentJson.name}.genAiPlannerBundle-meta.xml`);
+        const xmlParser = new XMLParser({ ignoreAttributes: false });
+        const xmlBuilder = new XMLBuilder({ ignoreAttributes: false });
+
+        const authoringBundleContent = await readFile(authoringBundlePath, 'utf-8');
+        const authoringBundle = xmlParser.parse(authoringBundleContent) as { GenAiPlannerBundle: { Target: string } };
+        authoringBundle.GenAiPlannerBundle.Target = response.botDeveloperName;
+
+        await writeFile(authoringBundlePath, xmlBuilder.build(authoringBundle));
+
+        // Now retrieve the updated agent metadata
+        const cs = await ComponentSetBuilder.build({
+          metadata: {
+            metadataEntries: [`Agent:${agentJson.name}`],
+            directoryPaths: [defaultPackagePath],
+          },
+          org: {
+            username: connection.getUsername() as string,
+            exclude: [],
+          },
+        });
+
+        const retrieve = await cs.retrieve({
+          usernameOrConnection: connection,
+          merge: true,
+          format: 'source',
+          output: path.resolve(project.getPath(), defaultPackagePath),
+        });
+
+        const retrieveResult = await retrieve.pollStatus({
+          frequency: Duration.seconds(1),
+          timeout: Duration.minutes(5),
+        });
+
+        if (!retrieveResult.response?.success) {
+          const errMessages = retrieveResult.response?.messages?.toString() ?? 'unknown';
+          const error = messages.createError('agentRetrievalError', [errMessages]);
+          error.actions = [messages.getMessage('agentRetrievalErrorActions')];
+          throw error;
+        }
+      } catch (err) {
+        const error = SfError.wrap(err);
+        if (error.name === 'AgentRetrievalError') {
+          throw error;
+        }
+        throw SfError.create({
+          name: 'AgentRetrievalError',
+          message: messages.getMessage('agentRetrievalError', [error.message]),
+          cause: error,
+          actions: [messages.getMessage('agentRetrievalErrorActions')],
+        });
+      }
 
       return response;
     } else {
