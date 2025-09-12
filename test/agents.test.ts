@@ -92,7 +92,7 @@ describe('Agents', () => {
 
   describe('publishAgentJson', () => {
     let sfProject: SfProject;
-    let agentJson: AgentJson & { name: string };
+    let agentJson: AgentJson;
 
     beforeEach(async () => {
       sfProject = SfProject.getInstance();
@@ -114,7 +114,6 @@ describe('Agents', () => {
 
       // Create test agent JSON
       agentJson = {
-        name: 'test_agent_v1',
         // eslint-disable-next-line camelcase
         schema_version: '1.0',
         // eslint-disable-next-line camelcase
@@ -153,12 +152,19 @@ describe('Agents', () => {
       // Mock successful API response
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishAgentJson-Success');
 
+      // Verify file before
+      let fileContent = await fs.readFile(
+        join('force-app', 'main', 'default', 'genAiPlannerBundles', 'test_agent_v1.genAiPlannerBundle-meta.xml'),
+        'utf-8'
+      );
+      expect(fileContent).to.not.include('<Target>test_agent_v1</Target>');
+
       const response = await Agent.publishAgentJson(connection, sfProject, agentJson);
       expect(response).to.have.property('isSuccess', true);
       expect(response).to.have.property('botDeveloperName', 'test_agent_v1');
 
       // Verify file was updated
-      const fileContent = await fs.readFile(
+      fileContent = await fs.readFile(
         join('force-app', 'main', 'default', 'genAiPlannerBundles', 'test_agent_v1.genAiPlannerBundle-meta.xml'),
         'utf-8'
       );

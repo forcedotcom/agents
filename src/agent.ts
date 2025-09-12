@@ -343,13 +343,13 @@ export class Agent {
    * @beta
    * @param {Connection} connection The connection to the org
    * @param {SfProject} project The Salesforce project
-   * @param {AgentJson & { name: string }} agentJson The agent JSON with name
+   * @param {AgentJson} agentJson The agent JSON with name
    * @returns {Promise<PublishAgentJsonResponse>} The publish response
    */
   public static async publishAgentJson(
     connection: Connection,
     project: SfProject,
-    agentJson: AgentJson & { name: string }
+    agentJson: AgentJson
   ): Promise<PublishAgentJsonResponse> {
     const url = '/einstein/ai-agent/v1.1/authoring/publish';
     const maybeMock = new MaybeMock(connection);
@@ -366,7 +366,10 @@ export class Agent {
 
       try {
         // First update the AuthoringBundle file with the new BotId
-        const authoringBundlePath = path.join(genAiPlannerBundlesPath, `${agentJson.name}.genAiPlannerBundle-meta.xml`);
+        const authoringBundlePath = path.join(
+          genAiPlannerBundlesPath,
+          `${agentJson.agent_version.developer_name}.genAiPlannerBundle-meta.xml`
+        );
         const xmlParser = new XMLParser({ ignoreAttributes: false });
         const xmlBuilder = new XMLBuilder({ ignoreAttributes: false });
 
@@ -379,7 +382,7 @@ export class Agent {
         // Now retrieve the updated agent metadata
         const cs = await ComponentSetBuilder.build({
           metadata: {
-            metadataEntries: [`Agent:${agentJson.name}`],
+            metadataEntries: [`Agent:${agentJson.agent_version.developer_name}`],
             directoryPaths: [defaultPackagePath],
           },
           org: {
