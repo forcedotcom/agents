@@ -1,3 +1,12 @@
+## [0.17.9](https://github.com/forcedotcom/agents/compare/0.17.8...0.17.9) (2025-09-12)
+
+
+### Bug Fixes
+
+* sanitize output file path for validity ([295e5a9](https://github.com/forcedotcom/agents/commit/295e5a9c931804286439695da2123873e98f4f3a))
+
+
+
 ## [0.17.8](https://github.com/forcedotcom/agents/compare/0.17.7...0.17.8) (2025-09-05)
 
 
