@@ -3,7 +3,7 @@
   "agentJson": {
     "schema_version": "1.0",
     "global_configuration": {
-      "developer_name": "simple_response_agent_001",
+      "developer_name": "simple_response_agent_v1",
       "label": "Simple Response Agent",
       "description": "A simple agent that responds to user queries.",
       "enable_enhanced_event_logs": false,
@@ -22,7 +22,7 @@
       ]
     },
     "agent_version": {
-      "developer_name": "simple_response_agent_001",
+      "developer_name": "simple_response_agent_v1",
       "planner_type": "Atlas__ConcurrentMultiAgentOrchestration",
       "system_messages": [
         {

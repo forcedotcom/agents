@@ -114,13 +114,13 @@ describe('Agents', () => {
 
       // Create test agent JSON
       agentJson = {
-        name: 'test_agent_001',
+        name: 'test_agent_v1',
         // eslint-disable-next-line camelcase
         schema_version: '1.0',
         // eslint-disable-next-line camelcase
         global_configuration: {
           // eslint-disable-next-line camelcase
-          developer_name: 'test_agent_001',
+          developer_name: 'test_agent_v1',
           label: 'Test Agent',
           description: 'A test agent',
           // eslint-disable-next-line camelcase
@@ -129,7 +129,7 @@ describe('Agents', () => {
         // eslint-disable-next-line camelcase
         agent_version: {
           // eslint-disable-next-line camelcase
-          developer_name: 'test_agent_001',
+          developer_name: 'test_agent_v1',
           // eslint-disable-next-line camelcase
           planner_type: 'Atlas__ConcurrentMultiAgentOrchestration',
         },
@@ -138,7 +138,7 @@ describe('Agents', () => {
       // Create test directory structure and files
       await fs.mkdir('force-app/main/default/genAiPlannerBundles', { recursive: true });
       await fs.writeFile(
-        'force-app/main/default/genAiPlannerBundles/test_agent_001.genAiPlannerBundle-meta.xml',
+        'force-app/main/default/genAiPlannerBundles/test_agent_v1.genAiPlannerBundle-meta.xml',
         '<?xml version="1.0" encoding="UTF-8"?>\n<GenAiPlannerBundle xmlns="http://soap.sforce.com/2006/04/metadata">\n    <Target>old_value</Target>\n</GenAiPlannerBundle>'
       );
     });
@@ -153,19 +153,19 @@ describe('Agents', () => {
 
       const response = await Agent.publishAgentJson(connection, sfProject, agentJson);
       expect(response).to.have.property('isSuccess', true);
-      expect(response).to.have.property('botDeveloperName', 'test_agent_001');
+      expect(response).to.have.property('botDeveloperName', 'test_agent_v1');
 
       // Verify file was updated
       const fileContent = await fs.readFile(
-        'force-app/main/default/genAiPlannerBundles/test_agent_001.genAiPlannerBundle-meta.xml',
+        'force-app/main/default/genAiPlannerBundles/test_agent_v1.genAiPlannerBundle-meta.xml',
         'utf-8'
       );
-      expect(fileContent).to.include('<Target>test_agent_001</Target>');
+      expect(fileContent).to.include('<Target>test_agent_v1</Target>');
     });
 
     it('should throw error when AuthoringBundle file does not exist', async () => {
       // Delete the file to simulate missing file
-      await fs.unlink('force-app/main/default/genAiPlannerBundles/test_agent_001.genAiPlannerBundle-meta.xml');
+      await fs.unlink('force-app/main/default/genAiPlannerBundles/test_agent_v1.genAiPlannerBundle-meta.xml');
 
       // Mock successful API response
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishAgentJson-Success');
