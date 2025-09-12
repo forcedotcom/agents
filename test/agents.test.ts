@@ -136,15 +136,17 @@ describe('Agents', () => {
       };
 
       // Create test directory structure and files
-      await fs.mkdir('force-app/main/default/genAiPlannerBundles', { recursive: true });
+      const bundlePath = join('force-app', 'main', 'default', 'genAiPlannerBundles');
+      const bundleFilePath = join(bundlePath, 'test_agent_v1.genAiPlannerBundle-meta.xml');
+      await fs.mkdir(bundlePath, { recursive: true });
       await fs.writeFile(
-        'force-app/main/default/genAiPlannerBundles/test_agent_v1.genAiPlannerBundle-meta.xml',
+        bundleFilePath,
         '<?xml version="1.0" encoding="UTF-8"?>\n<GenAiPlannerBundle xmlns="http://soap.sforce.com/2006/04/metadata">\n    <Target>old_value</Target>\n</GenAiPlannerBundle>'
       );
     });
 
     afterEach(async () => {
-      await fs.rm('force-app', { recursive: true, force: true });
+      await fs.rm(join('force-app'), { recursive: true, force: true });
     });
 
     it('should update AuthoringBundle and return bot developer name on success', async () => {
@@ -157,7 +159,7 @@ describe('Agents', () => {
 
       // Verify file was updated
       const fileContent = await fs.readFile(
-        'force-app/main/default/genAiPlannerBundles/test_agent_v1.genAiPlannerBundle-meta.xml',
+        join('force-app', 'main', 'default', 'genAiPlannerBundles', 'test_agent_v1.genAiPlannerBundle-meta.xml'),
         'utf-8'
       );
       expect(fileContent).to.include('<Target>test_agent_v1</Target>');
@@ -165,7 +167,9 @@ describe('Agents', () => {
 
     it('should throw error when AuthoringBundle file does not exist', async () => {
       // Delete the file to simulate missing file
-      await fs.unlink('force-app/main/default/genAiPlannerBundles/test_agent_v1.genAiPlannerBundle-meta.xml');
+      await fs.unlink(
+        join('force-app', 'main', 'default', 'genAiPlannerBundles', 'test_agent_v1.genAiPlannerBundle-meta.xml')
+      );
 
       // Mock successful API response
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishAgentJson-Success');
