@@ -14,10 +14,12 @@
  * limitations under the License.
  */
 import { join } from 'node:path';
+import fs from 'node:fs/promises';
 import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
-import { Connection, SfProject } from '@salesforce/core';
+import { Connection, SfError, SfProject } from '@salesforce/core';
 import { ComponentSetBuilder, ComponentSet, MetadataApiRetrieve } from '@salesforce/source-deploy-retrieve';
+import { type AgentJson } from '../src/types.js';
 import { Agent, type AgentCreateConfig } from '../src';
 
 describe('Agents', () => {
@@ -85,6 +87,122 @@ describe('Agents', () => {
     expect(output).to.have.property('schema_version', '1.0');
     expect(output).to.have.property('global_configuration').and.be.an('object');
     expect(output).to.have.property('agent_version').and.be.an('object');
+    await fs.rm('force-app', { recursive: true, force: true });
+  });
+
+  describe('publishAgentJson', () => {
+    let sfProject: SfProject;
+    let agentJson: AgentJson & { name: string };
+
+    beforeEach(async () => {
+      sfProject = SfProject.getInstance();
+      // @ts-expect-error Not the full package def
+      $$.SANDBOX.stub(sfProject, 'getDefaultPackage').returns({ path: 'force-app' });
+
+      // Create test agent JSON
+      agentJson = {
+        name: 'test_agent_001',
+        // eslint-disable-next-line camelcase
+        schema_version: '1.0',
+        // eslint-disable-next-line camelcase
+        global_configuration: {
+          // eslint-disable-next-line camelcase
+          developer_name: 'test_agent_001',
+          label: 'Test Agent',
+          description: 'A test agent',
+          // eslint-disable-next-line camelcase
+          agent_type: 'AgentforceServiceAgent',
+        },
+        // eslint-disable-next-line camelcase
+        agent_version: {
+          // eslint-disable-next-line camelcase
+          developer_name: 'test_agent_001',
+          // eslint-disable-next-line camelcase
+          planner_type: 'Atlas__ConcurrentMultiAgentOrchestration',
+        },
+      };
+
+      // Create test directory structure and files
+      await fs.mkdir('force-app/main/default/genAiPlannerBundles', { recursive: true });
+      await fs.writeFile(
+        'force-app/main/default/genAiPlannerBundles/test_agent_001.genAiPlannerBundle-meta.xml',
+        '<?xml version="1.0" encoding="UTF-8"?>\n<GenAiPlannerBundle xmlns="http://soap.sforce.com/2006/04/metadata">\n    <Target>old_value</Target>\n</GenAiPlannerBundle>'
+      );
+    });
+
+    afterEach(async () => {
+      await fs.rm('force-app', { recursive: true, force: true });
+    });
+
+    it('should update AuthoringBundle and return bot developer name on success', async () => {
+      // Mock successful API response
+      process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishAgentJson-Success');
+
+      const response = await Agent.publishAgentJson(connection, sfProject, agentJson);
+      expect(response).to.have.property('isSuccess', true);
+      expect(response).to.have.property('botDeveloperName', 'test_agent_001');
+
+      // Verify file was updated
+      const fileContent = await fs.readFile(
+        'force-app/main/default/genAiPlannerBundles/test_agent_001.genAiPlannerBundle-meta.xml',
+        'utf-8'
+      );
+      expect(fileContent).to.include('<Target>test_agent_001</Target>');
+    });
+
+    it('should throw error when AuthoringBundle file does not exist', async () => {
+      // Delete the file to simulate missing file
+      await fs.unlink('force-app/main/default/genAiPlannerBundles/test_agent_001.genAiPlannerBundle-meta.xml');
+
+      try {
+        await Agent.publishAgentJson(connection, sfProject, agentJson);
+        expect.fail('Expected error was not thrown');
+      } catch (err) {
+        expect(err).to.be.instanceOf(SfError);
+        expect((err as SfError).name).to.equal('AgentRetrievalError');
+      }
+    });
+
+    it('should throw error when API call fails', async () => {
+      // Mock failed API response
+      process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishAgentJson-Error');
+
+      try {
+        await Agent.publishAgentJson(connection, sfProject, agentJson);
+        expect.fail('Expected error was not thrown');
+      } catch (err) {
+        expect(err).to.be.instanceOf(SfError);
+        expect((err as SfError).name).to.equal('CreateAgentJsonError');
+      }
+    });
+
+    it('should throw error when metadata retrieval fails', async () => {
+      // Mock successful API response but failed metadata retrieval
+      process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishAgentJson-Success');
+
+      // Mock ComponentSetBuilder to simulate metadata retrieval failure
+      const compSet = new ComponentSet();
+      const mdApiRetrieve = new MetadataApiRetrieve({
+        usernameOrConnection: testOrg.getMockUserInfo().Username,
+        output: 'nowhere',
+      });
+      const pollingStub = $$.SANDBOX.stub(mdApiRetrieve, 'pollStatus').resolves({
+        // @ts-expect-error Not the full response
+        response: { success: false, messages: ['Metadata retrieval failed'] },
+      });
+      const retrieveStub = $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
+      $$.SANDBOX.stub(ComponentSetBuilder, 'build').resolves(compSet);
+
+      try {
+        await Agent.publishAgentJson(connection, sfProject, agentJson);
+        expect.fail('Expected error was not thrown');
+      } catch (err) {
+        expect(err).to.be.instanceOf(SfError);
+        expect((err as SfError).name).to.equal('AgentRetrievalError');
+        expect(pollingStub.calledOnce).to.be.true;
+        expect(retrieveStub.calledOnce).to.be.true;
+      }
+    });
   });
 
   it('create save agent', async () => {
