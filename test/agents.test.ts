@@ -99,6 +99,19 @@ describe('Agents', () => {
       // @ts-expect-error Not the full package def
       $$.SANDBOX.stub(sfProject, 'getDefaultPackage').returns({ path: 'force-app' });
 
+      // Setup default successful metadata retrieval mock
+      const compSet = new ComponentSet();
+      const mdApiRetrieve = new MetadataApiRetrieve({
+        usernameOrConnection: testOrg.getMockUserInfo().Username,
+        output: 'nowhere',
+      });
+      $$.SANDBOX.stub(mdApiRetrieve, 'pollStatus').resolves({
+        // @ts-expect-error Not the full response
+        response: { success: true },
+      });
+      $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
+      $$.SANDBOX.stub(ComponentSetBuilder, 'build').resolves(compSet);
+
       // Create test agent JSON
       agentJson = {
         name: 'test_agent_001',
@@ -154,6 +167,9 @@ describe('Agents', () => {
       // Delete the file to simulate missing file
       await fs.unlink('force-app/main/default/genAiPlannerBundles/test_agent_001.genAiPlannerBundle-meta.xml');
 
+      // Mock successful API response
+      process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishAgentJson-Success');
+
       try {
         await Agent.publishAgentJson(connection, sfProject, agentJson);
         expect.fail('Expected error was not thrown');
@@ -180,7 +196,10 @@ describe('Agents', () => {
       // Mock successful API response but failed metadata retrieval
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishAgentJson-Success');
 
-      // Mock ComponentSetBuilder to simulate metadata retrieval failure
+      // Reset the stubs from beforeEach
+      $$.SANDBOX.restore();
+
+      // Setup new mocks for this test
       const compSet = new ComponentSet();
       const mdApiRetrieve = new MetadataApiRetrieve({
         usernameOrConnection: testOrg.getMockUserInfo().Username,
@@ -192,6 +211,10 @@ describe('Agents', () => {
       });
       const retrieveStub = $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
       $$.SANDBOX.stub(ComponentSetBuilder, 'build').resolves(compSet);
+
+      // Re-stub the project path since we restored all stubs
+      // @ts-expect-error Not the full package def
+      $$.SANDBOX.stub(sfProject, 'getDefaultPackage').returns({ path: 'force-app' });
 
       try {
         await Agent.publishAgentJson(connection, sfProject, agentJson);
