@@ -272,7 +272,7 @@ export type DraftAgentTopicsResponse = {
 export type CreateAfScriptResponse = {
   isSuccess: boolean;
   errorMessage?: string;
-  afScript?: string;
+  afScript?: AfScript;
 };
 
 // ====================================================
@@ -630,3 +630,5 @@ export type AgentJson = {
     planner_type: string;
   };
 };
+
+export type AfScript = string;

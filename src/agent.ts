@@ -36,9 +36,10 @@ import {
   type DraftAgentTopicsBody,
   type DraftAgentTopicsResponse,
   PublishAgentJsonResponse,
+  AfScript,
 } from './types.js';
 import { MaybeMock } from './maybe-mock';
-import { decodeHtmlEntities } from './utils';
+import { decodeHtmlEntities, findAuthoringBundle } from './utils';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agents');
@@ -290,10 +291,10 @@ export class Agent {
    *
    * @param connection The connection to the org
    * @param agentJobSpec The agent specification data
-   * @returns Promise<string> The generated AF Script as a string
+   * @returns Promise<AfScript> The generated AF Script as a string
    * @beta
    */
-  public static async createAfScript(connection: Connection, agentJobSpec: AgentJobSpec): Promise<string> {
+  public static async createAfScript(connection: Connection, agentJobSpec: AgentJobSpec): Promise<AfScript> {
     const url = '/connect/ai-assist/create-af-script';
     const maybeMock = new MaybeMock(connection);
 
@@ -319,7 +320,7 @@ export class Agent {
    * @returns Promise<string> The generated Agent JSON as a string
    * @beta
    */
-  public static async compileAfScript(connection: Connection, afScript: string): Promise<AgentJson> {
+  public static async compileAfScript(connection: Connection, afScript: AfScript): Promise<AgentJson> {
     const url = '/einstein/ai-agent/v1.1/authoring/compile';
     const maybeMock = new MaybeMock(connection);
 
@@ -358,26 +359,40 @@ export class Agent {
 
     const response = await maybeMock.request<PublishAgentJsonResponse>('POST', url, { agentJson });
     if (response.isSuccess && response.botDeveloperName) {
-      // we've published the AgentJson, now we need to
+      // we've published the AgentJson, now we need to:
       // 1. update the AuthoringBundle-meta.xml file with response.BotId
-      // 2. retrieve the new Agent metadata in the org
-      const defaultPackagePath = project.getDefaultPackage().path ?? 'force-app';
-      const genAiPlannerBundlesPath = path.join(defaultPackagePath, 'main', 'default', 'genAiPlannerBundles');
+      // 2. retrieve the new Agent metadata that's in the org
+      const defaultPackagePath = project.getDefaultPackage().path;
 
       try {
         // First update the AuthoringBundle file with the new BotId
-        const authoringBundlePath = path.join(
-          genAiPlannerBundlesPath,
-          `${agentJson.agent_version.developer_name}.genAiPlannerBundle-meta.xml`
+        const mainDefaultBundlePath = path.join(
+          defaultPackagePath,
+          'main',
+          'default',
+          'aiAuthoringBundle',
+          response.botDeveloperName,
+          `${response.botDeveloperName}.authoring-bundle-meta.xml`
         );
+
+        // Try to find the authoring bundle directory by recursively searching from the default package path
+        const foundBundleDir = response.botDeveloperName
+          ? findAuthoringBundle(defaultPackagePath, response.botDeveloperName)
+          : undefined;
+
+        // Construct the full file path whether we found the directory or not
+        const targetPath = foundBundleDir
+          ? path.join(foundBundleDir, `${response.botDeveloperName}.authoring-bundle-meta.xml`)
+          : mainDefaultBundlePath;
+
         const xmlParser = new XMLParser({ ignoreAttributes: false });
         const xmlBuilder = new XMLBuilder({ ignoreAttributes: false });
 
-        const authoringBundleContent = await readFile(authoringBundlePath, 'utf-8');
-        const authoringBundle = xmlParser.parse(authoringBundleContent) as { GenAiPlannerBundle: { Target: string } };
-        authoringBundle.GenAiPlannerBundle.Target = response.botDeveloperName;
+        const authoringBundleContent = await readFile(targetPath, 'utf-8');
+        const authoringBundle = xmlParser.parse(authoringBundleContent) as { aiAuthoringBundle: { Target: string } }; // all the typing we'll need
+        authoringBundle.aiAuthoringBundle.Target = response.botDeveloperName;
 
-        await writeFile(authoringBundlePath, xmlBuilder.build(authoringBundle));
+        await writeFile(targetPath, xmlBuilder.build(authoringBundle));
 
         // Now retrieve the updated agent metadata
         const cs = await ComponentSetBuilder.build({

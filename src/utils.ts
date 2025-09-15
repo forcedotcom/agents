@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+import { readdirSync, statSync } from 'node:fs';
+import * as path from 'node:path';
+
 export const metric = [
   'completeness',
   'coherence',
@@ -65,4 +68,40 @@ export const decodeHtmlEntities = (str: string = ''): string => {
   };
 
   return str.replace(/&[a-zA-Z0-9#]+;/g, (entity) => entities[entity] || entity);
+};
+
+/**
+ * Find the authoring bundle directory for a given bot name by recursively searching from a starting directory.
+ *
+ * @param dir - The directory to start searching from
+ * @param botName - The name of the bot to find the authoring bundle directory for
+ * @returns The path to the authoring bundle directory if found, undefined otherwise
+ */
+export const findAuthoringBundle = (dir: string, botName: string): string | undefined => {
+  try {
+    const files: string[] = readdirSync(dir);
+
+    // If we find aiAuthoringBundle dir, check for the expected directory structure
+    if (files.includes('aiAuthoringBundle')) {
+      const expectedPath = path.join(dir, 'aiAuthoringBundle', botName);
+      const statResult = statSync(expectedPath, { throwIfNoEntry: false });
+      if (statResult?.isDirectory()) {
+        return expectedPath;
+      }
+    }
+
+    // Otherwise keep searching directories
+    for (const file of files) {
+      const filePath = path.join(dir, file);
+      const statResult = statSync(filePath, { throwIfNoEntry: false });
+      if (statResult?.isDirectory()) {
+        const found = findAuthoringBundle(filePath, botName);
+        if (found) return found;
+      }
+    }
+  } catch (err) {
+    // Directory doesn't exist or can't be read
+    return undefined;
+  }
+  return undefined;
 };

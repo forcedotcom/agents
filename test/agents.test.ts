@@ -82,7 +82,7 @@ describe('Agents', () => {
   });
 
   it('createAgentJson (mock behavior) should return full agent json', async () => {
-    process.env.SF_MOCK_DIR = join('test', 'mocks', 'createAgentJson');
+    process.env.SF_MOCK_DIR = join('test', 'mocks');
     const output = await Agent.compileAfScript(connection, 'AF Script string');
     expect(output).to.have.property('schema_version', '1.0');
     expect(output).to.have.property('global_configuration').and.be.an('object');
