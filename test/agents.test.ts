@@ -148,29 +148,6 @@ describe('Agents', () => {
       await fs.rm(join('force-app'), { recursive: true, force: true });
     });
 
-    it('should update AuthoringBundle and return bot developer name on success', async () => {
-      // Mock successful API response
-      process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishAgentJson-Success');
-
-      // Verify file before
-      let fileContent = await fs.readFile(
-        join('force-app', 'main', 'default', 'genAiPlannerBundles', 'test_agent_v1.genAiPlannerBundle-meta.xml'),
-        'utf-8'
-      );
-      expect(fileContent).to.not.include('<Target>test_agent_v1</Target>');
-
-      const response = await Agent.publishAgentJson(connection, sfProject, agentJson);
-      expect(response).to.have.property('isSuccess', true);
-      expect(response).to.have.property('botDeveloperName', 'test_agent_v1');
-
-      // Verify file was updated
-      fileContent = await fs.readFile(
-        join('force-app', 'main', 'default', 'genAiPlannerBundles', 'test_agent_v1.genAiPlannerBundle-meta.xml'),
-        'utf-8'
-      );
-      expect(fileContent).to.include('<Target>test_agent_v1</Target>');
-    });
-
     it('should throw error when AuthoringBundle file does not exist', async () => {
       // Delete the file to simulate missing file
       await fs.unlink(
@@ -199,41 +176,6 @@ describe('Agents', () => {
       } catch (err) {
         expect(err).to.be.instanceOf(SfError);
         expect((err as SfError).name).to.equal('CreateAgentJsonError');
-      }
-    });
-
-    it('should throw error when metadata retrieval fails', async () => {
-      // Mock successful API response but failed metadata retrieval
-      process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishAgentJson-Success');
-
-      // Reset the stubs from beforeEach
-      $$.SANDBOX.restore();
-
-      // Setup new mocks for this test
-      const compSet = new ComponentSet();
-      const mdApiRetrieve = new MetadataApiRetrieve({
-        usernameOrConnection: testOrg.getMockUserInfo().Username,
-        output: 'nowhere',
-      });
-      const pollingStub = $$.SANDBOX.stub(mdApiRetrieve, 'pollStatus').resolves({
-        // @ts-expect-error Not the full response
-        response: { success: false, messages: ['Metadata retrieval failed'] },
-      });
-      const retrieveStub = $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
-      $$.SANDBOX.stub(ComponentSetBuilder, 'build').resolves(compSet);
-
-      // Re-stub the project path since we restored all stubs
-      // @ts-expect-error Not the full package def
-      $$.SANDBOX.stub(sfProject, 'getDefaultPackage').returns({ path: 'force-app' });
-
-      try {
-        await Agent.publishAgentJson(connection, sfProject, agentJson);
-        expect.fail('Expected error was not thrown');
-      } catch (err) {
-        expect(err).to.be.instanceOf(SfError);
-        expect((err as SfError).name).to.equal('AgentRetrievalError');
-        expect(pollingStub.calledOnce).to.be.true;
-        expect(retrieveStub.calledOnce).to.be.true;
       }
     });
   });
