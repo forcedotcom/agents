@@ -211,7 +211,7 @@ export class Agent {
           output: path.resolve(project.getPath(), defaultPackagePath),
         });
         const retrieveResult = await retrieve.pollStatus({
-          frequency: Duration.seconds(1),
+          frequency: Duration.milliseconds(200),
           timeout: Duration.minutes(5),
         });
         if (!retrieveResult.response.success) {
