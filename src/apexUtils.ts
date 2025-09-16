@@ -18,6 +18,7 @@ import { join } from 'node:path';
 import { writeFile } from 'node:fs/promises';
 import { Connection, Logger, Messages } from '@salesforce/core';
 import { type ApexLog, type TraceFlag } from '@salesforce/types/tooling';
+import { sanitizeFilename } from './utils';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'apexUtils');
@@ -69,7 +70,7 @@ export const writeDebugLog = async (connection: Connection, log: ApexLog, output
   if (!logId) {
     throw messages.createError('apexLogIdNotFound');
   }
-  const logFile = join(outputDir, `${logId}.log`);
+  const logFile = join(outputDir, sanitizeFilename(`${logId}.log`));
   // eslint-disable-next-line no-underscore-dangle
   const url = `${connection.tooling._baseUrl()}/sobjects/ApexLog/${logId}/Body`;
   const logContent = await connection.tooling.request<string>(url);
