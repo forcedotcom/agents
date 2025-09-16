@@ -21,6 +21,7 @@ import { XMLBuilder, XMLParser } from 'fast-xml-parser';
 import { Connection, Lifecycle, Logger, Messages, SfError, SfProject, generateApiName } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { Duration } from '@salesforce/kit';
+import nock from 'nock';
 import {
   type AgentCreateConfig,
   type AgentCreateResponse,
@@ -405,6 +406,11 @@ export class Agent {
           },
         });
 
+        // will unset mocks so that retrieve will work
+        nock.restore();
+        nock.cleanAll();
+        nock.enableNetConnect();
+
         const retrieve = await cs.retrieve({
           usernameOrConnection: connection,
           merge: true,
@@ -413,10 +419,7 @@ export class Agent {
           output: path.resolve(project.getPath(), defaultPackagePath),
         });
 
-        const retrieveResult = await retrieve.pollStatus({
-          frequency: Duration.seconds(1),
-          timeout: Duration.minutes(5),
-        });
+        const retrieveResult = await retrieve.pollStatus();
 
         if (!retrieveResult.response?.success) {
           const errMessages = retrieveResult.response?.messages?.toString() ?? 'unknown';
