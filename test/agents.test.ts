@@ -84,9 +84,9 @@ describe('Agents', () => {
   it('createAgentJson (mock behavior) should return full agent json', async () => {
     process.env.SF_MOCK_DIR = join('test', 'mocks');
     const output = await Agent.compileAfScript(connection, 'AF Script string');
-    expect(output).to.have.property('schema_version', '1.0');
-    expect(output).to.have.property('global_configuration').and.be.an('object');
-    expect(output).to.have.property('agent_version').and.be.an('object');
+    expect(output).to.have.property('schemaVersion', '2.0');
+    expect(output).to.have.property('globalConfiguration').and.be.an('object');
+    expect(output).to.have.property('agentVersion').and.be.an('object');
     await fs.rm('force-app', { recursive: true, force: true });
   });
 
@@ -114,23 +114,44 @@ describe('Agents', () => {
 
       // Create test agent JSON
       agentJson = {
-        // eslint-disable-next-line camelcase
-        schema_version: '1.0',
-        // eslint-disable-next-line camelcase
-        global_configuration: {
-          // eslint-disable-next-line camelcase
-          developer_name: 'test_agent_v1',
+        schemaVersion: '1.0',
+        globalConfiguration: {
+          developerName: 'test_agent_v1',
           label: 'Test Agent',
           description: 'A test agent',
-          // eslint-disable-next-line camelcase
-          agent_type: 'AgentforceServiceAgent',
+          agentType: 'AgentforceServiceAgent',
+          enableEnhancedEventLogs: false,
+          templateName: '',
+          defaultAgentUser: '',
+          defaultOutboundRouting: '',
+          contextVariables: [],
         },
-        // eslint-disable-next-line camelcase
-        agent_version: {
-          // eslint-disable-next-line camelcase
-          developer_name: 'test_agent_v1',
-          // eslint-disable-next-line camelcase
-          planner_type: 'Atlas__ConcurrentMultiAgentOrchestration',
+        agentVersion: {
+          developerName: 'test_agent_v1',
+          plannerType: 'Atlas__ConcurrentMultiAgentOrchestration',
+          systemMessages: [],
+          modalityParameters: {
+            voice: {
+              inboundModel: null,
+              inboundFillerWordsDetection: null,
+              outboundVoice: null,
+              outboundModel: null,
+              outboundSpeed: null,
+              outboundStyleExaggeration: null,
+            },
+            language: {
+              defaultLocale: 'en_US',
+              additionalLocales: [],
+              allAdditionalLocales: false,
+            },
+          },
+          additionalParameters: false,
+          company: '',
+          role: '',
+          stateVariables: [],
+          initialNode: '',
+          nodes: [],
+          knowledgeDefinitions: null,
         },
       };
 

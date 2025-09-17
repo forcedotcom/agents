@@ -17,6 +17,7 @@
 import { inspect } from 'node:util';
 import * as path from 'node:path';
 import { stat, readdir, readFile, writeFile } from 'node:fs/promises';
+import { EOL } from 'node:os';
 import { XMLBuilder, XMLParser } from 'fast-xml-parser';
 import { Connection, Lifecycle, Logger, Messages, SfError, SfProject, generateApiName } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
@@ -33,7 +34,7 @@ import {
   type BotMetadata,
   type BotVersionMetadata,
   type CreateAfScriptResponse,
-  type CreateAgentJsonResponse,
+  type CompileAfScriptResponse,
   type DraftAgentTopicsBody,
   type DraftAgentTopicsResponse,
   PublishAgentJsonResponse,
@@ -327,13 +328,16 @@ export class Agent {
 
     getLogger().debug(`Generating Agent JSON with AF Script: ${afScript}`);
 
-    const response = await maybeMock.request<CreateAgentJsonResponse>('POST', url, { afScript });
-    if (response.isSuccess && response.agentJson) {
-      return response.agentJson;
+    const response = await maybeMock.request<CompileAfScriptResponse>('POST', url, { afScript });
+    if (response.status === 'success') {
+      return response.compiledArtifact;
     } else {
       throw SfError.create({
         name: 'CreateAgentJsonError',
-        message: response.errorMessage ?? 'unknown',
+        message:
+          response.errors
+            .map((e) => `${e.errorType}: ${e.description} (${e.lineStart}:${e.colStart}-${e.lineEnd}:${e.colEnd})`)
+            .join(EOL) ?? 'unknown',
         data: response,
       });
     }
