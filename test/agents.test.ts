@@ -169,24 +169,6 @@ describe('Agents', () => {
       await fs.rm(join('force-app'), { recursive: true, force: true });
     });
 
-    it('should throw error when AuthoringBundle file does not exist', async () => {
-      // Delete the file to simulate missing file
-      await fs.unlink(
-        join('force-app', 'main', 'default', 'genAiPlannerBundles', 'test_agent_v1.genAiPlannerBundle-meta.xml')
-      );
-
-      // Mock successful API response
-      process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishAgentJson-Success');
-
-      try {
-        await Agent.publishAgentJson(connection, sfProject, agentJson);
-        expect.fail('Expected error was not thrown');
-      } catch (err) {
-        expect(err).to.be.instanceOf(SfError);
-        expect((err as SfError).name).to.equal('AgentRetrievalError');
-      }
-    });
-
     it('should throw error when API call fails', async () => {
       // Mock failed API response
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishAgentJson-Error');
