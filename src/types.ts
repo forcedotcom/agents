@@ -607,11 +607,12 @@ export type AgentTraceResponse = {
 export type CompileAfScriptResponse = AgentCompilationSuccess | AgentCompilationError;
 
 export type PublishAgentJsonResponse = {
-  isSuccess: boolean;
+  botVersionId: string;
+  botId: string;
   errorMessage?: string;
-  botDeveloperName?: string;
 };
 
+export type PublishAgent = PublishAgentJsonResponse & { developerName: string };
 export type AgentCompilationError = {
   status: 'failure';
   compiledArtifact: null;

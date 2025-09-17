@@ -3,7 +3,7 @@
   "compiledArtifact": {
     "schemaVersion": "2.0",
     "globalConfiguration": {
-      "developerName": "simple_response_agent_v1",
+      "developerName": "Guest_Experience_Agent_v1",
       "label": "Servicebot",
       "description": "",
       "enableEnhancedEventLogs": false,
@@ -14,7 +14,7 @@
       "contextVariables": []
     },
     "agentVersion": {
-      "developerName": "simple_response_agent_v1",
+      "developerName": "Guest_Experience_Agent_v1",
       "plannerType": "Atlas__ConcurrentMultiAgentOrchestration",
       "systemMessages": [],
       "modalityParameters": {

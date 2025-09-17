@@ -39,6 +39,7 @@ import {
   type DraftAgentTopicsResponse,
   PublishAgentJsonResponse,
   AfScript,
+  PublishAgent,
 } from './types.js';
 import { MaybeMock } from './maybe-mock';
 import { decodeHtmlEntities, findAuthoringBundle } from './utils';
@@ -356,14 +357,15 @@ export class Agent {
     connection: Connection,
     project: SfProject,
     agentJson: AgentJson
-  ): Promise<PublishAgentJsonResponse> {
+  ): Promise<PublishAgent> {
     const maybeMock = new MaybeMock(connection);
+    let developerName: string;
 
     getLogger().debug('Publishing AfScript');
 
     const url = '/einstein/ai-agent/v1.1/authoring/publish';
     const response = await maybeMock.request<PublishAgentJsonResponse>('POST', url, { agentJson });
-    if (response.isSuccess && response.botDeveloperName) {
+    if (response.botId && response.botVersionId) {
       // we've published the AgentJson, now we need to:
       // 1. update the AuthoringBundle-meta.xml file with response.BotId
       // 2. retrieve the new Agent metadata that's in the org
@@ -371,18 +373,20 @@ export class Agent {
 
       try {
         // First update the AuthoringBundle file with the new BotId
+        // strip the "_v1" or similar from the end of a developerName, if it's present
+        developerName = agentJson.globalConfiguration.developerName.replace(/_v\d$/, '');
         // Try to find the authoring bundle directory by recursively searching from the default package path
-        const bundleDir = findAuthoringBundle(defaultPackagePath, response.botDeveloperName);
+        const bundleDir = findAuthoringBundle(defaultPackagePath, developerName);
 
         if (!bundleDir) {
           throw SfError.create({
             name: 'Cannot Find Bundle',
-            message: `Cannot find an authoring bundle in ${defaultPackagePath} that matches ${response.botDeveloperName}`,
+            message: `Cannot find an authoring bundle in ${defaultPackagePath} that matches ${developerName}`,
           });
         }
 
         // Construct the full file path whether we found the directory or not
-        const bundleMetaPath = path.join(bundleDir, `${response.botDeveloperName}.authoring-bundle-meta.xml`);
+        const bundleMetaPath = path.join(bundleDir, `${developerName}.authoring-bundle-meta.xml`);
 
         const xmlParser = new XMLParser({ ignoreAttributes: false });
         const xmlBuilder = new XMLBuilder({
@@ -395,15 +399,13 @@ export class Agent {
         const authoringBundle = xmlParser.parse(await readFile(bundleMetaPath, 'utf-8')) as {
           aiAuthoringBundle: { Target: string };
         }; // all the typing we'll need
-        authoringBundle.aiAuthoringBundle.Target = response.botDeveloperName;
+        authoringBundle.aiAuthoringBundle.Target = developerName;
 
         await writeFile(bundleMetaPath, xmlBuilder.build(authoringBundle));
 
         // Now retrieve the updated agent metadata
         const cs = await ComponentSetBuilder.build({
-          sourcepath: [
-            path.resolve(path.join(defaultPackagePath, 'main', 'default', 'bots', response.botDeveloperName)),
-          ],
+          sourcepath: [path.resolve(path.join(defaultPackagePath, 'main', 'default', 'bots', developerName))],
           org: {
             username: connection.getUsername() as string,
             exclude: [],
@@ -444,7 +446,7 @@ export class Agent {
         });
       }
 
-      return response;
+      return { ...response, developerName };
     } else {
       throw SfError.create({
         name: 'CreateAgentJsonError',
@@ -476,7 +478,12 @@ export class Agent {
   public async getBotMetadata(): Promise<BotMetadata> {
     if (!this.botMetadata) {
       const whereClause = this.id ? `Id = '${this.id}'` : `DeveloperName = '${this.name as string}'`;
-      const query = `SELECT FIELDS(ALL), (SELECT FIELDS(ALL) FROM BotVersions LIMIT 10) FROM BotDefinition WHERE ${whereClause} LIMIT 1`;
+      // Query BotDefinition to get DeveloperName and other metadata
+      const query = `SELECT Id, DeveloperName, MasterLabel, Description, CreatedDate, LastModifiedDate,
+        (SELECT Id, VersionNumber, Status FROM BotVersions ORDER BY VersionNumber DESC LIMIT 10)
+        FROM BotDefinition
+        WHERE ${whereClause}
+        LIMIT 1`;
       this.botMetadata = await this.options.connection.singleRecordQuery<BotMetadata>(query);
       this.id = this.botMetadata.Id;
       this.name = this.botMetadata.DeveloperName;
