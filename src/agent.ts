@@ -403,25 +403,25 @@ export class Agent {
 
         await writeFile(bundleMetaPath, xmlBuilder.build(authoringBundle));
 
-        // Now retrieve the updated agent metadata
+        // will unset mocks so that retrieve will work - can be removed when APIs exist
+        nock.restore();
+        nock.cleanAll();
+        nock.enableNetConnect();
+
         const cs = await ComponentSetBuilder.build({
-          sourcepath: [path.resolve(path.join(defaultPackagePath, 'main', 'default', 'bots', developerName))],
+          metadata: {
+            metadataEntries: [`Agent:${developerName}`],
+            directoryPaths: [defaultPackagePath],
+          },
           org: {
             username: connection.getUsername() as string,
             exclude: [],
           },
         });
-
-        // will unset mocks so that retrieve will work
-        nock.restore();
-        nock.cleanAll();
-        nock.enableNetConnect();
-
         const retrieve = await cs.retrieve({
           usernameOrConnection: connection,
           merge: true,
           format: 'source',
-          rootTypesWithDependencies: ['Bot'],
           output: path.resolve(project.getPath(), defaultPackagePath),
         });
 
