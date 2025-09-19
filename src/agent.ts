@@ -478,12 +478,7 @@ export class Agent {
   public async getBotMetadata(): Promise<BotMetadata> {
     if (!this.botMetadata) {
       const whereClause = this.id ? `Id = '${this.id}'` : `DeveloperName = '${this.name as string}'`;
-      // Query BotDefinition to get DeveloperName and other metadata
-      const query = `SELECT Id, DeveloperName, MasterLabel, Description, CreatedDate, LastModifiedDate,
-        (SELECT Id, VersionNumber, Status FROM BotVersions ORDER BY VersionNumber DESC LIMIT 10)
-        FROM BotDefinition
-        WHERE ${whereClause}
-        LIMIT 1`;
+      const query = `SELECT FIELDS(ALL), (SELECT FIELDS(ALL) FROM BotVersions LIMIT 10) FROM BotDefinition WHERE ${whereClause} LIMIT 1`;
       this.botMetadata = await this.options.connection.singleRecordQuery<BotMetadata>(query);
       this.id = this.botMetadata.Id;
       this.name = this.botMetadata.DeveloperName;
