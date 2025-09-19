@@ -1,0 +1,4 @@
+{
+  "isSuccess": true,
+  "afScript": "system:\n    @prompt:\n        You are a helpful AI assistant.\n\nconfig:\n    @agent_id: \"test_agent_001\"\n    @agent_name: \"Test_Agent\"\n    user_locale: en_US\n\ntrigger default:\n    initial_node: greeting\n\nvariables:\n    user_name: string = \"Guest\"\n    counter: int = 0\n\nblock greeting:\n    @prompt:\n        Hello! How can I help you today?\n\nblock help:\n    @prompt:\n        I'm here to assist you with any questions.\n\nfunctions:\n    test_function:\n        description: \"A simple test function\"\n"
+}
