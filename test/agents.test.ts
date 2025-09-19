@@ -14,10 +14,12 @@
  * limitations under the License.
  */
 import { join } from 'node:path';
+import fs from 'node:fs/promises';
 import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
-import { Connection, SfProject } from '@salesforce/core';
+import { Connection, SfError, SfProject } from '@salesforce/core';
 import { ComponentSetBuilder, ComponentSet, MetadataApiRetrieve } from '@salesforce/source-deploy-retrieve';
+import { type AgentJson } from '../src/types.js';
 import { Agent, type AgentCreateConfig } from '../src';
 
 describe('Agents', () => {
@@ -79,12 +81,106 @@ describe('Agents', () => {
     expect(output).to.include('agent_name: "ServiceBot"');
   });
 
-  it('createAgentDsl (mock behavior) should return full agent dsl', async () => {
-    process.env.SF_MOCK_DIR = join('test', 'mocks', 'createAgentDsl');
-    const output = await Agent.createAgentDsl(connection, 'AF Script string');
-    expect(output).to.have.property('schema_version', '1.0');
-    expect(output).to.have.property('global_configuration').and.be.an('object');
-    expect(output).to.have.property('agent_version').and.be.an('object');
+  it('createAgentJson (mock behavior) should return full agent json', async () => {
+    process.env.SF_MOCK_DIR = join('test', 'mocks');
+    const output = await Agent.compileAfScript(connection, 'AF Script string');
+    expect(output).to.have.property('schemaVersion', '2.0');
+    expect(output).to.have.property('globalConfiguration').and.be.an('object');
+    expect(output).to.have.property('agentVersion').and.be.an('object');
+    await fs.rm('force-app', { recursive: true, force: true });
+  });
+
+  describe('publishAgentJson', () => {
+    let sfProject: SfProject;
+    let agentJson: AgentJson;
+
+    beforeEach(async () => {
+      sfProject = SfProject.getInstance();
+      // @ts-expect-error Not the full package def
+      $$.SANDBOX.stub(sfProject, 'getDefaultPackage').returns({ path: 'force-app' });
+
+      // Setup default successful metadata retrieval mock
+      const compSet = new ComponentSet();
+      const mdApiRetrieve = new MetadataApiRetrieve({
+        usernameOrConnection: testOrg.getMockUserInfo().Username,
+        output: 'nowhere',
+      });
+      $$.SANDBOX.stub(mdApiRetrieve, 'pollStatus').resolves({
+        // @ts-expect-error Not the full response
+        response: { success: true },
+      });
+      $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
+      $$.SANDBOX.stub(ComponentSetBuilder, 'build').resolves(compSet);
+
+      // Create test agent JSON
+      agentJson = {
+        schemaVersion: '1.0',
+        globalConfiguration: {
+          developerName: 'test_agent_v1',
+          label: 'Test Agent',
+          description: 'A test agent',
+          agentType: 'AgentforceServiceAgent',
+          enableEnhancedEventLogs: false,
+          templateName: '',
+          defaultAgentUser: '',
+          defaultOutboundRouting: '',
+          contextVariables: [],
+        },
+        agentVersion: {
+          developerName: 'test_agent_v1',
+          plannerType: 'Atlas__ConcurrentMultiAgentOrchestration',
+          systemMessages: [],
+          modalityParameters: {
+            voice: {
+              inboundModel: null,
+              inboundFillerWordsDetection: null,
+              outboundVoice: null,
+              outboundModel: null,
+              outboundSpeed: null,
+              outboundStyleExaggeration: null,
+            },
+            language: {
+              defaultLocale: 'en_US',
+              additionalLocales: [],
+              allAdditionalLocales: false,
+            },
+          },
+          additionalParameters: false,
+          company: '',
+          role: '',
+          stateVariables: [],
+          initialNode: '',
+          nodes: [],
+          knowledgeDefinitions: null,
+        },
+      };
+
+      // Create test directory structure and files
+      const bundlePath = join('force-app', 'main', 'default', 'genAiPlannerBundles');
+      const bundleFilePath = join(bundlePath, 'test_agent_v1.genAiPlannerBundle-meta.xml');
+      await fs.mkdir(bundlePath, { recursive: true });
+      await fs.writeFile(
+        bundleFilePath,
+        '<?xml version="1.0" encoding="UTF-8"?>\n<GenAiPlannerBundle xmlns="http://soap.sforce.com/2006/04/metadata">\n    <Target>old_value</Target>\n</GenAiPlannerBundle>'
+      );
+    });
+
+    afterEach(async () => {
+      await fs.rm(join('force-app'), { recursive: true, force: true });
+    });
+
+    it('should throw error when API call fails', async () => {
+      // Mock failed API response
+      process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishAgentJson-Error');
+
+      try {
+        await Agent.publishAgentJson(connection, sfProject, agentJson);
+        expect.fail('Expected error was not thrown');
+      } catch (err) {
+        expect(err).to.be.instanceOf(SfError);
+        expect((err as SfError).name).to.equal('CreateAgentJsonError');
+      }
+    });
   });
 
   it('create save agent', async () => {

@@ -15,6 +15,7 @@
  */
 
 export {
+  type AfScript,
   type AgentCreateConfig,
   type AgentCreateResponse,
   type AgentJobSpec,
@@ -41,7 +42,7 @@ export {
   type TestCaseResult,
   type TestStatus,
 } from './types';
-export { metric } from './utils';
+export { metric, findAuthoringBundle } from './utils';
 export { Agent, AgentCreateLifecycleStages } from './agent';
 export { AgentTester } from './agentTester';
 export { AgentTest, AgentTestCreateLifecycleStages } from './agentTest';

@@ -16,14 +16,17 @@
 
 import { inspect } from 'node:util';
 import * as path from 'node:path';
-import { stat, readdir } from 'node:fs/promises';
+import { stat, readdir, readFile, writeFile } from 'node:fs/promises';
+import { EOL } from 'node:os';
+import { XMLBuilder, XMLParser } from 'fast-xml-parser';
 import { Connection, Lifecycle, Logger, Messages, SfError, SfProject, generateApiName } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { Duration } from '@salesforce/kit';
+import nock from 'nock';
 import {
   type AgentCreateConfig,
   type AgentCreateResponse,
-  type AgentDsl,
+  type AgentJson,
   type AgentJobSpec,
   type AgentJobSpecCreateConfig,
   type AgentOptions,
@@ -31,12 +34,15 @@ import {
   type BotMetadata,
   type BotVersionMetadata,
   type CreateAfScriptResponse,
-  type CreateAgentDslResponse,
+  type CompileAfScriptResponse,
   type DraftAgentTopicsBody,
   type DraftAgentTopicsResponse,
+  PublishAgentJsonResponse,
+  AfScript,
+  PublishAgent,
 } from './types.js';
 import { MaybeMock } from './maybe-mock';
-import { decodeHtmlEntities } from './utils';
+import { decodeHtmlEntities, findAuthoringBundle } from './utils';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agents');
@@ -288,10 +294,10 @@ export class Agent {
    *
    * @param connection The connection to the org
    * @param agentJobSpec The agent specification data
-   * @returns Promise<string> The generated AF Script as a string
+   * @returns Promise<AfScript> The generated AF Script as a string
    * @beta
    */
-  public static async createAfScript(connection: Connection, agentJobSpec: AgentJobSpec): Promise<string> {
+  public static async createAfScript(connection: Connection, agentJobSpec: AgentJobSpec): Promise<AfScript> {
     const url = '/connect/ai-assist/create-af-script';
     const maybeMock = new MaybeMock(connection);
 
@@ -310,25 +316,140 @@ export class Agent {
   }
 
   /**
-   * Creates agent DSL using AF Script.
+   * Creates agent JSON from compiling AF Script on the server.
    *
    * @param connection The connection to the org
    * @param afScript The agent AF Script as a string
-   * @returns Promise<string> The generated Agent DSL as a string
+   * @returns Promise<string> The generated Agent JSON as a string
    * @beta
    */
-  public static async createAgentDsl(connection: Connection, afScript: string): Promise<AgentDsl> {
-    const url = '/connect/ai-assist/create-agent-dsl';
+  public static async compileAfScript(connection: Connection, afScript: AfScript): Promise<AgentJson> {
+    const url = '/einstein/ai-agent/v1.1/authoring/compile';
     const maybeMock = new MaybeMock(connection);
 
-    getLogger().debug(`Generating Agent DSL with AF Script: ${afScript}`);
+    getLogger().debug(`Generating Agent JSON with AF Script: ${afScript}`);
 
-    const response = await maybeMock.request<CreateAgentDslResponse>('POST', url, { afScript });
-    if (response.isSuccess && response.agentDsl) {
-      return response.agentDsl;
+    const response = await maybeMock.request<CompileAfScriptResponse>('POST', url, { afScript });
+    if (response.status === 'success') {
+      return response.compiledArtifact;
     } else {
       throw SfError.create({
-        name: 'CreateAgentDslError',
+        name: 'CreateAgentJsonError',
+        message:
+          response.errors
+            .map((e) => `${e.errorType}: ${e.description} (${e.lineStart}:${e.colStart}-${e.lineEnd}:${e.colEnd})`)
+            .join(EOL) ?? 'unknown',
+        data: response,
+      });
+    }
+  }
+
+  /**
+   * Publish an AgentJson representation to the org
+   *
+   * @beta
+   * @param {Connection} connection The connection to the org
+   * @param {SfProject} project The Salesforce project
+   * @param {AgentJson} agentJson The agent JSON with name
+   * @returns {Promise<PublishAgentJsonResponse>} The publish response
+   */
+  public static async publishAgentJson(
+    connection: Connection,
+    project: SfProject,
+    agentJson: AgentJson
+  ): Promise<PublishAgent> {
+    const maybeMock = new MaybeMock(connection);
+    let developerName: string;
+
+    getLogger().debug('Publishing AfScript');
+
+    const url = '/einstein/ai-agent/v1.1/authoring/publish';
+    const response = await maybeMock.request<PublishAgentJsonResponse>('POST', url, { agentJson });
+    if (response.botId && response.botVersionId) {
+      // we've published the AgentJson, now we need to:
+      // 1. update the AuthoringBundle-meta.xml file with response.BotId
+      // 2. retrieve the new Agent metadata that's in the org
+      const defaultPackagePath = path.resolve(project.getDefaultPackage().path);
+
+      try {
+        // First update the AuthoringBundle file with the new BotId
+        // strip the "_v1" or similar from the end of a developerName, if it's present
+        developerName = agentJson.globalConfiguration.developerName.replace(/_v\d$/, '');
+        // Try to find the authoring bundle directory by recursively searching from the default package path
+        const bundleDir = findAuthoringBundle(defaultPackagePath, developerName);
+
+        if (!bundleDir) {
+          throw SfError.create({
+            name: 'Cannot Find Bundle',
+            message: `Cannot find an authoring bundle in ${defaultPackagePath} that matches ${developerName}`,
+          });
+        }
+
+        // Construct the full file path whether we found the directory or not
+        const bundleMetaPath = path.join(bundleDir, `${developerName}.authoring-bundle-meta.xml`);
+
+        const xmlParser = new XMLParser({ ignoreAttributes: false });
+        const xmlBuilder = new XMLBuilder({
+          ignoreAttributes: false,
+          format: true,
+          suppressBooleanAttributes: false,
+          suppressEmptyNode: false,
+        });
+
+        const authoringBundle = xmlParser.parse(await readFile(bundleMetaPath, 'utf-8')) as {
+          aiAuthoringBundle: { Target: string };
+        }; // all the typing we'll need
+        authoringBundle.aiAuthoringBundle.Target = developerName;
+
+        await writeFile(bundleMetaPath, xmlBuilder.build(authoringBundle));
+
+        // will unset mocks so that retrieve will work - can be removed when APIs exist
+        nock.restore();
+        nock.cleanAll();
+        nock.enableNetConnect();
+
+        const cs = await ComponentSetBuilder.build({
+          metadata: {
+            metadataEntries: [`Agent:${developerName}`],
+            directoryPaths: [defaultPackagePath],
+          },
+          org: {
+            username: connection.getUsername() as string,
+            exclude: [],
+          },
+        });
+        const retrieve = await cs.retrieve({
+          usernameOrConnection: connection,
+          merge: true,
+          format: 'source',
+          output: path.resolve(project.getPath(), defaultPackagePath),
+        });
+
+        const retrieveResult = await retrieve.pollStatus();
+
+        if (!retrieveResult.response?.success) {
+          const errMessages = retrieveResult.response?.messages?.toString() ?? 'unknown';
+          const error = messages.createError('agentRetrievalError', [errMessages]);
+          error.actions = [messages.getMessage('agentRetrievalErrorActions')];
+          throw error;
+        }
+      } catch (err) {
+        const error = SfError.wrap(err);
+        if (error.name === 'AgentRetrievalError') {
+          throw error;
+        }
+        throw SfError.create({
+          name: 'AgentRetrievalError',
+          message: messages.getMessage('agentRetrievalError', [error.message]),
+          cause: error,
+          actions: [messages.getMessage('agentRetrievalErrorActions')],
+        });
+      }
+
+      return { ...response, developerName };
+    } else {
+      throw SfError.create({
+        name: 'CreateAgentJsonError',
         message: response.errorMessage ?? 'unknown',
         data: response,
       });

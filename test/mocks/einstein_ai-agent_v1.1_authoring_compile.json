@@ -1,0 +1,96 @@
+{
+  "status": "success",
+  "compiledArtifact": {
+    "schemaVersion": "2.0",
+    "globalConfiguration": {
+      "developerName": "Guest_Experience_Agent_v1",
+      "label": "Servicebot",
+      "description": "",
+      "enableEnhancedEventLogs": false,
+      "agentType": "AgentforceServiceAgent",
+      "templateName": null,
+      "defaultAgentUser": "service_user",
+      "defaultOutboundRouting": null,
+      "contextVariables": []
+    },
+    "agentVersion": {
+      "developerName": "Guest_Experience_Agent_v1",
+      "plannerType": "Atlas__ConcurrentMultiAgentOrchestration",
+      "systemMessages": [],
+      "modalityParameters": {
+        "voice": {
+          "inboundModel": null,
+          "inboundFillerWordsDetection": null,
+          "outboundVoice": null,
+          "outboundModel": null,
+          "outboundSpeed": null,
+          "outboundStyleExaggeration": null
+        },
+        "language": {
+          "defaultLocale": "en_US",
+          "additionalLocales": [],
+          "allAdditionalLocales": false
+        }
+      },
+      "additionalParameters": null,
+      "company": null,
+      "role": null,
+      "stateVariables": [
+        {
+          "developerName": "customer_name",
+          "label": "Customer_Name",
+          "description": "",
+          "dataType": "string",
+          "isList": false,
+          "default": null,
+          "visibility": "Internal"
+        },
+        {
+          "developerName": "issue_type",
+          "label": "Issue_Type",
+          "description": "",
+          "dataType": "string",
+          "isList": false,
+          "default": "general",
+          "visibility": "Internal"
+        },
+        {
+          "developerName": "priority",
+          "label": "Priority",
+          "description": "",
+          "dataType": "number",
+          "isList": false,
+          "default": 1,
+          "visibility": "Internal"
+        }
+      ],
+      "initialNode": "greeting",
+      "nodes": [
+        {
+          "type": "subagent",
+          "reasoningType": "salesforce.default",
+          "description": "Greet the customer and gather basic information",
+          "beforeReasoning": null,
+          "instructions": "You are a helpful customer service representative",
+          "focusPrompt": "",
+          "tools": [],
+          "preToolCall": null,
+          "postToolCall": null,
+          "afterReasoning": null,
+          "developerName": "greeting",
+          "label": "greeting",
+          "onInit": null,
+          "transitions": null,
+          "onExit": null,
+          "actionDefinitions": []
+        }
+      ],
+      "knowledgeDefinitions": null
+    }
+  },
+  "errors": [],
+  "syntacticMap": {
+    "blocks": []
+  },
+  "dslVersion": "0.0.3.rc29"
+}

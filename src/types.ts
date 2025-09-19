@@ -272,7 +272,7 @@ export type DraftAgentTopicsResponse = {
 export type CreateAfScriptResponse = {
   isSuccess: boolean;
   errorMessage?: string;
-  afScript?: string;
+  afScript?: AfScript;
 };
 
 // ====================================================
@@ -604,23 +604,108 @@ export type AgentTraceResponse = {
   }>;
 };
 
-export type CreateAgentDslResponse = {
-  isSuccess: boolean;
+export type CompileAfScriptResponse = AgentCompilationSuccess | AgentCompilationError;
+
+export type PublishAgentJsonResponse = {
+  botVersionId: string;
+  botId: string;
   errorMessage?: string;
-  agentDsl?: AgentDsl;
+};
+
+export type PublishAgent = PublishAgentJsonResponse & { developerName: string };
+export type AgentCompilationError = {
+  status: 'failure';
+  compiledArtifact: null;
+  errors: Array<{
+    errorType: string;
+    description: string;
+    lineStart: number;
+    lineEnd: number;
+    colStart: number;
+    colEnd: number;
+  }>;
+  syntacticMap: {
+    blocks: [];
+  };
+  dslVersion: '0.0.3.rc29';
+};
+
+export type AgentCompilationSuccess = {
+  status: 'success';
+  compiledArtifact: AgentJson;
+  errors: [];
+  syntacticMap: {
+    blocks: [];
+  };
+  dslVersion: '0.0.3.rc29';
 };
 
 // This is not accurate but good enough for now
-export type AgentDsl = {
-  schema_version: string;
-  global_configuration: {
-    developer_name: string;
+export type AgentJson = {
+  schemaVersion: string;
+  globalConfiguration: {
+    developerName: string;
     label: string;
     description: string;
-    agent_type: string;
+    enableEnhancedEventLogs: boolean;
+    agentType: string;
+    templateName: string;
+    defaultAgentUser: string;
+    defaultOutboundRouting: string;
+    contextVariables: [];
   };
-  agent_version: {
-    developer_name: string;
-    planner_type: string;
+  agentVersion: {
+    developerName: string;
+    plannerType: string;
+    systemMessages: [];
+    modalityParameters: {
+      voice: {
+        inboundModel: null;
+        inboundFillerWordsDetection: null;
+        outboundVoice: null;
+        outboundModel: null;
+        outboundSpeed: null;
+        outboundStyleExaggeration: null;
+      };
+      language: {
+        defaultLocale: 'en_US';
+        additionalLocales: [];
+        allAdditionalLocales: boolean;
+      };
+    };
+    additionalParameters: boolean;
+    company: string;
+    role: string;
+    stateVariables: Array<{
+      developerName: string;
+      label: string;
+      description: string;
+      dataType: 'string';
+      isList: boolean;
+      default: boolean;
+      visibility: 'Internal';
+    }>;
+    initialNode: string;
+    nodes: Array<{
+      type: string;
+      reasoningType: string;
+      description: string;
+      beforeReasoning: string;
+      instructions: string;
+      focusPrompt: string;
+      tools: [];
+      preToolCall: null;
+      postToolCall: null;
+      afterReasoning: null;
+      developerName: string;
+      label: string;
+      onInit: null;
+      transitions: null;
+      onExit: null;
+      actionDefinitions: [];
+    }>;
+    knowledgeDefinitions: null;
   };
 };
+
+export type AfScript = string;
