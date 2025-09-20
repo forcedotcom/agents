@@ -13,7 +13,7 @@
   "dependencies": {
     "@salesforce/core": "^8.19.1",
     "@salesforce/kit": "^3.2.3",
-    "@salesforce/source-deploy-retrieve": "^12.22.2",
+    "@salesforce/source-deploy-retrieve": "^12.22.13",
     "@salesforce/types": "^1.4.0",
     "fast-xml-parser": "^5.2.5",
     "nock": "^13.5.6",
