@@ -165,8 +165,8 @@ export class MaybeMock {
         typeof response === 'object' && 'status' in response && typeof response.status === 'number'
           ? response.status
           : 200;
-      // This is a hack to work with SFAP endpoints
-      url = url.replace('https://api.salesforce.com', '');
+      // This is a hack to work with SFAP prod, dev, and test endpoints
+      url = url.replace(/https:\/\/(dev\.|test\.)?api\.salesforce\.com/, '');
       this.scopes.set(baseUrl, scope);
       switch (method) {
         case 'GET':

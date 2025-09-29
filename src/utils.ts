@@ -15,6 +15,8 @@
  */
 import { readdirSync, statSync } from 'node:fs';
 import * as path from 'node:path';
+import { Connection, SfError } from '@salesforce/core';
+import { NamedUserJwtResponse } from './types';
 
 export const metric = ['completeness', 'coherence', 'conciseness', 'output_latency_milliseconds'] as const;
 
@@ -111,4 +113,56 @@ export const findAuthoringBundle = (dir: string, botName: string): string | unde
     return undefined;
   }
   return undefined;
+};
+
+export const useNamedUserJwt = async (connection: Connection): Promise<Connection> => {
+  // Refresh the connection to ensure we have the latest, valid access token
+  try {
+    await connection.refreshAuth();
+  } catch (error) {
+    throw SfError.create({
+      name: 'ApiAccessError',
+      message: 'Error refreshing connection',
+      cause: error,
+    });
+  }
+
+  const { accessToken, instanceUrl } = connection.getConnectionOptions();
+  if (!instanceUrl) {
+    throw SfError.create({
+      name: 'ApiAccessError',
+      message: 'Missing Instance URL for org connection',
+    });
+  }
+  if (!accessToken) {
+    throw SfError.create({
+      name: 'ApiAccessError',
+      message: 'Missing Access Token for org connection',
+    });
+  }
+
+  const url = `${instanceUrl}/agentforce/bootstrap/nameduser`;
+  // For the namdeduser endpoint request to work we need to delete the access token
+  delete connection.accessToken;
+  try {
+    const response = await connection.request<NamedUserJwtResponse>(
+      {
+        method: 'GET',
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: `sid=${accessToken}`,
+        },
+      },
+      { retry: { maxRetries: 3 } }
+    );
+    connection.accessToken = response.access_token;
+    return connection;
+  } catch (error) {
+    throw SfError.create({
+      name: 'ApiAccessError',
+      message: 'Error obtaining API token',
+      cause: error,
+    });
+  }
 };

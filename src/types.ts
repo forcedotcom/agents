@@ -709,3 +709,12 @@ export type AgentJson = {
 };
 
 export type AfScript = string;
+
+export type NamedUserJwtResponse = {
+  access_token: string;
+  token_format: 'jwt';
+  scope: string;
+  token_type: 'Bearer';
+  issued_at: number;
+  api_instance_url: string;
+};

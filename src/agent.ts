@@ -42,7 +42,7 @@ import {
   PublishAgent,
 } from './types.js';
 import { MaybeMock } from './maybe-mock';
-import { decodeHtmlEntities, findAuthoringBundle } from './utils';
+import { decodeHtmlEntities, findAuthoringBundle, useNamedUserJwt } from './utils';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agents');
@@ -324,19 +324,42 @@ export class Agent {
    * @beta
    */
   public static async compileAfScript(connection: Connection, afScript: AfScript): Promise<AgentJson> {
-    const url = '/einstein/ai-agent/v1.1/authoring/compile';
-    const maybeMock = new MaybeMock(connection);
+    // Ensure we use the correct connection for this API call
+    const orgJwtConnection = await useNamedUserJwt(connection);
 
-    getLogger().debug(`Generating Agent JSON with AF Script: ${afScript}`);
+    const apiEnv = 'test.api.salesforce.com'; // prod is api.salesforce.com
+    const url = `https://${apiEnv}/einstein/ai-agent/v1.1/authoring/compile`;
+    const maybeMock = new MaybeMock(orgJwtConnection);
 
-    const response = await maybeMock.request<CompileAfScriptResponse>('POST', url, { afScript });
+    getLogger().debug(`Compiling AF Script: ${afScript}`);
+    const compileData = {
+      assets: [
+        {
+          type: 'AFScript',
+          name: 'AFScript',
+          content: afScript,
+        },
+      ],
+      afScriptVersion: '1.0.0',
+    };
+
+    let response: CompileAfScriptResponse;
+    try {
+      response = await maybeMock.request<CompileAfScriptResponse>('POST', url, compileData);
+    } catch (error) {
+      throw SfError.create({
+        name: 'CompileAfScriptError',
+        message: 'Error when compiling AF Script',
+        cause: error,
+      });
+    }
     if (response.status === 'success') {
       return response.compiledArtifact;
     } else {
       throw SfError.create({
-        name: 'CreateAgentJsonError',
+        name: 'CompileAfScriptError',
         message:
-          response.errors
+          response?.errors
             .map((e) => `${e.errorType}: ${e.description} (${e.lineStart}:${e.colStart}-${e.lineEnd}:${e.colEnd})`)
             .join(EOL) ?? 'unknown',
         data: response,
