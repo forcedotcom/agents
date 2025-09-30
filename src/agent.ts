@@ -345,7 +345,11 @@ export class Agent {
 
     let response: CompileAfScriptResponse;
     try {
-      response = await maybeMock.request<CompileAfScriptResponse>('POST', url, compileData);
+      const headers = {
+        'x-client-name': 'afdx',
+        'content-type': 'application/json',
+      };
+      response = await maybeMock.request<CompileAfScriptResponse>('POST', url, compileData, headers);
     } catch (error) {
       throw SfError.create({
         name: 'CompileAfScriptError',

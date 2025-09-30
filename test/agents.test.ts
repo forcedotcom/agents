@@ -91,19 +91,20 @@ describe('Agents', () => {
     $$.SANDBOX.stub(connection, 'request')
       .withArgs(sinon.match({ url: `${connection.instanceUrl}/agentforce/bootstrap/nameduser` }))
       // eslint-disable-next-line camelcase
-      .resolves({ access_token: 'test_access_token' });
-    $$.SANDBOX.stub(connection, 'requestPost').resolves({
-      status: 'success',
-      compiledArtifact: {
-        schemaVersion: '2.0',
-        globalConfiguration: {
-          developerName: 'test_agent_v1',
+      .resolves({ access_token: 'test_access_token' })
+      .withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/compile') }))
+      .resolves({
+        status: 'success',
+        compiledArtifact: {
+          schemaVersion: '2.0',
+          globalConfiguration: {
+            developerName: 'test_agent_v1',
+          },
+          agentVersion: {
+            developerName: 'test_agent_v1',
+          },
         },
-        agentVersion: {
-          developerName: 'test_agent_v1',
-        },
-      },
-    });
+      });
     const output = await Agent.compileAfScript(connection, 'AF Script string');
     expect(output).to.have.property('schemaVersion', '2.0');
     expect(output).to.have.property('globalConfiguration').and.be.an('object');

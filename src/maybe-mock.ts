@@ -198,7 +198,15 @@ export class MaybeMock {
             message: 'POST requests must include a body',
           });
         }
-        return this.connection.requestPost<T>(url, body, { retry: { maxRetries: 3 } });
+        return this.connection.request<T>(
+          {
+            method: 'POST',
+            url,
+            headers,
+            body: JSON.stringify(body),
+          },
+          { retry: { maxRetries: 3 } }
+        );
       case 'DELETE':
         // We use .request() rather than .requestDelete() so that we can pass in the headers
         return this.connection.request<T>(
