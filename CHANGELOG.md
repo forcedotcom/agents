@@ -1,3 +1,12 @@
+## [0.17.11](https://github.com/forcedotcom/agents/compare/0.17.10...0.17.11) (2025-10-03)
+
+
+### Bug Fixes
+
+* rename aiAuthoringBundle dir ([a0467e3](https://github.com/forcedotcom/agents/commit/a0467e32a073312c686c288d153bc49543e91ba9))
+
+
+
 ## [0.17.10](https://github.com/forcedotcom/agents/compare/0.17.9...0.17.10) (2025-09-19)
 
 
