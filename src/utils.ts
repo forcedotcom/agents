@@ -88,9 +88,9 @@ export const findAuthoringBundle = (dir: string, botName: string): string | unde
   try {
     const files: string[] = readdirSync(dir);
 
-    // If we find aiAuthoringBundle dir, check for the expected directory structure
-    if (files.includes('aiAuthoringBundle')) {
-      const expectedPath = path.join(dir, 'aiAuthoringBundle', botName);
+    // If we find aiAuthoringBundles dir, check for the expected directory structure
+    if (files.includes('aiAuthoringBundles')) {
+      const expectedPath = path.join(dir, 'aiAuthoringBundles', botName);
       const statResult = statSync(expectedPath, { throwIfNoEntry: false });
       if (statResult?.isDirectory()) {
         return expectedPath;
