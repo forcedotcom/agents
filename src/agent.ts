@@ -367,7 +367,7 @@ export class Agent {
     const response = await maybeMock.request<PublishAgentJsonResponse>('POST', url, { agentJson });
     if (response.botId && response.botVersionId) {
       // we've published the AgentJson, now we need to:
-      // 1. update the AuthoringBundle-meta.xml file with response.BotId
+      // 1. update the AuthoringBundle's -meta.xml file with response.BotId
       // 2. retrieve the new Agent metadata that's in the org
       const defaultPackagePath = path.resolve(project.getDefaultPackage().path);
 
@@ -386,7 +386,7 @@ export class Agent {
         }
 
         // Construct the full file path whether we found the directory or not
-        const bundleMetaPath = path.join(bundleDir, `${developerName}.authoring-bundle-meta.xml`);
+        const bundleMetaPath = path.join(bundleDir, `${developerName}.bundle-meta.xml`);
 
         const xmlParser = new XMLParser({ ignoreAttributes: false });
         const xmlBuilder = new XMLBuilder({
