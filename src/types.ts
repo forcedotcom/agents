@@ -269,10 +269,10 @@ export type DraftAgentTopicsResponse = {
 /**
  * The response from the `create-af-script` API.
  */
-export type CreateAfScriptResponse = {
+export type CreateAgentResponse = {
   isSuccess: boolean;
   errorMessage?: string;
-  afScript?: AfScript;
+  agentString?: AgentString;
 };
 
 // ====================================================
@@ -604,7 +604,7 @@ export type AgentTraceResponse = {
   }>;
 };
 
-export type CompileAfScriptResponse = AgentCompilationSuccess | AgentCompilationError;
+export type CompileAgentResponse = AgentCompilationSuccess | AgentCompilationError;
 
 export type PublishAgentJsonResponse = {
   botVersionId: string;
@@ -708,4 +708,4 @@ export type AgentJson = {
   };
 };
 
-export type AfScript = string;
+export type AgentString = string;

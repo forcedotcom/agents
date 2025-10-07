@@ -1,4 +1,133 @@
 {
   "isSuccess": true,
-  "afScript": "system:\n    @prompt:\n        You are a helpful AI assistant.\n\nconfig:\n    @agent_id: \"test_agent_001\"\n    @agent_name: \"Test_Agent\"\n    user_locale: en_US\n\ntrigger default:\n    initial_node: greeting\n\nvariables:\n    user_name: string = \"Guest\"\n    counter: int = 0\n\nblock greeting:\n    @prompt:\n        Hello! How can I help you today?\n\nblock help:\n    @prompt:\n        I'm here to assist you with any questions.\n\nfunctions:\n    test_function:\n        description: \"A simple test function\"\n"
+  "agentJson": {
+    "schemaVersion": "1.0",
+    "globalConfiguration": {
+      "developerName": "simple_response_agentV1",
+      "label": "Simple Response Agent",
+      "description": "A simple agent that responds to user queries.",
+      "enableEnhancedEventLogs": false,
+      "agentType": "AgentforceServiceAgent",
+      "templateName": null,
+      "defaultAgentUser": null,
+      "defaultOutboundRouting": null,
+      "contextVariables": [
+        {
+          "developerName": "some_id",
+          "label": "Some ID",
+          "description": "The some id",
+          "dataType": "string",
+          "fieldMapping": null
+        }
+      ]
+    },
+    "agentVersion": {
+      "developerName": "simple_response_agentV1",
+      "plannerType": "Atlas__ConcurrentMultiAgentOrchestration",
+      "systemMessages": [
+        {
+          "message": "Hello! I'm your SimpleResponseAgent. How can I help you today?",
+          "messageType": "Welcome"
+        },
+        {
+          "message": "I'm sorry, I'm having trouble processing your request. Please try again later.",
+          "messageType": "Error"
+        }
+      ],
+      "modalityParameters": {
+        "voice": null,
+        "language": {
+          "defaultLocale": "en-US",
+          "additionalLocales": null,
+          "allAdditionalLocales": false
+        }
+      },
+      "additional_parameters": null,
+      "company": "A simple company that responds to user queries.",
+      "role": "A simple agent that responds to user queries.",
+      "stateVariables": [
+        {
+          "developerName": "user_query",
+          "label": "User Query",
+          "description": "The user's query",
+          "dataType": "string",
+          "isList": false,
+          "default": "",
+          "visibility": "Internal"
+        },
+        {
+          "developerName": "response",
+          "label": "Response",
+          "description": "The response to the user",
+          "dataType": "string",
+          "isList": false,
+          "default": "",
+          "visibility": "Internal"
+        },
+        {
+          "developerName": "processing_complete",
+          "label": "Processing Complete",
+          "description": "Whether processing is complete",
+          "dataType": "boolean",
+          "isList": false,
+          "default": false,
+          "visibility": "Internal"
+        }
+      ],
+      "initialNode": "process_query",
+      "nodes": [
+        {
+          "type": "subagent",
+          "reasoningType": "salesforce.default",
+          "description": "Process the user's query",
+          "beforeReasoning": null,
+          "instructions": "\n  # CONTEXT\n  Name: {agentName:-\"Simple Agent\"}\n  Description: {agent_description:-\"You are an AI assistant developed by Salesforce\"}\n  Role: {agentLabel:-\"You are an AI assistant developed by Salesforce\"}\n  Tone: Maintain a {agent_plannerToneType:-\"NEUTRAL\"} tone while being clear and helpful.\n  Company: {agent_company:-\"Salesforce\"}\n  Locale: {agentLocale:-\"English (United States)\"}\n  Location: {agent_userLocation:-\"United States\"}\n  Current Date/Time: {current_dateTime:-\"\"}\n ",
+          "focusPrompt": null,
+          "tools": [
+            {
+              "type": "action",
+              "target": "set_response_action",
+              "boundInputs": {
+                "some_id": "context.some_id"
+              },
+              "llmInputs": null,
+              "enabled": null,
+              "stateUpdates": [
+                {
+                  "response": "result.response"
+                },
+                {
+                  "processingComplete": "true"
+                }
+              ],
+              "name": "set_response",
+              "description": null,
+              "inputParameters": null
+            }
+          ],
+          "preToolCall": null,
+          "postToolCall": null,
+          "afterReasoning": null,
+          "developerName": "process_query",
+          "label": "Process Query",
+          "onInit": null,
+          "transitions": [
+            {
+              "target": "exit",
+              "condition": "state.processing_complete == true",
+              "alias": null,
+              "enabled": null,
+              "instruction": null,
+              "type": "handoff",
+              "mode": "manual"
+            }
+          ],
+          "onExit": null,
+          "actionDefinitions": [],
+          "knowledgeDefinitions": null
+        }
+      ],
+      "knowledgeDefinitions": null
+    }
+  }
 }

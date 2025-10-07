@@ -15,7 +15,7 @@
  */
 
 export {
-  type AfScript,
+  type AgentString,
   type AgentCreateConfig,
   type AgentCreateResponse,
   type AgentJobSpec,
