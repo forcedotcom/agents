@@ -1,3 +1,17 @@
+# [0.18.0](https://github.com/forcedotcom/agents/compare/0.17.11...0.18.0) (2025-10-07)
+
+
+### Bug Fixes
+
+* utility method to search for authoring bundles acepts array of directories ([5b08d7a](https://github.com/forcedotcom/agents/commit/5b08d7a205030a085d11a218a830a7847465a8e0))
+
+
+### Features
+
+* rename AfScript to Agent ([50c0a05](https://github.com/forcedotcom/agents/commit/50c0a05e9ecb2a17dfc115d14702e8134fed05da))
+
+
+
 ## [0.17.11](https://github.com/forcedotcom/agents/compare/0.17.10...0.17.11) (2025-10-03)
 
 
