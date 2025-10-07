@@ -78,13 +78,24 @@ export const decodeHtmlEntities = (str: string = ''): string => {
 };
 
 /**
- * Find the authoring bundle directory for a given bot name by recursively searching from a starting directory.
+ * Find the authoring bundle directory for a given bot name by recursively searching from a starting directory or directories.
  *
- * @param dir - The directory to start searching from
+ * @param dirOrDirs - The directory or array of directories to start searching from
  * @param botName - The name of the bot to find the authoring bundle directory for
  * @returns The path to the authoring bundle directory if found, undefined otherwise
  */
-export const findAuthoringBundle = (dir: string, botName: string): string | undefined => {
+export const findAuthoringBundle = (dirOrDirs: string | string[], botName: string): string | undefined => {
+  // If it's an array of directories, search in each one
+  if (Array.isArray(dirOrDirs)) {
+    for (const dir of dirOrDirs) {
+      const found = findAuthoringBundle(dir, botName);
+      if (found) return found;
+    }
+    return undefined;
+  }
+
+  // Single directory search logic
+  const dir = dirOrDirs;
   try {
     const files: string[] = readdirSync(dir);
 

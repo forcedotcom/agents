@@ -301,7 +301,7 @@ export class Agent {
     const url = '/connect/ai-assist/create-af-script';
     const maybeMock = new MaybeMock(connection);
 
-    getLogger().debug(`Generating AF Script with agent spec data: ${JSON.stringify(agentJobSpec)}`);
+    getLogger().debug(`Generating Agent with spec data: ${JSON.stringify(agentJobSpec)}`);
 
     const response = await maybeMock.request<CreateAfScriptResponse>('POST', url, agentJobSpec);
     if (response.isSuccess && response.afScript) {
@@ -327,7 +327,7 @@ export class Agent {
     const url = '/einstein/ai-agent/v1.1/authoring/compile';
     const maybeMock = new MaybeMock(connection);
 
-    getLogger().debug(`Generating Agent JSON with AF Script: ${afScript}`);
+    getLogger().debug(`Generating Agent JSON with: ${afScript}`);
 
     const response = await maybeMock.request<CompileAfScriptResponse>('POST', url, { afScript });
     if (response.status === 'success') {
@@ -361,7 +361,7 @@ export class Agent {
     const maybeMock = new MaybeMock(connection);
     let developerName: string;
 
-    getLogger().debug('Publishing AfScript');
+    getLogger().debug('Publishing Agent');
 
     const url = '/einstein/ai-agent/v1.1/authoring/publish';
     const response = await maybeMock.request<PublishAgentJsonResponse>('POST', url, { agentJson });
