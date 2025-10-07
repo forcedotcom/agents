@@ -1,3 +1,12 @@
+## [0.18.1](https://github.com/forcedotcom/agents/compare/0.18.0...0.18.1) (2025-10-07)
+
+
+### Bug Fixes
+
+* fix authoring-budnle-meta.xml to .bundle-meta.xml ([502baaa](https://github.com/forcedotcom/agents/commit/502baaafae00b94bdd96f46ebc6d51b9ee45e105))
+
+
+
 # [0.18.0](https://github.com/forcedotcom/agents/compare/0.17.11...0.18.0) (2025-10-07)
 
 
