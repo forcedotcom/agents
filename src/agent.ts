@@ -420,6 +420,7 @@ export class Agent {
         });
         const retrieve = await cs.retrieve({
           usernameOrConnection: connection,
+          rootTypesWithDependencies: ['Bot'],
           merge: true,
           format: 'source',
           output: path.resolve(project.getPath(), defaultPackagePath),
