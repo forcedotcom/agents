@@ -59,11 +59,11 @@ describe('Agents', () => {
     expect(output.topics[0]).to.have.property('name', 'Guest_Experience_Enhancement');
   });
 
-  it('createAfScript (mock behavior) should return AF Script', async () => {
-    process.env.SF_MOCK_DIR = join('test', 'mocks', 'createAfScript');
+  it('createAgent (mock behavior) should return an Agent as a string', async () => {
+    process.env.SF_MOCK_DIR = join('test', 'mocks', 'createAgent');
     const agentType = 'customer';
     const companyName = 'Coral Cloud Enterprises';
-    const output = await Agent.createAfScript(connection, {
+    const output = await Agent.createAgent(connection, {
       agentType,
       role: 'answer questions about vacation_rentals',
       companyName,
@@ -82,7 +82,7 @@ describe('Agents', () => {
     expect(output).to.include('agent_name: "ServiceBot"');
   });
 
-  it('compileAfScript (mock behavior) should return full agent json', async () => {
+  it('createAgentJson (mock behavior) should return full agent json', async () => {
     $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
     $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
       accessToken: 'test_access_token',
@@ -105,7 +105,7 @@ describe('Agents', () => {
           },
         },
       });
-    const output = await Agent.compileAfScript(connection, 'AF Script string');
+    const output = await Agent.compileAgent(connection, 'Agent string');
     expect(output).to.have.property('schemaVersion', '2.0');
     expect(output).to.have.property('globalConfiguration').and.be.an('object');
     expect(output).to.have.property('agentVersion').and.be.an('object');
