@@ -1,3 +1,12 @@
+## [0.18.2](https://github.com/forcedotcom/agents/compare/0.18.1...0.18.2) (2025-10-09)
+
+
+### Bug Fixes
+
+* fix spidering for Agent psuedo type after nga publish ([7acb3db](https://github.com/forcedotcom/agents/commit/7acb3db7a0124f5602d9c1c2a8cd26b5187ab303))
+
+
+
 ## [0.18.1](https://github.com/forcedotcom/agents/compare/0.18.0...0.18.1) (2025-10-07)
 
 
