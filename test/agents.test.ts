@@ -19,6 +19,7 @@ import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection, SfError, SfProject } from '@salesforce/core';
 import { ComponentSetBuilder, ComponentSet, MetadataApiRetrieve } from '@salesforce/source-deploy-retrieve';
+import sinon from 'sinon';
 import { type AgentJson } from '../src/types.js';
 import { Agent, type AgentCreateConfig } from '../src';
 
@@ -82,7 +83,28 @@ describe('Agents', () => {
   });
 
   it('createAgentJson (mock behavior) should return full agent json', async () => {
-    process.env.SF_MOCK_DIR = join('test', 'mocks');
+    $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
+    $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
+      accessToken: 'test_access_token',
+      instanceUrl: connection.instanceUrl,
+    });
+    $$.SANDBOX.stub(connection, 'request')
+      .withArgs(sinon.match({ url: `${connection.instanceUrl}/agentforce/bootstrap/nameduser` }))
+      // eslint-disable-next-line camelcase
+      .resolves({ access_token: 'test_access_token' })
+      .withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/compile') }))
+      .resolves({
+        status: 'success',
+        compiledArtifact: {
+          schemaVersion: '2.0',
+          globalConfiguration: {
+            developerName: 'test_agent_v1',
+          },
+          agentVersion: {
+            developerName: 'test_agent_v1',
+          },
+        },
+      });
     const output = await Agent.compileAgent(connection, 'Agent string');
     expect(output).to.have.property('schemaVersion', '2.0');
     expect(output).to.have.property('globalConfiguration').and.be.an('object');

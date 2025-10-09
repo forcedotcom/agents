@@ -42,7 +42,7 @@ import {
   PublishAgent,
 } from './types.js';
 import { MaybeMock } from './maybe-mock';
-import { decodeHtmlEntities, findAuthoringBundle } from './utils';
+import { decodeHtmlEntities, findAuthoringBundle, useNamedUserJwt } from './utils';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agents');
@@ -324,12 +324,39 @@ export class Agent {
    * @beta
    */
   public static async compileAgent(connection: Connection, agentString: AgentString): Promise<AgentJson> {
-    const url = '/einstein/ai-agent/v1.1/authoring/compile';
-    const maybeMock = new MaybeMock(connection);
+    // Ensure we use the correct connection for this API call
+    const orgJwtConnection = await useNamedUserJwt(connection);
 
-    getLogger().debug(`Generating Agent JSON with: ${agentString}`);
+    const apiEnv = 'test.api.salesforce.com'; // prod is api.salesforce.com
+    const url = `https://${apiEnv}/einstein/ai-agent/v1.1/authoring/compile`;
+    const maybeMock = new MaybeMock(orgJwtConnection);
 
-    const response = await maybeMock.request<CompileAgentResponse>('POST', url, { agentString });
+    getLogger().debug(`Compiling .agent : ${agentString}`);
+    const compileData = {
+      assets: [
+        {
+          type: 'AFScript',
+          name: 'AFScript',
+          content: agentString,
+        },
+      ],
+      afScriptVersion: '1.0.0',
+    };
+
+    let response: CompileAgentResponse;
+    try {
+      const headers = {
+        'x-client-name': 'afdx',
+        'content-type': 'application/json',
+      };
+      response = await maybeMock.request<CompileAgentResponse>('POST', url, compileData, headers);
+    } catch (error) {
+      throw SfError.create({
+        name: 'CompileAfScriptError',
+        message: 'Error when compiling AF Script',
+        cause: error,
+      });
+    }
     if (response.status === 'success') {
       return response.compiledArtifact;
     } else {
