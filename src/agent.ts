@@ -308,7 +308,7 @@ export class Agent {
       return response.agentScriptContent;
     } else {
       throw SfError.create({
-        name: 'CreateAgentError',
+        name: 'CreateAgenScriptError',
         message: response.errorMessage ?? 'unknown',
         data: response,
       });
