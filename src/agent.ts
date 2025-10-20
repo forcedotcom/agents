@@ -335,8 +335,8 @@ export class Agent {
     const compileData = {
       assets: [
         {
-          type: 'AgentScript',
-          name: 'AgentScript',
+          type: 'AFScript',
+          name: 'AFScript',
           content: agentScriptContent,
         },
       ],
