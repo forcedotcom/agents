@@ -33,12 +33,12 @@ import {
   type BotActivationResponse,
   type BotMetadata,
   type BotVersionMetadata,
-  type CreateAgentResponse,
-  type CompileAgentResponse,
+  type CreateAgentScriptResponse,
+  type CompileAgentScriptResponse,
   type DraftAgentTopicsBody,
   type DraftAgentTopicsResponse,
   PublishAgentJsonResponse,
-  AgentString,
+  AgentScriptContent,
   PublishAgent,
 } from './types.js';
 import { MaybeMock } from './maybe-mock';
@@ -290,22 +290,22 @@ export class Agent {
   }
 
   /**
-   * Creates Agent as string using agent job spec data.
+   * Creates AgentScriptContent using agent job spec data.
    *
    * @param connection The connection to the org
    * @param agentJobSpec The agent specification data
-   * @returns Promise<AgentString> The generated Agent as a string
+   * @returns Promise<AgentScriptContent> The generated AgentScriptContent
    * @beta
    */
-  public static async createAgent(connection: Connection, agentJobSpec: AgentJobSpec): Promise<AgentString> {
+  public static async createAgentScript(connection: Connection, agentJobSpec: AgentJobSpec): Promise<AgentScriptContent> {
     const url = '/connect/ai-assist/create-af-script';
     const maybeMock = new MaybeMock(connection);
 
     getLogger().debug(`Generating Agent with spec data: ${JSON.stringify(agentJobSpec)}`);
 
-    const response = await maybeMock.request<CreateAgentResponse>('POST', url, agentJobSpec);
-    if (response.isSuccess && response.agentString) {
-      return response.agentString;
+    const response = await maybeMock.request<CreateAgentScriptResponse>('POST', url, agentJobSpec);
+    if (response.isSuccess && response.agentScriptContent) {
+      return response.agentScriptContent;
     } else {
       throw SfError.create({
         name: 'CreateAgentError',
@@ -316,14 +316,14 @@ export class Agent {
   }
 
   /**
-   * Creates agent JSON from compiling the Agent as a string on the server.
+   * Creates agent JSON from compiling the AgentScriptContent on the server.
    *
    * @param connection The connection to the org
-   * @param AgentString The agent Agent as a string
-   * @returns Promise<string> The generated Agent JSON as a string
+   * @param agentScriptContent The AgentScriptContent to compile
+   * @returns Promise<AgentJson> The generated Agent JSON
    * @beta
    */
-  public static async compileAgent(connection: Connection, agentString: AgentString): Promise<AgentJson> {
+  public static async compileAgentScript(connection: Connection, agentScriptContent: AgentScriptContent): Promise<AgentJson> {
     // Ensure we use the correct connection for this API call
     const orgJwtConnection = await useNamedUserJwt(connection);
 
@@ -331,29 +331,29 @@ export class Agent {
     const url = `https://${apiEnv}/einstein/ai-agent/v1.1/authoring/compile`;
     const maybeMock = new MaybeMock(orgJwtConnection);
 
-    getLogger().debug(`Compiling .agent : ${agentString}`);
+    getLogger().debug(`Compiling .agent : ${agentScriptContent}`);
     const compileData = {
       assets: [
         {
-          type: 'AFScript',
-          name: 'AFScript',
-          content: agentString,
+          type: 'AgentScript',
+          name: 'AgentScript',
+          content: agentScriptContent,
         },
       ],
-      afScriptVersion: '1.0.0',
+      agentScriptVersion: '1.0.0',
     };
 
-    let response: CompileAgentResponse;
+    let response: CompileAgentScriptResponse;
     try {
       const headers = {
         'x-client-name': 'afdx',
         'content-type': 'application/json',
       };
-      response = await maybeMock.request<CompileAgentResponse>('POST', url, compileData, headers);
+      response = await maybeMock.request<CompileAgentScriptResponse>('POST', url, compileData, headers);
     } catch (error) {
       throw SfError.create({
-        name: 'CompileAfScriptError',
-        message: 'Error when compiling AF Script',
+        name: 'CompileAgentScriptError',
+        message: 'Error when compiling AgentScript',
         cause: error,
       });
     }

@@ -15,7 +15,7 @@
  */
 
 export {
-  type AgentString,
+  type AgentScriptContent,
   type AgentCreateConfig,
   type AgentCreateResponse,
   type AgentJobSpec,
