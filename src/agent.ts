@@ -340,7 +340,7 @@ export class Agent {
           content: agentScriptContent,
         },
       ],
-      agentScriptVersion: '1.0.0',
+      afScriptVersion: '1.0.0',
     };
 
     let response: CompileAgentScriptResponse;
