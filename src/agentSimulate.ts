@@ -1,0 +1,215 @@
+/*
+ * Copyright 2025, Salesforce, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+import { readFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { Connection, Logger, SfError } from '@salesforce/core';
+import { Agent } from './agent';
+import { MaybeMock } from './maybe-mock';
+import {
+  type AgentPreviewEndResponse,
+  type AgentPreviewStartResponse,
+  type AgentPreviewSendResponse,
+  type EndReason,
+  type AgentJson,
+} from './types.js';
+import { getDebugLog } from './apexUtils';
+
+/**
+ * A service to simulate interactions with an agent using a local .agent file.
+ * The file will be compiled using Agent.compileAgent before being used
+ * with the simulation endpoints.
+ *
+ * **Examples**
+ *
+ * Create an instance of the service:
+ *
+ * `const agentSimulate = new AgentSimulate(connection, './path/to/agent.agent');`
+ *
+ * Start an interactive session:
+ *
+ * `const { sessionId } = await agentSimulate.start();`
+ *
+ * Send a message to the agent using the session ID from the startResponse:
+ *
+ * `const sendResponse = await agentSimulate.send(sessionId, message);`
+ *
+ * End an interactive session:
+ *
+ * `await agentSimulate.end(sessionId, 'UserRequest');`
+ *
+ * Enable Apex Debug Mode:
+ *
+ * `agentSimulate.toggleApexDebugMode(true);`
+ */
+export class AgentSimulate {
+  private readonly apiBase = 'https://api.salesforce.com/einstein/ai-agent';
+  private connection: Connection;
+  private logger: Logger;
+  private maybeMock: MaybeMock;
+  private apexDebugMode?: boolean;
+  // private apexTraceFlag?: ApexTraceFlag;
+  private agentFilePath: string;
+  private compiledAgent?: AgentJson;
+  /**
+   * The client can specify whether the actions will run in a simulated mode (“mock actions”, no side effects, mockActions=true) or a non-simulated mode (“real actions”, actions with side effects, mockActions=false)
+   */
+  private mockActions: boolean;
+
+  /**
+   * Create an instance of the service.
+   *
+   * @param connection The connection to use to make requests.
+   * @param agentFilePath Path to the .agent file to simulate.
+   */
+  public constructor(connection: Connection, agentFilePath: string, mockActions: boolean) {
+    this.connection = connection;
+    this.logger = Logger.childFromRoot(this.constructor.name);
+    this.maybeMock = new MaybeMock(connection);
+    this.agentFilePath = agentFilePath;
+    this.mockActions = mockActions;
+  }
+
+  /**
+   * Start an interactive simulation session with the agent.
+   * This will first compile the agent script if it hasn't been compiled yet.
+   *
+   * @returns `AgentPreviewStartResponse`, which includes a session ID needed for other actions.
+   */
+  public async start(): Promise<AgentPreviewStartResponse> {
+    if (!this.compiledAgent) {
+      this.logger.debug(`Compiling agent script from ${this.agentFilePath}`);
+      const agentString = await readFile(this.agentFilePath, 'utf-8');
+      this.compiledAgent = await Agent.compileAgent(this.connection, agentString);
+    }
+
+    const url = `${this.apiBase}/v1.1/preview/sessions`;
+    this.logger.debug('Starting agent simulation session');
+
+    const body = {
+      agentDefinition: this.compiledAgent,
+      enableSimulationMode: this.mockActions,
+      externalSessionKey: randomUUID(),
+      instanceConfig: {
+        endpoint: this.connection.instanceUrl,
+      },
+      streamingCapabilities: {
+        chunkTypes: ['Text'],
+      },
+      bypassUser: true,
+    };
+
+    try {
+      return await this.maybeMock.request<AgentPreviewStartResponse>('POST', url, body);
+    } catch (err) {
+      throw SfError.wrap(err);
+    }
+  }
+
+  /**
+   * Send a message to the agent using the session ID obtained by calling `start()`.
+   *
+   * @param sessionId A session ID provided by first calling `agentSimulate.start()`.
+   * @param message A message to send to the agent.
+   * @returns `AgentPreviewSendResponse`
+   */
+  public async send(sessionId: string, message: string): Promise<AgentPreviewSendResponse> {
+    const url = `${this.apiBase}/v1.1/preview/sessions/${sessionId}/messages`;
+    const body = {
+      message: {
+        sequenceId: Date.now(),
+        type: 'Text',
+        text: message,
+      },
+      variables: [],
+    };
+    this.logger.debug(`Sending message with apexDebugMode ${this.apexDebugMode ? 'enabled' : 'disabled'}`);
+
+    try {
+      const start = Date.now();
+      if (this.apexDebugMode) {
+        // await this.ensureTraceFlag();
+      }
+      const response = await this.maybeMock.request<AgentPreviewSendResponse>('POST', url, body);
+      if (this.apexDebugMode) {
+        const apexLog = await getDebugLog(this.connection, start, Date.now());
+        if (apexLog) {
+          if (apexLog.Id) this.logger.debug(`Apex debug log ID for message is ${apexLog.Id}`);
+          response.apexDebugLog = apexLog;
+        } else {
+          this.logger.debug('No apex debug log found for this message');
+        }
+      }
+
+      return response;
+    } catch (err) {
+      throw SfError.wrap(err);
+    }
+  }
+
+  /**
+   * Ends an interactive simulation session with the agent.
+   *
+   * @param sessionId A session ID provided by first calling `agentSimulate.start()`.
+   * @param reason A reason why the interactive session was ended.
+   * @returns `AgentPreviewEndResponse`
+   */
+  public async end(sessionId: string, reason: EndReason): Promise<AgentPreviewEndResponse> {
+    const url = `${this.apiBase}/sessions/${sessionId}`;
+    this.logger.debug(`Ending agent simulation session with sessionId: ${sessionId}`);
+    try {
+      return await this.maybeMock.request<AgentPreviewEndResponse>('DELETE', url, undefined, {
+        'x-session-end-reason': reason,
+      });
+    } catch (err) {
+      throw SfError.wrap(err);
+    }
+  }
+
+  /**
+   * Enable or disable Apex Debug Mode, which will enable trace flags for the Bot user
+   * and create apex debug logs for use within VS Code's Apex Replay Debugger.
+   *
+   * @param enable Whether to enable or disable Apex Debug Mode.
+   */
+  public toggleApexDebugMode(enable: boolean): void {
+    // I'm unsure if this.mockActions will be required to false to even enable/support apex debugging
+    this.apexDebugMode = enable;
+    this.logger.debug(`Apex Debug Mode is now ${enable ? 'enabled' : 'disabled'}`);
+  }
+
+  // once we're previewing agents in the org, with mockActions = false, we'll have to figure out how to get the correct user that was simulated for apex invocattion
+  // private async ensureTraceFlag(): Promise<void> {
+  //   if (this.apexTraceFlag) {
+  //     const expDate = this.apexTraceFlag.ExpirationDate;
+  //     if (expDate && new Date(expDate) > new Date()) {
+  //       this.logger.debug(`Using cached apexTraceFlag with ExpirationDate of ${expDate}`);
+  //       return;
+  //     } else {
+  //       this.logger.debug('Cached apex trace flag is expired');
+  //     }
+  //   }
+
+  //   const userId = AgentSimulate.getBotUserId();
+  //   if (!userId) {
+  //     throw messages.createError('agentApexDebuggingError');
+  //   }
+  //   this.apexTraceFlag = await findTraceFlag(this.connection, userId);
+  //   if (!this.apexTraceFlag) {
+  //     await createTraceFlag(this.connection, userId);
+  //   }
+  // }
+}
