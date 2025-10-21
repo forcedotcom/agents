@@ -290,11 +290,11 @@ export class Agent {
   }
 
   /**
-   * Creates AgentScriptContent using agent job spec data.
+   * Creates AgentScript using agent job spec data.
    *
-   * @param connection The connection to the org
-   * @param agentJobSpec The agent specification data
-   * @returns Promise<AgentScriptContent> The generated AgentScriptContent
+   * @param connection The connection to the org.
+   * @param agentJobSpec The agent specification data.
+   * @returns Promise<AgentScriptContent> The generated AgentScript as a `string`.
    * @beta
    */
   public static async createAgentScript(connection: Connection, agentJobSpec: AgentJobSpec): Promise<AgentScriptContent> {
@@ -316,7 +316,7 @@ export class Agent {
   }
 
   /**
-   * Creates agent JSON from compiling the AgentScriptContent on the server.
+   * Compiles AgentScript returning agent JSON when successful, otherwise the compile errors are returned.
    *
    * @param connection The connection to the org
    * @param agentScriptContent The AgentScriptContent to compile
