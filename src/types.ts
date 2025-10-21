@@ -267,7 +267,7 @@ export type DraftAgentTopicsResponse = {
 };
 
 /**
- * The response from the `create-af-script` API.
+ * The response from the API call to create an AgentScript.
  */
 export type CreateAgentScriptResponse = {
   isSuccess: boolean;
