@@ -27,7 +27,7 @@ export {
   type AgentCompilationSuccess,
 
   // Agent Creation Types
-  type AgentString,
+  type AgentScriptContent,
   type AgentCreateConfig,
   type AgentCreateResponse,
   type AgentJobSpec,

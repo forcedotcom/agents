@@ -87,7 +87,7 @@ export class AgentSimulate extends AgentPreviewBase {
     if (!this.compiledAgent) {
       this.logger.debug(`Compiling agent script from ${this.agentFilePath}`);
       const agentString = await readFile(this.agentFilePath, 'utf-8');
-      const compiledAgent = (await Agent.compileAgent(
+      const compiledAgent = (await Agent.compileAgentScript(
         this.connection,
         agentString
       )) as unknown as AgentCompilationSuccess;
