@@ -59,11 +59,11 @@ describe('Agents', () => {
     expect(output.topics[0]).to.have.property('name', 'Guest_Experience_Enhancement');
   });
 
-  it('createAgent (mock behavior) should return an Agent as a string', async () => {
+  it('createAgentScript (mock behavior) should return an AgentScriptContent', async () => {
     process.env.SF_MOCK_DIR = join('test', 'mocks', 'createAgent');
     const agentType = 'customer';
     const companyName = 'Coral Cloud Enterprises';
-    const output = await Agent.createAgent(connection, {
+    const output = await Agent.createAgentScript(connection, {
       agentType,
       role: 'answer questions about vacation_rentals',
       companyName,
@@ -105,7 +105,7 @@ describe('Agents', () => {
           },
         },
       });
-    const output = await Agent.compileAgent(connection, 'Agent string');
+    const output = await Agent.compileAgentScript(connection, 'AgentScriptContent');
     expect(output).to.have.property('schemaVersion', '2.0');
     expect(output).to.have.property('globalConfiguration').and.be.an('object');
     expect(output).to.have.property('agentVersion').and.be.an('object');
