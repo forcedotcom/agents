@@ -17,7 +17,6 @@
 import { inspect } from 'node:util';
 import * as path from 'node:path';
 import { stat, readdir, readFile, writeFile } from 'node:fs/promises';
-import { EOL } from 'node:os';
 import { XMLBuilder, XMLParser } from 'fast-xml-parser';
 import { Connection, Lifecycle, Logger, Messages, SfError, SfProject, generateApiName } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
@@ -320,16 +319,15 @@ export class Agent {
    *
    * @param connection The connection to the org
    * @param agentScriptContent The AgentScriptContent to compile
-   * @returns Promise<AgentJson> The generated Agent JSON
+   * @returns Promise<CompileAgentScriptResponse> The raw API response
    * @beta
    */
-  public static async compileAgentScript(connection: Connection, agentScriptContent: AgentScriptContent): Promise<AgentJson> {
+  public static async compileAgentScript(connection: Connection, agentScriptContent: AgentScriptContent): Promise<CompileAgentScriptResponse> {
     // Ensure we use the correct connection for this API call
     const orgJwtConnection = await useNamedUserJwt(connection);
 
     const apiEnv = 'test.api.salesforce.com'; // prod is api.salesforce.com
     const url = `https://${apiEnv}/einstein/ai-agent/v1.1/authoring/compile`;
-    const maybeMock = new MaybeMock(orgJwtConnection);
 
     getLogger().debug(`Compiling .agent : ${agentScriptContent}`);
     const compileData = {
@@ -343,30 +341,26 @@ export class Agent {
       afScriptVersion: '1.0.0',
     };
 
-    let response: CompileAgentScriptResponse;
+    const headers = {
+      'x-client-name': 'afdx',
+      'content-type': 'application/json',
+    };
+
     try {
-      const headers = {
-        'x-client-name': 'afdx',
-        'content-type': 'application/json',
-      };
-      response = await maybeMock.request<CompileAgentScriptResponse>('POST', url, compileData, headers);
+      return await orgJwtConnection.request<CompileAgentScriptResponse>(
+        {
+          method: 'POST',
+          url,
+          headers,
+          body: JSON.stringify(compileData),
+        },
+        { retry: { maxRetries: 3 } }
+      );
     } catch (error) {
       throw SfError.create({
         name: 'CompileAgentScriptError',
         message: 'Error when compiling AgentScript',
         cause: error,
-      });
-    }
-    if (response.status === 'success') {
-      return response.compiledArtifact;
-    } else {
-      throw SfError.create({
-        name: 'CreateAgentJsonError',
-        message:
-          response.errors
-            .map((e) => `${e.errorType}: ${e.description} (${e.lineStart}:${e.colStart}-${e.lineEnd}:${e.colEnd})`)
-            .join(EOL) ?? 'unknown',
-        data: response,
       });
     }
   }

@@ -606,13 +606,15 @@ export type AgentTraceResponse = {
 
 export type CompileAgentScriptResponse = AgentCompilationSuccess | AgentCompilationError;
 
-export type PublishAgentJsonResponse = {
-  botVersionId: string;
-  botId: string;
-  errorMessage?: string;
+export type AgentCompilationSuccess = {
+  status: 'success';
+  compiledArtifact: AgentJson;
+  errors: [];
+  syntacticMap: {
+    blocks: [];
+  };
+  dslVersion: '0.0.3.rc29';
 };
-
-export type PublishAgent = PublishAgentJsonResponse & { developerName: string };
 export type AgentCompilationError = {
   status: 'failure';
   compiledArtifact: null;
@@ -630,15 +632,13 @@ export type AgentCompilationError = {
   dslVersion: '0.0.3.rc29';
 };
 
-export type AgentCompilationSuccess = {
-  status: 'success';
-  compiledArtifact: AgentJson;
-  errors: [];
-  syntacticMap: {
-    blocks: [];
-  };
-  dslVersion: '0.0.3.rc29';
+export type PublishAgentJsonResponse = {
+  botVersionId: string;
+  botId: string;
+  errorMessage?: string;
 };
+
+export type PublishAgent = PublishAgentJsonResponse & { developerName: string };
 
 // This is not accurate but good enough for now
 export type AgentJson = {
