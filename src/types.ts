@@ -14,10 +14,29 @@
  * limitations under the License.
  */
 
-import { Connection, SfProject } from '@salesforce/core';
+import { Connection, Logger, SfProject } from '@salesforce/core';
 import { FileProperties } from '@salesforce/source-deploy-retrieve';
 import { type ApexLog } from '@salesforce/types/tooling';
 import { metric } from './utils';
+
+// ====================================================
+//               Agent Runner Types
+// ====================================================
+export type AgentInteractionBase = {
+  start(): Promise<AgentPreviewStartResponse>;
+  send(sessionId: string, message: string): Promise<AgentPreviewSendResponse>;
+  end(sessionId: string, reason: EndReason): Promise<AgentPreviewEndResponse>;
+  toggleApexDebugMode(enable: boolean): void;
+};
+
+export type BaseAgentConfig = {
+  connection: Connection;
+  logger?: Logger;
+};
+
+export type ApiStatus = {
+  status: 'UP' | 'DOWN';
+};
 
 // ====================================================
 //               Agent Creation Types
@@ -438,8 +457,11 @@ export type AiEvaluationDefinition = {
 // ====================================================
 //               Agent Preview Types
 // ====================================================
-export type ApiStatus = {
-  status: 'UP' | 'DOWN';
+export type AgentPreviewMessageLinks = {
+  self: Href | null;
+  messages: Href | null;
+  session: Href | null;
+  end: Href | null;
 };
 
 type Href = { href: string };
@@ -451,13 +473,6 @@ export type AgentPreviewError = {
   error: string;
   message: string;
   timestamp: number;
-};
-
-export type AgentPreviewMessageLinks = {
-  self: Href | null;
-  messages: Href | null;
-  session: Href | null;
-  end: Href | null;
 };
 
 export type MessageType =
@@ -640,7 +655,6 @@ export type AgentCompilationSuccess = {
   dslVersion: '0.0.3.rc29';
 };
 
-// This is not accurate but good enough for now
 export type AgentJson = {
   schemaVersion: string;
   globalConfiguration: {
@@ -709,6 +723,8 @@ export type AgentJson = {
 };
 
 export type AgentString = string;
+
+export type FindLocalAgentsFunction = (dir: string) => string[];
 
 export type NamedUserJwtResponse = {
   access_token: string;

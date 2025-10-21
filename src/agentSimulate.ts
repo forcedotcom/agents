@@ -16,17 +16,17 @@
 
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-import { Connection, Logger, SfError } from '@salesforce/core';
+import { Connection, SfError } from '@salesforce/core';
 import { Agent } from './agent';
-import { MaybeMock } from './maybe-mock';
+import { AgentPreviewBase } from './agentPreviewBase';
 import {
-  type AgentPreviewEndResponse,
   type AgentPreviewStartResponse,
   type AgentPreviewSendResponse,
+  type AgentPreviewEndResponse,
   type EndReason,
   type AgentJson,
+  type AgentCompilationSuccess,
 } from './types.js';
-import { getDebugLog } from './apexUtils';
 
 /**
  * A service to simulate interactions with an agent using a local .agent file.
@@ -55,30 +55,24 @@ import { getDebugLog } from './apexUtils';
  *
  * `agentSimulate.toggleApexDebugMode(true);`
  */
-export class AgentSimulate {
-  private readonly apiBase = 'https://api.salesforce.com/einstein/ai-agent';
-  private connection: Connection;
-  private logger: Logger;
-  private maybeMock: MaybeMock;
-  private apexDebugMode?: boolean;
-  // private apexTraceFlag?: ApexTraceFlag;
-  private agentFilePath: string;
+export class AgentSimulate extends AgentPreviewBase {
+  protected readonly apiBase = 'https://api.salesforce.com/einstein/ai-agent';
+  private readonly agentFilePath: string;
   private compiledAgent?: AgentJson;
   /**
-   * The client can specify whether the actions will run in a simulated mode (“mock actions”, no side effects, mockActions=true) or a non-simulated mode (“real actions”, actions with side effects, mockActions=false)
+   * The client can specify whether the actions will run in a simulated mode ("mock actions", no side effects, mockActions=true) or a non-simulated mode ("real actions", actions with side effects, mockActions=false)
    */
-  private mockActions: boolean;
+  private readonly mockActions: boolean;
 
   /**
    * Create an instance of the service.
    *
    * @param connection The connection to use to make requests.
    * @param agentFilePath Path to the .agent file to simulate.
+   * @param mockActions whether or not to mock the actions of the simulated agent
    */
   public constructor(connection: Connection, agentFilePath: string, mockActions: boolean) {
-    this.connection = connection;
-    this.logger = Logger.childFromRoot(this.constructor.name);
-    this.maybeMock = new MaybeMock(connection);
+    super({ connection });
     this.agentFilePath = agentFilePath;
     this.mockActions = mockActions;
   }
@@ -93,7 +87,15 @@ export class AgentSimulate {
     if (!this.compiledAgent) {
       this.logger.debug(`Compiling agent script from ${this.agentFilePath}`);
       const agentString = await readFile(this.agentFilePath, 'utf-8');
-      this.compiledAgent = await Agent.compileAgent(this.connection, agentString);
+      const compiledAgent = (await Agent.compileAgent(
+        this.connection,
+        agentString
+      )) as unknown as AgentCompilationSuccess;
+      if (compiledAgent.status === 'success' && compiledAgent.compiledArtifact) {
+        this.compiledAgent = compiledAgent.compiledArtifact;
+      } else {
+        throw new Error('Failed to compile agent script');
+      }
     }
 
     const url = `${this.apiBase}/v1.1/preview/sessions`;
@@ -110,7 +112,7 @@ export class AgentSimulate {
         chunkTypes: ['Text'],
       },
       bypassUser: true,
-    };
+    } as const;
 
     try {
       return await this.maybeMock.request<AgentPreviewStartResponse>('POST', url, body);
@@ -139,20 +141,21 @@ export class AgentSimulate {
     this.logger.debug(`Sending message with apexDebugMode ${this.apexDebugMode ? 'enabled' : 'disabled'}`);
 
     try {
-      const start = Date.now();
+      // const start = Date.now();
       if (this.apexDebugMode) {
         // await this.ensureTraceFlag();
       }
       const response = await this.maybeMock.request<AgentPreviewSendResponse>('POST', url, body);
-      if (this.apexDebugMode) {
-        const apexLog = await getDebugLog(this.connection, start, Date.now());
-        if (apexLog) {
-          if (apexLog.Id) this.logger.debug(`Apex debug log ID for message is ${apexLog.Id}`);
-          response.apexDebugLog = apexLog;
-        } else {
-          this.logger.debug('No apex debug log found for this message');
-        }
-      }
+      // todo: figure out if we can debug with mocked actions, or if mocked actions must be true to debug
+      // if (this.apexDebugMode) {
+      //   const apexLog = await getDebugLog(this.connection, start, Date.now());
+      //   if (apexLog) {
+      //     if (apexLog.Id) this.logger.debug(`Apex debug log ID for message is ${apexLog.Id}`);
+      //     response.apexDebugLog = apexLog;
+      //   } else {
+      //     this.logger.debug('No apex debug log found for this message');
+      //   }
+      // }
 
       return response;
     } catch (err) {
@@ -186,9 +189,7 @@ export class AgentSimulate {
    * @param enable Whether to enable or disable Apex Debug Mode.
    */
   public toggleApexDebugMode(enable: boolean): void {
-    // I'm unsure if this.mockActions will be required to false to even enable/support apex debugging
-    this.apexDebugMode = enable;
-    this.logger.debug(`Apex Debug Mode is now ${enable ? 'enabled' : 'disabled'}`);
+    this.setApexDebugMode(enable);
   }
 
   // once we're previewing agents in the org, with mockActions = false, we'll have to figure out how to get the correct user that was simulated for apex invocattion

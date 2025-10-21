@@ -15,17 +15,17 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { Connection, Logger, Messages, SfError } from '@salesforce/core';
+import { Connection, Messages, SfError } from '@salesforce/core';
 import { Agent } from './agent';
-import { MaybeMock } from './maybe-mock';
+import { AgentPreviewBase } from './agentPreviewBase';
 import {
-  type AgentPreviewEndResponse,
   type AgentPreviewStartResponse,
   type AgentPreviewSendResponse,
+  type AgentPreviewEndResponse,
   type ApiStatus,
   type EndReason,
 } from './types.js';
-import { createTraceFlag, findTraceFlag, getDebugLog, type ApexTraceFlag } from './apexUtils';
+import { createTraceFlag, findTraceFlag, getDebugLog } from './apexUtils';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agentPreview');
@@ -56,13 +56,9 @@ const messages = Messages.loadMessages('@salesforce/agents', 'agentPreview');
  *
  * `agentPreview.toggleApexDebugMode(true);`
  */
-export class AgentPreview {
-  private readonly apiBase = 'https://api.salesforce.com/einstein/ai-agent/v1';
-  private connection: Connection;
-  private logger: Logger;
-  private maybeMock: MaybeMock;
-  private apexDebugMode?: boolean;
-  private apexTraceFlag?: ApexTraceFlag;
+export class AgentPreview extends AgentPreviewBase {
+  protected readonly apiBase = 'https://api.salesforce.com/einstein/ai-agent/v1';
+  private apexTraceFlag?: { Id?: string; ExpirationDate?: string };
   private botId: string;
 
   /**
@@ -72,9 +68,7 @@ export class AgentPreview {
    * @param botId The ID of the agent (`Bot` ID).
    */
   public constructor(connection: Connection, botId: string) {
-    this.connection = connection;
-    this.logger = Logger.childFromRoot(this.constructor.name);
-    this.maybeMock = new MaybeMock(connection);
+    super({ connection });
     if (!botId.startsWith('0Xx') || ![15, 18].includes(botId.length)) {
       throw messages.createError('invalidBotId', [botId]);
     }
@@ -164,16 +158,17 @@ export class AgentPreview {
    * @returns `AgentPreviewEndResponse`
    */
   public async end(sessionId: string, reason: EndReason): Promise<AgentPreviewEndResponse> {
-    const url = `${this.apiBase}/sessions/${sessionId}`;
-    this.logger.debug(`Ending agent preview session for botId: ${this.botId} with sessionId: ${sessionId}`);
-    try {
-      // https://developer.salesforce.com/docs/einstein/genai/guide/agent-api-examples.html#end-session
-      return await this.maybeMock.request<AgentPreviewEndResponse>('DELETE', url, undefined, {
-        'x-session-end-reason': reason,
-      });
-    } catch (err) {
-      throw SfError.wrap(err);
-    }
+    return this.endSession(sessionId, reason);
+  }
+
+  /**
+   * Enable or disable Apex Debug Mode, which will enable trace flags for the Bot user
+   * and create apex debug logs for use within VS Code's Apex Replay Debugger.
+   *
+   * @param enable Whether to enable or disable Apex Debug Mode.
+   */
+  public toggleApexDebugMode(enable: boolean): void {
+    this.setApexDebugMode(enable);
   }
 
   /**
@@ -192,36 +187,21 @@ export class AgentPreview {
     }
   }
 
-  /**
-   * Enable or disable Apex Debug Mode, which will enable trace flags for the Bot user
-   * and create apex debug logs for use within VS Code's Apex Replay Debugger.
-   *
-   * @param enable Whether to enable or disable Apex Debug Mode.
-   */
-  public toggleApexDebugMode(enable: boolean): void {
-    this.apexDebugMode = enable;
-    this.logger.debug(`Apex Debug Mode is now ${enable ? 'enabled' : 'disabled'}`);
-  }
-
   private async getBotUserId(): Promise<string | null> {
     const agent = new Agent({ connection: this.connection, nameOrId: this.botId });
     const botMetadata = await agent.getBotMetadata();
-    return botMetadata.BotUserId;
+    return botMetadata?.BotUserId ?? null;
   }
 
-  // If apex debug mode is enabled, ensure we have a trace flag for the bot user
-  // that is not expired checking in this order:
-  // 1. instance var (this.apexTraceFlag)
-  // 2. query the org
-  // 3. create a new trace flag
   private async ensureTraceFlag(): Promise<void> {
-    if (this.apexTraceFlag) {
-      const expDate = this.apexTraceFlag.ExpirationDate;
-      if (expDate && new Date(expDate) > new Date()) {
-        this.logger.debug(`Using cached apexTraceFlag with ExpirationDate of ${expDate}`);
+    if (this.apexTraceFlag?.ExpirationDate) {
+      const expDate = new Date(this.apexTraceFlag.ExpirationDate).getTime();
+      if (expDate > Date.now()) {
+        this.logger.debug(`Using cached apexTraceFlag with ExpirationDate of ${this.apexTraceFlag.ExpirationDate}`);
         return;
       } else {
         this.logger.debug('Cached apex trace flag is expired');
+        this.apexTraceFlag = undefined;
       }
     }
 

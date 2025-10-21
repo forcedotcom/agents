@@ -126,6 +126,38 @@ export const findAuthoringBundle = (dirOrDirs: string | string[], botName: strin
   return undefined;
 };
 
+/**
+ * Find all local agent files in a directory by recursively searching for files ending with '.agent'
+ *
+ * @param dir - The directory to start searching from
+ * @returns Array of paths to agent files
+ */
+export const findLocalAgents = (dir: string): string[] => {
+  const results: string[] = [];
+
+  try {
+    const files = readdirSync(dir);
+
+    for (const file of files) {
+      const filePath = path.join(dir, file);
+      const statResult = statSync(filePath, { throwIfNoEntry: false });
+
+      if (!statResult) continue;
+
+      if (statResult.isDirectory()) {
+        results.push(...findLocalAgents(filePath));
+      } else if (file.endsWith('.agent')) {
+        results.push(filePath);
+      }
+    }
+  } catch (err) {
+    // Directory doesn't exist or can't be read
+    return [];
+  }
+
+  return results;
+};
+
 export const useNamedUserJwt = async (connection: Connection): Promise<Connection> => {
   // Refresh the connection to ensure we have the latest, valid access token
   try {
