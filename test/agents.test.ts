@@ -68,6 +68,8 @@ describe('Agents', () => {
       role: 'answer questions about vacation_rentals',
       companyName,
       companyDescription: 'Provide vacation rentals and activities',
+      name: 'Weather Agent',
+      developerName: 'Weather_Agent',
       topics: [
         {
           name: 'Guest_Experience_Enhancement',
@@ -80,6 +82,8 @@ describe('Agents', () => {
     expect(output).to.include('# A simple weather assistant agent');
     expect(output).to.include('topic weather_assistant:');
     expect(output).to.include('agent_name: "ServiceBot"');
+    expect(output).to.include('Weather Agent');
+    expect(output).to.include('Weather_Agent');
   });
 
   it('createAgentJson (mock behavior) should return full agent json', async () => {
