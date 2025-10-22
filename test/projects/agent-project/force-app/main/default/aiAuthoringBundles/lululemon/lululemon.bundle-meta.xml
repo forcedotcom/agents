@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<aiAuthoringBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+  <Label>specContents.role</Label>
+  <BundleType>specContents.agentType</BundleType>
+  <VersionTag>Spring2026</VersionTag>
+  <VersionDescription>Initial release for lululemon</VersionDescription>
+  <SourceBundleVersion></SourceBundleVersion>
+  <Target></Target>
+</aiAuthoringBundle>

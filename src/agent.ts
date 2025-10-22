@@ -326,7 +326,7 @@ export class Agent {
     // Ensure we use the correct connection for this API call
     const orgJwtConnection = await useNamedUserJwt(connection);
 
-    const apiEnv = 'test.api.salesforce.com'; // prod is api.salesforce.com
+    const apiEnv = 'api.salesforce.com';
     const url = `https://${apiEnv}/einstein/ai-agent/v1.1/authoring/compile`;
 
     getLogger().debug(`Compiling .agent : ${agentScriptContent}`);
