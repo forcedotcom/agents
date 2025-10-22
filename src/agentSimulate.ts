@@ -25,7 +25,6 @@ import {
   type AgentPreviewEndResponse,
   type EndReason,
   type AgentJson,
-  type AgentCompilationSuccess,
 } from './types.js';
 
 /**
@@ -87,18 +86,18 @@ export class AgentSimulate extends AgentPreviewBase {
     if (!this.compiledAgent) {
       this.logger.debug(`Compiling agent script from ${this.agentFilePath}`);
       const agentString = await readFile(this.agentFilePath, 'utf-8');
-      const compiledAgent = (await Agent.compileAgentScript(
-        this.connection,
-        agentString
-      )) as unknown as AgentCompilationSuccess;
+      const compiledAgent = await Agent.compileAgentScript(this.connection, agentString);
       if (compiledAgent.status === 'success' && compiledAgent.compiledArtifact) {
         this.compiledAgent = compiledAgent.compiledArtifact;
       } else {
-        throw new Error('Failed to compile agent script');
+        const formattedError = compiledAgent.errors
+          .map((e) => `- ${e.errorType} ${e.description}: ${e.lineStart}:${e.colStart} / ${e.lineEnd}:${e.colEnd}`)
+          .join('\n');
+        throw new SfError('Failed to compile agent script', formattedError);
       }
     }
 
-    const url = `${this.apiBase}/v1.1/preview/sessions`;
+    const url = 'https://api.salesforce.com/einstein/ai-agent/v1.1/preview/sessions';
     this.logger.debug('Starting agent simulation session');
 
     const body = {
@@ -108,14 +107,20 @@ export class AgentSimulate extends AgentPreviewBase {
       instanceConfig: {
         endpoint: this.connection.instanceUrl,
       },
+      // variables: [],
+      // parameters: {},
       streamingCapabilities: {
-        chunkTypes: ['Text'],
+        chunkTypes: ['Text', 'LightningChunk'],
       },
+      richContentCapabilities: {},
       bypassUser: true,
-    } as const;
+      executionHistory: [],
+      conversationContext: [],
+    };
 
     try {
-      return await this.maybeMock.request<AgentPreviewStartResponse>('POST', url, body);
+      const x = await this.maybeMock.request<AgentPreviewStartResponse>('POST', url, body);
+      return x;
     } catch (err) {
       throw SfError.wrap(err);
     }
