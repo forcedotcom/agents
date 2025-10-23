@@ -22,7 +22,7 @@ import { Connection, Org, SfProject, User, UserFields } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { sleep } from '@salesforce/kit';
 import { Agent, type AgentJobSpec, type AgentJobSpecCreateConfig } from '../../src/index';
-import { lululemonAgentScript } from '../testData';
+import { validAgentScript } from '../testData';
 
 /* eslint-disable no-console */
 // Helper function to wait for Einstein AI services to be ready
@@ -300,10 +300,10 @@ describe('agent NUTs', () => {
   });
 
   describe('compileAgentScript', () => {
-    it('should compile a lululemon agent script successfully', async () => {
-      // Read the lululemon agent script from the project
+    it('should compile a valid agent script successfully', async () => {
+      // Read the valid agent script from the project
 
-      const result = await Agent.compileAgentScript(connection, lululemonAgentScript);
+      const result = await Agent.compileAgentScript(connection, validAgentScript);
 
       // Verify the response structure
       expect(result).to.be.an('object');

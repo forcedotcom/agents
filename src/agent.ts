@@ -326,8 +326,7 @@ export class Agent {
     // Ensure we use the correct connection for this API call
     const orgJwtConnection = await useNamedUserJwt(connection);
 
-    const apiEnv = 'api.salesforce.com';
-    const url = `https://${apiEnv}/einstein/ai-agent/v1.1/authoring/compile`;
+    const url = 'https://api.salesforce.com/einstein/ai-agent/v1.1/authoring/compile';
 
     getLogger().debug(`Compiling .agent : ${agentScriptContent}`);
     const compileData = {
@@ -357,11 +356,7 @@ export class Agent {
         { retry: { maxRetries: 3 } }
       );
     } catch (error) {
-      throw SfError.create({
-        name: 'CompileAgentScriptError',
-        message: 'Error when compiling AgentScript',
-        cause: error,
-      });
+      throw SfError.wrap(error);
     }
   }
 

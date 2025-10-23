@@ -152,8 +152,8 @@ describe('Agents', () => {
         await Agent.compileAgentScript(connection, 'AgentScriptContent');
         expect.fail('Expected compileAgentScript to throw an error');
       } catch (error) {
-        expect((error as SfError).name).to.equal('CompileAgentScriptError');
-        expect((error as SfError).message).to.include('Error when compiling AgentScript');
+        expect((error as SfError).name).to.equal('Error');
+        expect((error as SfError).message).to.include('Some error');
       }
     });
   
