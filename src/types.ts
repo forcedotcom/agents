@@ -102,6 +102,11 @@ export type AgentJobSpec = AgentJobSpecCreateConfig & {
   topics: DraftAgentTopics;
 };
 
+export type ExtendedAgentJobSpec = AgentJobSpec & {
+  developerName: string;
+  name: string;
+};
+
 export type AgentType = 'customer' | 'internal';
 
 export type AgentTone = 'casual' | 'formal' | 'neutral';
@@ -621,30 +626,6 @@ export type AgentTraceResponse = {
 
 export type CompileAgentScriptResponse = AgentCompilationSuccess | AgentCompilationError;
 
-export type PublishAgentJsonResponse = {
-  botVersionId: string;
-  botId: string;
-  errorMessage?: string;
-};
-
-export type PublishAgent = PublishAgentJsonResponse & { developerName: string };
-export type AgentCompilationError = {
-  status: 'failure';
-  compiledArtifact: null;
-  errors: Array<{
-    errorType: string;
-    description: string;
-    lineStart: number;
-    lineEnd: number;
-    colStart: number;
-    colEnd: number;
-  }>;
-  syntacticMap: {
-    blocks: [];
-  };
-  dslVersion: '0.0.3.rc29';
-};
-
 export type AgentCompilationSuccess = {
   status: 'success';
   compiledArtifact: AgentJson;
@@ -654,6 +635,32 @@ export type AgentCompilationSuccess = {
   };
   dslVersion: '0.0.3.rc29';
 };
+export type AgentCompilationError = {
+  status: 'failure';
+  compiledArtifact: null;
+  errors: CompilationError[];
+  syntacticMap: {
+    blocks: [];
+  };
+  dslVersion: '0.0.3.rc29';
+};
+
+export type CompilationError = {
+  errorType: string;
+  description: string;
+  lineStart: number;
+  lineEnd: number;
+  colStart: number;
+  colEnd: number;
+};
+
+export type PublishAgentJsonResponse = {
+  botVersionId: string;
+  botId: string;
+  errorMessage?: string;
+};
+
+export type PublishAgent = PublishAgentJsonResponse & { developerName: string };
 
 export type AgentJson = {
   schemaVersion: string;
