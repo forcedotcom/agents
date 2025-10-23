@@ -33,13 +33,13 @@ import {
   type BotActivationResponse,
   type BotMetadata,
   type BotVersionMetadata,
-  type CreateAgentScriptResponse,
   type CompileAgentScriptResponse,
   type DraftAgentTopicsBody,
   type DraftAgentTopicsResponse,
   PublishAgentJsonResponse,
   AgentScriptContent,
   PublishAgent,
+  ExtendedAgentJobSpec,
 } from './types.js';
 import { MaybeMock } from './maybe-mock';
 import { decodeHtmlEntities, findAuthoringBundle, useNamedUserJwt } from './utils';
@@ -290,29 +290,69 @@ export class Agent {
   }
 
   /**
-   * Creates AgentScript using agent job spec data.
+   * Creates AgentScript using extended agent job spec data.
    *
    * @param connection The connection to the org.
    * @param agentJobSpec The agent specification data.
    * @returns Promise<AgentScriptContent> The generated AgentScript as a `string`.
    * @beta
    */
-  public static async createAgentScript(connection: Connection, agentJobSpec: AgentJobSpec): Promise<AgentScriptContent> {
-    const url = '/connect/ai-assist/create-af-script';
-    const maybeMock = new MaybeMock(connection);
-
+  public static async createAgentScript(
+    connection: Connection,
+    agentJobSpec: ExtendedAgentJobSpec
+  ): Promise<AgentScriptContent> {
+    // this will eventually be done via AI in the org, but for now, we're hardcoding a valid .agent file boilerplate response
     getLogger().debug(`Generating Agent with spec data: ${JSON.stringify(agentJobSpec)}`);
 
-    const response = await maybeMock.request<CreateAgentScriptResponse>('POST', url, agentJobSpec);
-    if (response.isSuccess && response.agentScriptContent) {
-      return response.agentScriptContent;
-    } else {
-      throw SfError.create({
-        name: 'CreateAgenScriptError',
-        message: response.errorMessage ?? 'unknown',
-        data: response,
-      });
-    }
+    const boilerplate = `system:
+   instructions: "You are a generic AI assistant. You assist users with various inquiries and provide helpful responses."
+   messages:
+      welcome: "Hello, I am here to assist you with your questions. How can I help you today?"
+      error: "Apologies, something went wrong. Please try again later."
+
+config:
+   agent_name: "${agentJobSpec.name}"
+   developer_name: "${agentJobSpec.developerName}"
+   default_agent_user: "default_agent_user@salesforce.com"
+   user_locale: "en_US"
+   enable_enhanced_event_logs: True
+   agent_description: "Default agent description"
+
+variables:
+   user_query: string
+   query_status: string = ""
+
+start_agent topic_selector:
+   description: "Analyze the user's input and determine the appropriate topic."
+
+   reasoning_instructions:
+      >>
+           You are a topic selector for a generic AI assistant. Analyze the user's input and determine the most appropriate topic to handle their request.
+
+           Use the appropriate transition based on the user's needs:
+           - {{@action.go_to_general_inquiry}}: General inquiries
+           - {{@action.go_to_escalation}}: Escalation
+
+   reasoning_actions:
+      @utils.transition to @topic.general_inquiry as go_to_general_inquiry
+         description: "Transition to general inquiries."
+      @utils.transition to @topic.escalation as go_to_escalation
+         description: "Escalate the conversation to a human agent."
+
+topic escalate:
+   description: "Escalation topic"
+
+   reasoning_instructions:
+      >>
+           Escalate the conversation to a human agent if the user requests further assistance or if their query cannot be resolved by the agent. Or if the user mentions a specific person, such as Tim Robinson (e.g., a supervisor or manager).
+
+topic escalation:
+   description: "Escalation topic"
+
+   reasoning_instructions:
+      >>
+           Escalate the conversation to a human agent if the user requests further assistance or if their query cannot be resolved by the agent.`;
+    return Promise.resolve(boilerplate);
   }
 
   /**
@@ -323,7 +363,10 @@ export class Agent {
    * @returns Promise<AgentJson> The generated Agent JSON
    * @beta
    */
-  public static async compileAgentScript(connection: Connection, agentScriptContent: AgentScriptContent): Promise<AgentJson> {
+  public static async compileAgentScript(
+    connection: Connection,
+    agentScriptContent: AgentScriptContent
+  ): Promise<AgentJson> {
     // Ensure we use the correct connection for this API call
     const orgJwtConnection = await useNamedUserJwt(connection);
 

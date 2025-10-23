@@ -83,6 +83,11 @@ export type AgentJobSpec = AgentJobSpecCreateConfig & {
   topics: DraftAgentTopics;
 };
 
+export type ExtendedAgentJobSpec = AgentJobSpec & {
+  developerName: string;
+  name: string;
+};
+
 export type AgentType = 'customer' | 'internal';
 
 export type AgentTone = 'casual' | 'formal' | 'neutral';
