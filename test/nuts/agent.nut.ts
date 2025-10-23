@@ -22,8 +22,35 @@ import { Connection, Org, SfProject, User, UserFields } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { sleep } from '@salesforce/kit';
 import { Agent, type AgentJobSpec, type AgentJobSpecCreateConfig } from '../../src/index';
+import { validAgentScript } from '../testData';
 
 /* eslint-disable no-console */
+// Helper function to wait for Einstein AI services to be ready
+async function waitForEinsteinReady(connection: Connection, maxAttempts = 30): Promise<void> {
+  // eslint-disable-next-line no-await-in-loop
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      // Check Agent API status using direct HTTP call
+      const statusResponse = await connection.request<{ status: 'UP' | 'DOWN' }>({ // eslint-disable-line no-await-in-loop
+        method: 'GET',
+        url: 'https://api.salesforce.com/einstein/ai-agent/v1/status',
+        headers: {
+          'x-salesforce-region': 'us-west-2'
+        }
+      });
+
+      if (statusResponse.status === 'UP') {;
+        return;
+      }
+    } catch (error) {
+      // do nothing
+    }
+    // Wait 10 seconds between checks
+    await sleep(10 * 1000); // eslint-disable-line no-await-in-loop
+  }
+  const timeoutSeconds = maxAttempts * 10;
+  throw new Error(`Einstein AI did not become ready within ${timeoutSeconds} seconds timeout`);
+}
 
 describe('agent NUTs', () => {
   const agentName = 'The Campus Agent Test';
@@ -55,6 +82,9 @@ describe('agent NUTs', () => {
     );
     const user = await User.create({ org: defaultOrg });
     await user.assignPermissionSets(queryResult.Id, ['EinsteinGPTPromptTemplateManager']);
+
+    // Wait for Einstein AI services to be fully initialized using polling
+    await waitForEinsteinReady(connection);
   });
 
   after(async () => {
@@ -100,6 +130,7 @@ describe('agent NUTs', () => {
       // deploy project to scratch org
       const compSet = await ComponentSetBuilder.build({
         sourcepath: [join(session.project.dir, 'force-app')],
+        apiversion: '65.0',
       });
       const deploy = await compSet.deploy({ usernameOrConnection: connection });
       const deployResult = await deploy.pollStatus();
@@ -265,6 +296,48 @@ describe('agent NUTs', () => {
       expect(readdirSync(join(sourceDir, 'bots'))).to.have.lengthOf(2);
       expect(readdirSync(join(sourceDir, 'genAiPlannerBundles'))).to.have.lengthOf(2);
       expect(readdirSync(join(sourceDir, 'genAiPlugins'))).to.have.lengthOf(6);
+    });
+  });
+
+  describe('compileAgentScript', () => {
+    it('should compile a valid agent script successfully', async () => {
+      // Read the valid agent script from the project
+
+      const result = await Agent.compileAgentScript(connection, validAgentScript);
+
+      // Verify the response structure
+      expect(result).to.be.an('object');
+      expect(result).to.have.property('status', 'success');
+      expect(result).to.have.property('compiledArtifact');
+      expect(result.compiledArtifact).to.not.be.null;
+      expect(result.compiledArtifact).to.be.an('object');
+      expect(result.compiledArtifact).to.have.property('schemaVersion');
+      expect(result.compiledArtifact).to.have.property('globalConfiguration');
+      expect(result.compiledArtifact).to.have.property('agentVersion');
+    });
+
+    it('should return compilation errors for invalid agent script', async () => {
+      // Invalid agent script - missing closing brace
+      const invalidAgentScript = `
+        agent InvalidAgent {
+          greeting {
+            instructions: "Hello!"
+          // Missing closing brace for agent
+      `;
+
+      const result = await Agent.compileAgentScript(connection, invalidAgentScript);
+
+      // Verify the response indicates failure
+      expect(result).to.be.an('object');
+      expect(result).to.have.property('status', 'failure');
+      expect(result).to.have.property('errors');
+      expect(result.errors).to.be.an('array');
+      expect(result.errors.length).to.be.greaterThan(0);
+
+      // Verify error structure
+      const firstError = result.errors[0];
+      expect(firstError).to.have.property('errorType');
+      expect(firstError).to.have.property('description');
     });
   });
 });
