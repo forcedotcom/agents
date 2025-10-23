@@ -618,18 +618,20 @@ export type AgentCompilationSuccess = {
 export type AgentCompilationError = {
   status: 'failure';
   compiledArtifact: null;
-  errors: Array<{
-    errorType: string;
-    description: string;
-    lineStart: number;
-    lineEnd: number;
-    colStart: number;
-    colEnd: number;
-  }>;
+  errors: CompilationError[];
   syntacticMap: {
     blocks: [];
   };
   dslVersion: '0.0.3.rc29';
+};
+
+export type CompilationError = {
+  errorType: string;
+  description: string;
+  lineStart: number;
+  lineEnd: number;
+  colStart: number;
+  colEnd: number;
 };
 
 export type PublishAgentJsonResponse = {

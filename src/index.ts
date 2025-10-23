@@ -32,6 +32,7 @@ export {
   type AgentTraceStep,
   type BotMetadata,
   type BotVersionMetadata,
+  type CompilationError,
   type DraftAgentTopics,
   type DraftAgentTopicsBody,
   type DraftAgentTopicsResponse,
