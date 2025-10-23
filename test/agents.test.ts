@@ -59,8 +59,7 @@ describe('Agents', () => {
     expect(output.topics[0]).to.have.property('name', 'Guest_Experience_Enhancement');
   });
 
-  it('createAgentScript (mock behavior) should return an AgentScriptContent', async () => {
-    process.env.SF_MOCK_DIR = join('test', 'mocks', 'createAgent');
+  it('createAgentScript (mock behavior) should return a AgentScriptContent', async () => {
     const agentType = 'customer';
     const companyName = 'Coral Cloud Enterprises';
     const output = await Agent.createAgentScript(connection, {
@@ -79,11 +78,9 @@ describe('Agents', () => {
     });
 
     expect(output).to.be.a('string');
-    expect(output).to.include('# A simple weather assistant agent');
-    expect(output).to.include('topic weather_assistant:');
-    expect(output).to.include('agent_name: "ServiceBot"');
-    expect(output).to.include('Weather Agent');
-    expect(output).to.include('Weather_Agent');
+    expect(output).to.include('instructions: "You are a generic AI assistant.');
+    expect(output).to.include('developer_name: "Weather_Agent"');
+    expect(output).to.include('agent_name: "Weather Agent"');
   });
 
   it('createAgentJson (mock behavior) should return full agent json', async () => {
