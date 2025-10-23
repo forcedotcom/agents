@@ -22,6 +22,7 @@ import { Connection, Org, SfProject, User, UserFields } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { sleep } from '@salesforce/kit';
 import { Agent, type AgentJobSpec, type AgentJobSpecCreateConfig } from '../../src/index';
+import { lululemonAgentScript } from '../testData';
 
 /* eslint-disable no-console */
 // Helper function to wait for Einstein AI services to be ready
@@ -129,6 +130,7 @@ describe('agent NUTs', () => {
       // deploy project to scratch org
       const compSet = await ComponentSetBuilder.build({
         sourcepath: [join(session.project.dir, 'force-app')],
+        apiversion: '65.0',
       });
       const deploy = await compSet.deploy({ usernameOrConnection: connection });
       const deployResult = await deploy.pollStatus();
@@ -300,8 +302,6 @@ describe('agent NUTs', () => {
   describe('compileAgentScript', () => {
     it('should compile a lululemon agent script successfully', async () => {
       // Read the lululemon agent script from the project
-      const lululemonAgentPath = join(session.project.dir, 'force-app', 'main', 'default', 'aiAuthoringBundles', 'lululemon', 'lululemon.agent');
-      const lululemonAgentScript = readFileSync(lululemonAgentPath, 'utf8');
 
       const result = await Agent.compileAgentScript(connection, lululemonAgentScript);
 
