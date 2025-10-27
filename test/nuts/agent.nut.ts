@@ -31,6 +31,7 @@ async function waitForEinsteinReady(connection: Connection, maxAttempts = 30): P
   for (let i = 0; i < maxAttempts; i++) {
     try {
       // Check Agent API status using direct HTTP call
+      // eslint-disable-next-line no-await-in-loop
       const statusResponse = await connection.request<{ status: 'UP' | 'DOWN' }>({
         // eslint-disable-line no-await-in-loop
         method: 'GET',
