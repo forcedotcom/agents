@@ -20,12 +20,13 @@ import { Connection, SfError } from '@salesforce/core';
 import { Agent } from './agent';
 import { AgentPreviewBase } from './agentPreviewBase';
 import {
-  type AgentPreviewStartResponse,
-  type AgentPreviewSendResponse,
-  type AgentPreviewEndResponse,
-  type EndReason,
   type AgentJson,
+  type AgentPreviewEndResponse,
+  type AgentPreviewSendResponse,
+  type AgentPreviewStartResponse,
+  type EndReason,
 } from './types.js';
+import { useNamedUserJwt } from './utils';
 
 /**
  * A service to simulate interactions with an agent using a local .agent file.
@@ -97,8 +98,12 @@ export class AgentSimulate extends AgentPreviewBase {
       }
     }
 
+    this.connection = await useNamedUserJwt(this.connection);
+
     const url = 'https://api.salesforce.com/einstein/ai-agent/v1.1/preview/sessions';
     this.logger.debug('Starting agent simulation session');
+
+    this.compiledAgent.agentVersion.developerName = this.compiledAgent.agentVersion.developerName + '_v1';
 
     const body = {
       agentDefinition: this.compiledAgent,
@@ -119,8 +124,7 @@ export class AgentSimulate extends AgentPreviewBase {
     };
 
     try {
-      const x = await this.maybeMock.request<AgentPreviewStartResponse>('POST', url, body);
-      return x;
+      return await this.maybeMock.request<AgentPreviewStartResponse>('POST', url, body);
     } catch (err) {
       throw SfError.wrap(err);
     }
@@ -175,16 +179,21 @@ export class AgentSimulate extends AgentPreviewBase {
    * @param reason A reason why the interactive session was ended.
    * @returns `AgentPreviewEndResponse`
    */
-  public async end(sessionId: string, reason: EndReason): Promise<AgentPreviewEndResponse> {
-    const url = `${this.apiBase}/sessions/${sessionId}`;
-    this.logger.debug(`Ending agent simulation session with sessionId: ${sessionId}`);
-    try {
-      return await this.maybeMock.request<AgentPreviewEndResponse>('DELETE', url, undefined, {
-        'x-session-end-reason': reason,
-      });
-    } catch (err) {
-      throw SfError.wrap(err);
-    }
+  public end(sessionId: string, reason: EndReason): Promise<AgentPreviewEndResponse> {
+    // const url = `${this.apiBase}/sessions/${sessionId}`;
+    this.logger.debug(`Ending agent simulation session with sessionId: ${sessionId}: ${reason}`);
+    // @ts-expect-error asdfs
+    return Promise.resolve({
+      messages: [{ id: '', type: '', reason: '', feedbackId: '' }],
+      _links: [{ self: null, messages: null, session: null, end: null }],
+    });
+    // try {
+    //   return await this.maybeMock.request<AgentPreviewEndResponse>('DELETE', url, undefined, {
+    //     'x-session-end-reason': reason,
+    //   });
+    // } catch (err) {
+    //   throw SfError.wrap(err);
+    // }
   }
 
   /**

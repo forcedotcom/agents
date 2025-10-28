@@ -30,7 +30,7 @@ import {
  * for interacting with agents through the Einstein AI Agent API.
  */
 export abstract class AgentPreviewBase implements AgentInteractionBase {
-  protected readonly connection: Connection;
+  protected connection: Connection;
   protected readonly logger: Logger;
   protected readonly maybeMock: MaybeMock;
   protected apexDebugMode?: boolean;
