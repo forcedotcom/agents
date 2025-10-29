@@ -47,6 +47,9 @@ export {
   type AgentPreviewMessageLinks,
   type AgentPreviewMessage,
   type AgentPreviewError,
+  AgentSource,
+  type ScriptAgent,
+  type PublishedAgent,
 
   // Agent Testing Types
   type AgentTestResultsResponse,

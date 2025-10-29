@@ -624,6 +624,39 @@ export type AgentTraceResponse = {
   }>;
 };
 
+// ====================================================
+//               Agent Plan Response Types
+// ====================================================
+
+export type PlannerResponse = {
+  type: 'PlanSuccessResponse';
+  planId: string;
+  sessionId: string;
+  intent: string;
+  topic: string;
+  plan: PlanStep[];
+};
+
+export type PlanStep =
+  | UserInputStep
+  | LLMExecutionStep
+  | UpdateTopicStep
+  | EventStep
+  | FunctionStep
+  | PlannerResponseStep;
+
+export type FunctionStep = {
+  type: 'FunctionStep';
+  function: {
+    name: string;
+    input: Record<string, unknown>;
+    output: Record<string, unknown>;
+  };
+  executionLatency: number;
+  startExecutionTime: number;
+  endExecutionTime: number;
+};
+
 export type CompileAgentScriptResponse = AgentCompilationSuccess | AgentCompilationError;
 
 export type AgentCompilationSuccess = {
@@ -731,7 +764,17 @@ export type AgentJson = {
 
 export type AgentScriptContent = string;
 
-export type FindLocalAgentsFunction = (dir: string) => string[];
+export enum AgentSource {
+  PUBLISHED = 'published',
+  SCRIPT = 'script',
+}
+
+export type ScriptAgent = { DeveloperName: string; source: AgentSource.SCRIPT; path: string };
+export type PublishedAgent = {
+  Id: string;
+  DeveloperName: string;
+  source: AgentSource.PUBLISHED;
+};
 
 export type NamedUserJwtResponse = {
   access_token: string;

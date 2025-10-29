@@ -24,6 +24,7 @@ import {
   type AgentPreviewEndResponse,
   type AgentPreviewSendResponse,
   type AgentPreviewStartResponse,
+  PlannerResponse,
 } from './types.js';
 import { createTraceFlag, findTraceFlag, getDebugLog } from './apexUtils';
 
@@ -190,6 +191,13 @@ export class AgentSimulate extends AgentPreviewBase {
    */
   public toggleApexDebugMode(enable: boolean): void {
     this.setApexDebugMode(enable);
+  }
+
+  public async trace(sessionId: string, messageId: string): Promise<PlannerResponse> {
+    return this.maybeMock.request<PlannerResponse>(
+      'GET',
+      `${this.apiBase}/v1.1/preview/sessions/${sessionId}/plans/${messageId}`
+    );
   }
 
   // once we're previewing agents in the org, with mockActions = false, we'll have to figure out how to get the correct user that was simulated for apex invocattion

@@ -369,7 +369,7 @@ topic escalation:
     // Ensure we use the correct connection for this API call
     const orgJwtConnection = await useNamedUserJwt(connection);
 
-    const url = 'https://api.salesforce.com/einstein/ai-agent/v1.1/authoring/compile';
+    const url = 'https://test.api.salesforce.com/einstein/ai-agent/v1.1/authoring/compile';
 
     getLogger().debug(`Compiling .agent : ${agentScriptContent}`);
     const compileData = {
