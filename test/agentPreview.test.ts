@@ -101,7 +101,7 @@ describe('AgentPreview', () => {
         .returns(1_747_054_800_000);
 
       const agentPreview = new AgentPreview(connection, agentId);
-      agentPreview.toggleApexDebugMode(true);
+      agentPreview.setApexDebugMode(true);
       // @ts-expect-error - private property
       expect(agentPreview.apexDebugMode).to.be.true;
       // @ts-expect-error - private property
@@ -131,7 +131,7 @@ describe('AgentPreview', () => {
         .returns(1_747_049_000_000);
 
       const agentPreview = new AgentPreview(connection, agentId);
-      agentPreview.toggleApexDebugMode(true);
+      agentPreview.setApexDebugMode(true);
       // @ts-expect-error - private property
       expect(agentPreview.apexDebugMode).to.be.true;
       // @ts-expect-error - private property
@@ -160,7 +160,7 @@ describe('AgentPreview', () => {
         .returns(1_747_054_800_000);
 
       const agentPreview = new AgentPreview(connection, agentId);
-      agentPreview.toggleApexDebugMode(true);
+      agentPreview.setApexDebugMode(true);
       // @ts-expect-error - private property
       expect(agentPreview.apexDebugMode).to.be.true;
       // @ts-expect-error - private property
