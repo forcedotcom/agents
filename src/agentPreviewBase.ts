@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { Connection, Logger, SfError } from '@salesforce/core';
+import { Connection, Logger } from '@salesforce/core';
 import { MaybeMock } from './maybe-mock';
 import {
   type AgentPreviewEndResponse,
@@ -31,6 +31,7 @@ import {
  */
 export abstract class AgentPreviewBase implements AgentInteractionBase {
   protected connection: Connection;
+  protected apexTraceFlag?: { Id?: string; ExpirationDate?: string };
   protected readonly logger: Logger;
   protected readonly maybeMock: MaybeMock;
   protected apexDebugMode?: boolean;
@@ -55,26 +56,6 @@ export abstract class AgentPreviewBase implements AgentInteractionBase {
    * This is overridden by child classes to provide their specific API base.
    */
   protected abstract get apiBase(): string;
-
-  /**
-   * Ends an interactive session with the agent.
-   * This is the base implementation that child classes can use.
-   *
-   * @param sessionId A session ID provided by first calling `start()`.
-   * @param reason A reason why the interactive session was ended.
-   * @returns `AgentPreviewEndResponse`
-   */
-  protected async endSession(sessionId: string, reason: EndReason): Promise<AgentPreviewEndResponse> {
-    const url = `${this.apiBase}/sessions/${sessionId}`;
-    this.logger.debug(`Ending agent session with sessionId: ${sessionId}`);
-    try {
-      return await this.maybeMock.request<AgentPreviewEndResponse>('DELETE', url, undefined, {
-        'x-session-end-reason': reason,
-      });
-    } catch (err) {
-      throw SfError.wrap(err);
-    }
-  }
 
   /**
    * Enable or disable Apex Debug Mode, which will enable trace flags for the Bot user

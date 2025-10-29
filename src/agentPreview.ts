@@ -58,8 +58,7 @@ const messages = Messages.loadMessages('@salesforce/agents', 'agentPreview');
  */
 export class AgentPreview extends AgentPreviewBase {
   protected readonly apiBase = 'https://api.salesforce.com/einstein/ai-agent/v1';
-  private apexTraceFlag?: { Id?: string; ExpirationDate?: string };
-  private botId: string;
+  private readonly botId: string;
 
   /**
    * Create an instance of the service.
@@ -158,7 +157,15 @@ export class AgentPreview extends AgentPreviewBase {
    * @returns `AgentPreviewEndResponse`
    */
   public async end(sessionId: string, reason: EndReason): Promise<AgentPreviewEndResponse> {
-    return this.endSession(sessionId, reason);
+    const url = `${this.apiBase}/sessions/${sessionId}`;
+    this.logger.debug(`Ending agent session with sessionId: ${sessionId}`);
+    try {
+      return await this.maybeMock.request<AgentPreviewEndResponse>('DELETE', url, undefined, {
+        'x-session-end-reason': reason,
+      });
+    } catch (err) {
+      throw SfError.wrap(err);
+    }
   }
 
   /**

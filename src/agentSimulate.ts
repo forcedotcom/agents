@@ -16,7 +16,7 @@
 
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-import { Connection, SfError } from '@salesforce/core';
+import { Connection, Lifecycle, SfError } from '@salesforce/core';
 import { Agent } from './agent';
 import { AgentPreviewBase } from './agentPreviewBase';
 import {
@@ -24,9 +24,8 @@ import {
   type AgentPreviewEndResponse,
   type AgentPreviewSendResponse,
   type AgentPreviewStartResponse,
-  type EndReason,
 } from './types.js';
-import { useNamedUserJwt } from './utils';
+import { createTraceFlag, findTraceFlag, getDebugLog } from './apexUtils';
 
 /**
  * A service to simulate interactions with an agent using a local .agent file.
@@ -56,13 +55,13 @@ import { useNamedUserJwt } from './utils';
  * `agentSimulate.toggleApexDebugMode(true);`
  */
 export class AgentSimulate extends AgentPreviewBase {
-  protected readonly apiBase = 'https://api.salesforce.com/einstein/ai-agent';
-  private readonly agentFilePath: string;
-  private compiledAgent?: AgentJson;
   /**
    * The client can specify whether the actions will run in a simulated mode ("mock actions", no side effects, mockActions=true) or a non-simulated mode ("real actions", actions with side effects, mockActions=false)
    */
-  private readonly mockActions: boolean;
+  public mockActions: boolean;
+  protected readonly apiBase = 'https://test.api.salesforce.com/einstein/ai-agent';
+  private readonly agentFilePath: string;
+  private compiledAgent?: AgentJson;
 
   /**
    * Create an instance of the service.
@@ -85,6 +84,7 @@ export class AgentSimulate extends AgentPreviewBase {
    */
   public async start(): Promise<AgentPreviewStartResponse> {
     if (!this.compiledAgent) {
+      void Lifecycle.getInstance().emit('agents:compiling', {});
       this.logger.debug(`Compiling agent script from ${this.agentFilePath}`);
       const agentString = await readFile(this.agentFilePath, 'utf-8');
       const compiledAgent = await Agent.compileAgentScript(this.connection, agentString);
@@ -98,12 +98,7 @@ export class AgentSimulate extends AgentPreviewBase {
       }
     }
 
-    this.connection = await useNamedUserJwt(this.connection);
-
-    const url = 'https://api.salesforce.com/einstein/ai-agent/v1.1/preview/sessions';
     this.logger.debug('Starting agent simulation session');
-
-    this.compiledAgent.agentVersion.developerName = this.compiledAgent.agentVersion.developerName + '_v1';
 
     const body = {
       agentDefinition: this.compiledAgent,
@@ -112,8 +107,8 @@ export class AgentSimulate extends AgentPreviewBase {
       instanceConfig: {
         endpoint: this.connection.instanceUrl,
       },
-      // variables: [],
-      // parameters: {},
+      variables: [],
+      parameters: {},
       streamingCapabilities: {
         chunkTypes: ['Text', 'LightningChunk'],
       },
@@ -124,7 +119,12 @@ export class AgentSimulate extends AgentPreviewBase {
     };
 
     try {
-      return await this.maybeMock.request<AgentPreviewStartResponse>('POST', url, body);
+      void Lifecycle.getInstance().emit('agents:simulation-starting', {});
+      return await this.maybeMock.request<AgentPreviewStartResponse>(
+        'POST',
+        `${this.apiBase}/v1.1/preview/sessions`,
+        body
+      );
     } catch (err) {
       throw SfError.wrap(err);
     }
@@ -150,21 +150,20 @@ export class AgentSimulate extends AgentPreviewBase {
     this.logger.debug(`Sending message with apexDebugMode ${this.apexDebugMode ? 'enabled' : 'disabled'}`);
 
     try {
-      // const start = Date.now();
-      if (this.apexDebugMode) {
-        // await this.ensureTraceFlag();
+      const start = Date.now();
+      if (this.apexDebugMode && !this.mockActions) {
+        await this.ensureTraceFlag();
       }
       const response = await this.maybeMock.request<AgentPreviewSendResponse>('POST', url, body);
-      // todo: figure out if we can debug with mocked actions, or if mocked actions must be true to debug
-      // if (this.apexDebugMode) {
-      //   const apexLog = await getDebugLog(this.connection, start, Date.now());
-      //   if (apexLog) {
-      //     if (apexLog.Id) this.logger.debug(`Apex debug log ID for message is ${apexLog.Id}`);
-      //     response.apexDebugLog = apexLog;
-      //   } else {
-      //     this.logger.debug('No apex debug log found for this message');
-      //   }
-      // }
+      if (this.apexDebugMode && !this.mockActions) {
+        const apexLog = await getDebugLog(this.connection, start, Date.now());
+        if (apexLog) {
+          if (apexLog.Id) this.logger.debug(`Apex debug log ID for message is ${apexLog.Id}`);
+          response.apexDebugLog = apexLog;
+        } else {
+          this.logger.debug('No apex debug log found for this message');
+        }
+      }
 
       return response;
     } catch (err) {
@@ -173,27 +172,14 @@ export class AgentSimulate extends AgentPreviewBase {
   }
 
   /**
-   * Ends an interactive simulation session with the agent.
+   * Ending is not required, or supported, for AgentSimulation
+   * this is a noop method to support easier consumer typings
    *
-   * @param sessionId A session ID provided by first calling `agentSimulate.start()`.
-   * @param reason A reason why the interactive session was ended.
    * @returns `AgentPreviewEndResponse`
    */
-  public end(sessionId: string, reason: EndReason): Promise<AgentPreviewEndResponse> {
-    // const url = `${this.apiBase}/sessions/${sessionId}`;
-    this.logger.debug(`Ending agent simulation session with sessionId: ${sessionId}: ${reason}`);
-    // @ts-expect-error asdfs
-    return Promise.resolve({
-      messages: [{ id: '', type: '', reason: '', feedbackId: '' }],
-      _links: [{ self: null, messages: null, session: null, end: null }],
-    });
-    // try {
-    //   return await this.maybeMock.request<AgentPreviewEndResponse>('DELETE', url, undefined, {
-    //     'x-session-end-reason': reason,
-    //   });
-    // } catch (err) {
-    //   throw SfError.wrap(err);
-    // }
+  // eslint-disable-next-line class-methods-use-this
+  public async end(): Promise<AgentPreviewEndResponse> {
+    return Promise.resolve({ messages: [], _links: [] } as unknown as AgentPreviewEndResponse);
   }
 
   /**
@@ -207,24 +193,26 @@ export class AgentSimulate extends AgentPreviewBase {
   }
 
   // once we're previewing agents in the org, with mockActions = false, we'll have to figure out how to get the correct user that was simulated for apex invocattion
-  // private async ensureTraceFlag(): Promise<void> {
-  //   if (this.apexTraceFlag) {
-  //     const expDate = this.apexTraceFlag.ExpirationDate;
-  //     if (expDate && new Date(expDate) > new Date()) {
-  //       this.logger.debug(`Using cached apexTraceFlag with ExpirationDate of ${expDate}`);
-  //       return;
-  //     } else {
-  //       this.logger.debug('Cached apex trace flag is expired');
-  //     }
-  //   }
+  private async ensureTraceFlag(): Promise<void> {
+    if (this.apexTraceFlag) {
+      const expDate = this.apexTraceFlag.ExpirationDate;
+      if (expDate && new Date(expDate) > new Date()) {
+        this.logger.debug(`Using cached apexTraceFlag with ExpirationDate of ${expDate}`);
+        return;
+      } else {
+        this.logger.debug('Cached apex trace flag is expired');
+      }
+    }
 
-  //   const userId = AgentSimulate.getBotUserId();
-  //   if (!userId) {
-  //     throw messages.createError('agentApexDebuggingError');
-  //   }
-  //   this.apexTraceFlag = await findTraceFlag(this.connection, userId);
-  //   if (!this.apexTraceFlag) {
-  //     await createTraceFlag(this.connection, userId);
-  //   }
-  // }
+    const user = this.compiledAgent?.globalConfiguration.defaultAgentUser ?? this.connection.getUsername()!;
+
+    const userId = (
+      await this.connection.singleRecordQuery<{ Id: string }>(`SELECT Id FROM Users WHERE Name = '${user}'`)
+    ).Id;
+
+    this.apexTraceFlag = await findTraceFlag(this.connection, userId);
+    if (!this.apexTraceFlag) {
+      await createTraceFlag(this.connection, userId);
+    }
+  }
 }
