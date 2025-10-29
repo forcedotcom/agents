@@ -95,7 +95,7 @@ export class Agent {
    * Create an instance of an agent in an org. Must provide a connection to an org
    * and the agent (Bot) API name or ID as part of `AgentOptions`.
    *
-   * @param options
+   * @param {options} AgentOptions
    */
   public constructor(private options: AgentOptions) {
     if (!options.nameOrId) {
@@ -369,7 +369,7 @@ topic escalation:
     // Ensure we use the correct connection for this API call
     const orgJwtConnection = await useNamedUserJwt(connection);
 
-    const url = 'https://test.api.salesforce.com/einstein/ai-agent/v1.1/authoring/compile';
+    const url = 'https://api.salesforce.com/einstein/ai-agent/v1.1/authoring/compile';
 
     getLogger().debug(`Compiling .agent : ${agentScriptContent}`);
     const compileData = {

@@ -158,24 +158,15 @@ export class AgentPreview extends AgentPreviewBase {
    */
   public async end(sessionId: string, reason: EndReason): Promise<AgentPreviewEndResponse> {
     const url = `${this.apiBase}/sessions/${sessionId}`;
-    this.logger.debug(`Ending agent session with sessionId: ${sessionId}`);
+    this.logger.debug(`Ending agent preview session for botId: ${this.botId} with sessionId: ${sessionId}`);
     try {
+      // https://developer.salesforce.com/docs/einstein/genai/guide/agent-api-examples.html#end-session
       return await this.maybeMock.request<AgentPreviewEndResponse>('DELETE', url, undefined, {
         'x-session-end-reason': reason,
       });
     } catch (err) {
       throw SfError.wrap(err);
     }
-  }
-
-  /**
-   * Enable or disable Apex Debug Mode, which will enable trace flags for the Bot user
-   * and create apex debug logs for use within VS Code's Apex Replay Debugger.
-   *
-   * @param enable Whether to enable or disable Apex Debug Mode.
-   */
-  public toggleApexDebugMode(enable: boolean): void {
-    this.setApexDebugMode(enable);
   }
 
   /**
@@ -197,18 +188,22 @@ export class AgentPreview extends AgentPreviewBase {
   private async getBotUserId(): Promise<string | null> {
     const agent = new Agent({ connection: this.connection, nameOrId: this.botId });
     const botMetadata = await agent.getBotMetadata();
-    return botMetadata?.BotUserId ?? null;
+    return botMetadata.BotUserId;
   }
 
+  // If apex debug mode is enabled, ensure we have a trace flag for the bot user
+  // that is not expired checking in this order:
+  // 1. instance var (this.apexTraceFlag)
+  // 2. query the org
+  // 3. create a new trace flag
   private async ensureTraceFlag(): Promise<void> {
-    if (this.apexTraceFlag?.ExpirationDate) {
-      const expDate = new Date(this.apexTraceFlag.ExpirationDate).getTime();
-      if (expDate > Date.now()) {
-        this.logger.debug(`Using cached apexTraceFlag with ExpirationDate of ${this.apexTraceFlag.ExpirationDate}`);
+    if (this.apexTraceFlag) {
+      const expDate = this.apexTraceFlag.ExpirationDate;
+      if (expDate && new Date(expDate) > new Date()) {
+        this.logger.debug(`Using cached apexTraceFlag with ExpirationDate of ${expDate}`);
         return;
       } else {
         this.logger.debug('Cached apex trace flag is expired');
-        this.apexTraceFlag = undefined;
       }
     }
 

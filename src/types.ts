@@ -26,16 +26,12 @@ export type AgentInteractionBase = {
   start(): Promise<AgentPreviewStartResponse>;
   send(sessionId: string, message: string): Promise<AgentPreviewSendResponse>;
   end(sessionId: string, reason: EndReason): Promise<AgentPreviewEndResponse>;
-  toggleApexDebugMode(enable: boolean): void;
+  setApexDebugMode(enable: boolean): void;
 };
 
 export type BaseAgentConfig = {
   connection: Connection;
   logger?: Logger;
-};
-
-export type ApiStatus = {
-  status: 'UP' | 'DOWN';
 };
 
 // ====================================================
@@ -462,11 +458,8 @@ export type AiEvaluationDefinition = {
 // ====================================================
 //               Agent Preview Types
 // ====================================================
-export type AgentPreviewMessageLinks = {
-  self: Href | null;
-  messages: Href | null;
-  session: Href | null;
-  end: Href | null;
+export type ApiStatus = {
+  status: 'UP' | 'DOWN';
 };
 
 type Href = { href: string };
@@ -478,6 +471,13 @@ export type AgentPreviewError = {
   error: string;
   message: string;
   timestamp: number;
+};
+
+export type AgentPreviewMessageLinks = {
+  self: Href | null;
+  messages: Href | null;
+  session: Href | null;
+  end: Href | null;
 };
 
 export type MessageType =
@@ -695,6 +695,7 @@ export type PublishAgentJsonResponse = {
 
 export type PublishAgent = PublishAgentJsonResponse & { developerName: string };
 
+// This is not accurate but good enough for now
 export type AgentJson = {
   schemaVersion: string;
   globalConfiguration: {

@@ -56,15 +56,13 @@ export abstract class AgentPreviewBase implements AgentInteractionBase {
    * This is overridden by child classes to provide their specific API base.
    */
   protected abstract get apiBase(): string;
-
   /**
    * Enable or disable Apex Debug Mode, which will enable trace flags for the Bot user
    * and create apex debug logs for use within VS Code's Apex Replay Debugger.
-   * This is the base implementation that child classes can use.
    *
    * @param enable Whether to enable or disable Apex Debug Mode.
    */
-  protected setApexDebugMode(enable: boolean): void {
+  public setApexDebugMode(enable: boolean): void {
     this.apexDebugMode = enable;
     this.logger.debug(`Apex Debug Mode is now ${enable ? 'enabled' : 'disabled'}`);
   }
@@ -92,12 +90,4 @@ export abstract class AgentPreviewBase implements AgentInteractionBase {
    * @returns `AgentPreviewEndResponse`
    */
   public abstract end(sessionId: string, reason: EndReason): Promise<AgentPreviewEndResponse>;
-
-  /**
-   * Enable or disable Apex Debug Mode, which will enable trace flags for the Bot user
-   * and create apex debug logs for use within VS Code's Apex Replay Debugger.
-   *
-   * @param enable Whether to enable or disable Apex Debug Mode.
-   */
-  public abstract toggleApexDebugMode(enable: boolean): void;
 }
