@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 import { readdirSync, statSync } from 'node:fs';
-import { mkdir, appendFile, readFile } from 'node:fs/promises';
+import { mkdir, appendFile, readFile, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { Connection, SfError, SfProject } from '@salesforce/core';
 import { NamedUserJwtResponse } from './types';
@@ -225,7 +225,6 @@ export type TranscriptEntry = {
   text?: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   raw?: any;
-  event?: 'start' | 'end';
   reason?: string;
 };
 
@@ -240,30 +239,40 @@ const resolveProjectLocalSfdx = async (): Promise<string | undefined> => {
 
 const getConversationDir = async (agentId: string): Promise<string> => {
   const base = (await resolveProjectLocalSfdx()) ?? path.join(process.cwd(), '.sfdx');
-  const dir = path.join(base, 'agents', 'conversations', agentId);
+  const dir = path.join(base, 'agents', agentId);
   await mkdir(dir, { recursive: true });
   return dir;
 };
 
+const getLastConversationPath = async (agentId: string): Promise<string> =>
+  path.join(await getConversationDir(agentId), 'history.json');
+
 /**
- * Append a transcript entry to a per-session JSONL file under the project local .sfdx folder.
- * Path: <project>/.sfdx/agents/conversations/<agentId>/<sessionId>.jsonl
+ * Append a transcript entry to the last conversation JSON file under the project local .sfdx folder.
+ * If the entry has event: 'start', this will clear the previous conversation and start fresh.
+ * Path: <project>/.sfdx/agents/conversations/<agentId>/history.json
  */
-export const appendTranscriptEntry = async (entry: TranscriptEntry): Promise<void> => {
-  const dir = await getConversationDir(entry.agentId);
-  const filePath = path.join(dir, `${entry.sessionId}.jsonl`);
+export const appendTranscriptEntry = async (entry: TranscriptEntry, newSession = false): Promise<void> => {
+  const filePath = await getLastConversationPath(entry.agentId);
   const line = `${JSON.stringify(entry)}\n`;
-  await appendFile(filePath, line);
+
+  // If this is a new session start, clear the file first
+  if (newSession) {
+    await writeFile(filePath, line, 'utf-8');
+  } else {
+    await appendFile(filePath, line);
+  }
 };
 
 /**
- * Read and parse a session's transcript entries from JSONL.
+ * Read and parse the last conversation's transcript entries from JSON.
+ * Path: <project>/.sfdx/agents/conversations/<agentId>/history.json
  *
+ * @param agentId The agent's API name (developerName)
  * @returns Array of TranscriptEntry in file order (chronological append order).
  */
-export const readTranscriptEntries = async (agentId: string, sessionId: string): Promise<TranscriptEntry[]> => {
-  const dir = await getConversationDir(agentId);
-  const filePath = path.join(dir, `${sessionId}.jsonl`);
+export const readTranscriptEntries = async (agentId: string): Promise<TranscriptEntry[]> => {
+  const filePath = await getLastConversationPath(agentId);
   try {
     const data = await readFile(filePath, 'utf-8');
     return data

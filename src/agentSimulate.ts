@@ -133,15 +133,17 @@ export class AgentSimulate extends AgentPreviewBase {
       );
       const agentIdForStorage = basename(this.agentFilePath);
 
-      await appendTranscriptEntry({
-        timestamp: new Date().toISOString(),
-        agentId: agentIdForStorage,
-        sessionId: response.sessionId,
-        role: 'agent',
-        text: response.messages.map((m) => m.message).join('\n'),
-        raw: response.messages,
-        event: 'start',
-      });
+      await appendTranscriptEntry(
+        {
+          timestamp: new Date().toISOString(),
+          agentId: agentIdForStorage,
+          sessionId: response.sessionId,
+          role: 'agent',
+          text: response.messages.map((m) => m.message).join('\n'),
+          raw: response.messages,
+        },
+        true
+      );
       return response;
     } catch (err) {
       throw SfError.wrap(err);

@@ -102,15 +102,17 @@ export class AgentPreview extends AgentPreviewBase {
       const response = await this.maybeMock.request<AgentPreviewStartResponse>('POST', url, body);
       // Persist any initial agent messages (welcome, etc.)
 
-      await appendTranscriptEntry({
-        timestamp: new Date().toISOString(),
-        agentId: this.botId,
-        sessionId: response.sessionId,
-        role: 'agent',
-        text: response.messages.map((m) => m.message).join('\n'),
-        raw: response.messages,
-        event: 'start',
-      });
+      await appendTranscriptEntry(
+        {
+          timestamp: new Date().toISOString(),
+          agentId: this.botId,
+          sessionId: response.sessionId,
+          role: 'agent',
+          text: response.messages.map((m) => m.message).join('\n'),
+          raw: response.messages,
+        },
+        true
+      );
 
       return response;
     } catch (err) {
@@ -207,7 +209,6 @@ export class AgentPreview extends AgentPreviewBase {
         agentId: this.botId,
         sessionId,
         role: 'agent',
-        event: 'end',
         reason,
         raw: response.messages,
       });

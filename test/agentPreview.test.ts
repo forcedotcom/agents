@@ -231,17 +231,8 @@ describe('AgentPreview', () => {
       expect(result.sessionId).to.equal(session);
 
       // Verify transcript was saved (basic check)
-      const entries = await readTranscriptEntries(agentId, session);
+      const entries = await readTranscriptEntries(agentId);
       expect(entries).to.have.length.greaterThan(0);
-    });
-
-    it('should handle transcript saving gracefully', async () => {
-      process.env.SF_MOCK_DIR = join('test', 'mocks', 'agentPreview-Start');
-      const agentPreview = new AgentPreview(connection, agentId);
-
-      // Test that the main functionality still works
-      const result = await agentPreview.start();
-      expect(result.sessionId).to.equal(session);
     });
   });
 });

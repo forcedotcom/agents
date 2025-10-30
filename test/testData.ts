@@ -13,30 +13,56 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-export const compileAgentScriptResponseSuccess = {
-  status: 'success',
+import type { CompileAgentScriptResponse } from '../src/types';
+
+export const compileAgentScriptResponseSuccess: CompileAgentScriptResponse = {
+  status: 'success' as const,
   compiledArtifact: {
     schemaVersion: '2.0',
     globalConfiguration: {
       developerName: 'test_agent_v1',
+      label: '',
+      description: '',
+      enableEnhancedEventLogs: false,
+      agentType: '',
+      templateName: '',
+      defaultAgentUser: '',
+      defaultOutboundRouting: '',
+      contextVariables: [],
     },
     agentVersion: {
       developerName: 'test_agent_v1',
       plannerType: 'Atlas__ConcurrentMultiAgentOrchestration',
       systemMessages: [],
       modalityParameters: {
-        voice: null,
-        language: null,
+        voice: {
+          inboundModel: null,
+          inboundFillerWordsDetection: null,
+          outboundVoice: null,
+          outboundModel: null,
+          outboundSpeed: null,
+          outboundStyleExaggeration: null,
+        },
+        language: {
+          defaultLocale: 'en_US',
+          additionalLocales: [],
+          allAdditionalLocales: false,
+        },
       },
-      additionalParameters: null,
-      company: null,
-      role: null,
+      additionalParameters: false,
+      company: 'test',
+      role: 'test',
       stateVariables: [],
-      initialNode: null,
+      initialNode: 'test',
       nodes: [],
       knowledgeDefinitions: null,
     },
   },
+  errors: [],
+  syntacticMap: {
+    blocks: [],
+  },
+  dslVersion: '0.0.3.rc29',
 };
 
 export const compileAgentScriptResponseFailure = {
