@@ -94,19 +94,8 @@ describe('Agents', () => {
       .withArgs(sinon.match({ url: `${connection.instanceUrl}/agentforce/bootstrap/nameduser` }))
       // eslint-disable-next-line camelcase
       .resolves({ access_token: 'test_access_token' })
-      .withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/compile') }))
-      .resolves({
-        status: 'success',
-        compiledArtifact: {
-          schemaVersion: '2.0',
-          globalConfiguration: {
-            developerName: 'test_agent_v1',
-          },
-          agentVersion: {
-            developerName: 'test_agent_v1',
-          },
-        },
-      });
+      .withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/scripts') }))
+      .resolves(compileAgentScriptResponseSuccess);
     const output = await Agent.compileAgentScript(connection, 'AgentScriptContent');
     expect(output).to.have.property('status', 'success');
     expect(output).to.have.property('compiledArtifact').and.be.an('object');
@@ -136,7 +125,7 @@ describe('Agents', () => {
 
     it('compileAgentScript should return raw response on compilation failure', async () => {
       requestStub
-        .withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/compile') }))
+        .withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/scripts') }))
         .resolves(compileAgentScriptResponseFailure);
 
       const result = await Agent.compileAgentScript(connection, 'Invalid AgentScriptContent');
@@ -149,7 +138,7 @@ describe('Agents', () => {
 
     it('compileAgentScript should throw SfError on an exception during the request', async () => {
       requestStub
-        .withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/compile') }))
+        .withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/scripts') }))
         .rejects(new Error('Some error'));
 
       try {
@@ -163,7 +152,7 @@ describe('Agents', () => {
 
     it('compileAgentScript should return success response on a successful compilation', async () => {
       requestStub
-        .withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/compile') }))
+        .withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/scripts') }))
         .resolves(compileAgentScriptResponseSuccess);
 
       const output = await Agent.compileAgentScript(connection, '');
@@ -188,7 +177,7 @@ describe('Agents', () => {
         }
       `;
 
-      requestStub.withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/compile') })).resolves({
+      requestStub.withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/scripts') })).resolves({
         status: 'success',
         compiledArtifact: {
           schemaVersion: '2.0',
