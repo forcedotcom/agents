@@ -100,18 +100,13 @@ describe('AgentSimulate', () => {
 
       // Start a new session (should clear the previous one)
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'agentSimulate-Start');
-      const agentSimulateForSecondStart = new AgentSimulate(connection, agentFilePath, true);
-      const secondResult = await agentSimulateForSecondStart.start();
+      const secondResult = await agentSimulate.start();
       expect(secondResult.sessionId).to.equal(session);
 
       // Send a different message in the second session
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'agentSimulate-Send');
-      const agentSimulateForSecondSend = new AgentSimulate(connection, agentFilePath, true);
-      // Manually set the compiled agent so send() can work
-      // @ts-expect-error - accessing private property for testing
-      agentSimulateForSecondSend.compiledAgent = agentSimulateForSecondStart.compiledAgent;
       const secondMessage = 'Hello, second message';
-      await agentSimulateForSecondSend.send(secondResult.sessionId, secondMessage);
+      await agentSimulateForSend.send(firstResult.sessionId, secondMessage);
 
       // Verify only the second session entries exist (first message should be gone)
       entries = await readTranscriptEntries(agentApiName);
