@@ -252,7 +252,7 @@ export class AgentSimulate extends AgentPreviewBase {
     const user = this.compiledAgent?.globalConfiguration.defaultAgentUser ?? this.connection.getUsername()!;
 
     const userId = (
-      await this.connection.singleRecordQuery<{ Id: string }>(`SELECT Id FROM Users WHERE Name = '${user}'`)
+      await this.connection.singleRecordQuery<{ Id: string }>(`SELECT Id FROM User WHERE Username = '${user}'`)
     ).Id;
 
     this.apexTraceFlag = await findTraceFlag(this.connection, userId);
