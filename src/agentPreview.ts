@@ -16,6 +16,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { Connection, Messages, SfError } from '@salesforce/core';
+import { env } from '@salesforce/kit';
 import { Agent } from './agent';
 import { AgentPreviewBase } from './agentPreviewBase';
 import {
@@ -25,6 +26,7 @@ import {
   type ApiStatus,
   type EndReason,
 } from './types.js';
+import { appendTranscriptEntry } from './utils';
 import { createTraceFlag, findTraceFlag, getDebugLog } from './apexUtils';
 
 Messages.importMessagesDirectory(__dirname);
@@ -57,7 +59,9 @@ const messages = Messages.loadMessages('@salesforce/agents', 'agentPreview');
  * `agentPreview.toggleApexDebugMode(true);`
  */
 export class AgentPreview extends AgentPreviewBase {
-  protected readonly apiBase = 'https://api.salesforce.com/einstein/ai-agent/v1';
+  protected readonly apiBase = `https://${
+    env.getBoolean('SF_TEST_API') ? 'test.' : ''
+  }api.salesforce.com/einstein/ai-agent/v1`;
   private readonly botId: string;
 
   /**
@@ -95,7 +99,20 @@ export class AgentPreview extends AgentPreviewBase {
     };
 
     try {
-      return await this.maybeMock.request<AgentPreviewStartResponse>('POST', url, body);
+      const response = await this.maybeMock.request<AgentPreviewStartResponse>('POST', url, body);
+      // Persist any initial agent messages (welcome, etc.)
+
+      await appendTranscriptEntry({
+        timestamp: new Date().toISOString(),
+        agentId: this.botId,
+        sessionId: response.sessionId,
+        role: 'agent',
+        text: response.messages.map((m) => m.message).join('\n'),
+        raw: response.messages,
+        event: 'start',
+      });
+
+      return response;
     } catch (err) {
       throw SfError.wrap(err);
     }
@@ -132,6 +149,27 @@ export class AgentPreview extends AgentPreviewBase {
         await this.ensureTraceFlag();
       }
       const response = await this.maybeMock.request<AgentPreviewSendResponse>('POST', url, body);
+      // Save user entry
+      await appendTranscriptEntry({
+        timestamp: new Date().toISOString(),
+        agentId: this.botId,
+        sessionId,
+        role: 'user',
+        text: message,
+      });
+      // Save agent response entry
+      const agentText = (response.messages ?? [])
+        .map((m) => m.message)
+        .filter(Boolean)
+        .join('\n');
+      await appendTranscriptEntry({
+        timestamp: new Date().toISOString(),
+        agentId: this.botId,
+        sessionId,
+        role: 'agent',
+        text: agentText || undefined,
+        raw: response.messages,
+      });
       if (this.apexDebugMode) {
         // get apex debug logs and look for a log within the start and end time
         const apexLog = await getDebugLog(this.connection, start, Date.now());
@@ -161,9 +199,19 @@ export class AgentPreview extends AgentPreviewBase {
     this.logger.debug(`Ending agent preview session for botId: ${this.botId} with sessionId: ${sessionId}`);
     try {
       // https://developer.salesforce.com/docs/einstein/genai/guide/agent-api-examples.html#end-session
-      return await this.maybeMock.request<AgentPreviewEndResponse>('DELETE', url, undefined, {
+      const response = await this.maybeMock.request<AgentPreviewEndResponse>('DELETE', url, undefined, {
         'x-session-end-reason': reason,
       });
+      await appendTranscriptEntry({
+        timestamp: new Date().toISOString(),
+        agentId: this.botId,
+        sessionId,
+        role: 'agent',
+        event: 'end',
+        reason,
+        raw: response.messages,
+      });
+      return response;
     } catch (err) {
       throw SfError.wrap(err);
     }
@@ -175,8 +223,7 @@ export class AgentPreview extends AgentPreviewBase {
    * @returns `ApiStatus`
    */
   public async status(): Promise<ApiStatus> {
-    const base = 'https://test.api.salesforce.com';
-    const url = `${base}/einstein/ai-agent/v1/status`;
+    const url = `https://${env.getBoolean('SF_TEST_API') ? 'test.' : ''}api.salesforce.com/einstein/ai-agent/v1/status`;
 
     try {
       return await this.maybeMock.request<ApiStatus>('GET', url);

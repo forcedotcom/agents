@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 import { readdirSync, statSync } from 'node:fs';
+import { mkdir, appendFile, readFile } from 'node:fs/promises';
 import * as path from 'node:path';
-import { Connection, SfError } from '@salesforce/core';
+import { Connection, SfError, SfProject } from '@salesforce/core';
 import { NamedUserJwtResponse } from './types';
 
 export const metric = ['completeness', 'coherence', 'conciseness', 'output_latency_milliseconds'] as const;
@@ -207,5 +208,69 @@ export const useNamedUserJwt = async (connection: Connection): Promise<Connectio
       message: 'Error obtaining API token',
       cause: error,
     });
+  }
+};
+
+// ====================================================
+//               Transcript Utilities
+// ====================================================
+
+export type TranscriptRole = 'user' | 'agent';
+
+export type TranscriptEntry = {
+  timestamp: string;
+  agentId: string; // botId for published agents, developerName for .agent files
+  sessionId: string;
+  role: TranscriptRole;
+  text?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  raw?: any;
+  event?: 'start' | 'end';
+  reason?: string;
+};
+
+const resolveProjectLocalSfdx = async (): Promise<string | undefined> => {
+  try {
+    const project = await SfProject.resolve();
+    return path.join(project.getPath(), '.sfdx');
+  } catch (_e) {
+    return undefined;
+  }
+};
+
+const getConversationDir = async (agentId: string): Promise<string> => {
+  const base = (await resolveProjectLocalSfdx()) ?? path.join(process.cwd(), '.sfdx');
+  const dir = path.join(base, 'agents', 'conversations', agentId);
+  await mkdir(dir, { recursive: true });
+  return dir;
+};
+
+/**
+ * Append a transcript entry to a per-session JSONL file under the project local .sfdx folder.
+ * Path: <project>/.sfdx/agents/conversations/<agentId>/<sessionId>.jsonl
+ */
+export const appendTranscriptEntry = async (entry: TranscriptEntry): Promise<void> => {
+  const dir = await getConversationDir(entry.agentId);
+  const filePath = path.join(dir, `${entry.sessionId}.jsonl`);
+  const line = `${JSON.stringify(entry)}\n`;
+  await appendFile(filePath, line);
+};
+
+/**
+ * Read and parse a session's transcript entries from JSONL.
+ *
+ * @returns Array of TranscriptEntry in file order (chronological append order).
+ */
+export const readTranscriptEntries = async (agentId: string, sessionId: string): Promise<TranscriptEntry[]> => {
+  const dir = await getConversationDir(agentId);
+  const filePath = path.join(dir, `${sessionId}.jsonl`);
+  try {
+    const data = await readFile(filePath, 'utf-8');
+    return data
+      .split('\n')
+      .filter((l) => l.trim().length > 0)
+      .map((l) => JSON.parse(l) as TranscriptEntry);
+  } catch (_e) {
+    return [];
   }
 };

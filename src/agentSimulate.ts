@@ -15,8 +15,10 @@
  */
 
 import { readFile } from 'node:fs/promises';
+import { basename } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Connection, Lifecycle, SfError } from '@salesforce/core';
+import { env } from '@salesforce/kit';
 import { Agent } from './agent';
 import { AgentPreviewBase } from './agentPreviewBase';
 import {
@@ -27,6 +29,7 @@ import {
   PlannerResponse,
 } from './types.js';
 import { createTraceFlag, findTraceFlag, getDebugLog } from './apexUtils';
+import { appendTranscriptEntry } from './utils';
 
 /**
  * A service to simulate interactions with an agent using a local .agent file.
@@ -60,7 +63,9 @@ export class AgentSimulate extends AgentPreviewBase {
    * The client can specify whether the actions will run in a simulated mode ("mock actions", no side effects, mockActions=true) or a non-simulated mode ("real actions", actions with side effects, mockActions=false)
    */
   public mockActions: boolean;
-  protected readonly apiBase = 'https://test.api.salesforce.com/einstein/ai-agent';
+  protected readonly apiBase = `https://${
+    env.getBoolean('SF_TEST_API') ? 'test.' : ''
+  }api.salesforce.com/einstein/ai-agent`;
   private readonly agentFilePath: string;
   private compiledAgent?: AgentJson;
 
@@ -121,11 +126,23 @@ export class AgentSimulate extends AgentPreviewBase {
 
     try {
       void Lifecycle.getInstance().emit('agents:simulation-starting', {});
-      return await this.maybeMock.request<AgentPreviewStartResponse>(
+      const response = await this.maybeMock.request<AgentPreviewStartResponse>(
         'POST',
         `${this.apiBase}/v1.1/preview/sessions`,
         body
       );
+      const agentIdForStorage = basename(this.agentFilePath);
+
+      await appendTranscriptEntry({
+        timestamp: new Date().toISOString(),
+        agentId: agentIdForStorage,
+        sessionId: response.sessionId,
+        role: 'agent',
+        text: response.messages.map((m) => m.message).join('\n'),
+        raw: response.messages,
+        event: 'start',
+      });
+      return response;
     } catch (err) {
       throw SfError.wrap(err);
     }
@@ -139,6 +156,9 @@ export class AgentSimulate extends AgentPreviewBase {
    * @returns `AgentPreviewSendResponse`
    */
   public async send(sessionId: string, message: string): Promise<AgentPreviewSendResponse> {
+    if (!this.compiledAgent) {
+      throw new SfError('Agent not compiled, please call .start() first');
+    }
     const url = `${this.apiBase}/v1.1/preview/sessions/${sessionId}/messages`;
     const body = {
       message: {
@@ -149,13 +169,30 @@ export class AgentSimulate extends AgentPreviewBase {
       variables: [],
     };
     this.logger.debug(`Sending message with apexDebugMode ${this.apexDebugMode ? 'enabled' : 'disabled'}`);
+    const agentIdForStorage = basename(this.agentFilePath);
 
     try {
       const start = Date.now();
       if (this.apexDebugMode && !this.mockActions) {
         await this.ensureTraceFlag();
       }
+      await appendTranscriptEntry({
+        timestamp: new Date().toISOString(),
+        agentId: agentIdForStorage,
+        sessionId,
+        role: 'user',
+        text: message,
+      });
       const response = await this.maybeMock.request<AgentPreviewSendResponse>('POST', url, body);
+
+      await appendTranscriptEntry({
+        timestamp: new Date().toISOString(),
+        agentId: agentIdForStorage,
+        sessionId,
+        role: 'agent',
+        text: response.messages.map((m) => m.message).join('\n'),
+        raw: response.messages,
+      });
       if (this.apexDebugMode && !this.mockActions) {
         const apexLog = await getDebugLog(this.connection, start, Date.now());
         if (apexLog) {

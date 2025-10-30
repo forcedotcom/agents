@@ -20,7 +20,7 @@ import { stat, readdir, readFile, writeFile } from 'node:fs/promises';
 import { XMLBuilder, XMLParser } from 'fast-xml-parser';
 import { Connection, Lifecycle, Logger, Messages, SfError, SfProject, generateApiName } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
-import { Duration } from '@salesforce/kit';
+import { Duration, env } from '@salesforce/kit';
 import nock from 'nock';
 import {
   type AgentCreateConfig,
@@ -369,7 +369,9 @@ topic escalation:
     // Ensure we use the correct connection for this API call
     const orgJwtConnection = await useNamedUserJwt(connection);
 
-    const url = 'https://api.salesforce.com/einstein/ai-agent/v1.1/authoring/compile';
+    const url = `https://${
+      env.getBoolean('SF_TEST_API') ? 'test.' : ''
+    }api.salesforce.com/einstein/ai-agent/v1.1/authoring/scripts`;
 
     getLogger().debug(`Compiling .agent : ${agentScriptContent}`);
     const compileData = {

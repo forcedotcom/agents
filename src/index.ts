@@ -76,7 +76,7 @@ export {
   type PlannerResponseStep,
 } from './types';
 
-export { metric, findAuthoringBundle } from './utils';
+export { metric, findAuthoringBundle, readTranscriptEntries } from './utils';
 export { Agent, AgentCreateLifecycleStages } from './agent';
 export { AgentTester } from './agentTester';
 export { AgentTest, AgentTestCreateLifecycleStages } from './agentTest';
