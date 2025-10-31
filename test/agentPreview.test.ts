@@ -15,10 +15,12 @@
  */
 
 import { join } from 'node:path';
+import { rm } from 'node:fs/promises';
 import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection, SfError } from '@salesforce/core';
 import { AgentPreview } from '../src/agentPreview';
+import { readTranscriptEntries } from '../src/utils';
 
 describe('AgentPreview', () => {
   const $$ = new TestContext();
@@ -37,8 +39,15 @@ describe('AgentPreview', () => {
     $$.SANDBOXES.CONNECTION.restore();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     delete process.env.SF_MOCK_DIR;
+    // Clean up any transcript files created during tests
+    try {
+      const sfdxPath = join(process.cwd(), '.sfdx');
+      await rm(sfdxPath, { recursive: true, force: true });
+    } catch {
+      // Directory doesn't exist, that's fine
+    }
   });
 
   describe('start', () => {
@@ -101,7 +110,7 @@ describe('AgentPreview', () => {
         .returns(1_747_054_800_000);
 
       const agentPreview = new AgentPreview(connection, agentId);
-      agentPreview.toggleApexDebugMode(true);
+      agentPreview.setApexDebugMode(true);
       // @ts-expect-error - private property
       expect(agentPreview.apexDebugMode).to.be.true;
       // @ts-expect-error - private property
@@ -131,7 +140,7 @@ describe('AgentPreview', () => {
         .returns(1_747_049_000_000);
 
       const agentPreview = new AgentPreview(connection, agentId);
-      agentPreview.toggleApexDebugMode(true);
+      agentPreview.setApexDebugMode(true);
       // @ts-expect-error - private property
       expect(agentPreview.apexDebugMode).to.be.true;
       // @ts-expect-error - private property
@@ -160,7 +169,7 @@ describe('AgentPreview', () => {
         .returns(1_747_054_800_000);
 
       const agentPreview = new AgentPreview(connection, agentId);
-      agentPreview.toggleApexDebugMode(true);
+      agentPreview.setApexDebugMode(true);
       // @ts-expect-error - private property
       expect(agentPreview.apexDebugMode).to.be.true;
       // @ts-expect-error - private property
@@ -210,6 +219,20 @@ describe('AgentPreview', () => {
         // @ts-expect-error We just confirmed it's an SfError
         expect((err as SfError).cause.message).to.include('V6Session not found for sessionId');
       }
+    });
+  });
+
+  describe('transcript saving', () => {
+    it('should save transcript entries during start', async () => {
+      process.env.SF_MOCK_DIR = join('test', 'mocks', 'agentPreview-Start');
+      const agentPreview = new AgentPreview(connection, agentId);
+
+      const result = await agentPreview.start();
+      expect(result.sessionId).to.equal(session);
+
+      // Verify transcript was saved (basic check)
+      const entries = await readTranscriptEntries(agentId);
+      expect(entries).to.have.length.greaterThan(0);
     });
   });
 });

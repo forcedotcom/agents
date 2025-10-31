@@ -94,19 +94,8 @@ describe('Agents', () => {
       .withArgs(sinon.match({ url: `${connection.instanceUrl}/agentforce/bootstrap/nameduser` }))
       // eslint-disable-next-line camelcase
       .resolves({ access_token: 'test_access_token' })
-      .withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/compile') }))
-      .resolves({
-        status: 'success',
-        compiledArtifact: {
-          schemaVersion: '2.0',
-          globalConfiguration: {
-            developerName: 'test_agent_v1',
-          },
-          agentVersion: {
-            developerName: 'test_agent_v1',
-          },
-        },
-      });
+      .withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/scripts') }))
+      .resolves(compileAgentScriptResponseSuccess);
     const output = await Agent.compileAgentScript(connection, 'AgentScriptContent');
     expect(output).to.have.property('status', 'success');
     expect(output).to.have.property('compiledArtifact').and.be.an('object');
@@ -125,7 +114,8 @@ describe('Agents', () => {
         instanceUrl: connection.instanceUrl,
       });
       requestStub = $$.SANDBOX.stub(connection, 'request');
-      requestStub.withArgs(sinon.match({ url: `${connection.instanceUrl}/agentforce/bootstrap/nameduser` }))
+      requestStub
+        .withArgs(sinon.match({ url: `${connection.instanceUrl}/agentforce/bootstrap/nameduser` }))
         // eslint-disable-next-line camelcase
         .resolves({ access_token: 'test_access_token' });
     });
@@ -134,7 +124,8 @@ describe('Agents', () => {
     });
 
     it('compileAgentScript should return raw response on compilation failure', async () => {
-      requestStub.withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/compile') }))
+      requestStub
+        .withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/scripts') }))
         .resolves(compileAgentScriptResponseFailure);
 
       const result = await Agent.compileAgentScript(connection, 'Invalid AgentScriptContent');
@@ -144,11 +135,12 @@ describe('Agents', () => {
       expect(result.errors[0]).to.have.property('errorType', 'SyntaxError');
       expect(result.errors[0]).to.have.property('description', 'Invalid syntax in agent script');
     });
-  
+
     it('compileAgentScript should throw SfError on an exception during the request', async () => {
-      requestStub.withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/compile') }))
+      requestStub
+        .withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/scripts') }))
         .rejects(new Error('Some error'));
-  
+
       try {
         await Agent.compileAgentScript(connection, 'AgentScriptContent');
         expect.fail('Expected compileAgentScript to throw an error');
@@ -157,19 +149,20 @@ describe('Agents', () => {
         expect((error as SfError).message).to.include('Some error');
       }
     });
-  
-    it('compileAgentScript should return success response on a successful compilation', async () => {
-      requestStub.withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/compile') }))
-        .resolves(compileAgentScriptResponseSuccess);
-  
-    const output = await Agent.compileAgentScript(connection, '');
 
-    expect(output).to.have.property('status', 'success');
-    expect(output).to.have.property('compiledArtifact').and.be.an('object');
-    expect(output.compiledArtifact!).to.have.property('schemaVersion', '2.0');
-    expect(output.compiledArtifact!.globalConfiguration.developerName).to.equal('test_agent_v1');
+    it('compileAgentScript should return success response on a successful compilation', async () => {
+      requestStub
+        .withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/scripts') }))
+        .resolves(compileAgentScriptResponseSuccess);
+
+      const output = await Agent.compileAgentScript(connection, '');
+
+      expect(output).to.have.property('status', 'success');
+      expect(output).to.have.property('compiledArtifact').and.be.an('object');
+      expect(output.compiledArtifact!).to.have.property('schemaVersion', '2.0');
+      expect(output.compiledArtifact!.globalConfiguration.developerName).to.equal('test_agent_v1');
     });
-  
+
     it('compileAgentScript should handle complex AgentScriptContent', async () => {
       const complexAgentScript = `
         agent ComplexAgent {
@@ -183,27 +176,26 @@ describe('Agents', () => {
           }
         }
       `;
-  
-      requestStub.withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/compile') }))
-        .resolves({
-          status: 'success',
-          compiledArtifact: {
-            schemaVersion: '2.0',
-            globalConfiguration: {
-              developerName: 'complex_agent',
-            },
-            agentVersion: {
-              developerName: 'complex_agent',
-            },
-          },
-        });
-  
-    const output = await Agent.compileAgentScript(connection, complexAgentScript);
 
-    expect(output).to.have.property('status', 'success');
-    expect(output).to.have.property('compiledArtifact').and.be.an('object');
-    expect(output.compiledArtifact!).to.have.property('schemaVersion', '2.0');
-    expect(output.compiledArtifact!.globalConfiguration.developerName).to.equal('complex_agent');
+      requestStub.withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/scripts') })).resolves({
+        status: 'success',
+        compiledArtifact: {
+          schemaVersion: '2.0',
+          globalConfiguration: {
+            developerName: 'complex_agent',
+          },
+          agentVersion: {
+            developerName: 'complex_agent',
+          },
+        },
+      });
+
+      const output = await Agent.compileAgentScript(connection, complexAgentScript);
+
+      expect(output).to.have.property('status', 'success');
+      expect(output).to.have.property('compiledArtifact').and.be.an('object');
+      expect(output.compiledArtifact!).to.have.property('schemaVersion', '2.0');
+      expect(output.compiledArtifact!.globalConfiguration.developerName).to.equal('complex_agent');
     });
   });
 

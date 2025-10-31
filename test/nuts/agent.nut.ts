@@ -31,15 +31,17 @@ async function waitForEinsteinReady(connection: Connection, maxAttempts = 30): P
   for (let i = 0; i < maxAttempts; i++) {
     try {
       // Check Agent API status using direct HTTP call
-      const statusResponse = await connection.request<{ status: 'UP' | 'DOWN' }>({ // eslint-disable-line no-await-in-loop
+      // eslint-disable-next-line no-await-in-loop
+      const statusResponse = await connection.request<{ status: 'UP' | 'DOWN' }>({
+        // eslint-disable-line no-await-in-loop
         method: 'GET',
         url: 'https://api.salesforce.com/einstein/ai-agent/v1/status',
         headers: {
-          'x-salesforce-region': 'us-west-2'
-        }
+          'x-salesforce-region': 'us-west-2',
+        },
       });
 
-      if (statusResponse.status === 'UP') {;
+      if (statusResponse.status === 'UP') {
         return;
       }
     } catch (error) {

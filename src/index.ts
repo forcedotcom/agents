@@ -15,6 +15,18 @@
  */
 
 export {
+  // Agent Runner Types
+  type AgentInteractionBase,
+  type BaseAgentConfig,
+  type AgentPreviewStartResponse,
+  type AgentPreviewSendResponse,
+  type AgentPreviewEndResponse,
+  type EndReason,
+  type ApiStatus,
+  type AgentJson,
+  type AgentCompilationSuccess,
+
+  // Agent Creation Types
   type AgentScriptContent,
   type AgentCreateConfig,
   type AgentCreateResponse,
@@ -23,13 +35,6 @@ export {
   type AgentOptions,
   type AgentTone,
   type AgentType,
-  type AgentPreviewMessageLinks,
-  type AgentPreviewMessage,
-  type AgentPreviewStartResponse,
-  type AgentPreviewSendResponse,
-  type AgentPreviewEndResponse,
-  type AgentTraceResponse,
-  type AgentTraceStep,
   type BotMetadata,
   type BotVersionMetadata,
   type CompilationError,
@@ -37,17 +42,47 @@ export {
   type DraftAgentTopicsBody,
   type DraftAgentTopicsResponse,
   type AvailableDefinition,
+
+  // Agent Preview Types
+  type AgentPreviewMessageLinks,
+  type AgentPreviewMessage,
+  type AgentPreviewError,
+  AgentSource,
+  type ScriptAgent,
+  type PublishedAgent,
+
+  // Agent Testing Types
   type AgentTestResultsResponse,
   type AgentTestStartResponse,
   type AgentTestStatusResponse,
   type TestCaseResult,
   type TestStatus,
+  type AgentTestConfig,
+  type TestCase,
+  type TestSpec,
+  type MetadataMetric,
+  type MetadataExpectation,
+  type MetadataCustomEvaluation,
+  type AiEvaluationDefinition,
+
+  // Agent Trace Types
+  type AgentTraceResponse,
+  type AgentTraceStep,
+  type UserInputStep,
+  type LLMExecutionStep,
+  type UpdateTopicStep,
+  type EventStep,
+  type ReasoningStep,
+  type PlannerResponseStep,
 } from './types';
-export { metric, findAuthoringBundle } from './utils';
+
+export { metric, findAuthoringBundle, readTranscriptEntries } from './utils';
 export { Agent, AgentCreateLifecycleStages } from './agent';
 export { AgentTester } from './agentTester';
 export { AgentTest, AgentTestCreateLifecycleStages } from './agentTest';
 export { AgentTrace } from './agentTrace';
 export { convertTestResultsToFormat, humanFriendlyName } from './agentTestResults';
 export { AgentPreview } from './agentPreview';
+export { AgentSimulate } from './agentSimulate';
 export { writeDebugLog } from './apexUtils';
+export { AgentPreviewBase } from './agentPreviewBase';

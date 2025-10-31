@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 import { readdirSync, statSync } from 'node:fs';
+import { mkdir, appendFile, readFile, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
-import { Connection, SfError } from '@salesforce/core';
+import { Connection, SfError, SfProject } from '@salesforce/core';
 import { NamedUserJwtResponse } from './types';
 
 export const metric = ['completeness', 'coherence', 'conciseness', 'output_latency_milliseconds'] as const;
@@ -126,6 +127,38 @@ export const findAuthoringBundle = (dirOrDirs: string | string[], botName: strin
   return undefined;
 };
 
+/**
+ * Find all local agent files in a directory by recursively searching for files ending with '.agent'
+ *
+ * @param dir - The directory to start searching from
+ * @returns Array of paths to agent files
+ */
+export const findLocalAgents = (dir: string): string[] => {
+  const results: string[] = [];
+
+  try {
+    const files = readdirSync(dir);
+
+    for (const file of files) {
+      const filePath = path.join(dir, file);
+      const statResult = statSync(filePath, { throwIfNoEntry: false });
+
+      if (!statResult) continue;
+
+      if (statResult.isDirectory()) {
+        results.push(...findLocalAgents(filePath));
+      } else if (file.endsWith('.agent')) {
+        results.push(filePath);
+      }
+    }
+  } catch (err) {
+    // Directory doesn't exist or can't be read
+    return [];
+  }
+
+  return results;
+};
+
 export const useNamedUserJwt = async (connection: Connection): Promise<Connection> => {
   // Refresh the connection to ensure we have the latest, valid access token
   try {
@@ -175,5 +208,78 @@ export const useNamedUserJwt = async (connection: Connection): Promise<Connectio
       message: 'Error obtaining API token',
       cause: error,
     });
+  }
+};
+
+// ====================================================
+//               Transcript Utilities
+// ====================================================
+
+export type TranscriptRole = 'user' | 'agent';
+
+export type TranscriptEntry = {
+  timestamp: string;
+  agentId: string; // botId for published agents, developerName for .agent files
+  sessionId: string;
+  role: TranscriptRole;
+  text?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  raw?: any;
+  reason?: string;
+};
+
+const resolveProjectLocalSfdx = async (): Promise<string | undefined> => {
+  try {
+    const project = await SfProject.resolve();
+    return path.join(project.getPath(), '.sfdx');
+  } catch (_e) {
+    return undefined;
+  }
+};
+
+const getConversationDir = async (agentId: string): Promise<string> => {
+  const base = (await resolveProjectLocalSfdx()) ?? path.join(process.cwd(), '.sfdx');
+  const dir = path.join(base, 'agents', agentId);
+  await mkdir(dir, { recursive: true });
+  return dir;
+};
+
+const getLastConversationPath = async (agentId: string): Promise<string> =>
+  path.join(await getConversationDir(agentId), 'history.json');
+
+/**
+ * Append a transcript entry to the last conversation JSON file under the project local .sfdx folder.
+ * If the entry has event: 'start', this will clear the previous conversation and start fresh.
+ * Path: <project>/.sfdx/agents/conversations/<agentId>/history.json
+ */
+export const appendTranscriptEntry = async (entry: TranscriptEntry, newSession = false): Promise<void> => {
+  const filePath = await getLastConversationPath(entry.agentId);
+  const line = `${JSON.stringify(entry)}\n`;
+
+  // If this is a new session start, clear the file first
+  if (newSession) {
+    await writeFile(filePath, line, 'utf-8');
+  } else {
+    await appendFile(filePath, line);
+  }
+};
+
+/**
+ * Read and parse the last conversation's transcript entries from JSON.
+ * Path: <project>/.sfdx/agents/conversations/<agentId>/history.json
+ *
+ * @param agentId The agent's API name (developerName)
+ * @returns Array of TranscriptEntry in file order (chronological append order).
+ */
+export const readTranscriptEntries = async (agentId: string): Promise<TranscriptEntry[]> => {
+  const filePath = await getLastConversationPath(agentId);
+  try {
+    const data = await readFile(filePath, 'utf-8');
+    return data
+      .split('\n')
+      .filter((l) => l.trim().length > 0)
+      .map((l) => JSON.parse(l) as TranscriptEntry);
+  } catch (_e) {
+    return [];
   }
 };

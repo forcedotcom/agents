@@ -1,0 +1,14 @@
+{
+  "messages": [
+    {
+      "type": "Text",
+      "id": "1b2c3d4e-5f6g-7h8i-9j0k-1l2m3n4o5p6q",
+      "feedbackId": "",
+      "planId": "",
+      "isContentSafe": true,
+      "message": "Hi there! I can help you with a few things.",
+      "result": [],
+      "citedReferences": []
+    }
+  ]
+}
