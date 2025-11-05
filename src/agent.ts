@@ -382,7 +382,7 @@ topic escalation:
           content: agentScriptContent,
         },
       ],
-      afScriptVersion: '1.0.0',
+      afScriptVersion: '1.0.1',
     };
 
     const headers = {
