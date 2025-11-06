@@ -16,12 +16,11 @@
 
 import { inspect } from 'node:util';
 import * as path from 'node:path';
-import { stat, readdir, readFile, writeFile } from 'node:fs/promises';
-import { XMLBuilder, XMLParser } from 'fast-xml-parser';
+import { stat, readdir, writeFile } from 'node:fs/promises';
 import { Connection, Lifecycle, Logger, Messages, SfError, SfProject, generateApiName } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { Duration, env } from '@salesforce/kit';
-import nock from 'nock';
+// import nock from 'nock';
 import {
   type AgentCreateConfig,
   type AgentCreateResponse,
@@ -35,13 +34,13 @@ import {
   type CompileAgentScriptResponse,
   type DraftAgentTopicsBody,
   type DraftAgentTopicsResponse,
-  PublishAgentJsonResponse,
   AgentScriptContent,
   PublishAgent,
   ExtendedAgentJobSpec,
 } from './types.js';
 import { MaybeMock } from './maybe-mock';
-import { decodeHtmlEntities, findAuthoringBundle, useNamedUserJwt } from './utils';
+import { AgentPublisher } from './agentPublisher';
+import { decodeHtmlEntities, useNamedUserJwt } from './utils';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agents');
@@ -382,7 +381,7 @@ topic escalation:
           content: agentScriptContent,
         },
       ],
-      afScriptVersion: '1.0.0',
+      afScriptVersion: '1.0.1',
     };
 
     const headers = {
@@ -390,8 +389,10 @@ topic escalation:
       'content-type': 'application/json',
     };
 
+
+
     try {
-      return await orgJwtConnection.request<CompileAgentScriptResponse>(
+      const res = await orgJwtConnection.request<CompileAgentScriptResponse>(
         {
           method: 'POST',
           url,
@@ -400,6 +401,15 @@ topic escalation:
         },
         { retry: { maxRetries: 3 } }
       );
+
+      // Save the compiledArtifact to a JSON file in test/mocks
+      if (res.status === 'success' && res.compiledArtifact) {
+        const outputPath = path.join(__dirname, '..', 'test', 'mocks', 'compiledAgentScript.json');
+        await writeFile(outputPath, JSON.stringify(res.compiledArtifact, null, 2));
+        getLogger().debug(`Saved compiled artifact to ${outputPath}`);
+      }
+
+      return res;
     } catch (error) {
       throw SfError.wrap(error);
     }
@@ -419,103 +429,8 @@ topic escalation:
     project: SfProject,
     agentJson: AgentJson
   ): Promise<PublishAgent> {
-    const maybeMock = new MaybeMock(connection);
-    let developerName: string;
-
-    getLogger().debug('Publishing Agent');
-
-    const url = '/einstein/ai-agent/v1.1/authoring/publish';
-    const response = await maybeMock.request<PublishAgentJsonResponse>('POST', url, { agentJson });
-    if (response.botId && response.botVersionId) {
-      // we've published the AgentJson, now we need to:
-      // 1. update the AuthoringBundle's -meta.xml file with response.BotId
-      // 2. retrieve the new Agent metadata that's in the org
-      const defaultPackagePath = path.resolve(project.getDefaultPackage().path);
-
-      try {
-        // First update the AuthoringBundle file with the new BotId
-        // strip the "_v1" or similar from the end of a developerName, if it's present
-        developerName = agentJson.globalConfiguration.developerName.replace(/_v\d$/, '');
-        // Try to find the authoring bundle directory by recursively searching from the default package path
-        const bundleDir = findAuthoringBundle(defaultPackagePath, developerName);
-
-        if (!bundleDir) {
-          throw SfError.create({
-            name: 'Cannot Find Bundle',
-            message: `Cannot find an authoring bundle in ${defaultPackagePath} that matches ${developerName}`,
-          });
-        }
-
-        // Construct the full file path whether we found the directory or not
-        const bundleMetaPath = path.join(bundleDir, `${developerName}.bundle-meta.xml`);
-
-        const xmlParser = new XMLParser({ ignoreAttributes: false });
-        const xmlBuilder = new XMLBuilder({
-          ignoreAttributes: false,
-          format: true,
-          suppressBooleanAttributes: false,
-          suppressEmptyNode: false,
-        });
-
-        const authoringBundle = xmlParser.parse(await readFile(bundleMetaPath, 'utf-8')) as {
-          aiAuthoringBundle: { Target: string };
-        }; // all the typing we'll need
-        authoringBundle.aiAuthoringBundle.Target = developerName;
-
-        await writeFile(bundleMetaPath, xmlBuilder.build(authoringBundle));
-
-        // will unset mocks so that retrieve will work - can be removed when APIs exist
-        nock.restore();
-        nock.cleanAll();
-        nock.enableNetConnect();
-
-        const cs = await ComponentSetBuilder.build({
-          metadata: {
-            metadataEntries: [`Agent:${developerName}`],
-            directoryPaths: [defaultPackagePath],
-          },
-          org: {
-            username: connection.getUsername() as string,
-            exclude: [],
-          },
-        });
-        const retrieve = await cs.retrieve({
-          usernameOrConnection: connection,
-          rootTypesWithDependencies: ['Bot'],
-          merge: true,
-          format: 'source',
-          output: path.resolve(project.getPath(), defaultPackagePath),
-        });
-
-        const retrieveResult = await retrieve.pollStatus();
-
-        if (!retrieveResult.response?.success) {
-          const errMessages = retrieveResult.response?.messages?.toString() ?? 'unknown';
-          const error = messages.createError('agentRetrievalError', [errMessages]);
-          error.actions = [messages.getMessage('agentRetrievalErrorActions')];
-          throw error;
-        }
-      } catch (err) {
-        const error = SfError.wrap(err);
-        if (error.name === 'AgentRetrievalError') {
-          throw error;
-        }
-        throw SfError.create({
-          name: 'AgentRetrievalError',
-          message: messages.getMessage('agentRetrievalError', [error.message]),
-          cause: error,
-          actions: [messages.getMessage('agentRetrievalErrorActions')],
-        });
-      }
-
-      return { ...response, developerName };
-    } else {
-      throw SfError.create({
-        name: 'CreateAgentJsonError',
-        message: response.errorMessage ?? 'unknown',
-        data: response,
-      });
-    }
+    const publisher = new AgentPublisher(connection, project, agentJson);
+    return publisher.publishAgentJson();
   }
 
   /**
@@ -588,7 +503,6 @@ topic escalation:
     }
 
     if (botVersionMetadata.Status === desiredState) {
-      getLogger().debug(`Agent ${botMetadata.DeveloperName} is already ${desiredState}. Nothing to do.`);
       return;
     }
 
@@ -614,3 +528,4 @@ const verifyAgentSpecConfig = (config: AgentJobSpecCreateConfig): void => {
 // Decodes all HTML entities in ai-assist API responses.
 const decodeResponse = <T extends object>(response: T): T =>
   JSON.parse(decodeHtmlEntities(JSON.stringify(response))) as T;
+

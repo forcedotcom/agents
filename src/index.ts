@@ -78,6 +78,7 @@ export {
 
 export { metric, findAuthoringBundle, readTranscriptEntries } from './utils';
 export { Agent, AgentCreateLifecycleStages } from './agent';
+export { AgentPublisher } from './agentPublisher';
 export { AgentTester } from './agentTester';
 export { AgentTest, AgentTestCreateLifecycleStages } from './agentTest';
 export { AgentTrace } from './agentTrace';
