@@ -16,7 +16,7 @@
 
 import { inspect } from 'node:util';
 import * as path from 'node:path';
-import { stat, readdir, writeFile } from 'node:fs/promises';
+import { stat, readdir } from 'node:fs/promises';
 import { Connection, Lifecycle, Logger, Messages, SfError, SfProject, generateApiName } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { Duration, env } from '@salesforce/kit';
@@ -401,14 +401,6 @@ topic escalation:
         },
         { retry: { maxRetries: 3 } }
       );
-
-      // Save the compiledArtifact to a JSON file in test/mocks
-      if (res.status === 'success' && res.compiledArtifact) {
-        const outputPath = path.join(__dirname, '..', 'test', 'mocks', 'compiledAgentScript.json');
-        await writeFile(outputPath, JSON.stringify(res.compiledArtifact, null, 2));
-        getLogger().debug(`Saved compiled artifact to ${outputPath}`);
-      }
-
       return res;
     } catch (error) {
       throw SfError.wrap(error);
