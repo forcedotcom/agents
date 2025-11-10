@@ -20,7 +20,6 @@ import { stat, readdir } from 'node:fs/promises';
 import { Connection, Lifecycle, Logger, Messages, SfError, SfProject, generateApiName } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { Duration, env } from '@salesforce/kit';
-// import nock from 'nock';
 import {
   type AgentCreateConfig,
   type AgentCreateResponse,

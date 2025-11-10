@@ -17,9 +17,11 @@
 import * as path from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { env } from '@salesforce/kit';
 import { XMLBuilder, XMLParser } from 'fast-xml-parser';
 import { Connection, Logger, Messages, SfError, SfProject } from '@salesforce/core';
 import { ComponentSet, ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
+import { MaybeMock } from './maybe-mock';
 import {
   type AgentJson,
   type PublishAgentJsonResponse,
@@ -42,6 +44,7 @@ const getLogger = (): Logger => {
  * Service class responsible for publishing agents to Salesforce orgs
  */
 export class AgentPublisher {
+  private readonly maybeMock: MaybeMock;
   private connection: Connection;
   private project: SfProject;
   private agentJson: AgentJson;
@@ -49,8 +52,9 @@ export class AgentPublisher {
   private bundleMetaPath: string;
   private bundleDir: string;
 
-  // API configuration constants
-  private API_URL = 'https://test.api.salesforce.com/einstein/ai-agent/v1.1/authoring/agents';
+  private API_URL = `https://${
+    env.getBoolean('SF_TEST_API') ? 'test.' : ''
+  }api.salesforce.com/einstein/ai-agent/v1.1/authoring/agents`;
   private readonly API_HEADERS = {
     'x-client-name': 'afdx',
     'content-type': 'application/json',
@@ -63,6 +67,7 @@ export class AgentPublisher {
    * @param project The Salesforce project
    */
   public constructor(connection: Connection, project: SfProject, agentJson: AgentJson) {
+    this.maybeMock = new MaybeMock(connection);
     this.connection = connection;
     this.project = project;
     this.agentJson = agentJson;
@@ -84,25 +89,21 @@ export class AgentPublisher {
     // store the access token so we can restore it afterwards
     const accessToken = this.connection.accessToken;
     // Ensure we use the correct connection for this API call
-    const orgJwtConnection = await useNamedUserJwt(this.connection);
+    await useNamedUserJwt(this.connection);
 
     getLogger().debug('Publishing Agent');
 
-    const body = JSON.stringify({
+    const body = {
       'agentDefinition': this.agentJson,
       'instanceConfig': {
         'endpoint': this.connection.instanceUrl,
       }
-    });
+    };
 
     try {
       const botId = await this.getPublishedBotId(this.developerName);
-      const response = await orgJwtConnection.request<PublishAgentJsonResponse>({
-        method: 'POST',
-        url: botId ? `${this.API_URL}/${botId}/versions` : this.API_URL,
-        headers: this.API_HEADERS,
-        body,
-      }, { retry: { maxRetries: 3 } });
+      const url = botId ? `${this.API_URL}/${botId}/versions` : this.API_URL;
+      const response = await this.maybeMock.request<PublishAgentJsonResponse>('POST', url, body, this.API_HEADERS);
 
       // restore the access token
       this.connection.accessToken = accessToken;
@@ -147,7 +148,7 @@ export class AgentPublisher {
 
     if (!bundleDir) {
       throw SfError.create({
-        name: 'Cannot Find Bundle',
+        name: 'CannotFindBundle',
         message: `Cannot find an authoring bundle in ${defaultPackagePath} that matches ${developerName}`,
       });
     }
@@ -156,7 +157,7 @@ export class AgentPublisher {
 
     if (!existsSync(bundleMetaPath)) {
       throw SfError.create({
-        name: 'Cannot Find Bundle',
+        name: 'CannotFindBundle',
         message: `Cannot find a bundle-meta.xml file in ${bundleDir} that matches ${this.developerName}`,
       });
     }
