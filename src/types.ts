@@ -710,7 +710,7 @@ export type AgentJson = {
     contextVariables: [];
   };
   agentVersion: {
-    developerName: string;
+    developerName: string | null;
     plannerType: string;
     systemMessages: [];
     modalityParameters: {

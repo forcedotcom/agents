@@ -20,8 +20,9 @@ import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection, SfError, SfProject } from '@salesforce/core';
 import { ComponentSetBuilder, ComponentSet, MetadataApiRetrieve } from '@salesforce/source-deploy-retrieve';
 import sinon from 'sinon';
-import { type AgentJson } from '../src/types.js';
-import { Agent, type AgentCreateConfig } from '../src';
+import { Agent, type AgentCreateConfig, type AgentJson } from '../src';
+import * as utils from '../src/utils';
+import { AgentPublisher } from '../src/agentPublisher';
 import { compileAgentScriptResponseFailure, compileAgentScriptResponseSuccess } from './testData';
 
 describe('Agents', () => {
@@ -34,7 +35,7 @@ describe('Agents', () => {
     testOrg = new MockTestOrgData();
     process.env.SF_MOCK_DIR = join('test', 'mocks');
     connection = await testOrg.getConnection();
-    connection.instanceUrl = 'https://mydomain.salesforce.com';
+    connection.instanceUrl = 'https://api.salesforce.com';
     // restore the connection sandbox so that it doesn't override the builtin mocking (MaybeMock)
     $$.SANDBOXES.CONNECTION.restore();
   });
@@ -282,12 +283,25 @@ describe('Agents', () => {
       // Mock failed API response
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishAgentJson-Error');
 
+      // Mock AgentPublisher constructor to avoid bundle validation
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const validateStub = $$.SANDBOX.stub(AgentPublisher.prototype as any, 'validateDeveloperName').returns({
+        developerName: 'test_agent_v1',
+        bundleDir: 'test-bundle-dir',
+        bundleMetaPath: 'test-meta-path',
+      });
+
+      // Mock useNamedUserJwt to return the connection without making HTTP calls
+      $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
+
       try {
         await Agent.publishAgentJson(connection, sfProject, agentJson);
         expect.fail('Expected error was not thrown');
       } catch (err) {
         expect(err).to.be.instanceOf(SfError);
         expect((err as SfError).name).to.equal('CreateAgentJsonError');
+      } finally {
+        validateStub.restore();
       }
     });
   });
