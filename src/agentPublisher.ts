@@ -268,8 +268,7 @@ export class AgentPublisher {
       getLogger().debug(`Agent with developer name ${agentApiName} and id ${queryResult.Id} is already published.`);
       return queryResult.Id;
     } catch (error) {
-      // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
-      getLogger().debug(`Error reading agent metadata: ${error}`);
+      getLogger().debug(`Error reading agent metadata: ${JSON.stringify(error)}`);
       return undefined;
     }
   }
@@ -277,8 +276,8 @@ export class AgentPublisher {
   /**
    * Returns the developerName of the given bot version ID.
    *
-   * @param agentApiName The agent API name
-   * @returns The ID for the published bot
+   * @param botVersionId The Id of the bot version
+   * @returns The developer name of the bot version
    */
   private async getVersionDeveloperName(botVersionId: string): Promise<string> {
     try {
@@ -288,7 +287,6 @@ export class AgentPublisher {
       getLogger().debug(`Bot version with id ${botVersionId} is ${queryResult.DeveloperName}.`);
       return queryResult.DeveloperName;
     } catch (error) {
-      // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
       const err = messages.createError('findBotVersionError', [botVersionId]);
       err.actions = [messages.getMessage('authoringBundleDeploymentErrorActions')];
       throw err;

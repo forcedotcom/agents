@@ -388,10 +388,8 @@ topic escalation:
       'content-type': 'application/json',
     };
 
-
-
     try {
-      const res = await orgJwtConnection.request<CompileAgentScriptResponse>(
+      return await orgJwtConnection.request<CompileAgentScriptResponse>(
         {
           method: 'POST',
           url,
@@ -400,7 +398,6 @@ topic escalation:
         },
         { retry: { maxRetries: 3 } }
       );
-      return res;
     } catch (error) {
       throw SfError.wrap(error);
     }
@@ -494,6 +491,7 @@ topic escalation:
     }
 
     if (botVersionMetadata.Status === desiredState) {
+      getLogger().debug(`Agent ${botMetadata.DeveloperName} is already ${desiredState}. Nothing to do.`);
       return;
     }
 
@@ -519,4 +517,3 @@ const verifyAgentSpecConfig = (config: AgentJobSpecCreateConfig): void => {
 // Decodes all HTML entities in ai-assist API responses.
 const decodeResponse = <T extends object>(response: T): T =>
   JSON.parse(decodeHtmlEntities(JSON.stringify(response))) as T;
-
