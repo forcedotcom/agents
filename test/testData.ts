@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import type { CompileAgentScriptResponse } from '../src/types';
+import type { CompileAgentScriptResponse, AgentJson } from '../src/types';
 
 export const compileAgentScriptResponseSuccess: CompileAgentScriptResponse = {
   status: 'success' as const,
@@ -122,3 +122,45 @@ topic escalation:
    reasoning_instructions:
       >>
            Escalate the conversation to a human agent if the user requests further assistance or if their query cannot be resolved by the agent.`;
+
+export const testAgentJson: AgentJson = {
+  schemaVersion: '2.0',
+  globalConfiguration: {
+    developerName: 'test_agent_v1',
+    label: 'Test Agent',
+    description: 'A test agent',
+    agentType: 'AgentforceServiceAgent',
+    enableEnhancedEventLogs: false,
+    templateName: '',
+    defaultAgentUser: 'test@example.com',
+    defaultOutboundRouting: '',
+    contextVariables: []
+  },
+  agentVersion: {
+    developerName: 'test_agent_v1',
+    company: 'Test Company',
+    role: 'Test Role',
+    plannerType: 'Atlas__ConcurrentMultiAgentOrchestration',
+    systemMessages: [],
+    modalityParameters: {
+      voice: {
+        inboundModel: null,
+        inboundFillerWordsDetection: null,
+        outboundVoice: null,
+        outboundModel: null,
+        outboundSpeed: null,
+        outboundStyleExaggeration: null
+      },
+      language: {
+        defaultLocale: 'en_US',
+        additionalLocales: [],
+        allAdditionalLocales: false
+      }
+    },
+    additionalParameters: false,
+    stateVariables: [],
+    initialNode: 'greeting',
+    nodes: [],
+    knowledgeDefinitions: null
+  }
+};
