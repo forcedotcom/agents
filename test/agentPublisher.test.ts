@@ -20,9 +20,9 @@ import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection, SfError, SfProject } from '@salesforce/core';
 import { ComponentSetBuilder, ComponentSet, MetadataApiRetrieve } from '@salesforce/source-deploy-retrieve';
-import { type AgentJson } from '../src/types.js';
-import { AgentPublisher } from '../src';
+import { type AgentJson } from '../src';
 import * as utils from '../src/utils';
+import { AgentPublisher } from '../src/agentPublisher';
 import { testAgentJson } from './testData';
 
 describe('AgentPublisher', () => {
@@ -83,8 +83,8 @@ describe('AgentPublisher', () => {
         ...agentJson,
         globalConfiguration: {
           ...agentJson.globalConfiguration,
-          developerName: 'nonexistent_agent'
-        }
+          developerName: 'nonexistent_agent',
+        },
       };
 
       expect(() => new AgentPublisher(connection, sfProject, agentJsonNoBundle)).to.throw(SfError);
@@ -102,7 +102,7 @@ describe('AgentPublisher', () => {
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishNewAgent-Success');
       // Mock connection.singleRecordQuery to return undefined (no existing bot)
       $$.SANDBOX.stub(connection, 'singleRecordQuery')
-        .withArgs('SELECT Id FROM BotDefinition WHERE DeveloperName=\'test_agent\'')
+        .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
         .throws(new Error('No records found'));
 
       publisher = new AgentPublisher(connection, sfProject, agentJson);
@@ -121,7 +121,6 @@ describe('AgentPublisher', () => {
       expect(result).to.have.property('developerName', 'test_agent');
       expect(retrieveAgentMetadataStub.calledOnce).to.be.true;
       expect(deployAuthoringBundleStub.calledOnce).to.be.true;
-
     });
 
     it('should publish new version of an existing agent when there is a bot in the org for the given developer name', async () => {
@@ -134,7 +133,7 @@ describe('AgentPublisher', () => {
 
       // Mock connection.singleRecordQuery to return undefined (no existing bot)
       $$.SANDBOX.stub(connection, 'singleRecordQuery')
-        .withArgs('SELECT Id FROM BotDefinition WHERE DeveloperName=\'test_agent\'')
+        .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
         .resolves({ Id: '0Xx000000000001' });
 
       // Mock the private methods
@@ -152,9 +151,9 @@ describe('AgentPublisher', () => {
 
     it('should handle API errors during publishing', async () => {
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishAgentJson-Error');
-      
+
       publisher = new AgentPublisher(connection, sfProject, agentJson);
-      
+
       // Mock useNamedUserJwt to return the connection without making HTTP calls
       $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
 
@@ -175,7 +174,7 @@ describe('AgentPublisher', () => {
       const validateStub = $$.SANDBOX.stub(AgentPublisher.prototype as any, 'validateDeveloperName').returns({
         developerName: 'test_agent',
         bundleDir: 'test-bundle-dir',
-        bundleMetaPath: 'test-meta-path'
+        bundleMetaPath: 'test-meta-path',
       });
 
       const publisher = new AgentPublisher(connection, sfProject, agentJson);
@@ -198,7 +197,7 @@ describe('AgentPublisher', () => {
       const validateStub = $$.SANDBOX.stub(AgentPublisher.prototype as any, 'validateDeveloperName').returns({
         developerName: 'test_agent',
         bundleDir: 'test-bundle-dir',
-        bundleMetaPath: 'test-meta-path'
+        bundleMetaPath: 'test-meta-path',
       });
 
       const publisher = new AgentPublisher(connection, sfProject, agentJson);
@@ -222,7 +221,7 @@ describe('AgentPublisher', () => {
       const validateStub = $$.SANDBOX.stub(AgentPublisher.prototype as any, 'validateDeveloperName').returns({
         developerName: 'test_agent',
         bundleDir: 'test-bundle-dir',
-        bundleMetaPath: 'test-meta-path'
+        bundleMetaPath: 'test-meta-path',
       });
 
       const publisher = new AgentPublisher(connection, sfProject, agentJson);
@@ -245,7 +244,7 @@ describe('AgentPublisher', () => {
       const validateStub = $$.SANDBOX.stub(AgentPublisher.prototype as any, 'validateDeveloperName').returns({
         developerName: 'test_agent',
         bundleDir: 'test-bundle-dir',
-        bundleMetaPath: 'test-meta-path'
+        bundleMetaPath: 'test-meta-path',
       });
 
       const publisher = new AgentPublisher(connection, sfProject, agentJson);
@@ -275,7 +274,7 @@ describe('AgentPublisher', () => {
       const validateStub = $$.SANDBOX.stub(AgentPublisher.prototype as any, 'validateDeveloperName').returns({
         developerName: 'test_agent',
         bundleDir: '/nonexistent/path',
-        bundleMetaPath: '/nonexistent/path/test_agent.bundle-meta.xml'
+        bundleMetaPath: '/nonexistent/path/test_agent.bundle-meta.xml',
       });
 
       const publisher = new AgentPublisher(connection, sfProject, agentJson);
@@ -303,7 +302,7 @@ describe('AgentPublisher', () => {
       const validateStub = $$.SANDBOX.stub(AgentPublisher.prototype as any, 'validateDeveloperName').returns({
         developerName: 'test_agent',
         bundleDir: 'test-bundle-dir',
-        bundleMetaPath: 'test-meta-path'
+        bundleMetaPath: 'test-meta-path',
       });
 
       // Setup successful metadata retrieval mock
@@ -315,9 +314,9 @@ describe('AgentPublisher', () => {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
       $$.SANDBOX.stub(mdApiRetrieve, 'pollStatus').resolves({
         response: {
-          success: true
-        }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          success: true,
+        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
       $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
       const buildStub = $$.SANDBOX.stub(ComponentSetBuilder, 'build').resolves(compSet);
@@ -341,7 +340,7 @@ describe('AgentPublisher', () => {
       const validateStub = $$.SANDBOX.stub(AgentPublisher.prototype as any, 'validateDeveloperName').returns({
         developerName: 'test_agent',
         bundleDir: 'test-bundle-dir',
-        bundleMetaPath: 'test-meta-path'
+        bundleMetaPath: 'test-meta-path',
       });
 
       // Setup failed metadata retrieval mock
@@ -354,9 +353,9 @@ describe('AgentPublisher', () => {
       $$.SANDBOX.stub(mdApiRetrieve, 'pollStatus').resolves({
         response: {
           success: false,
-          messages: ['Retrieval failed']
-        }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          messages: ['Retrieval failed'],
+        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
       $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
       $$.SANDBOX.stub(ComponentSetBuilder, 'build').resolves(compSet);

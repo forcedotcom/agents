@@ -20,9 +20,9 @@ import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection, SfError, SfProject } from '@salesforce/core';
 import { ComponentSetBuilder, ComponentSet, MetadataApiRetrieve } from '@salesforce/source-deploy-retrieve';
 import sinon from 'sinon';
-import { type AgentJson } from '../src/types.js';
-import { Agent, type AgentCreateConfig, AgentPublisher } from '../src';
+import { Agent, type AgentCreateConfig, type AgentJson } from '../src';
 import * as utils from '../src/utils';
+import { AgentPublisher } from '../src/agentPublisher';
 import { compileAgentScriptResponseFailure, compileAgentScriptResponseSuccess } from './testData';
 
 describe('Agents', () => {
@@ -288,7 +288,7 @@ describe('Agents', () => {
       const validateStub = $$.SANDBOX.stub(AgentPublisher.prototype as any, 'validateDeveloperName').returns({
         developerName: 'test_agent_v1',
         bundleDir: 'test-bundle-dir',
-        bundleMetaPath: 'test-meta-path'
+        bundleMetaPath: 'test-meta-path',
       });
 
       // Mock useNamedUserJwt to return the connection without making HTTP calls
