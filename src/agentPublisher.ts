@@ -86,8 +86,6 @@ export class AgentPublisher {
    * @returns Promise<PublishAgent> The publish response
    */
   public async publishAgentJson(): Promise<PublishAgent> {
-    // store the access token so we can restore it afterwards
-    const accessToken = this.connection.accessToken;
     // Ensure we use the correct connection for this API call
     await useNamedUserJwt(this.connection);
 
@@ -105,8 +103,9 @@ export class AgentPublisher {
       const url = botId ? `${this.API_URL}/${botId}/versions` : this.API_URL;
       const response = await this.maybeMock.request<PublishAgentJsonResponse>('POST', url, body, this.API_HEADERS);
 
-      // restore the access token
-      this.connection.accessToken = accessToken;
+      // stop using named user jwt access token
+      delete this.connection.accessToken;
+      await this.connection.refreshAuth();
 
       if (response.botId && response.botVersionId) {
         // we've published the AgentJson, now we need to:
