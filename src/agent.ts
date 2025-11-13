@@ -17,6 +17,7 @@
 import { inspect } from 'node:util';
 import * as path from 'node:path';
 import { stat, readdir } from 'node:fs/promises';
+import { EOL } from 'node:os';
 import { Connection, Lifecycle, Logger, Messages, SfError, SfProject, generateApiName } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { Duration, env } from '@salesforce/kit';
@@ -290,65 +291,64 @@ export class Agent {
    * Creates AgentScript using extended agent job spec data.
    *
    * @param connection The connection to the org.
-   * @param agentJobSpec The agent specification data.
+   * @param agentSpec The agent specification data.
    * @returns Promise<AgentScriptContent> The generated AgentScript as a `string`.
    * @beta
    */
   public static async createAgentScript(
     connection: Connection,
-    agentJobSpec: ExtendedAgentJobSpec
+    agentSpec: ExtendedAgentJobSpec
   ): Promise<AgentScriptContent> {
     // this will eventually be done via AI in the org, but for now, we're hardcoding a valid .agent file boilerplate response
-    getLogger().debug(`Generating Agent with spec data: ${JSON.stringify(agentJobSpec)}`);
+    getLogger().debug(`Generating Agent with spec data: ${JSON.stringify(agentSpec)}`);
 
     const boilerplate = `system:
-   instructions: "You are a generic AI assistant. You assist users with various inquiries and provide helpful responses."
-   messages:
-      welcome: "Hello, I am here to assist you with your questions. How can I help you today?"
-      error: "Apologies, something went wrong. Please try again later."
+  instructions: "You are a customer support agent focused on order management and answering general FAQs."
+  messages:
+    welcome: "Hi, I'm an AI service assistant. How can I help you?"
+    error: "Sorry, it looks like something has gone wrong."
 
 config:
-   agent_name: "${agentJobSpec.name}"
-   developer_name: "${agentJobSpec.developerName}"
-   default_agent_user: "default_agent_user@salesforce.com"
-   user_locale: "en_US"
-   enable_enhanced_event_logs: True
-   agent_description: "Default agent description"
+  developer_name: "${agentSpec.developerName}"
+  default_agent_user: "NEW AGENT USER"
+  agent_label: "Customer Support Agent"
+  description: "A customer support agent focused on order management and answering general FAQs."
 
 variables:
-   user_query: string
-   query_status: string = ""
+  EndUserId: linked string
+      source: @MessagingSession.MessagingEndUserId
+      description: "This variable may also be referred to as MessagingEndUser Id"
+
+language:
+  default_locale: "en_US"
+  additional_locales: ""
+  all_additional_locales: False
+
+connection messaging:
+  escalation_message: "One moment while I connect you to the next available service representative."
+  outbound_route_type: "OmniChannelFlow"
+  outbound_route_name: "agent_support_flow"
+  adaptive_response_allowed: True
 
 start_agent topic_selector:
-   description: "Analyze the user's input and determine the appropriate topic."
+  description: "Welcome the user and determine the appropriate topic based on user input"
 
-   reasoning_instructions:
-      >>
-           You are a topic selector for a generic AI assistant. Analyze the user's input and determine the most appropriate topic to handle their request.
+${agentSpec.topics
+  .map(
+    (t) => `topic ${t.name}:
+  label: "${t.name}"
+  description: "${t.description}"
 
-           Use the appropriate transition based on the user's needs:
-           - {{@action.go_to_general_inquiry}}: General inquiries
-           - {{@action.go_to_escalation}}: Escalation
-
-   reasoning_actions:
-      @utils.transition to @topic.general_inquiry as go_to_general_inquiry
-         description: "Transition to general inquiries."
-      @utils.transition to @topic.escalation as go_to_escalation
-         description: "Escalate the conversation to a human agent."
-
-topic escalate:
-   description: "Escalation topic"
-
-   reasoning_instructions:
-      >>
-           Escalate the conversation to a human agent if the user requests further assistance or if their query cannot be resolved by the agent. Or if the user mentions a specific person, such as Tim Robinson (e.g., a supervisor or manager).
-
-topic escalation:
-   description: "Escalation topic"
-
-   reasoning_instructions:
-      >>
-           Escalate the conversation to a human agent if the user requests further assistance or if their query cannot be resolved by the agent.`;
+  reasoning:
+      instructions: ->
+          | Instructions for the agent on how to process this topic, example for an order tracking topic
+            Help the user track their order by asking for necessary details such as order number or email address.
+            Use the appropriate actions to retrieve tracking information and provide the user with updates.
+            If the user needs further assistance, offer to escalate the issue.
+`
+  )
+  .join(EOL)}
+`;
     return Promise.resolve(boilerplate);
   }
 

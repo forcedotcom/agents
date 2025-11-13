@@ -80,9 +80,10 @@ describe('Agents', () => {
     });
 
     expect(output).to.be.a('string');
-    expect(output).to.include('instructions: "You are a generic AI assistant.');
+    expect(output).to.include('instructions: "You are a customer support agent focused');
     expect(output).to.include('developer_name: "Weather_Agent"');
-    expect(output).to.include('agent_name: "Weather Agent"');
+    expect(output).to.include('topic Guest_Experience_Enhancement');
+    expect(output).to.include('description: "Enhance the guest experience');
   });
 
   it('createAgentJson (mock behavior) should return full agent json', async () => {
