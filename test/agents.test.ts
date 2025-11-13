@@ -293,6 +293,8 @@ describe('Agents', () => {
 
       // Mock useNamedUserJwt to return the connection without making HTTP calls
       $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
+      // Mock connection.refreshAuth to avoid making HTTP calls during auth refresh
+      $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
 
       try {
         await Agent.publishAgentJson(connection, sfProject, agentJson);

@@ -110,6 +110,9 @@ describe('AgentPublisher', () => {
       // Mock useNamedUserJwt to return the connection without making HTTP calls
       $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
 
+      // Mock connection.refreshAuth to avoid making HTTP calls during auth refresh
+      $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
+
       // Mock the private methods
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const retrieveAgentMetadataStub = $$.SANDBOX.stub(publisher as any, 'retrieveAgentMetadata').resolves();
@@ -130,6 +133,9 @@ describe('AgentPublisher', () => {
 
       // Mock useNamedUserJwt to return the connection without making HTTP calls
       $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
+
+      // Mock connection.refreshAuth to avoid making HTTP calls during auth refresh
+      $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
 
       // Mock connection.singleRecordQuery to return undefined (no existing bot)
       $$.SANDBOX.stub(connection, 'singleRecordQuery')
@@ -156,6 +162,9 @@ describe('AgentPublisher', () => {
 
       // Mock useNamedUserJwt to return the connection without making HTTP calls
       $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
+
+      // Mock connection.refreshAuth to avoid making HTTP calls during auth refresh
+      $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
 
       try {
         await publisher.publishAgentJson();
