@@ -85,43 +85,37 @@ export const compileAgentScriptResponseFailure = {
 };
 
 export const validAgentScript = `system:
-   instructions: "You are a generic AI assistant. You assist users with various inquiries and provide helpful responses."
+   instructions: "You are a customer support agent focused on order management and answering general FAQs."
    messages:
-      welcome: "Hello, I am here to assist you with your questions. How can I help you today?"
-      error: "Apologies, something went wrong. Please try again later."
+      welcome: "Hi, I'm an AI service assistant. How can I help you?"
+      error: "Sorry, it looks like something has gone wrong."
+
 config:
-   agent_name: "Generic AI Assistant"
-   developer_name: "Generic_AI_Assistant"
-   default_agent_user: "default_agent_user@salesforce.com"
-   user_locale: "en_US"
-   enable_enhanced_event_logs: True
-   agent_description: "Default agent description"
+    developer_name: "Generic_AI_Assistant"
+    default_agent_user: "default_agent_user@salesforce.com"
+    agent_label: "Customer Support Agent"
+    description: "A customer support agent focused on order management and answering general FAQs."
+
 variables:
-   user_query: string
-   query_status: string = ""
+    EndUserId: linked string
+        source: @MessagingSession.MessagingEndUserId
+        description: "This variable may also be referred to as MessagingEndUser Id"
+
+language:
+    default_locale: "en_US"
+    additional_locales: ""
+    all_additional_locales: False
+
+connection messaging:
+   escalation_message: "One moment while I connect you to the next available service representative."
+   outbound_route_type: "OmniChannelFlow"
+   outbound_route_name: "agent_support_flow"
+   adaptive_response_allowed: True
+
 start_agent topic_selector:
-   description: "Analyze the user's input and determine the appropriate topic."
-   reasoning_instructions:
-      >>
-           You are a topic selector for a generic AI assistant. Analyze the user's input and determine the most appropriate topic to handle their request.
-           Use the appropriate transition based on the user's needs:
-           - {{@action.go_to_general_inquiry}}: General inquiries
-           - {{@action.go_to_escalation}}: Escalation
-   reasoning_actions:
-      @utils.transition to @topic.general_inquiry as go_to_general_inquiry
-         description: "Transition to general inquiries."
-      @utils.transition to @topic.escalation as go_to_escalation
-         description: "Escalate the conversation to a human agent."
-topic escalate:
-   description: "Escalation topic"
-   reasoning_instructions:
-      >>
-           Escalate the conversation to a human agent if the user requests further assistance or if their query cannot be resolved by the agent. Or if the user mentions a specific person, such as Tim Robinson (e.g., a supervisor or manager).
-topic escalation:
-   description: "Escalation topic"
-   reasoning_instructions:
-      >>
-           Escalate the conversation to a human agent if the user requests further assistance or if their query cannot be resolved by the agent.`;
+   description: "Welcome the user and determine the appropriate topic based on user input"
+
+              `;
 
 export const testAgentJson: AgentJson = {
   schemaVersion: '2.0',
@@ -134,7 +128,7 @@ export const testAgentJson: AgentJson = {
     templateName: '',
     defaultAgentUser: 'test@example.com',
     defaultOutboundRouting: '',
-    contextVariables: []
+    contextVariables: [],
   },
   agentVersion: {
     developerName: 'test_agent_v1',
@@ -149,18 +143,18 @@ export const testAgentJson: AgentJson = {
         outboundVoice: null,
         outboundModel: null,
         outboundSpeed: null,
-        outboundStyleExaggeration: null
+        outboundStyleExaggeration: null,
       },
       language: {
         defaultLocale: 'en_US',
         additionalLocales: [],
-        allAdditionalLocales: false
-      }
+        allAdditionalLocales: false,
+      },
     },
     additionalParameters: false,
     stateVariables: [],
     initialNode: 'greeting',
     nodes: [],
-    knowledgeDefinitions: null
-  }
+    knowledgeDefinitions: null,
+  },
 };
