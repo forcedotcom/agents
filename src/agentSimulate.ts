@@ -96,6 +96,9 @@ export class AgentSimulate extends AgentPreviewBase {
       const compiledAgent = await Agent.compileAgentScript(this.connection, agentString);
       if (compiledAgent.status === 'success' && compiledAgent.compiledArtifact) {
         this.compiledAgent = compiledAgent.compiledArtifact;
+        // we must set the compiledAgent.agentVersion.developerName, we'll get this from the -meta <target> field
+        const metaContent = await readFile(`${this.agentFilePath.replace('.agent', '.bundle-meta.xml')}`, 'utf-8');
+        this.compiledAgent.agentVersion.developerName = metaContent.match(/<target>.*(v\d+)<\/target>/)?.at(1) ?? 'v0';
       } else {
         const formattedError = compiledAgent.errors
           .map((e) => `- ${e.errorType} ${e.description}: ${e.lineStart}:${e.colStart} / ${e.lineEnd}:${e.colEnd}`)
