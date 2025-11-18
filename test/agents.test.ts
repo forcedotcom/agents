@@ -73,7 +73,7 @@ describe('Agents', () => {
       developerName: 'Weather_Agent',
       topics: [
         {
-          name: 'Guest_Experience_Enhancement',
+          name: 'Guest Experience Enhancement',
           description: 'Enhance the guest experience',
         },
       ],
@@ -82,7 +82,7 @@ describe('Agents', () => {
     expect(output).to.be.a('string');
     expect(output).to.include('instructions: "You are a customer support agent focused');
     expect(output).to.include('developer_name: "Weather_Agent"');
-    expect(output).to.include('topic Guest_Experience_Enhancement');
+    expect(output).to.include('topic guest_experience_enhancement:');
     expect(output).to.include('description: "Enhance the guest experience');
   });
 

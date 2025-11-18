@@ -20,7 +20,7 @@ import { stat, readdir } from 'node:fs/promises';
 import { EOL } from 'node:os';
 import { Connection, Lifecycle, Logger, Messages, SfError, SfProject, generateApiName } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
-import { Duration, env } from '@salesforce/kit';
+import { Duration, env, snakeCase } from '@salesforce/kit';
 import {
   type AgentCreateConfig,
   type AgentCreateResponse,
@@ -335,7 +335,7 @@ start_agent topic_selector:
 
 ${agentSpec.topics
   .map(
-    (t) => `topic ${t.name}:
+    (t) => `topic ${snakeCase(t.name)}:
   label: "${t.name}"
   description: "${t.description}"
 
