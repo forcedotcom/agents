@@ -211,32 +211,6 @@ export const useNamedUserJwt = async (connection: Connection): Promise<Connectio
   }
 };
 
-/**
- * Safely use a JWT token for an operation and restore the original connection afterwards.
- * This ensures the connection is always restored to its original state, even if an error occurs.
- *
- * @param connection The connection to use
- * @param operation An async function that performs the operation using the JWT connection
- * @returns The result of the operation
- */
-export const withNamedUserJwt = async <T>(
-  connection: Connection,
-  operation: (jwtConnection: Connection) => Promise<T>
-): Promise<T> => {
-  try {
-    // Switch to JWT token
-    const jwtConnection = await useNamedUserJwt(connection);
-
-    // Execute the operation
-    return await operation(jwtConnection);
-  } finally {
-    // Always restore the original connection, even if an error occurred
-    // Delete the JWT token and refresh to get the original token back
-    delete connection.accessToken;
-    await connection.refreshAuth();
-  }
-};
-
 // ====================================================
 //               Transcript Utilities
 // ====================================================

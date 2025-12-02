@@ -23,7 +23,7 @@ import { Connection, Logger, Messages, SfError, SfProject } from '@salesforce/co
 import { ComponentSet, ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { MaybeMock } from './maybe-mock';
 import { type AgentJson, type PublishAgentJsonResponse, type PublishAgent } from './types.js';
-import { findAuthoringBundle, withNamedUserJwt } from './utils';
+import { findAuthoringBundle, useNamedUserJwt } from './utils';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agentPublisher');
@@ -92,14 +92,20 @@ export class AgentPublisher {
 
     // Use JWT token only for the publish API call, then restore connection
     // before metadata operations that may use SOAP API
-    const response = await withNamedUserJwt(this.connection, async () => {
+    let response: PublishAgentJsonResponse;
+    try {
+      await useNamedUserJwt(this.connection);
       const botId = await this.getPublishedBotId(this.developerName);
       const url = botId ? `${this.API_URL}/${botId}/versions` : this.API_URL;
-      return this.maybeMock.request<PublishAgentJsonResponse>('POST', url, body, this.API_HEADERS);
-    });
+      response = await this.maybeMock.request<PublishAgentJsonResponse>('POST', url, body, this.API_HEADERS);
+    } finally {
+      // Always restore the original connection, even if an error occurred
+      delete this.connection.accessToken;
+      await this.connection.refreshAuth();
+    }
 
     if (response.botId && response.botVersionId) {
-      // Connection has been restored by withNamedUserJwt, so we can now use SOAP operations
+      // Connection has been restored, so we can now use SOAP operations
       // we've published the AgentJson, now we need to:
       // 1. retrieve the new Agent metadata that's in the org
       // 2. deploy the AuthoringBundle's -meta.xml file with correct target attribute

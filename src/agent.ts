@@ -40,7 +40,7 @@ import {
 } from './types.js';
 import { MaybeMock } from './maybe-mock';
 import { AgentPublisher } from './agentPublisher';
-import { decodeHtmlEntities, withNamedUserJwt } from './utils';
+import { decodeHtmlEntities, useNamedUserJwt } from './utils';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agents');
@@ -464,21 +464,24 @@ ${agentSpec.topics
     };
 
     // Use JWT token for this operation and ensure connection is restored afterwards
-    return withNamedUserJwt(connection, async (jwtConnection) => {
-      try {
-        return await jwtConnection.request<CompileAgentScriptResponse>(
-          {
-            method: 'POST',
-            url,
-            headers,
-            body: JSON.stringify(compileData),
-          },
-          { retry: { maxRetries: 3 } }
-        );
-      } catch (error) {
-        throw SfError.wrap(error);
-      }
-    });
+    try {
+      await useNamedUserJwt(connection);
+      return await connection.request<CompileAgentScriptResponse>(
+        {
+          method: 'POST',
+          url,
+          headers,
+          body: JSON.stringify(compileData),
+        },
+        { retry: { maxRetries: 3 } }
+      );
+    } catch (error) {
+      throw SfError.wrap(error);
+    } finally {
+      // Always restore the original connection, even if an error occurred
+      delete connection.accessToken;
+      await connection.refreshAuth();
+    }
   }
 
   /**
