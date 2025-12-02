@@ -111,8 +111,9 @@ export class AgentPublisher {
         // we've published the AgentJson, now we need to:
         // 1. retrieve the new Agent metadata that's in the org
         // 2. deploy the AuthoringBundle's -meta.xml file with correct target attribute
-        await this.retrieveAgentMetadata();
-        await this.deployAuthoringBundle(response.botVersionId);
+        const botVersionName = await this.getVersionDeveloperName(response.botVersionId);
+        await this.retrieveAgentMetadata(botVersionName);
+        await this.deployAuthoringBundle(botVersionName);
 
         return { ...response, developerName: this.developerName };
       } else {
@@ -169,12 +170,12 @@ export class AgentPublisher {
    * @param developerName The developer name of the agent
    * @param originalConnection The original connection to use for retrieval
    */
-  private async retrieveAgentMetadata(): Promise<void> {
+  private async retrieveAgentMetadata(botVersionName: string): Promise<void> {
     const defaultPackagePath = path.resolve(this.project.getDefaultPackage().path);
 
     const cs = await ComponentSetBuilder.build({
       metadata: {
-        metadataEntries: [`Agent:${this.developerName}`],
+        metadataEntries: [`Bot:${this.developerName}`,`Agent:${this.developerName}_${botVersionName}`], // `Bot:${this.developerName}`, 
         directoryPaths: [defaultPackagePath],
       },
       org: {
@@ -184,7 +185,6 @@ export class AgentPublisher {
     });
     const retrieve = await cs.retrieve({
       usernameOrConnection: this.connection,
-      rootTypesWithDependencies: ['Bot'],
       merge: true,
       format: 'source',
       output: path.resolve(this.project.getPath(), defaultPackagePath),
@@ -209,7 +209,7 @@ export class AgentPublisher {
    *
    * @throws SfError if the deployment fails or if there are component deployment errors
    */
-  private async deployAuthoringBundle(botVersionId: string): Promise<void> {
+  private async deployAuthoringBundle(botVersionName: string): Promise<void> {
     // 1. add the target to the local authoring bundle meta.xml file
     // 2. deploy the authoring bundle to the org
     // 3. remove the target from the localauthoring bundle meta.xml file
@@ -219,8 +219,8 @@ export class AgentPublisher {
     const authoringBundle = xmlParser.parse(await readFile(this.bundleMetaPath, 'utf-8')) as {
       AiAuthoringBundle: { target?: string };
     };
-    const target = `${this.developerName}.${await this.getVersionDeveloperName(botVersionId)}`;
-    authoringBundle.AiAuthoringBundle.target =target;
+    const target = `${this.developerName}.${botVersionName}`;
+    authoringBundle.AiAuthoringBundle.target = `${this.developerName}.${botVersionName}`;
     getLogger().debug(`Setting target to ${target} in ${this.bundleMetaPath}`);
     const xmlBuilder = new XMLBuilder({
       ignoreAttributes: false,
