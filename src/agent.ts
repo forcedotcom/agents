@@ -418,11 +418,11 @@ ${agentSpec.topics
     description: "${t.description}"
 
     reasoning:
-    instructions: ->
-         | Instructions for the agent on how to process this topic, example for an order tracking topic
-        Help the user track their order by asking for necessary details such as order number or email address.
-        Use the appropriate actions to retrieve tracking information and provide the user with updates.
-        If the user needs further assistance, offer to escalate the issue.
+        instructions: ->
+            | Instructions for the agent on how to process this topic, example for an order tracking topic
+             Help the user track their order by asking for necessary details such as order number or email address.
+             Use the appropriate actions to retrieve tracking information and provide the user with updates.
+             If the user needs further assistance, offer to escalate the issue.
 `
   )
   .join(EOL)}
