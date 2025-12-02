@@ -40,7 +40,7 @@ import {
 } from './types.js';
 import { MaybeMock } from './maybe-mock';
 import { AgentPublisher } from './agentPublisher';
-import { decodeHtmlEntities, useNamedUserJwt } from './utils';
+import { decodeHtmlEntities, withNamedUserJwt } from './utils';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agents');
@@ -442,9 +442,6 @@ ${agentSpec.topics
     connection: Connection,
     agentScriptContent: AgentScriptContent
   ): Promise<CompileAgentScriptResponse> {
-    // Ensure we use the correct connection for this API call
-    const orgJwtConnection = await useNamedUserJwt(connection);
-
     const url = `https://${
       env.getBoolean('SF_TEST_API') ? 'test.' : ''
     }api.salesforce.com/einstein/ai-agent/v1.1/authoring/scripts`;
@@ -466,19 +463,22 @@ ${agentSpec.topics
       'content-type': 'application/json',
     };
 
-    try {
-      return await orgJwtConnection.request<CompileAgentScriptResponse>(
-        {
-          method: 'POST',
-          url,
-          headers,
-          body: JSON.stringify(compileData),
-        },
-        { retry: { maxRetries: 3 } }
-      );
-    } catch (error) {
-      throw SfError.wrap(error);
-    }
+    // Use JWT token for this operation and ensure connection is restored afterwards
+    return withNamedUserJwt(connection, async (jwtConnection) => {
+      try {
+        return await jwtConnection.request<CompileAgentScriptResponse>(
+          {
+            method: 'POST',
+            url,
+            headers,
+            body: JSON.stringify(compileData),
+          },
+          { retry: { maxRetries: 3 } }
+        );
+      } catch (error) {
+        throw SfError.wrap(error);
+      }
+    });
   }
 
   /**

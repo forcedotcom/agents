@@ -22,12 +22,8 @@ import { XMLBuilder, XMLParser } from 'fast-xml-parser';
 import { Connection, Logger, Messages, SfError, SfProject } from '@salesforce/core';
 import { ComponentSet, ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { MaybeMock } from './maybe-mock';
-import {
-  type AgentJson,
-  type PublishAgentJsonResponse,
-  type PublishAgent,
-} from './types.js';
-import { findAuthoringBundle, useNamedUserJwt } from './utils';
+import { type AgentJson, type PublishAgentJsonResponse, type PublishAgent } from './types.js';
+import { findAuthoringBundle, withNamedUserJwt } from './utils';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agentPublisher');
@@ -79,51 +75,44 @@ export class AgentPublisher {
     this.bundleDir = validationResult.bundleDir;
   }
 
-
   /**
    * Publish an AgentJson representation to the org
    *
    * @returns Promise<PublishAgent> The publish response
    */
   public async publishAgentJson(): Promise<PublishAgent> {
-    // Ensure we use the correct connection for this API call
-    await useNamedUserJwt(this.connection);
-
     getLogger().debug('Publishing Agent');
 
     const body = {
-      'agentDefinition': this.agentJson,
-      'instanceConfig': {
-        'endpoint': this.connection.instanceUrl,
-      }
+      agentDefinition: this.agentJson,
+      instanceConfig: {
+        endpoint: this.connection.instanceUrl,
+      },
     };
 
-    try {
+    // Use JWT token only for the publish API call, then restore connection
+    // before metadata operations that may use SOAP API
+    const response = await withNamedUserJwt(this.connection, async () => {
       const botId = await this.getPublishedBotId(this.developerName);
       const url = botId ? `${this.API_URL}/${botId}/versions` : this.API_URL;
-      const response = await this.maybeMock.request<PublishAgentJsonResponse>('POST', url, body, this.API_HEADERS);
+      return this.maybeMock.request<PublishAgentJsonResponse>('POST', url, body, this.API_HEADERS);
+    });
 
-      // stop using named user jwt access token
-      delete this.connection.accessToken;
-      await this.connection.refreshAuth();
+    if (response.botId && response.botVersionId) {
+      // Connection has been restored by withNamedUserJwt, so we can now use SOAP operations
+      // we've published the AgentJson, now we need to:
+      // 1. retrieve the new Agent metadata that's in the org
+      // 2. deploy the AuthoringBundle's -meta.xml file with correct target attribute
+      await this.retrieveAgentMetadata();
+      await this.deployAuthoringBundle(response.botVersionId);
 
-      if (response.botId && response.botVersionId) {
-        // we've published the AgentJson, now we need to:
-        // 1. retrieve the new Agent metadata that's in the org
-        // 2. deploy the AuthoringBundle's -meta.xml file with correct target attribute
-        await this.retrieveAgentMetadata();
-        await this.deployAuthoringBundle(response.botVersionId);
-
-        return { ...response, developerName: this.developerName };
-      } else {
-        throw SfError.create({
-          name: 'CreateAgentJsonError',
-          message: response.errorMessage ?? 'unknown',
-          data: response,
-        });
-      }
-    } catch (error) {
-      throw SfError.wrap(error);
+      return { ...response, developerName: this.developerName };
+    } else {
+      throw SfError.create({
+        name: 'CreateAgentJsonError',
+        message: response.errorMessage ?? 'unknown',
+        data: response,
+      });
     }
   }
 
@@ -162,7 +151,7 @@ export class AgentPublisher {
     }
     return { developerName, bundleDir, bundleMetaPath };
   }
-  
+
   /**
    * Retrieve the agent metadata from the org after publishing
    *
@@ -213,14 +202,14 @@ export class AgentPublisher {
     // 1. add the target to the local authoring bundle meta.xml file
     // 2. deploy the authoring bundle to the org
     // 3. remove the target from the localauthoring bundle meta.xml file
-    
+
     // 1. add the target to the local authoring bundle meta.xml file
     const xmlParser = new XMLParser({ ignoreAttributes: false });
     const authoringBundle = xmlParser.parse(await readFile(this.bundleMetaPath, 'utf-8')) as {
       AiAuthoringBundle: { target?: string };
     };
     const target = `${this.developerName}.${await this.getVersionDeveloperName(botVersionId)}`;
-    authoringBundle.AiAuthoringBundle.target =target;
+    authoringBundle.AiAuthoringBundle.target = target;
     getLogger().debug(`Setting target to ${target} in ${this.bundleMetaPath}`);
     const xmlBuilder = new XMLBuilder({
       ignoreAttributes: false,
@@ -231,10 +220,11 @@ export class AgentPublisher {
     await writeFile(this.bundleMetaPath, xmlBuilder.build(authoringBundle));
 
     // 2. attempt to deploy the authoring bundle to the org
-    const deploy = await ComponentSet.fromSource(this.bundleDir)
-      .deploy({ usernameOrConnection: this.connection.getUsername() as string });
+    const deploy = await ComponentSet.fromSource(this.bundleDir).deploy({
+      usernameOrConnection: this.connection.getUsername() as string,
+    });
     const deployResult = await deploy.pollStatus();
-    
+
     // 3.remove the target from the local authoring bundle meta.xml file
     delete authoringBundle.AiAuthoringBundle.target;
     await writeFile(this.bundleMetaPath, xmlBuilder.build(authoringBundle));
@@ -242,7 +232,7 @@ export class AgentPublisher {
     if (!deployResult.response?.success) {
       const componentFailures = deployResult.response.details?.componentFailures;
       let errMessages = 'unknown';
-  
+
       if (componentFailures) {
         const failures = Array.isArray(componentFailures) ? componentFailures : [componentFailures];
         errMessages = failures[0].problem ?? 'unknown';

@@ -31,10 +31,8 @@ describe('AgentSimulate', () => {
   let connection: Connection;
   const session = 'e17fe68d-8509-4da7-8715-f270da5d64be';
   const agentFileName = 'test-agent.agent';
-  const agentDir = join(process.cwd(), 'test', 'fixtures');
-  const agentFilePath = join(agentDir, agentFileName);
+  const agentFilePath = join(process.cwd(), 'test', 'fixtures', agentFileName);
   const agentApiName = agentFileName; // basename with extension
-  const bundleMetaPath = join(agentDir, 'test-agent.bundle-meta.xml');
 
   beforeEach(async () => {
     $$.inProject(true);
@@ -46,10 +44,12 @@ describe('AgentSimulate', () => {
     $$.SANDBOXES.CONNECTION.restore();
 
     // Create the test .agent file
-    await mkdir(agentDir, { recursive: true });
+    const fixturesDir = join(process.cwd(), 'test', 'fixtures');
+    await mkdir(fixturesDir, { recursive: true });
     await writeFile(agentFilePath, 'system:\n  instructions: "Test agent"');
 
     // Create the bundle-meta.xml file
+    const bundleMetaPath = agentFilePath.replace('.agent', '.bundle-meta.xml');
     await writeFile(
       bundleMetaPath,
       `<?xml version="1.0" encoding="UTF-8"?>${EOL}<AiAuthoringBundle xmlns="http://soap.sforce.com/2006/04/metadata">${EOL}    <bundleType>AGENT</bundleType>${EOL}    <masterLabel>TestAgent</masterLabel>${EOL}    <versionDescription>Test version</versionDescription>${EOL}    <target>test-agent.v1</target>${EOL}</AiAuthoringBundle>`
@@ -66,11 +66,13 @@ describe('AgentSimulate', () => {
     } catch {
       // Directory doesn't exist, that's fine
     }
-    // Clean up test fixture file
+    // Clean up test fixture files
     try {
-      await rm(agentDir, { force: true });
+      await rm(agentFilePath, { force: true });
+      const bundleMetaPath = agentFilePath.replace('.agent', '.bundle-meta.xml');
+      await rm(bundleMetaPath, { force: true });
     } catch {
-      // File doesn't exist, that's fine
+      // Files don't exist, that's fine
     }
   });
 
@@ -140,9 +142,10 @@ describe('AgentSimulate', () => {
       $$.SANDBOX.stub(Agent, 'compileAgentScript').resolves(compileAgentScriptResponseSuccess);
 
       // Create bundle-meta.xml with version
+      const bundleMetaPath = agentFilePath.replace('.agent', '.bundle-meta.xml');
       await writeFile(
         bundleMetaPath,
-        `<?xml version="1.0" encoding="UTF-8"?>${EOL}<AiAuthoringBundle xmlns="http://soap.sforce.com/2006/04/metadata">${EOL}    <bundleType>AGENT</bundleType>${EOL}    <masterLabel>Willie1</masterLabel>${EOL}    <versionDescription>something in version description</versionDescription>${EOL}    <target>willie.v1</target>${EOL}</AiAuthoringBundle>`
+        '<?xml version="1.0" encoding="UTF-8"?>\n<AiAuthoringBundle xmlns="http://soap.sforce.com/2006/04/metadata">\n    <bundleType>AGENT</bundleType>\n    <masterLabel>Willie1</masterLabel>\n    <versionDescription>something in version description</versionDescription>\n    <target>willie.v1</target>\n</AiAuthoringBundle>'
       );
 
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'agentSimulate-Start');
@@ -159,9 +162,10 @@ describe('AgentSimulate', () => {
       $$.SANDBOX.stub(Agent, 'compileAgentScript').resolves(compileAgentScriptResponseSuccess);
 
       // Create bundle-meta.xml without version in target
+      const bundleMetaPath = agentFilePath.replace('.agent', '.bundle-meta.xml');
       await writeFile(
         bundleMetaPath,
-        `<?xml version="1.0" encoding="UTF-8"?>${EOL}<AiAuthoringBundle xmlns="http://soap.sforce.com/2006/04/metadata">${EOL}    <bundleType>AGENT</bundleType>${EOL}    <masterLabel>TestAgent</masterLabel>${EOL}</AiAuthoringBundle>`
+        '<?xml version="1.0" encoding="UTF-8"?>\n<AiAuthoringBundle xmlns="http://soap.sforce.com/2006/04/metadata">\n    <bundleType>AGENT</bundleType>\n    <masterLabel>TestAgent</masterLabel>\n    <target>test-agent</target>\n</AiAuthoringBundle>'
       );
 
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'agentSimulate-Start');
@@ -178,9 +182,10 @@ describe('AgentSimulate', () => {
       $$.SANDBOX.stub(Agent, 'compileAgentScript').resolves(compileAgentScriptResponseSuccess);
 
       // Create bundle-meta.xml with version v2
+      const bundleMetaPath = agentFilePath.replace('.agent', '.bundle-meta.xml');
       await writeFile(
         bundleMetaPath,
-        `<?xml version="1.0" encoding="UTF-8"?>${EOL}<AiAuthoringBundle xmlns="http://soap.sforce.com/2006/04/metadata">${EOL}    <bundleType>AGENT</bundleType>${EOL}    <masterLabel>TestAgent</masterLabel>${EOL}    <target>test-agent.v2</target>${EOL}</AiAuthoringBundle>`
+        '<?xml version="1.0" encoding="UTF-8"?>\n<AiAuthoringBundle xmlns="http://soap.sforce.com/2006/04/metadata">\n    <bundleType>AGENT</bundleType>\n    <masterLabel>TestAgent</masterLabel>\n    <target>test-agent.v2</target>\n</AiAuthoringBundle>'
       );
 
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'agentSimulate-Start');
