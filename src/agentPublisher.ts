@@ -175,7 +175,7 @@ export class AgentPublisher {
 
     const cs = await ComponentSetBuilder.build({
       metadata: {
-        metadataEntries: [`Bot:${this.developerName}`,`Agent:${this.developerName}_${botVersionName}`], // `Bot:${this.developerName}`, 
+        metadataEntries: [`Bot:${this.developerName}`,`Agent:${this.developerName}_${botVersionName}`],
         directoryPaths: [defaultPackagePath],
       },
       org: {
