@@ -80,7 +80,7 @@ describe('Agents', () => {
     });
 
     expect(output).to.be.a('string');
-    expect(output).to.include('instructions: "You are a customer support agent focused');
+    expect(output).to.include('instructions: "You are an AI Agent.');
     expect(output).to.include('developer_name: "Weather_Agent"');
     expect(output).to.include('topic guest_experience_enhancement:');
     expect(output).to.include('description: "Enhance the guest experience');
