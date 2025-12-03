@@ -103,7 +103,9 @@ describe('AgentPublisher', () => {
       // Mock connection.singleRecordQuery to return undefined (no existing bot)
       $$.SANDBOX.stub(connection, 'singleRecordQuery')
         .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
-        .throws(new Error('No records found'));
+        .throws(new Error('No records found'))
+        .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
+        .resolves({ DeveloperName: 'v1' });
 
       publisher = new AgentPublisher(connection, sfProject, agentJson);
 
@@ -140,7 +142,9 @@ describe('AgentPublisher', () => {
       // Mock connection.singleRecordQuery to return undefined (no existing bot)
       $$.SANDBOX.stub(connection, 'singleRecordQuery')
         .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
-        .resolves({ Id: '0Xx000000000001' });
+        .resolves({ Id: '0Xx000000000001' })
+        .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
+        .resolves({ DeveloperName: 'v2' });
 
       // Mock the private methods
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
