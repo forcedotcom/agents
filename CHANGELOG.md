@@ -1,3 +1,12 @@
+## [0.19.1](https://github.com/forcedotcom/agents/compare/0.19.0...0.19.1) (2025-12-03)
+
+
+### Bug Fixes
+
+* bump deps to latest and regen lock file ([c21bf21](https://github.com/forcedotcom/agents/commit/c21bf217d2dfefdbc2779164742353a678e84ea6))
+
+
+
 # [0.19.0](https://github.com/forcedotcom/agents/compare/0.18.3-nga.8...0.19.0) (2025-12-03)
 
 
