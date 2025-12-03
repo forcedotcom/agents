@@ -14,10 +14,25 @@
  * limitations under the License.
  */
 
-import { Connection, SfProject } from '@salesforce/core';
+import { Connection, Logger, SfProject } from '@salesforce/core';
 import { FileProperties } from '@salesforce/source-deploy-retrieve';
 import { type ApexLog } from '@salesforce/types/tooling';
 import { metric } from './utils';
+
+// ====================================================
+//               Agent Runner Types
+// ====================================================
+export type AgentInteractionBase = {
+  start(): Promise<AgentPreviewStartResponse>;
+  send(sessionId: string, message: string): Promise<AgentPreviewSendResponse>;
+  end(sessionId: string, reason: EndReason): Promise<AgentPreviewEndResponse>;
+  setApexDebugMode(enable: boolean): void;
+};
+
+export type BaseAgentConfig = {
+  connection: Connection;
+  logger?: Logger;
+};
 
 // ====================================================
 //               Agent Creation Types
@@ -81,6 +96,11 @@ export type BotActivationResponse = {
  */
 export type AgentJobSpec = AgentJobSpecCreateConfig & {
   topics: DraftAgentTopics;
+};
+
+export type ExtendedAgentJobSpec = AgentJobSpec & {
+  developerName: string;
+  name: string;
 };
 
 export type AgentType = 'customer' | 'internal';
@@ -267,12 +287,12 @@ export type DraftAgentTopicsResponse = {
 };
 
 /**
- * The response from the `create-af-script` API.
+ * The response from the API call to create an AgentScript.
  */
-export type CreateAgentResponse = {
+export type CreateAgentScriptResponse = {
   isSuccess: boolean;
   errorMessage?: string;
-  agentString?: AgentString;
+  agentScriptContent?: AgentScriptContent;
 };
 
 // ====================================================
@@ -604,31 +624,40 @@ export type AgentTraceResponse = {
   }>;
 };
 
-export type CompileAgentResponse = AgentCompilationSuccess | AgentCompilationError;
+// ====================================================
+//               Agent Plan Response Types
+// ====================================================
 
-export type PublishAgentJsonResponse = {
-  botVersionId: string;
-  botId: string;
-  errorMessage?: string;
+export type PlannerResponse = {
+  type: 'PlanSuccessResponse';
+  planId: string;
+  sessionId: string;
+  intent: string;
+  topic: string;
+  plan: PlanStep[];
 };
 
-export type PublishAgent = PublishAgentJsonResponse & { developerName: string };
-export type AgentCompilationError = {
-  status: 'failure';
-  compiledArtifact: null;
-  errors: Array<{
-    errorType: string;
-    description: string;
-    lineStart: number;
-    lineEnd: number;
-    colStart: number;
-    colEnd: number;
-  }>;
-  syntacticMap: {
-    blocks: [];
+export type PlanStep =
+  | UserInputStep
+  | LLMExecutionStep
+  | UpdateTopicStep
+  | EventStep
+  | FunctionStep
+  | PlannerResponseStep;
+
+export type FunctionStep = {
+  type: 'FunctionStep';
+  function: {
+    name: string;
+    input: Record<string, unknown>;
+    output: Record<string, unknown>;
   };
-  dslVersion: '0.0.3.rc29';
+  executionLatency: number;
+  startExecutionTime: number;
+  endExecutionTime: number;
 };
+
+export type CompileAgentScriptResponse = AgentCompilationSuccess | AgentCompilationError;
 
 export type AgentCompilationSuccess = {
   status: 'success';
@@ -639,6 +668,32 @@ export type AgentCompilationSuccess = {
   };
   dslVersion: '0.0.3.rc29';
 };
+export type AgentCompilationError = {
+  status: 'failure';
+  compiledArtifact: null;
+  errors: CompilationError[];
+  syntacticMap: {
+    blocks: [];
+  };
+  dslVersion: '0.0.3.rc29';
+};
+
+export type CompilationError = {
+  errorType: string;
+  description: string;
+  lineStart: number;
+  lineEnd: number;
+  colStart: number;
+  colEnd: number;
+};
+
+export type PublishAgentJsonResponse = {
+  botVersionId: string;
+  botId: string;
+  errorMessage?: string;
+};
+
+export type PublishAgent = PublishAgentJsonResponse & { developerName: string };
 
 // This is not accurate but good enough for now
 export type AgentJson = {
@@ -655,7 +710,7 @@ export type AgentJson = {
     contextVariables: [];
   };
   agentVersion: {
-    developerName: string;
+    developerName: string | null;
     plannerType: string;
     systemMessages: [];
     modalityParameters: {
@@ -708,4 +763,25 @@ export type AgentJson = {
   };
 };
 
-export type AgentString = string;
+export type AgentScriptContent = string;
+
+export enum AgentSource {
+  PUBLISHED = 'published',
+  SCRIPT = 'script',
+}
+
+export type ScriptAgent = { DeveloperName: string; source: AgentSource.SCRIPT; path: string };
+export type PublishedAgent = {
+  Id: string;
+  DeveloperName: string;
+  source: AgentSource.PUBLISHED;
+};
+
+export type NamedUserJwtResponse = {
+  access_token: string;
+  token_format: 'jwt';
+  scope: string;
+  token_type: 'Bearer';
+  issued_at: number;
+  api_instance_url: string;
+};

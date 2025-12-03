@@ -165,8 +165,8 @@ export class MaybeMock {
         typeof response === 'object' && 'status' in response && typeof response.status === 'number'
           ? response.status
           : 200;
-      // This is a hack to work with SFAP endpoints
-      url = url.replace('https://api.salesforce.com', '');
+      // This is a hack to work with SFAP prod, dev, and test endpoints
+      url = url.replace(/https:\/\/(dev\.|test\.)?api\.salesforce\.com/, '');
       this.scopes.set(baseUrl, scope);
       switch (method) {
         case 'GET':
@@ -198,7 +198,15 @@ export class MaybeMock {
             message: 'POST requests must include a body',
           });
         }
-        return this.connection.requestPost<T>(url, body, { retry: { maxRetries: 3 } });
+        return this.connection.request<T>(
+          {
+            method: 'POST',
+            url,
+            headers,
+            body: JSON.stringify(body),
+          },
+          { retry: { maxRetries: 3 } }
+        );
       case 'DELETE':
         // We use .request() rather than .requestDelete() so that we can pass in the headers
         return this.connection.request<T>(

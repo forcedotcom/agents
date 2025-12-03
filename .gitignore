@@ -6,6 +6,8 @@ package-lock.json
 # never checkin npm config
 .npmrc
 
+.cursor
+
 # debug logs
 npm-error.log
 yarn-error.log

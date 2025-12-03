@@ -19,8 +19,11 @@ import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection, SfError, SfProject } from '@salesforce/core';
 import { ComponentSetBuilder, ComponentSet, MetadataApiRetrieve } from '@salesforce/source-deploy-retrieve';
-import { type AgentJson } from '../src/types.js';
-import { Agent, type AgentCreateConfig } from '../src';
+import sinon from 'sinon';
+import { Agent, type AgentCreateConfig, type AgentJson } from '../src';
+import * as utils from '../src/utils';
+import { AgentPublisher } from '../src/agentPublisher';
+import { compileAgentScriptResponseFailure, compileAgentScriptResponseSuccess } from './testData';
 
 describe('Agents', () => {
   const $$ = new TestContext();
@@ -32,7 +35,7 @@ describe('Agents', () => {
     testOrg = new MockTestOrgData();
     process.env.SF_MOCK_DIR = join('test', 'mocks');
     connection = await testOrg.getConnection();
-    connection.instanceUrl = 'https://mydomain.salesforce.com';
+    connection.instanceUrl = 'https://api.salesforce.com';
     // restore the connection sandbox so that it doesn't override the builtin mocking (MaybeMock)
     $$.SANDBOXES.CONNECTION.restore();
   });
@@ -58,36 +61,144 @@ describe('Agents', () => {
     expect(output.topics[0]).to.have.property('name', 'Guest_Experience_Enhancement');
   });
 
-  it('createAgent (mock behavior) should return an Agent as a string', async () => {
-    process.env.SF_MOCK_DIR = join('test', 'mocks', 'createAgent');
+  it('createAgentScript (mock behavior) should return a AgentScriptContent', async () => {
     const agentType = 'customer';
     const companyName = 'Coral Cloud Enterprises';
-    const output = await Agent.createAgent(connection, {
+    const output = await Agent.createAgentScript(connection, {
       agentType,
       role: 'answer questions about vacation_rentals',
       companyName,
       companyDescription: 'Provide vacation rentals and activities',
+      name: 'Weather Agent',
+      developerName: 'Weather_Agent',
       topics: [
         {
-          name: 'Guest_Experience_Enhancement',
+          name: 'Guest Experience Enhancement',
           description: 'Enhance the guest experience',
         },
       ],
     });
 
     expect(output).to.be.a('string');
-    expect(output).to.include('# A simple weather assistant agent');
-    expect(output).to.include('topic weather_assistant:');
-    expect(output).to.include('agent_name: "ServiceBot"');
+    expect(output).to.include('instructions: "You are an AI Agent.');
+    expect(output).to.include('developer_name: "Weather_Agent"');
+    expect(output).to.include('topic guest_experience_enhancement:');
+    expect(output).to.include('description: "Enhance the guest experience');
   });
 
   it('createAgentJson (mock behavior) should return full agent json', async () => {
-    process.env.SF_MOCK_DIR = join('test', 'mocks');
-    const output = await Agent.compileAgent(connection, 'Agent string');
-    expect(output).to.have.property('schemaVersion', '2.0');
-    expect(output).to.have.property('globalConfiguration').and.be.an('object');
-    expect(output).to.have.property('agentVersion').and.be.an('object');
+    $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
+    $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
+      accessToken: 'test_access_token',
+      instanceUrl: connection.instanceUrl,
+    });
+    $$.SANDBOX.stub(connection, 'request')
+      .withArgs(sinon.match({ url: `${connection.instanceUrl}/agentforce/bootstrap/nameduser` }))
+      // eslint-disable-next-line camelcase
+      .resolves({ access_token: 'test_access_token' })
+      .withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/scripts') }))
+      .resolves(compileAgentScriptResponseSuccess);
+    const output = await Agent.compileAgentScript(connection, 'AgentScriptContent');
+    expect(output).to.have.property('status', 'success');
+    expect(output).to.have.property('compiledArtifact').and.be.an('object');
+    expect(output.compiledArtifact).to.have.property('schemaVersion', '2.0');
+    expect(output.compiledArtifact).to.have.property('globalConfiguration').and.be.an('object');
+    expect(output.compiledArtifact).to.have.property('agentVersion').and.be.an('object');
     await fs.rm('force-app', { recursive: true, force: true });
+  });
+
+  describe('compile AgentScript', () => {
+    let requestStub: sinon.SinonStub;
+    beforeEach(() => {
+      $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
+      $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
+        accessToken: 'test_access_token',
+        instanceUrl: connection.instanceUrl,
+      });
+      requestStub = $$.SANDBOX.stub(connection, 'request');
+      requestStub
+        .withArgs(sinon.match({ url: `${connection.instanceUrl}/agentforce/bootstrap/nameduser` }))
+        // eslint-disable-next-line camelcase
+        .resolves({ access_token: 'test_access_token' });
+    });
+    afterEach(() => {
+      sinon.restore();
+    });
+
+    it('compileAgentScript should return raw response on compilation failure', async () => {
+      requestStub
+        .withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/scripts') }))
+        .resolves(compileAgentScriptResponseFailure);
+
+      const result = await Agent.compileAgentScript(connection, 'Invalid AgentScriptContent');
+      expect(result).to.have.property('status', 'failure');
+      expect(result).to.have.property('compiledArtifact', null);
+      expect(result).to.have.property('errors').and.be.an('array').with.lengthOf(1);
+      expect(result.errors[0]).to.have.property('errorType', 'SyntaxError');
+      expect(result.errors[0]).to.have.property('description', 'Invalid syntax in agent script');
+    });
+
+    it('compileAgentScript should throw SfError on an exception during the request', async () => {
+      requestStub
+        .withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/scripts') }))
+        .rejects(new Error('Some error'));
+
+      try {
+        await Agent.compileAgentScript(connection, 'AgentScriptContent');
+        expect.fail('Expected compileAgentScript to throw an error');
+      } catch (error) {
+        expect((error as SfError).name).to.equal('Error');
+        expect((error as SfError).message).to.include('Some error');
+      }
+    });
+
+    it('compileAgentScript should return success response on a successful compilation', async () => {
+      requestStub
+        .withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/scripts') }))
+        .resolves(compileAgentScriptResponseSuccess);
+
+      const output = await Agent.compileAgentScript(connection, '');
+
+      expect(output).to.have.property('status', 'success');
+      expect(output).to.have.property('compiledArtifact').and.be.an('object');
+      expect(output.compiledArtifact!).to.have.property('schemaVersion', '2.0');
+      expect(output.compiledArtifact!.globalConfiguration.developerName).to.equal('test_agent_v1');
+    });
+
+    it('compileAgentScript should handle complex AgentScriptContent', async () => {
+      const complexAgentScript = `
+        agent ComplexAgent {
+          greeting {
+            instructions: "Welcome to our service"
+            transitions: ["main_menu"]
+          }
+          main_menu {
+            instructions: "How can I help you today?"
+            tools: ["case_search", "account_lookup"]
+          }
+        }
+      `;
+
+      requestStub.withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/scripts') })).resolves({
+        status: 'success',
+        compiledArtifact: {
+          schemaVersion: '2.0',
+          globalConfiguration: {
+            developerName: 'complex_agent',
+          },
+          agentVersion: {
+            developerName: 'complex_agent',
+          },
+        },
+      });
+
+      const output = await Agent.compileAgentScript(connection, complexAgentScript);
+
+      expect(output).to.have.property('status', 'success');
+      expect(output).to.have.property('compiledArtifact').and.be.an('object');
+      expect(output.compiledArtifact!).to.have.property('schemaVersion', '2.0');
+      expect(output.compiledArtifact!.globalConfiguration.developerName).to.equal('complex_agent');
+    });
   });
 
   describe('publishAgentJson', () => {
@@ -173,12 +284,27 @@ describe('Agents', () => {
       // Mock failed API response
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishAgentJson-Error');
 
+      // Mock AgentPublisher constructor to avoid bundle validation
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const validateStub = $$.SANDBOX.stub(AgentPublisher.prototype as any, 'validateDeveloperName').returns({
+        developerName: 'test_agent_v1',
+        bundleDir: 'test-bundle-dir',
+        bundleMetaPath: 'test-meta-path',
+      });
+
+      // Mock useNamedUserJwt to return the connection without making HTTP calls
+      $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
+      // Mock connection.refreshAuth to avoid making HTTP calls during auth refresh
+      $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
+
       try {
         await Agent.publishAgentJson(connection, sfProject, agentJson);
         expect.fail('Expected error was not thrown');
       } catch (err) {
         expect(err).to.be.instanceOf(SfError);
         expect((err as SfError).name).to.equal('CreateAgentJsonError');
+      } finally {
+        validateStub.restore();
       }
     });
   });
