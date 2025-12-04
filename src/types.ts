@@ -103,7 +103,7 @@ export type ExtendedAgentJobSpec = AgentJobSpec & {
   name: string;
 };
 
-export type AgentType = 'customer' | 'internal';
+export type AgentType = 'customer' | 'internal' | 'AGENT';
 
 export type AgentTone = 'casual' | 'formal' | 'neutral';
 
