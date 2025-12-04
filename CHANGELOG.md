@@ -1,3 +1,12 @@
+## [0.19.3](https://github.com/forcedotcom/agents/compare/0.19.2...0.19.3) (2025-12-04)
+
+
+### Bug Fixes
+
+* generate correct AAB, and -meta.xml ([a70929c](https://github.com/forcedotcom/agents/commit/a70929c3a0f0755fb8a35227136f7961389cc108))
+
+
+
 ## [0.19.2](https://github.com/forcedotcom/agents/compare/0.19.1...0.19.2) (2025-12-04)
 
 
