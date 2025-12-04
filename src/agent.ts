@@ -345,10 +345,10 @@ language:
     all_additional_locales: False
 
 connection messaging:
-  escalation_message: "One moment while I connect you to the next available service representative."
-  outbound_route_type: "OmniChannelFlow"
-  outbound_route_name: "agent_support_flow"
-  adaptive_response_allowed: True
+    escalation_message: "One moment while I connect you to the next available service representative."
+    outbound_route_type: "OmniChannelFlow"
+    outbound_route_name: "agent_support_flow"
+    adaptive_response_allowed: True
 
 start_agent topic_selector:
     label: "Topic Selector"
