@@ -389,7 +389,7 @@ describe('Agents', () => {
       // Verify .agent file content
       expect(agentContent).to.include('system:');
       expect(agentContent).to.include('instructions: "You are an AI Agent."');
-      expect(agentContent).to.include('developer_name: "New_Agent"');
+      expect(agentContent).to.include('developer_name: "TestBundle_Default"');
       expect(agentContent).to.include('agent_label: "New Agent"');
       expect(agentContent).to.include('topic escalation:');
       expect(agentContent).to.include('topic off_topic:');

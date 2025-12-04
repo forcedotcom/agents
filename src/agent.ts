@@ -318,10 +318,10 @@ export class Agent {
         error: "Sorry, it looks like something has gone wrong."
 
 config:
-    developer_name: "${options.agentSpec?.developerName ?? 'New_Agent'}"
+    developer_name: "${options.agentSpec?.developerName ?? options.bundleApiName}"
     default_agent_user: "NEW AGENT USER"
-    agent_label: "New Agent"
-    description: "New agent description"
+    agent_label: "${options.agentSpec?.name ?? 'New Agent'}"
+    description: "${options.agentSpec?.role ?? 'New agent description'}"
 
 variables:
     EndUserId: linked string
