@@ -21,6 +21,7 @@ import { Connection, SfError, SfProject } from '@salesforce/core';
 import { ComponentSetBuilder, ComponentSet, MetadataApiRetrieve } from '@salesforce/source-deploy-retrieve';
 import sinon from 'sinon';
 import { Agent, type AgentCreateConfig, type AgentJson } from '../src';
+import type { ExtendedAgentJobSpec, DraftAgentTopics } from '../src/types';
 import * as utils from '../src/utils';
 import { AgentPublisher } from '../src/agentPublisher';
 import { compileAgentScriptResponseFailure, compileAgentScriptResponseSuccess } from './testData';
@@ -59,31 +60,6 @@ describe('Agents', () => {
     expect(output).to.have.property('companyName', companyName);
     expect(output.topics).to.be.an('array').with.lengthOf(10);
     expect(output.topics[0]).to.have.property('name', 'Guest_Experience_Enhancement');
-  });
-
-  it('createAgentScript (mock behavior) should return a AgentScriptContent', async () => {
-    const agentType = 'customer';
-    const companyName = 'Coral Cloud Enterprises';
-    const output = await Agent.createAgentScript(connection, {
-      agentType,
-      role: 'answer questions about vacation_rentals',
-      companyName,
-      companyDescription: 'Provide vacation rentals and activities',
-      name: 'Weather Agent',
-      developerName: 'Weather_Agent',
-      topics: [
-        {
-          name: 'Guest Experience Enhancement',
-          description: 'Enhance the guest experience',
-        },
-      ],
-    });
-
-    expect(output).to.be.a('string');
-    expect(output).to.include('instructions: "You are an AI Agent.');
-    expect(output).to.include('developer_name: "Weather_Agent"');
-    expect(output).to.include('topic guest_experience_enhancement:');
-    expect(output).to.include('description: "Enhance the guest experience');
   });
 
   it('createAgentJson (mock behavior) should return full agent json', async () => {
@@ -375,5 +351,207 @@ describe('Agents', () => {
     expect(response).to.have.property('isSuccess', true);
     expect(response).to.not.have.property('agentId');
     expect(response).to.have.property('agentDefinition');
+  });
+
+  describe('createAuthoringBundle', () => {
+    let sfProject: SfProject;
+    let testOutputDir: string;
+
+    beforeEach(async () => {
+      sfProject = SfProject.getInstance();
+      // @ts-expect-error Not the full package def
+      $$.SANDBOX.stub(sfProject, 'getDefaultPackage').returns({ path: 'force-app', fullPath: 'force-app' });
+      testOutputDir = join('test-output', 'createAuthoringBundle');
+    });
+
+    afterEach(async () => {
+      // Clean up test files
+      await fs.rm(join('force-app', 'main', 'default', 'aiAuthoringBundles'), { recursive: true, force: true });
+      await fs.rm(testOutputDir, { recursive: true, force: true });
+    });
+
+    it('should create bundle files with default values when agentSpec is not provided', async () => {
+      const bundleApiName = 'TestBundle_Default';
+      await Agent.createAuthoringBundle({
+        connection,
+        project: sfProject,
+        bundleApiName,
+      });
+
+      const defaultOutputDir = join('force-app', 'main', 'default', 'aiAuthoringBundles', bundleApiName);
+      const agentPath = join(defaultOutputDir, `${bundleApiName}.agent`);
+      const metaXmlPath = join(defaultOutputDir, `${bundleApiName}.bundle-meta.xml`);
+
+      // Verify files exist
+      const agentContent = await fs.readFile(agentPath, 'utf-8');
+      const metaXmlContent = await fs.readFile(metaXmlPath, 'utf-8');
+
+      // Verify .agent file content
+      expect(agentContent).to.include('system:');
+      expect(agentContent).to.include('instructions: "You are an AI Agent."');
+      expect(agentContent).to.include('developer_name: "New_Agent"');
+      expect(agentContent).to.include('agent_label: "New Agent"');
+      expect(agentContent).to.include('topic escalation:');
+      expect(agentContent).to.include('topic off_topic:');
+      expect(agentContent).to.include('topic ambiguous_question:');
+
+      // Verify .bundle-meta.xml file content
+      expect(metaXmlContent).to.include('<?xml version="1.0" encoding="UTF-8"?>');
+      expect(metaXmlContent).to.include('<AiAuthoringBundle xmlns="http://soap.sforce.com/2006/04/metadata">');
+      expect(metaXmlContent).to.include('<bundleType>AGENT</bundleType>');
+      expect(metaXmlContent).to.include('</AiAuthoringBundle>');
+    });
+
+    it('should create bundle files with agentSpec when provided', async () => {
+      const bundleApiName = 'TestBundle_WithSpec';
+      const agentSpec: ExtendedAgentJobSpec = {
+        agentType: 'customer',
+        role: 'answer questions about vacation rentals',
+        companyName: 'Coral Cloud Enterprises',
+        companyDescription: 'Provide vacation rentals and activities',
+        developerName: 'Vacation_Rental_Agent',
+        name: 'Vacation Rental Agent',
+        topics: [
+          {
+            name: 'Guest Experience Enhancement',
+            description: 'Enhance the guest experience with personalized recommendations',
+          },
+          {
+            name: 'Booking Management',
+            description: 'Help users manage their bookings and reservations',
+          },
+        ] as unknown as DraftAgentTopics,
+      };
+
+      await Agent.createAuthoringBundle({
+        connection,
+        project: sfProject,
+        bundleApiName,
+        agentSpec,
+      });
+
+      const defaultOutputDir = join('force-app', 'main', 'default', 'aiAuthoringBundles', bundleApiName);
+      const agentPath = join(defaultOutputDir, `${bundleApiName}.agent`);
+      const metaXmlPath = join(defaultOutputDir, `${bundleApiName}.bundle-meta.xml`);
+
+      // Verify files exist
+      const agentContent = await fs.readFile(agentPath, 'utf-8');
+      const metaXmlContent = await fs.readFile(metaXmlPath, 'utf-8');
+
+      // Verify .agent file content includes agentSpec data
+      expect(agentContent).to.include('developer_name: "Vacation_Rental_Agent"');
+      expect(agentContent).to.include('topic guest_experience_enhancement:');
+      expect(agentContent).to.include('label: "Guest Experience Enhancement"');
+      expect(agentContent).to.include('description: "Enhance the guest experience with personalized recommendations"');
+      expect(agentContent).to.include('topic booking_management:');
+      expect(agentContent).to.include('label: "Booking Management"');
+      expect(agentContent).to.include('description: "Help users manage their bookings and reservations"');
+      expect(agentContent).to.include(
+        'go_to_guest_experience_enhancement: @utils.transition to @topic.guest_experience_enhancement'
+      );
+      expect(agentContent).to.include('go_to_booking_management: @utils.transition to @topic.booking_management');
+
+      // Verify .bundle-meta.xml file content
+      expect(metaXmlContent).to.include('<?xml version="1.0" encoding="UTF-8"?>');
+      expect(metaXmlContent).to.include('<AiAuthoringBundle xmlns="http://soap.sforce.com/2006/04/metadata">');
+      expect(metaXmlContent).to.include('<bundleType>customer</bundleType>');
+      expect(metaXmlContent).to.include('</AiAuthoringBundle>');
+    });
+
+    it('should create bundle files in custom outputDir when provided', async () => {
+      const bundleApiName = 'TestBundle_CustomDir';
+      await Agent.createAuthoringBundle({
+        connection,
+        project: sfProject,
+        bundleApiName,
+        outputDir: testOutputDir,
+      });
+
+      const agentPath = join(testOutputDir, 'aiAuthoringBundles', bundleApiName, `${bundleApiName}.agent`);
+      const metaXmlPath = join(testOutputDir, 'aiAuthoringBundles', bundleApiName, `${bundleApiName}.bundle-meta.xml`);
+
+      // Verify files exist in custom directory
+      const agentContent = await fs.readFile(agentPath, 'utf-8');
+      const metaXmlContent = await fs.readFile(metaXmlPath, 'utf-8');
+
+      expect(agentContent).to.include('system:');
+      expect(agentContent).to.include('instructions: "You are an AI Agent."');
+      expect(metaXmlContent).to.include('<bundleType>AGENT</bundleType>');
+    });
+
+    it('should create bundle files with agentSpec and custom outputDir', async () => {
+      const bundleApiName = 'TestBundle_SpecAndCustomDir';
+      const agentSpec: ExtendedAgentJobSpec = {
+        agentType: 'internal',
+        role: 'help employees with internal processes',
+        companyName: 'Test Company',
+        companyDescription: 'A test company',
+        developerName: 'Internal_Helper_Agent',
+        name: 'Internal Helper Agent',
+        topics: [
+          {
+            name: 'HR Questions',
+            description: 'Answer questions about HR policies',
+          },
+        ] as unknown as DraftAgentTopics,
+      };
+
+      await Agent.createAuthoringBundle({
+        connection,
+        project: sfProject,
+        bundleApiName,
+        outputDir: testOutputDir,
+        agentSpec,
+      });
+
+      const agentPath = join(testOutputDir, 'aiAuthoringBundles', bundleApiName, `${bundleApiName}.agent`);
+      const metaXmlPath = join(testOutputDir, 'aiAuthoringBundles', bundleApiName, `${bundleApiName}.bundle-meta.xml`);
+
+      // Verify files exist in custom directory
+      const agentContent = await fs.readFile(agentPath, 'utf-8');
+      const metaXmlContent = await fs.readFile(metaXmlPath, 'utf-8');
+
+      // Verify .agent file content includes agentSpec data
+      expect(agentContent).to.include('developer_name: "Internal_Helper_Agent"');
+      expect(agentContent).to.include('topic hr_questions:');
+      expect(agentContent).to.include('label: "HR Questions"');
+      expect(agentContent).to.include('description: "Answer questions about HR policies"');
+
+      // Verify .bundle-meta.xml file content
+      expect(metaXmlContent).to.include('<bundleType>internal</bundleType>');
+    });
+
+    it('should handle empty topics array in agentSpec', async () => {
+      const bundleApiName = 'TestBundle_EmptyTopics';
+      const agentSpec: ExtendedAgentJobSpec = {
+        agentType: 'customer',
+        role: 'test role',
+        companyName: 'Test Company',
+        companyDescription: 'Test description',
+        developerName: 'Test_Agent',
+        name: 'Test Agent',
+        topics: [] as unknown as DraftAgentTopics,
+      };
+
+      await Agent.createAuthoringBundle({
+        connection,
+        project: sfProject,
+        bundleApiName,
+        agentSpec,
+      });
+
+      const defaultOutputDir = join('force-app', 'main', 'default', 'aiAuthoringBundles', bundleApiName);
+      const agentPath = join(defaultOutputDir, `${bundleApiName}.agent`);
+      const agentContent = await fs.readFile(agentPath, 'utf-8');
+
+      // Verify .agent file content
+      expect(agentContent).to.include('developer_name: "Test_Agent"');
+      // Should not include any topic transitions in the topic_selector
+      expect(agentContent).to.include('start_agent topic_selector:');
+      // Should still include default topics (escalation, off_topic, ambiguous_question)
+      expect(agentContent).to.include('topic escalation:');
+      expect(agentContent).to.include('topic off_topic:');
+      expect(agentContent).to.include('topic ambiguous_question:');
+    });
   });
 });

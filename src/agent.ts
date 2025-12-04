@@ -302,7 +302,7 @@ export class Agent {
    * agentSpec?: ExtendedAgentJobSpec;
    *}
    */
-  public static async createAgentScript(options: {
+  public static async createAuthoringBundle(options: {
     connection: Connection;
     project: SfProject;
     bundleApiName: string;
