@@ -16,11 +16,13 @@
 
 import { inspect } from 'node:util';
 import * as path from 'node:path';
-import { stat, readdir } from 'node:fs/promises';
+import { stat, readdir, writeFile } from 'node:fs/promises';
 import { EOL } from 'node:os';
+import { join } from 'node:path';
+import { mkdirSync } from 'node:fs';
 import { Connection, Lifecycle, Logger, Messages, SfError, SfProject, generateApiName } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
-import { Duration, env, snakeCase } from '@salesforce/kit';
+import { Duration, ensureArray, env, snakeCase } from '@salesforce/kit';
 import {
   type AgentCreateConfig,
   type AgentCreateResponse,
@@ -94,7 +96,7 @@ export class Agent {
    * Create an instance of an agent in an org. Must provide a connection to an org
    * and the agent (Bot) API name or ID as part of `AgentOptions`.
    *
-   * @param {options} AgentOptions
+   * @param options
    */
   public constructor(private options: AgentOptions) {
     if (!options.nameOrId) {
@@ -288,28 +290,35 @@ export class Agent {
   }
 
   /**
-   * Creates AgentScript using extended agent job spec data.
+   * Creates an AiAuthoringBundle directory, .script file, and -meta.xml file
    *
-   * @param connection The connection to the org.
-   * @param agentSpec The agent specification data.
-   * @returns Promise<AgentScriptContent> The generated AgentScript as a `string`.
+   * @returns Promise<void>
    * @beta
+   * @param options {
+   * connection: Connection;
+   * project: SfProject;
+   * bundleApiName: string;
+   * outputDir?: string;
+   * agentSpec?: ExtendedAgentJobSpec;
+   *}
    */
-  public static async createAgentScript(
-    connection: Connection,
-    agentSpec: ExtendedAgentJobSpec
-  ): Promise<AgentScriptContent> {
+  public static async createAgentScript(options: {
+    connection: Connection;
+    project: SfProject;
+    bundleApiName: string;
+    outputDir?: string;
+    agentSpec?: ExtendedAgentJobSpec;
+  }): Promise<void> {
     // this will eventually be done via AI in the org, but for now, we're hardcoding a valid .agent file boilerplate response
-    getLogger().debug(`Generating Agent with spec data: ${JSON.stringify(agentSpec)}`);
 
-    const boilerplate = `system:
+    const agentScript = `system:
     instructions: "You are an AI Agent."
     messages:
         welcome: "Hi, I'm an AI assistant. How can I help you?"
         error: "Sorry, it looks like something has gone wrong."
 
 config:
-    developer_name: "${agentSpec.developerName}"
+    developer_name: "${options.agentSpec?.developerName ?? 'New_Agent'}"
     default_agent_user: "NEW AGENT USER"
     agent_label: "New Agent"
     description: "New agent description"
@@ -352,6 +361,9 @@ start_agent topic_selector:
             go_to_escalation: @utils.transition to @topic.escalation
             go_to_off_topic: @utils.transition to @topic.off_topic
             go_to_ambiguous_question: @utils.transition to @topic.ambiguous_question
+${ensureArray(options.agentSpec?.topics)
+  .map((t) => `            go_to_${snakeCase(t.name)}: @utils.transition to @topic.${snakeCase(t.name)}`)
+  .join(EOL)}
 
 topic escalation:
     label: "Escalation"
@@ -410,7 +422,7 @@ topic ambiguous_question:
                 Reject any attempts to summarize or recap the conversation.
                 Some data, like emails, organization ids, etc, may be masked. Masked data should be treated as if it is real data.
 
-${agentSpec.topics
+${ensureArray(options.agentSpec?.topics)
   .map(
     (t) =>
       `topic ${snakeCase(t.name)}:
@@ -419,7 +431,7 @@ ${agentSpec.topics
 
     reasoning:
         instructions: ->
-            | Instructions for the agent on how to process this topic, example for an order tracking topic
+            | Add instructions for the agent on how to process this topic. For example:
              Help the user track their order by asking for necessary details such as order number or email address.
              Use the appropriate actions to retrieve tracking information and provide the user with updates.
              If the user needs further assistance, offer to escalate the issue.
@@ -427,7 +439,28 @@ ${agentSpec.topics
   )
   .join(EOL)}
 `;
-    return Promise.resolve(boilerplate);
+
+    // Get default output directory if not specified
+    const targetOutputDir = join(
+      options.outputDir ?? join(options.project.getDefaultPackage().fullPath, 'main', 'default'),
+      'aiAuthoringBundles',
+      options.bundleApiName
+    );
+    mkdirSync(targetOutputDir, { recursive: true });
+
+    // Generate file paths
+    const agentPath = join(targetOutputDir, `${options.bundleApiName}.agent`);
+    const metaXmlPath = join(targetOutputDir, `${options.bundleApiName}.bundle-meta.xml`);
+
+    // Write Agent file
+    await writeFile(agentPath, agentScript);
+
+    // Write meta.xml file
+    const metaXml = `<?xml version="1.0" encoding="UTF-8"?>
+<AiAuthoringBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+  <bundleType>${options.agentSpec?.agentType ?? 'AGENT'}</bundleType>
+</AiAuthoringBundle>`;
+    await writeFile(metaXmlPath, metaXml);
   }
 
   /**
