@@ -1,3 +1,13 @@
+## [0.19.4](https://github.com/forcedotcom/agents/compare/0.19.3...0.19.4) (2025-12-04)
+
+
+### Bug Fixes
+
+* consistent spacing ([99951a2](https://github.com/forcedotcom/agents/commit/99951a283fee796d63c6390b8d725c3bafdeb8c2))
+* preview using NamedJWT ([7fb9485](https://github.com/forcedotcom/agents/commit/7fb94859d164e016db9415252ca1bb058a77b04a))
+
+
+
 ## [0.19.3](https://github.com/forcedotcom/agents/compare/0.19.2...0.19.3) (2025-12-04)
 
 
