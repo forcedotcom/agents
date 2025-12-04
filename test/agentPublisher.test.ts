@@ -42,6 +42,15 @@ describe('AgentPublisher', () => {
     );
   }
 
+  function createValidateDeveloperNameStub(developerName = 'test_agent', bundleDir = 'test-bundle-dir', bundleMetaPath = 'test-meta-path') {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return $$.SANDBOX.stub(AgentPublisher.prototype as any, 'validateDeveloperName').returns({
+      developerName,
+      bundleDir,
+      bundleMetaPath,
+    });
+  }
+
   beforeEach(async () => {
     $$.inProject(true);
     testOrg = new MockTestOrgData();
@@ -119,13 +128,13 @@ describe('AgentPublisher', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const retrieveAgentMetadataStub = $$.SANDBOX.stub(publisher as any, 'retrieveAgentMetadata').resolves();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const deployAuthoringBundleStub = $$.SANDBOX.stub(publisher as any, 'deployAuthoringBundle').resolves();
+      const syncAuthoringBundleStub = $$.SANDBOX.stub(publisher as any, 'syncAuthoringBundle').resolves();
 
       const result = await publisher.publishAgentJson();
 
       expect(result).to.have.property('developerName', 'test_agent');
       expect(retrieveAgentMetadataStub.calledOnce).to.be.true;
-      expect(deployAuthoringBundleStub.calledOnce).to.be.true;
+      expect(syncAuthoringBundleStub.calledOnce).to.be.true;
     });
 
     it('should publish new version of an existing agent when there is a bot in the org for the given developer name', async () => {
@@ -150,13 +159,13 @@ describe('AgentPublisher', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const retrieveAgentMetadataStub = $$.SANDBOX.stub(publisher as any, 'retrieveAgentMetadata').resolves();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const deployAuthoringBundleStub = $$.SANDBOX.stub(publisher as any, 'deployAuthoringBundle').resolves();
+      const syncAuthoringBundleStub = $$.SANDBOX.stub(publisher as any, 'syncAuthoringBundle').resolves();
 
       const result = await publisher.publishAgentJson();
 
       expect(result).to.have.property('developerName', 'test_agent');
       expect(retrieveAgentMetadataStub.calledOnce).to.be.true;
-      expect(deployAuthoringBundleStub.calledOnce).to.be.true;
+      expect(syncAuthoringBundleStub.calledOnce).to.be.true;
     });
 
     it('should handle API errors during publishing', async () => {
@@ -183,12 +192,7 @@ describe('AgentPublisher', () => {
   describe('getPublishedBotId', () => {
     it('should return bot ID when agent exists', async () => {
       // Create minimal publisher instance by mocking validateDeveloperName
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const validateStub = $$.SANDBOX.stub(AgentPublisher.prototype as any, 'validateDeveloperName').returns({
-        developerName: 'test_agent',
-        bundleDir: 'test-bundle-dir',
-        bundleMetaPath: 'test-meta-path',
-      });
+      const validateStub = createValidateDeveloperNameStub();
 
       const publisher = new AgentPublisher(connection, sfProject, agentJson);
 
@@ -206,12 +210,7 @@ describe('AgentPublisher', () => {
 
     it('should return undefined when agent does not exist', async () => {
       // Create minimal publisher instance by mocking validateDeveloperName
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const validateStub = $$.SANDBOX.stub(AgentPublisher.prototype as any, 'validateDeveloperName').returns({
-        developerName: 'test_agent',
-        bundleDir: 'test-bundle-dir',
-        bundleMetaPath: 'test-meta-path',
-      });
+      const validateStub = createValidateDeveloperNameStub();
 
       const publisher = new AgentPublisher(connection, sfProject, agentJson);
 
@@ -230,12 +229,7 @@ describe('AgentPublisher', () => {
   describe('getVersionDeveloperName', () => {
     it('should return version developer name', async () => {
       // Create minimal publisher instance by mocking validateDeveloperName
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const validateStub = $$.SANDBOX.stub(AgentPublisher.prototype as any, 'validateDeveloperName').returns({
-        developerName: 'test_agent',
-        bundleDir: 'test-bundle-dir',
-        bundleMetaPath: 'test-meta-path',
-      });
+      const validateStub = createValidateDeveloperNameStub();
 
       const publisher = new AgentPublisher(connection, sfProject, agentJson);
 
@@ -253,12 +247,7 @@ describe('AgentPublisher', () => {
 
     it('should throw error when version does not exist', async () => {
       // Create minimal publisher instance by mocking validateDeveloperName
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const validateStub = $$.SANDBOX.stub(AgentPublisher.prototype as any, 'validateDeveloperName').returns({
-        developerName: 'test_agent',
-        bundleDir: 'test-bundle-dir',
-        bundleMetaPath: 'test-meta-path',
-      });
+      const validateStub = createValidateDeveloperNameStub();
 
       const publisher = new AgentPublisher(connection, sfProject, agentJson);
 
@@ -283,12 +272,7 @@ describe('AgentPublisher', () => {
   describe('deployAuthoringBundle', () => {
     it('should handle missing bundle directory', async () => {
       // Create minimal publisher instance by mocking validateDeveloperName
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const validateStub = $$.SANDBOX.stub(AgentPublisher.prototype as any, 'validateDeveloperName').returns({
-        developerName: 'test_agent',
-        bundleDir: '/nonexistent/path',
-        bundleMetaPath: '/nonexistent/path/test_agent.bundle-meta.xml',
-      });
+      const validateStub = createValidateDeveloperNameStub('test_agent', '/nonexistent/path', '/nonexistent/path/test_agent.bundle-meta.xml');
 
       const publisher = new AgentPublisher(connection, sfProject, agentJson);
 
@@ -308,15 +292,37 @@ describe('AgentPublisher', () => {
     });
   });
 
+  describe('syncAuthoringBundle', () => {
+    it('should call deployAuthoringBundle twice with correct parameters', async () => {
+      // Create minimal publisher instance by mocking validateDeveloperName
+      const validateStub = createValidateDeveloperNameStub();
+      const publisher = new AgentPublisher(connection, sfProject, agentJson);
+
+      // Mock the deployAuthoringBundle method
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const deployAuthoringBundleStub = $$.SANDBOX.stub(publisher as any, 'deployAuthoringBundle').resolves();
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      const syncAuthoringBundle = (publisher as any).syncAuthoringBundle.bind(publisher);
+      const botVersionName = 'test_version_1';
+      
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      await syncAuthoringBundle(botVersionName);
+
+      // Verify deployAuthoringBundle was called twice
+      expect(deployAuthoringBundleStub.callCount).to.equal(2);
+      // Verify first call was with undefined (draft deployment)
+      expect(deployAuthoringBundleStub.firstCall.args[0]).to.be.undefined;
+      // Verify second call was with botVersionName (published deployment)
+      expect(deployAuthoringBundleStub.secondCall.calledWithExactly(botVersionName)).to.be.true;
+
+      validateStub.restore();
+    });
+  });
+
   describe('retrieveAgentMetadata', () => {
     it('should retrieve agent metadata successfully', async () => {
       // Create minimal publisher instance by mocking validateDeveloperName
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const validateStub = $$.SANDBOX.stub(AgentPublisher.prototype as any, 'validateDeveloperName').returns({
-        developerName: 'test_agent',
-        bundleDir: 'test-bundle-dir',
-        bundleMetaPath: 'test-meta-path',
-      });
+      const validateStub = createValidateDeveloperNameStub();
 
       // Setup successful metadata retrieval mock
       const compSet = new ComponentSet();
@@ -349,12 +355,7 @@ describe('AgentPublisher', () => {
 
     it('should throw error when retrieval fails', async () => {
       // Create minimal publisher instance by mocking validateDeveloperName
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const validateStub = $$.SANDBOX.stub(AgentPublisher.prototype as any, 'validateDeveloperName').returns({
-        developerName: 'test_agent',
-        bundleDir: 'test-bundle-dir',
-        bundleMetaPath: 'test-meta-path',
-      });
+      const validateStub = createValidateDeveloperNameStub();
 
       // Setup failed metadata retrieval mock
       const compSet = new ComponentSet();

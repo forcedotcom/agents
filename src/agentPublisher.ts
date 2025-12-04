@@ -110,7 +110,7 @@ export class AgentPublisher {
       // 2. deploy the AuthoringBundle's -meta.xml file with correct target attribute
       const botVersionName = await this.getVersionDeveloperName(response.botVersionId);
       await this.retrieveAgentMetadata(botVersionName);
-      await this.deployAuthoringBundle(botVersionName);
+      await this.syncAuthoringBundle(botVersionName);
 
       return { ...response, developerName: this.developerName };
     } else {
@@ -195,7 +195,22 @@ export class AgentPublisher {
   }
 
   /**
-   * Deploys the authoring bundle to the Salesforce org after setting the correct target attribute.
+   * Synchronizes the authoring bundle by deploying it twice due to server-side validation requirements.
+   *
+   * Due to a server side validation constraint, the authoring bundle (AAB) must be deployed twice:
+   * 1. First deployment without target attribute creates the AAB as a draft version
+   * 2. Second deployment with target attribute commits the AAB as the published version
+   *
+   * @param botVersionName The bot version name to use as the target for the final published deployment
+   * @private
+   */
+  private async syncAuthoringBundle(botVersionName: string): Promise<void> {
+    await this.deployAuthoringBundle();
+    await this.deployAuthoringBundle(botVersionName);
+  }
+
+  /**
+   * Deploys the authoring bundle to the Salesforce org after setting the correct target attribute if provided.
    * The target attribute is required for deployment but should not remain in the
    * local source files after deployment.
    *
@@ -203,8 +218,8 @@ export class AgentPublisher {
    *
    * @throws SfError if the deployment fails or if there are component deployment errors
    */
-  private async deployAuthoringBundle(botVersionName: string): Promise<void> {
-    // 1. add the target to the local authoring bundle meta.xml file
+  private async deployAuthoringBundle(botVersionName?: string): Promise<void> {
+    // 1. if botVersionName is provided, add the target to the local authoring bundle meta.xml file
     // 2. deploy the authoring bundle to the org
     // 3. remove the target from the localauthoring bundle meta.xml file
 
@@ -213,9 +228,11 @@ export class AgentPublisher {
     const authoringBundle = xmlParser.parse(await readFile(this.bundleMetaPath, 'utf-8')) as {
       AiAuthoringBundle: { target?: string };
     };
-    const target = `${this.developerName}.${botVersionName}`;
-    authoringBundle.AiAuthoringBundle.target = `${this.developerName}.${botVersionName}`;
-    getLogger().debug(`Setting target to ${target} in ${this.bundleMetaPath}`);
+    if(botVersionName) {
+      const target = `${this.developerName}.${botVersionName}`;
+      authoringBundle.AiAuthoringBundle.target = `${this.developerName}.${botVersionName}`;
+      getLogger().debug(`Setting target to ${target} in ${this.bundleMetaPath}`);
+    }
     const xmlBuilder = new XMLBuilder({
       ignoreAttributes: false,
       format: true,
