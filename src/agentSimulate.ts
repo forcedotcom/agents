@@ -29,7 +29,7 @@ import {
   PlannerResponse,
 } from './types.js';
 import { createTraceFlag, findTraceFlag, getDebugLog } from './apexUtils';
-import { appendTranscriptEntry } from './utils';
+import { appendTranscriptEntry, useNamedUserJwt } from './utils';
 
 /**
  * A service to simulate interactions with an agent using a local .agent file.
@@ -129,10 +129,18 @@ export class AgentSimulate extends AgentPreviewBase {
 
     try {
       void Lifecycle.getInstance().emit('agents:simulation-starting', {});
-      const response = await this.maybeMock.request<AgentPreviewStartResponse>(
-        'POST',
-        `${this.apiBase}/v1.1/preview/sessions`,
-        body
+      this.connection = await useNamedUserJwt(this.connection);
+
+      const response = await this.connection.request<AgentPreviewStartResponse>(
+        {
+          method: 'POST',
+          url: `${this.apiBase}/v1.1/preview/sessions`,
+          headers: {
+            'x-client-name': 'afdx',
+          },
+          body: JSON.stringify(body),
+        },
+        { retry: { maxRetries: 3 } }
       );
       const agentIdForStorage = basename(this.agentFilePath);
 
@@ -150,6 +158,10 @@ export class AgentSimulate extends AgentPreviewBase {
       return response;
     } catch (err) {
       throw SfError.wrap(err);
+    } finally {
+      // Always restore the original connection, even if an error occurred
+      delete this.connection.accessToken;
+      await this.connection.refreshAuth();
     }
   }
 
@@ -188,7 +200,16 @@ export class AgentSimulate extends AgentPreviewBase {
         role: 'user',
         text: message,
       });
-      const response = await this.maybeMock.request<AgentPreviewSendResponse>('POST', url, body);
+      this.connection = await useNamedUserJwt(this.connection);
+
+      const response = await this.connection.request<AgentPreviewSendResponse>({
+        method: 'POST',
+        url,
+        body: JSON.stringify(body),
+        headers: {
+          'x-client-name': 'afdx',
+        },
+      });
 
       await appendTranscriptEntry({
         timestamp: new Date().toISOString(),
@@ -211,6 +232,10 @@ export class AgentSimulate extends AgentPreviewBase {
       return response;
     } catch (err) {
       throw SfError.wrap(err);
+    } finally {
+      // Always restore the original connection, even if an error occurred
+      delete this.connection.accessToken;
+      await this.connection.refreshAuth();
     }
   }
 
