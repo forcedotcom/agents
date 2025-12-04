@@ -132,7 +132,10 @@ export class AgentSimulate extends AgentPreviewBase {
       const response = await this.maybeMock.request<AgentPreviewStartResponse>(
         'POST',
         `${this.apiBase}/v1.1/preview/sessions`,
-        body
+        body,
+        {
+          'x-client-name': 'afdx',
+        }
       );
       const agentIdForStorage = basename(this.agentFilePath);
 
@@ -188,7 +191,9 @@ export class AgentSimulate extends AgentPreviewBase {
         role: 'user',
         text: message,
       });
-      const response = await this.maybeMock.request<AgentPreviewSendResponse>('POST', url, body);
+      const response = await this.maybeMock.request<AgentPreviewSendResponse>('POST', url, body, {
+        'x-client-name': 'afdx',
+      });
 
       await appendTranscriptEntry({
         timestamp: new Date().toISOString(),
