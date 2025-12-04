@@ -1,7 +1,7 @@
 {
   "name": "@salesforce/agents",
   "description": "Client side APIs for working with Salesforce agents",
-  "version": "0.19.1",
+  "version": "0.19.2",
   "license": "Apache-2.0",
   "author": "Salesforce",
   "main": "lib/index",

@@ -1,3 +1,12 @@
+## [0.19.2](https://github.com/forcedotcom/agents/compare/0.19.1...0.19.2) (2025-12-04)
+
+
+### Bug Fixes
+
+* deploy aab twice, first as draft and second as committed ([ef37d8c](https://github.com/forcedotcom/agents/commit/ef37d8c2a0319d9abb28053708b68a2e42eec947))
+
+
+
 ## [0.19.1](https://github.com/forcedotcom/agents/compare/0.19.0...0.19.1) (2025-12-03)
 
 
