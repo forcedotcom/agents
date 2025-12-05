@@ -148,6 +148,7 @@ export class AgentSimulate extends AgentPreviewBase {
           method: 'POST',
           url: `${this.apiBase}/v1.1/preview/sessions`,
           headers: {
+            'x-attributed-client': 'no-builder', // <- removes markdown from responses
             'x-client-name': 'afdx',
           },
           body: JSON.stringify(body),
