@@ -112,11 +112,11 @@ export class AgentSimulate extends AgentPreviewBase {
     let bypassUser =
       (
         await this.connection.query(
-          `SELECT Id FROM USER WHERE name='${this.compiledAgent.globalConfiguration.defaultAgentUser}'`
+          `SELECT Id FROM USER WHERE username='${this.compiledAgent.globalConfiguration.defaultAgentUser}'`
         )
       ).totalSize === 1;
 
-    if (bypassUser) {
+    if (bypassUser && this.compiledAgent.globalConfiguration.agentType === 'AgentforceEmployeeAgent') {
       // another situation which bypassUser = false, is when previewing an agent script, with a valid default_agent_user, and it's an AgentforceEmployeeAgent type
       bypassUser = false;
     }
