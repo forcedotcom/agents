@@ -108,6 +108,18 @@ export class AgentSimulate extends AgentPreviewBase {
     }
 
     this.logger.debug('Starting agent simulation session');
+    // send bypassUser=false when the compiledAgent.globalConfiguration.defaultAgentUser is INVALID
+    let bypassUser =
+      (
+        await this.connection.query(
+          `SELECT Id FROM USER WHERE name='${this.compiledAgent.globalConfiguration.defaultAgentUser}'`
+        )
+      ).totalSize === 1;
+
+    if (bypassUser) {
+      // another situation which bypassUser = false, is when previewing an agent script, with a valid default_agent_user, and it's an AgentforceEmployeeAgent type
+      bypassUser = false;
+    }
 
     const body = {
       agentDefinition: this.compiledAgent,
@@ -122,7 +134,7 @@ export class AgentSimulate extends AgentPreviewBase {
         chunkTypes: ['Text', 'LightningChunk'],
       },
       richContentCapabilities: {},
-      bypassUser: true,
+      bypassUser,
       executionHistory: [],
       conversationContext: [],
     };
