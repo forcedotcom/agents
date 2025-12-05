@@ -261,10 +261,21 @@ export class AgentSimulate extends AgentPreviewBase {
   }
 
   public async trace(sessionId: string, messageId: string): Promise<PlannerResponse> {
-    return this.maybeMock.request<PlannerResponse>(
-      'GET',
-      `${this.apiBase}/v1.1/preview/sessions/${sessionId}/plans/${messageId}`
-    );
+    try {
+      this.connection = await useNamedUserJwt(this.connection);
+
+      return await this.connection.request<PlannerResponse>({
+        method: 'GET',
+        url: `${this.apiBase}/v1.1/preview/sessions/${sessionId}/plans/${messageId}`,
+        headers: {
+          'x-client-name': 'afdx',
+        },
+      });
+    } finally {
+      // Always restore the original connection, even if an error occurred
+      delete this.connection.accessToken;
+      await this.connection.refreshAuth();
+    }
   }
 
   // once we're previewing agents in the org, with mockActions = false, we'll have to figure out how to get the correct user that was simulated for apex invocattion
