@@ -1,3 +1,12 @@
+## [0.19.6](https://github.com/forcedotcom/agents/compare/0.19.5...0.19.6) (2025-12-05)
+
+
+### Bug Fixes
+
+* conditionally set bypassUser ([86f7f09](https://github.com/forcedotcom/agents/commit/86f7f09067452632ec91edcc8184104b6a6808ea))
+
+
+
 ## [0.19.5](https://github.com/forcedotcom/agents/compare/0.19.4...0.19.5) (2025-12-05)
 
 
