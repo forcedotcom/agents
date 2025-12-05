@@ -1,3 +1,12 @@
+## [0.19.5](https://github.com/forcedotcom/agents/compare/0.19.4...0.19.5) (2025-12-05)
+
+
+### Bug Fixes
+
+* use named JWT for trace api call ([b74d0b9](https://github.com/forcedotcom/agents/commit/b74d0b9013d2b9fe27f4fa7d71649351cc449b35))
+
+
+
 ## [0.19.4](https://github.com/forcedotcom/agents/compare/0.19.3...0.19.4) (2025-12-04)
 
 
