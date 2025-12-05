@@ -132,6 +132,9 @@ describe('AgentSimulate', () => {
         ],
       };
 
+      // Mock the query for default agent user check
+      $$.SANDBOX.stub(connection, 'query').resolves({ totalSize: 0, done: true, records: [] });
+
       const requestStub = $$.SANDBOX.stub(connection, 'request');
       requestStub
         .withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/preview/sessions') }))
@@ -231,6 +234,9 @@ describe('AgentSimulate', () => {
         ],
       };
 
+      // Mock the query for default agent user check
+      $$.SANDBOX.stub(connection, 'query').resolves({ totalSize: 0, done: true, records: [] });
+
       const requestStub = $$.SANDBOX.stub(connection, 'request');
       requestStub
         .withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/preview/sessions') }))
@@ -285,6 +291,9 @@ describe('AgentSimulate', () => {
         ],
       };
 
+      // Mock the query for default agent user check
+      $$.SANDBOX.stub(connection, 'query').resolves({ totalSize: 0, done: true, records: [] });
+
       const requestStub = $$.SANDBOX.stub(connection, 'request');
       requestStub
         .withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/preview/sessions') }))
@@ -338,6 +347,9 @@ describe('AgentSimulate', () => {
           },
         ],
       };
+
+      // Mock the query for default agent user check
+      $$.SANDBOX.stub(connection, 'query').resolves({ totalSize: 0, done: true, records: [] });
 
       const requestStub = $$.SANDBOX.stub(connection, 'request');
       requestStub
