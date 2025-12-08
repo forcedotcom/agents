@@ -454,7 +454,7 @@ describe('Agents', () => {
       // Verify .bundle-meta.xml file content
       expect(metaXmlContent).to.include('<?xml version="1.0" encoding="UTF-8"?>');
       expect(metaXmlContent).to.include('<AiAuthoringBundle xmlns="http://soap.sforce.com/2006/04/metadata">');
-      expect(metaXmlContent).to.include('<bundleType>customer</bundleType>');
+      expect(metaXmlContent).to.include('<bundleType>AGENT</bundleType>');
       expect(metaXmlContent).to.include('</AiAuthoringBundle>');
     });
 
@@ -518,7 +518,7 @@ describe('Agents', () => {
       expect(agentContent).to.include('description: "Answer questions about HR policies"');
 
       // Verify .bundle-meta.xml file content
-      expect(metaXmlContent).to.include('<bundleType>internal</bundleType>');
+      expect(metaXmlContent).to.include('<bundleType>AGENT</bundleType>');
     });
 
     it('should handle empty topics array in agentSpec', async () => {

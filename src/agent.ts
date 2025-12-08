@@ -344,12 +344,6 @@ language:
     additional_locales: ""
     all_additional_locales: False
 
-connection messaging:
-    escalation_message: "One moment while I connect you to the next available service representative."
-    outbound_route_type: "OmniChannelFlow"
-    outbound_route_name: "agent_support_flow"
-    adaptive_response_allowed: True
-
 start_agent topic_selector:
     label: "Topic Selector"
     description: "Welcome the user and determine the appropriate topic based on user input"
@@ -458,7 +452,7 @@ ${ensureArray(options.agentSpec?.topics)
     // Write meta.xml file
     const metaXml = `<?xml version="1.0" encoding="UTF-8"?>
 <AiAuthoringBundle xmlns="http://soap.sforce.com/2006/04/metadata">
-  <bundleType>${options.agentSpec?.agentType ?? 'AGENT'}</bundleType>
+  <bundleType>AGENT</bundleType>
 </AiAuthoringBundle>`;
     await writeFile(metaXmlPath, metaXml);
   }
