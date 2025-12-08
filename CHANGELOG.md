@@ -1,3 +1,12 @@
+## [0.19.7](https://github.com/forcedotcom/agents/compare/0.19.6...0.19.7) (2025-12-08)
+
+
+### Bug Fixes
+
+* update generated AAB - removes connection, sets to AGENT ([24d5a0d](https://github.com/forcedotcom/agents/commit/24d5a0db328d721748469952a59217d605964951))
+
+
+
 ## [0.19.6](https://github.com/forcedotcom/agents/compare/0.19.5...0.19.6) (2025-12-05)
 
 
