@@ -623,5 +623,31 @@ const verifyAgentSpecConfig = (config: AgentJobSpecCreateConfig): void => {
 };
 
 // Decodes all HTML entities in ai-assist API responses.
-const decodeResponse = <T extends object>(response: T): T =>
-  JSON.parse(decodeHtmlEntities(JSON.stringify(response))) as T;
+// Recursively decodes HTML entities in all string values (not keys) throughout the object structure.
+export const decodeResponse = <T>(response: T): T => {
+  if (response === null || response === undefined) {
+    return response;
+  }
+
+  // Handle arrays
+  if (Array.isArray(response)) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+    return response.map((item) => decodeResponse(item)) as T;
+  }
+
+  // Handle primitive values (strings, numbers, booleans, etc.)
+  if (typeof response !== 'object') {
+    if (typeof response === 'string') {
+      return decodeHtmlEntities(response) as unknown as T;
+    }
+    return response;
+  }
+
+  // Handle objects - only decode values, preserve keys
+  const decoded: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(response)) {
+    // Recursively decode the value, preserving the key as-is
+    decoded[key] = decodeResponse(value);
+  }
+  return decoded as T;
+};

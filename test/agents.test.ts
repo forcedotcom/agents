@@ -21,6 +21,7 @@ import { Connection, SfError, SfProject } from '@salesforce/core';
 import { ComponentSetBuilder, ComponentSet, MetadataApiRetrieve } from '@salesforce/source-deploy-retrieve';
 import sinon from 'sinon';
 import { Agent, type AgentCreateConfig, type AgentJson } from '../src';
+import { decodeResponse } from '../src/agent';
 import type { ExtendedAgentJobSpec, DraftAgentTopics } from '../src/types';
 import * as utils from '../src/utils';
 import { AgentPublisher } from '../src/agentPublisher';
@@ -81,6 +82,26 @@ describe('Agents', () => {
     expect(output.compiledArtifact).to.have.property('globalConfiguration').and.be.an('object');
     expect(output.compiledArtifact).to.have.property('agentVersion').and.be.an('object');
     await fs.rm('force-app', { recursive: true, force: true });
+  });
+
+  describe('HTML entity decoding', () => {
+    it('should decode HTML entities in error messages', () => {
+      const errorResponse = {
+        errorMessage:
+          'Error generating agent definition. Cannot invoke &quot;String.equals(Object)&quot; because the return value of &quot;agentforce.ai.assist.connect.api.outputs.AgentGenActionRepresentationBuilder.getApiName()&quot; is null',
+        isSuccess: false,
+      };
+
+      const decoded = decodeResponse(errorResponse);
+
+      // Verify HTML entities are decoded
+      expect(decoded.errorMessage).to.include('"String.equals(Object)"');
+      expect(decoded.errorMessage).to.include(
+        '"agentforce.ai.assist.connect.api.outputs.AgentGenActionRepresentationBuilder.getApiName()"'
+      );
+      expect(decoded.errorMessage).to.not.include('&quot;');
+      expect(decoded.isSuccess).to.equal(false);
+    });
   });
 
   describe('compile AgentScript', () => {
