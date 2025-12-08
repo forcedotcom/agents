@@ -1,3 +1,12 @@
+## [0.19.8](https://github.com/forcedotcom/agents/compare/0.19.7...0.19.8) (2025-12-08)
+
+
+### Bug Fixes
+
+* decode html entities to produce valid JSON still ([9e6f584](https://github.com/forcedotcom/agents/commit/9e6f584a1fa8c4a8442b83ea3ba1959672325bd8))
+
+
+
 ## [0.19.7](https://github.com/forcedotcom/agents/compare/0.19.6...0.19.7) (2025-12-08)
 
 
