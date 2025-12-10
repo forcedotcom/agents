@@ -23,6 +23,7 @@ import {
   type EndReason,
   type BaseAgentConfig,
   type AgentInteractionBase,
+  PlannerResponse,
 } from './types.js';
 
 /**
@@ -90,4 +91,13 @@ export abstract class AgentPreviewBase implements AgentInteractionBase {
    * @returns `AgentPreviewEndResponse`
    */
   public abstract end(sessionId: string, reason: EndReason): Promise<AgentPreviewEndResponse>;
+
+  /**
+   * Get the traces for a given session and message IDs.
+   *
+   * @param sessionId A session ID provided by first calling `start()`.
+   * @param messageIds An array of message IDs to get the traces for.
+   * @returns `PlannerResponse[]`
+   */
+  public abstract traces(sessionId: string, messageIds: string[]): Promise<PlannerResponse[]>;
 }
