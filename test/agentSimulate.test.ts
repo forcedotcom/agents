@@ -20,11 +20,20 @@ import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection } from '@salesforce/core';
 import sinon from 'sinon';
+import type { PlannerResponse } from '../src/types';
 import { AgentSimulate } from '../src/agentSimulate';
 import { Agent } from '../src/agent';
 import { readTranscriptEntries } from '../src/utils';
 import * as utils from '../src/utils';
 import { compileAgentScriptResponseSuccess } from './testData';
+
+// Import mock data and extract PlannerResponse from the returnValue
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const apiTrace123 = require('./mocks/trace_1.json') as PlannerResponse;
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const apiTrace456 = require('./mocks/trace_2.json') as PlannerResponse;
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const apiTrace789 = require('./mocks/trace_3.json') as PlannerResponse;
 
 describe('AgentSimulate', () => {
   const $$ = new TestContext();
@@ -34,6 +43,8 @@ describe('AgentSimulate', () => {
   const agentFileName = 'test-agent.agent';
   const agentFilePath = join(process.cwd(), 'test', 'fixtures', agentFileName);
   const agentApiName = agentFileName; // basename with extension
+  let useNamedUserJwtStub: sinon.SinonStub;
+  let refreshAuthStub: sinon.SinonStub;
 
   beforeEach(async () => {
     $$.inProject(true);
@@ -44,9 +55,9 @@ describe('AgentSimulate', () => {
     $$.SANDBOXES.CONNECTION.restore();
 
     // Mock useNamedUserJwt to return the connection without making HTTP calls
-    $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
+    useNamedUserJwtStub = $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
     // Mock connection.refreshAuth to avoid making HTTP calls during auth refresh
-    $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
+    refreshAuthStub =$$.SANDBOX.stub(connection, 'refreshAuth').resolves();
 
     // Create the test .agent file
     const fixturesDir = join(process.cwd(), 'test', 'fixtures');
@@ -362,6 +373,87 @@ describe('AgentSimulate', () => {
 
       // @ts-expect-error - accessing private property for testing
       expect(agentSimulate.compiledAgent?.agentVersion.developerName).to.equal('v2');
+    });
+  });
+
+  describe('traces()', () => {
+    it('should retrieve traces for multiple message IDs', async () => {
+      const sessionId = 'test-session-id';
+      const messageIds = ['123', '456', '789'];
+
+      // Mock responses for each trace request
+      const traceResponses = [apiTrace123, apiTrace456, apiTrace789];
+
+      // Mock the request calls for each message ID
+      const requestStub = $$.SANDBOX.stub(connection, 'request');
+      messageIds.forEach((messageId, index) => {
+        requestStub
+          .withArgs(
+            sinon.match({
+              method: 'GET',
+              url: `https://api.salesforce.com/einstein/ai-agent/v1.1/preview/sessions/${sessionId}/plans/${messageId}`,
+              headers: sinon.match({ 'x-client-name': 'afdx' }),
+            })
+          )
+          .resolves(traceResponses[index]);
+      });
+
+      const agentSimulate = new AgentSimulate(connection, agentFilePath, true);
+
+      const result = await agentSimulate.traces(sessionId, messageIds);
+
+      // Verify the result
+      expect(result).to.be.an('array');
+      expect(result).to.have.lengthOf(3);
+
+      // Verify that useNamedUserJwt and refreshAuth were called once each
+      expect(useNamedUserJwtStub.calledOnce).to.be.true;
+      expect(refreshAuthStub.calledOnce).to.be.true;
+
+      // Verify that request was called for each message ID
+      messageIds.forEach((messageId) => {
+        sinon.assert.calledWith(
+          requestStub,
+          sinon.match({
+            method: 'GET',
+            url: `https://api.salesforce.com/einstein/ai-agent/v1.1/preview/sessions/${sessionId}/plans/${messageId}`,
+            headers: sinon.match({ 'x-client-name': 'afdx' }),
+          })
+        );
+      });
+    });
+
+    it('should handle empty message IDs array', async () => {
+      const sessionId = 'test-session-id';
+      const messageIds: string[] = [];
+
+      const agentSimulate = new AgentSimulate(connection, agentFilePath, true);
+
+      const result = await agentSimulate.traces(sessionId, messageIds);
+
+      // Verify the result is an empty array
+      expect(result).to.be.an('array');
+      expect(result).to.have.lengthOf(0);
+    });
+
+    it('should wrap errors properly', async () => {
+      const sessionId = 'test-session-id';
+      const messageIds = ['123'];
+
+      // Mock the request to throw an error
+      const requestStub = $$.SANDBOX.stub(connection, 'request');
+      requestStub.rejects(new Error('API Error'));
+
+      const agentSimulate = new AgentSimulate(connection, agentFilePath, true);
+
+      try {
+        await agentSimulate.traces(sessionId, messageIds);
+        expect.fail('Should have thrown an error');
+      } catch (error) {
+        expect(error).to.be.instanceOf(Error);
+        // SfError.wrap should wrap the error
+        expect((error as Error).message).to.include('API Error');
+      }
     });
   });
 });
