@@ -40,12 +40,17 @@ export type BaseAgentConfig = {
 /**
  * Options for creating instances of agents from an org.
  */
-export type AgentOptions = {
+
+export type AgentOptions = ScriptAgentOptions | ProductionAgentOptions;
+export type ScriptAgentOptions = {
   connection: Connection;
-  project?: SfProject;
-  /**
-   * The API name or ID of the agent (Bot) that exists in the org.
-   */
+  project: SfProject;
+  // path to AAB dir, e.g. force-app/main/default/aiAuthoringBundles/myBundle
+  aabDirectory: string;
+};
+export type ProductionAgentOptions = {
+  connection: Connection;
+  project: SfProject;
   nameOrId: string;
 };
 

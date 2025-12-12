@@ -158,7 +158,7 @@ describe('Agents', () => {
 
       expect(output).to.have.property('status', 'success');
       expect(output).to.have.property('compiledArtifact').and.be.an('object');
-      expect(output.compiledArtifact!).to.have.property('schemaVersion', '2.0');
+      expect(output.compiledArtifact).to.have.property('schemaVersion', '2.0');
       expect(output.compiledArtifact!.globalConfiguration.developerName).to.equal('test_agent_v1');
     });
 
@@ -193,7 +193,7 @@ describe('Agents', () => {
 
       expect(output).to.have.property('status', 'success');
       expect(output).to.have.property('compiledArtifact').and.be.an('object');
-      expect(output.compiledArtifact!).to.have.property('schemaVersion', '2.0');
+      expect(output.compiledArtifact).to.have.property('schemaVersion', '2.0');
       expect(output.compiledArtifact!.globalConfiguration.developerName).to.equal('complex_agent');
     });
   });

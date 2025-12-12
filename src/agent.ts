@@ -29,7 +29,6 @@ import {
   type AgentJson,
   type AgentJobSpec,
   type AgentJobSpecCreateConfig,
-  type AgentOptions,
   type BotActivationResponse,
   type BotMetadata,
   type BotVersionMetadata,
@@ -39,10 +38,14 @@ import {
   AgentScriptContent,
   PublishAgent,
   ExtendedAgentJobSpec,
+  ProductionAgentOptions,
+  ScriptAgentOptions,
 } from './types.js';
 import { MaybeMock } from './maybe-mock';
 import { AgentPublisher } from './agentPublisher';
 import { decodeHtmlEntities, useNamedUserJwt } from './utils';
+import ScriptAgent from './scriptAgent';
+import ProductionAgent from './productionAgent';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agents');
@@ -85,28 +88,23 @@ export const AgentCreateLifecycleStages = {
  * `const agentList = await Agent.list(project);`
  */
 export class Agent {
-  // The ID of the agent (Bot)
-  private id?: string;
-  // The name of the agent (Bot)
-  private name?: string;
-  // The metadata fields for the agent (Bot and BotVersion)
-  private botMetadata?: BotMetadata;
-
   /**
    * Create an instance of an agent in an org. Must provide a connection to an org
    * and the agent (Bot) API name or ID as part of `AgentOptions`.
    *
    * @param options
    */
-  public constructor(private options: AgentOptions) {
-    if (!options.nameOrId) {
-      throw messages.createError('missingAgentNameOrId');
-    }
+  public constructor() {}
 
-    if (options.nameOrId.startsWith('0Xx') && [15, 18].includes(options.nameOrId.length)) {
-      this.id = options.nameOrId;
+  public static async init(
+    options: ProductionAgentOptions | ScriptAgentOptions
+  ): Promise<ScriptAgent | ProductionAgent> {
+    const jwtConnection = await useNamedUserJwt(options.connection);
+    if ('aabDirectory' in options) {
+      // create a script agent
+      return new ScriptAgent({ ...options, connection: jwtConnection });
     } else {
-      this.name = options.nameOrId;
+      return new ProductionAgent({ ...options, connection: jwtConnection });
     }
   }
 
@@ -527,90 +525,6 @@ ${ensureArray(options.agentSpec?.topics)
   ): Promise<PublishAgent> {
     const publisher = new AgentPublisher(connection, project, agentJson);
     return publisher.publishAgentJson();
-  }
-
-  /**
-   * Returns the ID for this agent.
-   *
-   * @returns The ID of the agent (The `Bot` ID).
-   */
-  public async getId(): Promise<string> {
-    if (!this.id) {
-      await this.getBotMetadata();
-    }
-    return this.id!; // getBotMetadata() ensures this.id is not undefined
-  }
-
-  /**
-   * Queries BotDefinition and BotVersions (limited to 10) for the bot metadata and assigns:
-   * 1. this.id
-   * 2. this.name
-   * 3. this.botMetadata
-   * 4. this.botVersionMetadata
-   */
-  public async getBotMetadata(): Promise<BotMetadata> {
-    if (!this.botMetadata) {
-      const whereClause = this.id ? `Id = '${this.id}'` : `DeveloperName = '${this.name as string}'`;
-      const query = `SELECT FIELDS(ALL), (SELECT FIELDS(ALL) FROM BotVersions LIMIT 10) FROM BotDefinition WHERE ${whereClause} LIMIT 1`;
-      this.botMetadata = await this.options.connection.singleRecordQuery<BotMetadata>(query);
-      this.id = this.botMetadata.Id;
-      this.name = this.botMetadata.DeveloperName;
-    }
-    return this.botMetadata;
-  }
-
-  /**
-   * Returns the latest bot version metadata.
-   *
-   * @returns the latest bot version metadata
-   */
-  public async getLatestBotVersionMetadata(): Promise<BotVersionMetadata> {
-    if (!this.botMetadata) {
-      this.botMetadata = await this.getBotMetadata();
-    }
-    const botVersions = this.botMetadata.BotVersions.records;
-    return botVersions[botVersions.length - 1];
-  }
-
-  /**
-   * Activates the agent.
-   *
-   * @returns void
-   */
-  public async activate(): Promise<void> {
-    return this.setAgentStatus('Active');
-  }
-
-  /**
-   * Deactivates the agent.
-   *
-   * @returns void
-   */
-  public async deactivate(): Promise<void> {
-    return this.setAgentStatus('Inactive');
-  }
-
-  private async setAgentStatus(desiredState: 'Active' | 'Inactive'): Promise<void> {
-    const botMetadata = await this.getBotMetadata();
-    const botVersionMetadata = await this.getLatestBotVersionMetadata();
-
-    if (botMetadata.IsDeleted) {
-      throw messages.createError('agentIsDeleted', [botMetadata.DeveloperName]);
-    }
-
-    if (botVersionMetadata.Status === desiredState) {
-      getLogger().debug(`Agent ${botMetadata.DeveloperName} is already ${desiredState}. Nothing to do.`);
-      return;
-    }
-
-    const url = `/connect/bot-versions/${botVersionMetadata.Id}/activation`;
-    const maybeMock = new MaybeMock(this.options.connection);
-    const response = await maybeMock.request<BotActivationResponse>('POST', url, { status: desiredState });
-    if (response.success) {
-      this.botMetadata!.BotVersions.records[0].Status = response.isActivated ? 'Active' : 'Inactive';
-    } else {
-      throw messages.createError('agentActivationError', [response.messages?.toString() ?? 'unknown']);
-    }
   }
 }
 
