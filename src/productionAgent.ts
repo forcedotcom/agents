@@ -29,11 +29,17 @@ import {
 } from './types';
 import { MaybeMock } from './maybe-mock';
 import { appendTranscriptEntry } from './utils';
-import { getDebugLog } from './apexUtils';
+import { ensureTraceFlag, getDebugLog } from './apexUtils';
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agents');
 
 export default class ProductionAgent {
+  public preview: {
+    start: (apexDebugging: boolean) => Promise<AgentPreviewStartResponse>;
+    send: (message: string) => Promise<AgentPreviewSendResponse>;
+    getAllTraces: () => Promise<PlannerResponse[]>;
+    end: (reason: EndReason) => Promise<AgentPreviewEndResponse>;
+  };
   private botMetadata: BotMetadata | undefined;
   private id: string | undefined;
   private name: string | undefined;
@@ -41,12 +47,7 @@ export default class ProductionAgent {
     env.getBoolean('SF_TEST_API') ? 'test.' : ''
   }api.salesforce.com/einstein/ai-agent`;
   private planIds = new Set<string>();
-  private preview: {
-    start: (apexDebugging: boolean) => Promise<AgentPreviewStartResponse>;
-    send: (message: string) => Promise<AgentPreviewSendResponse>;
-    getAllTraces: () => Promise<PlannerResponse[]>;
-    end: (reason: EndReason) => Promise<AgentPreviewEndResponse>;
-  };
+
   private sessionId: string | undefined;
   private apexDebugging: boolean | undefined;
   public constructor(private options: ProductionAgentOptions) {
@@ -76,7 +77,7 @@ export default class ProductionAgent {
    */
   public async getBotMetadata(): Promise<BotMetadata> {
     if (!this.botMetadata) {
-      const whereClause = this.id ? `Id = '${this.id}'` : `DeveloperName = '${this.name}'`;
+      const whereClause = this.id ? `Id = '${this.id}'` : `DeveloperName = '${this.name!}'`;
       const query = `SELECT FIELDS(ALL), (SELECT FIELDS(ALL) FROM BotVersions LIMIT 10) FROM BotDefinition WHERE ${whereClause} LIMIT 1`;
       this.botMetadata = await this.options.connection.singleRecordQuery<BotMetadata>(query);
       this.id = this.botMetadata.Id;
@@ -193,7 +194,7 @@ export default class ProductionAgent {
     }
   }
 
-  private async sendMessage(message: string) {
+  private async sendMessage(message: string): Promise<AgentPreviewSendResponse> {
     if (!this.sessionId) {
       throw SfError.create({ name: 'noSessionId', message: 'no sessionId, call .start() first' });
     }
@@ -217,7 +218,7 @@ export default class ProductionAgent {
       // if there isn't one, create one.
       const start = Date.now();
       if (this.apexDebugging) {
-        await this.ensureTraceFlag();
+        await ensureTraceFlag(this.name!, this.options.connection);
       }
       const response = await this.options.connection.request<AgentPreviewSendResponse>({
         method: 'POST',

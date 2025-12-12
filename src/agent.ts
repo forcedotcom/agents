@@ -22,20 +22,16 @@ import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { Connection, Lifecycle, Logger, Messages, SfError, SfProject, generateApiName } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
-import { Duration, ensureArray, env, snakeCase } from '@salesforce/kit';
+import { Duration, ensureArray, snakeCase } from '@salesforce/kit';
 import {
   type AgentCreateConfig,
   type AgentCreateResponse,
   type AgentJson,
   type AgentJobSpec,
   type AgentJobSpecCreateConfig,
-  type BotActivationResponse,
   type BotMetadata,
-  type BotVersionMetadata,
-  type CompileAgentScriptResponse,
   type DraftAgentTopicsBody,
   type DraftAgentTopicsResponse,
-  AgentScriptContent,
   PublishAgent,
   ExtendedAgentJobSpec,
   ProductionAgentOptions,
@@ -453,60 +449,6 @@ ${ensureArray(options.agentSpec?.topics)
   <bundleType>AGENT</bundleType>
 </AiAuthoringBundle>`;
     await writeFile(metaXmlPath, metaXml);
-  }
-
-  /**
-   * Compiles AgentScript returning agent JSON when successful, otherwise the compile errors are returned.
-   *
-   * @param connection The connection to the org
-   * @param agentScriptContent The AgentScriptContent to compile
-   * @returns Promise<CompileAgentScriptResponse> The raw API response
-   * @beta
-   */
-  public static async compileAgentScript(
-    connection: Connection,
-    agentScriptContent: AgentScriptContent
-  ): Promise<CompileAgentScriptResponse> {
-    const url = `https://${
-      env.getBoolean('SF_TEST_API') ? 'test.' : ''
-    }api.salesforce.com/einstein/ai-agent/v1.1/authoring/scripts`;
-
-    getLogger().debug(`Compiling .agent : ${agentScriptContent}`);
-    const compileData = {
-      assets: [
-        {
-          type: 'AFScript',
-          name: 'AFScript',
-          content: agentScriptContent,
-        },
-      ],
-      afScriptVersion: '1.0.1',
-    };
-
-    const headers = {
-      'x-client-name': 'afdx',
-      'content-type': 'application/json',
-    };
-
-    // Use JWT token for this operation and ensure connection is restored afterwards
-    try {
-      await useNamedUserJwt(connection);
-      return await connection.request<CompileAgentScriptResponse>(
-        {
-          method: 'POST',
-          url,
-          headers,
-          body: JSON.stringify(compileData),
-        },
-        { retry: { maxRetries: 3 } }
-      );
-    } catch (error) {
-      throw SfError.wrap(error);
-    } finally {
-      // Always restore the original connection, even if an error occurred
-      delete connection.accessToken;
-      await connection.refreshAuth();
-    }
   }
 
   /**
