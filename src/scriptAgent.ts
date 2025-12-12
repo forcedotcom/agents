@@ -36,7 +36,7 @@ import { AgentPublisher } from './agentPublisher';
 import { appendTranscriptEntry } from './utils';
 import { getDebugLog } from './apexUtils';
 
-export default class ScriptAgent {
+export class ScriptAgent {
   public preview;
   private mockMode: 'Mock' | 'Live Test' = 'Mock';
   private apexDebugging: boolean | undefined;

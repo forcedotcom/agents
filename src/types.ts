@@ -775,8 +775,8 @@ export enum AgentSource {
   SCRIPT = 'script',
 }
 
-export type ScriptAgent = { DeveloperName: string; source: AgentSource.SCRIPT; path: string };
-export type PublishedAgent = {
+export type ScriptAgentType = { DeveloperName: string; source: AgentSource.SCRIPT; path: string };
+export type ProductionAgentType = {
   Id: string;
   DeveloperName: string;
   source: AgentSource.PUBLISHED;

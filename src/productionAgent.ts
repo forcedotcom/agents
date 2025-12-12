@@ -33,7 +33,7 @@ import { ensureTraceFlag, getDebugLog } from './apexUtils';
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agents');
 
-export default class ProductionAgent {
+export class ProductionAgent {
   public preview: {
     start: (apexDebugging: boolean) => Promise<AgentPreviewStartResponse>;
     send: (message: string) => Promise<AgentPreviewSendResponse>;

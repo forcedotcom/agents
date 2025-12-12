@@ -61,6 +61,7 @@ export class AgentPublisher {
    *
    * @param connection The connection to the Salesforce org
    * @param project The Salesforce project
+   * @param agentJson
    */
   public constructor(connection: Connection, project: SfProject, agentJson: AgentJson) {
     this.maybeMock = new MaybeMock(connection);
@@ -228,7 +229,7 @@ export class AgentPublisher {
     const authoringBundle = xmlParser.parse(await readFile(this.bundleMetaPath, 'utf-8')) as {
       AiAuthoringBundle: { target?: string };
     };
-    if(botVersionName) {
+    if (botVersionName) {
       const target = `${this.developerName}.${botVersionName}`;
       authoringBundle.AiAuthoringBundle.target = `${this.developerName}.${botVersionName}`;
       getLogger().debug(`Setting target to ${target} in ${this.bundleMetaPath}`);

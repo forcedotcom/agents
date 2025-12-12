@@ -40,8 +40,8 @@ import {
 import { MaybeMock } from './maybe-mock';
 import { AgentPublisher } from './agentPublisher';
 import { decodeHtmlEntities, useNamedUserJwt } from './utils';
-import ScriptAgent from './scriptAgent';
-import ProductionAgent from './productionAgent';
+import { ScriptAgent } from './scriptAgent';
+import { ProductionAgent } from './productionAgent';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agents');
@@ -92,14 +92,21 @@ export class Agent {
    */
   public constructor() {}
 
+  // Overload signatures for type inference
+  public static async init(options: ScriptAgentOptions): Promise<ScriptAgent>;
+  public static async init(options: ProductionAgentOptions): Promise<ProductionAgent>;
+  // Implementation
   public static async init(
     options: ProductionAgentOptions | ScriptAgentOptions
   ): Promise<ScriptAgent | ProductionAgent> {
     const jwtConnection = await useNamedUserJwt(options.connection);
+
+    // Type guard: check if it's ScriptAgentOptions by looking for 'aabDirectory'
     if ('aabDirectory' in options) {
-      // create a script agent
+      // TypeScript now knows this is ScriptAgentOptions
       return new ScriptAgent({ ...options, connection: jwtConnection });
     } else {
+      // TypeScript now knows this is ProductionAgentOptions
       return new ProductionAgent({ ...options, connection: jwtConnection });
     }
   }

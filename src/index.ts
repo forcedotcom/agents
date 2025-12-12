@@ -48,8 +48,8 @@ export {
   type AgentPreviewMessage,
   type AgentPreviewError,
   AgentSource,
-  type ScriptAgent,
-  type PublishedAgent,
+  type ScriptAgentType,
+  type ProductionAgentType,
 
   // Agent Testing Types
   type AgentTestResultsResponse,
@@ -80,5 +80,7 @@ export { metric, findAuthoringBundle, readTranscriptEntries } from './utils';
 export { Agent, AgentCreateLifecycleStages } from './agent';
 export { AgentTester } from './agentTester';
 export { AgentTest, AgentTestCreateLifecycleStages } from './agentTest';
+export { ProductionAgent } from './productionAgent';
+export { ScriptAgent } from './scriptAgent';
 export { convertTestResultsToFormat, humanFriendlyName } from './agentTestResults';
 export { writeDebugLog } from './apexUtils';
