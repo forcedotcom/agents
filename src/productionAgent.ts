@@ -23,6 +23,7 @@ import {
   type BotActivationResponse,
   type BotMetadata,
   type BotVersionMetadata,
+  type EndReason,
   PlannerResponse,
   ProductionAgentOptions,
 } from './types';
@@ -39,11 +40,12 @@ export default class ProductionAgent {
   private readonly apiBase = `https://${
     env.getBoolean('SF_TEST_API') ? 'test.' : ''
   }api.salesforce.com/einstein/ai-agent`;
+  private planIds = new Set<string>();
   private preview: {
     start: (apexDebugging: boolean) => Promise<AgentPreviewStartResponse>;
     send: (message: string) => Promise<AgentPreviewSendResponse>;
     getAllTraces: () => Promise<PlannerResponse[]>;
-    end: () => Promise<AgentPreviewEndResponse>;
+    end: (reason: EndReason) => Promise<AgentPreviewEndResponse>;
   };
   private sessionId: string | undefined;
   private apexDebugging: boolean | undefined;
@@ -56,7 +58,7 @@ export default class ProductionAgent {
       start: (apexDebugging: boolean): Promise<AgentPreviewStartResponse> => this.startPreview(apexDebugging),
       send: (message: string): Promise<AgentPreviewSendResponse> => this.sendMessage(message),
       getAllTraces: (): Promise<PlannerResponse[]> => this.getAllTracesFromSession(),
-      end: (): Promise<AgentPreviewEndResponse> => this.endSession(),
+      end: (reason: EndReason): Promise<AgentPreviewEndResponse> => this.endSession(reason),
     };
 
     if (options.nameOrId.startsWith('0Xx') && [15, 18].includes(options.nameOrId.length)) {
@@ -222,6 +224,7 @@ export default class ProductionAgent {
         url,
         body: JSON.stringify(body),
       });
+      this.planIds.add(response.messages.at(0)!.planId);
       // Save user entry
       await appendTranscriptEntry({
         timestamp: new Date().toISOString(),
@@ -257,11 +260,61 @@ export default class ProductionAgent {
     }
   }
 
-  private getAllTracesFromSession() {
-    return Promise.resolve([]);
+  private async getAllTracesFromSession(): Promise<PlannerResponse[]> {
+    if (!this.sessionId) {
+      throw SfError.create({ message: 'Session never created' });
+    }
+    const promises: Array<Promise<PlannerResponse>> = [];
+    for (const id of this.planIds) {
+      promises.push(
+        this.options.connection.request<PlannerResponse>({
+          method: 'GET',
+          url: `${this.options.connection.baseUrl()}:9443/proxy/worker/internal/sessions/${this.sessionId}/plans/${id}`,
+          headers: {
+            'x-client-name': 'afdx',
+          },
+        })
+      );
+    }
+
+    return Promise.all(promises);
   }
 
-  private endSession() {
-    return Promise.resolve(undefined);
+  /**
+   * Ends an interactive session with the agent.
+   *
+   * @param sessionId A session ID provided by first calling `agentPreview.start()`.
+   * @param reason A reason why the interactive session was ended.
+   * @returns `AgentPreviewEndResponse`
+   */
+  private async endSession(reason: EndReason): Promise<AgentPreviewEndResponse> {
+    if (!this.sessionId) {
+      throw SfError.create({ name: 'noSessionId', message: 'please call .start() first' });
+    }
+    if (!this.id) {
+      throw SfError.create({ name: 'noId', message: 'please call .getId() first' });
+    }
+    const url = `${this.apiBase}/sessions/${this.sessionId}`;
+    try {
+      // https://developer.salesforce.com/docs/einstein/genai/guide/agent-api-examples.html#end-session
+      const response = await this.options.connection.request<AgentPreviewEndResponse>({
+        method: 'DELETE',
+        url,
+        headers: {
+          'x-session-end-reason': reason,
+        },
+      });
+      await appendTranscriptEntry({
+        timestamp: new Date().toISOString(),
+        agentId: this.id,
+        sessionId: this.sessionId,
+        role: 'agent',
+        reason,
+        raw: response.messages,
+      });
+      return response;
+    } catch (err) {
+      throw SfError.wrap(err);
+    }
   }
 }
