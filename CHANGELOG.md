@@ -1,3 +1,12 @@
+# [0.20.0](https://github.com/forcedotcom/agents/compare/0.19.8...0.20.0) (2025-12-12)
+
+
+### Features
+
+* add method to fetch traces ([98d085e](https://github.com/forcedotcom/agents/commit/98d085eea8532acdf0a488c9557c58709c6c0244))
+
+
+
 ## [0.19.8](https://github.com/forcedotcom/agents/compare/0.19.7...0.19.8) (2025-12-08)
 
 
