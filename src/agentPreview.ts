@@ -25,6 +25,7 @@ import {
   type AgentPreviewEndResponse,
   type ApiStatus,
   type EndReason,
+  PlannerResponse,
 } from './types.js';
 import { appendTranscriptEntry } from './utils';
 import { createTraceFlag, findTraceFlag, getDebugLog } from './apexUtils';
@@ -231,6 +232,18 @@ export class AgentPreview extends AgentPreviewBase {
     } catch (err) {
       throw SfError.wrap(err);
     }
+  }
+
+  /**
+   * Get the traces for a given session and message IDs.
+   *
+   * @param sessionId A session ID provided by first calling `start()`.
+   * @param messageIds An array of message IDs to get the traces for.
+   * @returns `AgentPreviewEndResponse`
+   */
+  public traces(sessionId: string, messageIds: string[]): Promise<PlannerResponse[]> {
+    this.logger.info(`Get traces for published agents is not implemented yet. Session ID: ${sessionId}, Message IDs: ${messageIds.join(', ')}`);
+    return Promise.resolve([]);
   }
 
   private async getBotUserId(): Promise<string | null> {

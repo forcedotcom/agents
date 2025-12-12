@@ -273,17 +273,31 @@ export class AgentSimulate extends AgentPreviewBase {
     this.setApexDebugMode(enable);
   }
 
-  public async trace(sessionId: string, messageId: string): Promise<PlannerResponse> {
+  public async trace(sessionId: string, messageId: string): Promise<PlannerResponse | null> {
+    const traces = await this.traces(sessionId, [messageId]);
+    return traces.length ? traces[0] : null;
+  }
+
+  public async traces(sessionId: string, messageIds: string[]): Promise<PlannerResponse[]> {
     try {
       this.connection = await useNamedUserJwt(this.connection);
+      const traces = [];
 
-      return await this.connection.request<PlannerResponse>({
-        method: 'GET',
-        url: `${this.apiBase}/v1.1/preview/sessions/${sessionId}/plans/${messageId}`,
-        headers: {
-          'x-client-name': 'afdx',
-        },
-      });
+      const tracePromises = messageIds.map((messageId) =>
+        this.connection.request<PlannerResponse>({
+          method: 'GET',
+          url: `${this.apiBase}/v1.1/preview/sessions/${sessionId}/plans/${messageId}`,
+          headers: {
+            'x-client-name': 'afdx',
+          },
+        })
+      );
+      const traceResults = await Promise.all(tracePromises);
+      traces.push(...traceResults);
+
+      return traces;
+    }catch (err) {
+      throw SfError.wrap(err);
     } finally {
       // Always restore the original connection, even if an error occurred
       delete this.connection.accessToken;
