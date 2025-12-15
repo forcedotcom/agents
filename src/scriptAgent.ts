@@ -49,6 +49,9 @@ export class ScriptAgent extends AgentBase {
     super(options.connection);
     this.options = options;
 
+    // Set initial name from directory name (will be updated when agent is compiled)
+    this.name = basename(this.options.aabDirectory);
+
     this.agentScriptContent = fs.readFileSync(
       join(this.options.aabDirectory, `${basename(this.options.aabDirectory)}.agent`),
       'utf-8'
@@ -284,6 +287,8 @@ ${ensureArray(options.agentSpec?.topics)
         this.agentJson = response.compiledArtifact;
 
         this.agentJson.agentVersion.developerName = this.metaContent.match(/<target>.*(v\d+)<\/target>/)?.at(1) ?? 'v0';
+        // Set the display name from agentJson label, or fallback to directory name
+        this.name = this.agentJson.globalConfiguration.label || basename(this.options.aabDirectory);
       }
 
       return response;

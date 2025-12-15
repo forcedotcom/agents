@@ -37,7 +37,7 @@ export class ProductionAgent extends AgentBase {
   public preview: AgentPreviewInterface;
   private botMetadata: BotMetadata | undefined;
   private id: string | undefined;
-  private name: string | undefined;
+  private developerName: string | undefined;
 
   public constructor(private options: ProductionAgentOptions) {
     super(options.connection);
@@ -57,17 +57,20 @@ export class ProductionAgent extends AgentBase {
     if (options.nameOrId.startsWith('0Xx') && [15, 18].includes(options.nameOrId.length)) {
       this.id = options.nameOrId;
     } else {
-      this.name = options.nameOrId;
+      this.developerName = options.nameOrId;
     }
   }
 
   public async getBotMetadata(): Promise<BotMetadata> {
     if (!this.botMetadata) {
-      const whereClause = this.id ? `Id = '${this.id}'` : `DeveloperName = '${this.name!}'`;
-      const query = `SELECT FIELDS(ALL), (SELECT FIELDS(ALL) FROM BotVersions LIMIT 10) FROM BotDefinition WHERE ${whereClause} LIMIT 1`;
-      this.botMetadata = await this.connection.singleRecordQuery<BotMetadata>(query);
+      const whereClause = this.id ? `Id = '${this.id}'` : `DeveloperName = '${this.developerName!}'`;
+      this.botMetadata = await this.connection.singleRecordQuery<BotMetadata>(
+        `SELECT FIELDS(ALL), (SELECT FIELDS(ALL) FROM BotVersions LIMIT 10) FROM BotDefinition WHERE ${whereClause} LIMIT 1`
+      );
       this.id = this.botMetadata.Id;
-      this.name = this.botMetadata.DeveloperName;
+      this.developerName = this.botMetadata.DeveloperName;
+      // Set the display name from MasterLabel
+      this.name = this.botMetadata.MasterLabel;
     }
     return this.botMetadata;
   }
@@ -174,9 +177,9 @@ export class ProductionAgent extends AgentBase {
 
   private async startPreview(apexDebugging?: boolean): Promise<AgentPreviewStartResponse> {
     if (!this.id) {
-      throw SfError.create({ name: 'no Id found', message: 'please call .getId() first' });
+      await this.getId();
     }
-    const url = `${this.apiBase}/agents/${this.id}/sessions`;
+    const url = `${this.apiBase}/agents/${this.id!}/sessions`;
     // Use the provided apexDebugging parameter if given, otherwise keep the previously set one
     if (apexDebugging !== undefined) {
       this.apexDebugging = apexDebugging;
@@ -203,7 +206,7 @@ export class ProductionAgent extends AgentBase {
       // Store initial agent messages (welcome, etc.) for later writing
       this.transcriptEntries.push({
         timestamp: new Date().toISOString(),
-        agentId: this.id,
+        agentId: this.id!,
         sessionId: response.sessionId,
         role: 'agent',
         text: response.messages.map((m) => m.message).join('\n'),

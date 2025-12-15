@@ -43,6 +43,11 @@ export type AgentPreviewInterface = {
  * Contains shared properties and methods between ScriptAgent and ProductionAgent.
  */
 export abstract class AgentBase {
+  /**
+   * The display name of the agent (user-friendly name, not API name)
+   */
+  public name: string | undefined;
+
   protected readonly apiBase = `https://${
     env.getBoolean('SF_TEST_API') ? 'test.' : ''
   }api.salesforce.com/einstein/ai-agent`;
@@ -55,7 +60,7 @@ export abstract class AgentBase {
 
   protected constructor(protected readonly connection: Connection) {}
 
-  protected async restoreConnection(): Promise<void> {
+  public async restoreConnection(): Promise<void> {
     delete this.connection.accessToken;
     await this.connection.refreshAuth();
   }
