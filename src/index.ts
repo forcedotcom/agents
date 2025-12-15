@@ -37,6 +37,7 @@ export {
   type AgentType,
   type BotMetadata,
   type BotVersionMetadata,
+  type PreviewableAgent,
   type CompilationError,
   type DraftAgentTopics,
   type DraftAgentTopicsBody,

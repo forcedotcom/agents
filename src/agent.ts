@@ -35,11 +35,12 @@ import {
   PublishAgent,
   ExtendedAgentJobSpec,
   ProductionAgentOptions,
+  PreviewableAgent,
   ScriptAgentOptions,
 } from './types.js';
 import { MaybeMock } from './maybe-mock';
 import { AgentPublisher } from './agentPublisher';
-import { decodeHtmlEntities, useNamedUserJwt } from './utils';
+import { decodeHtmlEntities, findLocalAgents, useNamedUserJwt } from './utils';
 import { ScriptAgent } from './scriptAgent';
 import { ProductionAgent } from './productionAgent';
 
@@ -154,6 +155,66 @@ export class Agent {
       'SELECT FIELDS(ALL), (SELECT FIELDS(ALL) FROM BotVersions LIMIT 10) FROM BotDefinition LIMIT 200'
     );
     return agentsQuery.records;
+  }
+
+  /**
+   * Lists all agents available for preview, combining agents from the org and local script files.
+   *
+   * @param connection a `Connection` to an org.
+   * @param project a `SfProject` for a local DX project.
+   * @returns the list of previewable agents with their source (org or script)
+   */
+  public static async listPreviewable(connection: Connection, project: SfProject): Promise<PreviewableAgent[]> {
+    const results = new Array<PreviewableAgent>();
+
+    // Get agents from the org
+    await useNamedUserJwt(connection);
+    const orgAgents = await this.listRemote(connection);
+    for (const agent of orgAgents) {
+      const previewableAgent: PreviewableAgent = {
+        name: agent.MasterLabel,
+        source: 'org',
+        id: agent.Id,
+        developerName: agent.DeveloperName,
+        label: agent.MasterLabel,
+      };
+      results.push(previewableAgent);
+    }
+
+    // Get local script agents
+    const projectDirs = project.getPackageDirectories();
+    const localAgentPaths = new Set<string>();
+
+    for (const pkgDir of projectDirs) {
+      // Search in typical locations for aiAuthoringBundles
+      const searchPaths = [
+        path.join(pkgDir.fullPath, 'aiAuthoringBundles'),
+        path.join(pkgDir.fullPath, 'main', 'default', 'aiAuthoringBundles'),
+      ];
+
+      for (const searchPath of searchPaths) {
+        const agentFiles = findLocalAgents(searchPath);
+        for (const agentFile of agentFiles) {
+          // Extract the directory path (parent of .agent file)
+          const agentDir = path.dirname(agentFile);
+          const agentName = path.basename(agentDir);
+          const normalizedPath = path.resolve(agentDir);
+
+          // Avoid duplicates
+          if (!localAgentPaths.has(normalizedPath)) {
+            localAgentPaths.add(normalizedPath);
+            const previewableAgent: PreviewableAgent = {
+              name: agentName,
+              source: 'script',
+              aabDirectory: normalizedPath,
+            };
+            results.push(previewableAgent);
+          }
+        }
+      }
+    }
+
+    return results;
   }
 
   /**

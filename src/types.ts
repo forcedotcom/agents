@@ -54,6 +54,18 @@ export type ProductionAgentOptions = {
   nameOrId: string;
 };
 
+/**
+ * Represents an agent available for preview, either from the org or from a local script file
+ */
+export type PreviewableAgent = {
+  name: string;
+  source: 'org' | 'script';
+  id?: string; // Bot ID for org agents
+  developerName?: string; // Developer name for org agents
+  aabDirectory?: string; // Path to authoring bundle directory for script agents
+  label?: string; // MasterLabel for org agents
+};
+
 export type BotMetadata = {
   Id: string;
   IsDeleted: boolean;
