@@ -40,9 +40,9 @@ import {
   updateMetadataEndTime,
   type TranscriptEntry,
 } from './utils';
-import { AgentBase, type AgentPreviewInterface } from './agentBase';
+import { AgentInteractionBase, type AgentPreviewInterface } from './agentInteractionBase';
 
-export class ScriptAgent extends AgentBase {
+export class ScriptAgent extends AgentInteractionBase {
   public preview: AgentPreviewInterface & {
     setMockMode: (mockMode: 'Mock' | 'Live Test') => void;
   };
@@ -389,7 +389,7 @@ ${ensureArray(options.agentSpec?.topics)
   }
 
   protected async saveSessionToDisc(outputDir: string): Promise<string> {
-    // This method is inherited from AgentBase and will use the parent implementation
+    // This method is inherited from AgentInteractionBase and will use the parent implementation
     // which copies the session directory
     return super.saveSessionToDisc(outputDir);
   }

@@ -16,7 +16,6 @@
 
 export {
   // Agent Runner Types
-  type AgentInteractionBase,
   type BaseAgentConfig,
   type AgentPreviewStartResponse,
   type AgentPreviewSendResponse,
@@ -83,6 +82,6 @@ export { AgentTester } from './agentTester';
 export { AgentTest, AgentTestCreateLifecycleStages } from './agentTest';
 export { ProductionAgent } from './productionAgent';
 export { ScriptAgent } from './scriptAgent';
-export { AgentBase, type AgentPreviewInterface } from './agentBase';
+export { AgentInteractionBase, type AgentPreviewInterface } from './agentInteractionBase';
 export { convertTestResultsToFormat, humanFriendlyName } from './agentTestResults';
 export { writeDebugLog } from './apexUtils';

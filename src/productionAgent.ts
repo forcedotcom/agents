@@ -36,11 +36,11 @@ import {
   type TranscriptEntry,
 } from './utils';
 import { createTraceFlag, findTraceFlag } from './apexUtils';
-import { AgentBase, type AgentPreviewInterface } from './agentBase';
+import { AgentInteractionBase, type AgentPreviewInterface } from './agentInteractionBase';
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agents');
 
-export class ProductionAgent extends AgentBase {
+export class ProductionAgent extends AgentInteractionBase {
   public preview: AgentPreviewInterface;
   private botMetadata: BotMetadata | undefined;
   private id: string | undefined;

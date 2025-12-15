@@ -47,7 +47,7 @@ export type AgentPreviewInterface = {
  * Abstract base class for agent preview functionality.
  * Contains shared properties and methods between ScriptAgent and ProductionAgent.
  */
-export abstract class AgentBase {
+export abstract class AgentInteractionBase {
   /**
    * The display name of the agent (user-friendly name, not API name)
    */
