@@ -16,7 +16,6 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Connection, SfError, SfProject } from '@salesforce/core';
-import { env } from '@salesforce/kit';
 import {
   type AgentPreviewEndResponse,
   type AgentPreviewSendResponse,
@@ -48,9 +47,6 @@ export abstract class AgentBase {
    */
   public name: string | undefined;
 
-  protected readonly apiBase = `https://${
-    env.getBoolean('SF_TEST_API') ? 'test.' : ''
-  }api.salesforce.com/einstein/ai-agent`;
   protected sessionId: string | undefined;
   protected apexDebugging: boolean | undefined;
   protected transcriptEntries: TranscriptEntry[] = [];

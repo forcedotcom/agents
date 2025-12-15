@@ -44,7 +44,7 @@ export class ScriptAgent extends AgentBase {
   private agentScriptContent: AgentScriptContent;
   private metaContent: string;
   private agentJson: AgentJson | undefined;
-
+  private apiBase = `https://${env.getBoolean('SF_TEST_API') ? 'test.' : ''}api.salesforce.com/einstein/ai-agent`;
   public constructor(private options: ScriptAgentOptions) {
     super(options.connection);
     this.options = options;

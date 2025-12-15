@@ -15,6 +15,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { Messages, SfError } from '@salesforce/core';
+import { env } from '@salesforce/kit';
 import {
   type AgentPreviewEndResponse,
   type AgentPreviewSendResponse,
@@ -38,6 +39,7 @@ export class ProductionAgent extends AgentBase {
   private botMetadata: BotMetadata | undefined;
   private id: string | undefined;
   private apiName: string | undefined;
+  private apiBase = `https://${env.getBoolean('SF_TEST_API') ? 'test.' : ''}api.salesforce.com/einstein/ai-agent/v1`;
 
   public constructor(private options: ProductionAgentOptions) {
     super(options.connection);
