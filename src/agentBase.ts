@@ -55,6 +55,11 @@ export abstract class AgentBase {
 
   protected constructor(protected readonly connection: Connection) {}
 
+  protected async restoreConnection(): Promise<void> {
+    delete this.connection.accessToken;
+    await this.connection.refreshAuth();
+  }
+
   /**
    * Send a message to the agent using the session ID obtained by calling `start()`.
    *
