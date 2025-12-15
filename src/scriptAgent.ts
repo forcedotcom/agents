@@ -311,8 +311,8 @@ ${ensureArray(options.agentSpec?.topics)
   }
 
   /**
-   * Ending is not required, or supported, for AgentSimulation
-   * this is a noop method to support easier consumer typings
+   * Ending is not required
+   * this will save all of the transcripts to disc
    *
    * @returns `AgentPreviewEndResponse`
    */
