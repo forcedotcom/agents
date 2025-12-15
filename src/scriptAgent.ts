@@ -33,24 +33,20 @@ import {
   ScriptAgentOptions,
 } from './types';
 import { AgentPublisher } from './agentPublisher';
-import { appendTranscriptEntry, readTranscriptEntries, type TranscriptEntry } from './utils';
-import { getDebugLog } from './apexUtils';
+import { appendTranscriptEntry, readTranscriptEntries } from './utils';
+import { AgentBase, type AgentPreviewInterface } from './agentBase';
 
-export class ScriptAgent {
-  public preview;
+export class ScriptAgent extends AgentBase {
+  public preview: AgentPreviewInterface & {
+    setMockMode: (mockMode: 'Mock' | 'Live Test') => void;
+  };
   private mockMode: 'Mock' | 'Live Test' = 'Mock';
-  private apexDebugging: boolean | undefined;
   private agentScriptContent: AgentScriptContent;
   private metaContent: string;
-  private sessionId: string | undefined;
-  private planId = new Set<string>();
-  private readonly apiBase = `https://${
-    env.getBoolean('SF_TEST_API') ? 'test.' : ''
-  }api.salesforce.com/einstein/ai-agent`;
   private agentJson: AgentJson | undefined;
-  private transcriptEntries: TranscriptEntry[] = [];
 
   public constructor(private options: ScriptAgentOptions) {
+    super(options.connection);
     this.options = options;
 
     this.agentScriptContent = fs.readFileSync(
@@ -70,8 +66,9 @@ export class ScriptAgent {
       saveSession: (outputDir?: string): Promise<string> => this.saveSessionToDisc(outputDir),
       setMockMode: (mockMode: 'Mock' | 'Live Test'): void => this.setMockMode(mockMode),
       setApexDebugging: (apexDebugging: boolean): void => this.setApexDebugging(apexDebugging),
-    };
+    } as AgentPreviewInterface & { setMockMode: (mockMode: 'Mock' | 'Live Test') => void };
   }
+
   /**
    * Creates an AiAuthoringBundle directory, .script file, and -meta.xml file
    *
@@ -239,9 +236,13 @@ ${ensureArray(options.agentSpec?.topics)
   }
 
   public async refreshContent(): Promise<void> {
-    this.agentScriptContent = await fs.promises.readFile(this.options.aabDirectory, 'utf-8');
+    this.agentScriptContent = await fs.promises.readFile(
+      join(this.options.aabDirectory, `${basename(this.options.aabDirectory)}.agent`),
+      'utf-8'
+    );
     await this.compile();
   }
+
   /**
    * Compiles AgentScript returning agent JSON when successful, otherwise the compile errors are returned.
    *
@@ -270,7 +271,7 @@ ${ensureArray(options.agentSpec?.topics)
     };
 
     try {
-      const response = await this.options.connection.request<CompileAgentScriptResponse>(
+      const response = await this.connection.request<CompileAgentScriptResponse>(
         {
           method: 'POST',
           url,
@@ -310,7 +311,6 @@ ${ensureArray(options.agentSpec?.topics)
    *
    * @returns `AgentPreviewEndResponse`
    */
-
   public async endSession(): Promise<AgentPreviewEndResponse> {
     if (!this.sessionId) {
       return Promise.resolve({ messages: [], _links: [] } as unknown as AgentPreviewEndResponse);
@@ -325,120 +325,101 @@ ${ensureArray(options.agentSpec?.topics)
     // Clear transcript entries and session data for next session
     this.transcriptEntries = [];
     this.sessionId = undefined;
-    this.planId = new Set<string>();
+    this.planIds = new Set<string>();
 
     return Promise.resolve({ messages: [], _links: [] } as unknown as AgentPreviewEndResponse);
   }
 
-  private async getAllTracesFromSession(): Promise<PlannerResponse[]> {
-    if (!this.sessionId) {
-      throw SfError.create({ message: 'Session never created' });
-    }
-    const promises: Array<Promise<PlannerResponse>> = [];
-    for (const id of this.planId) {
-      promises.push(
-        this.options.connection.request<PlannerResponse>({
-          method: 'GET',
-          url: `${this.apiBase}/v1.1/preview/sessions/${this.sessionId}/plans/${id}`,
-          headers: {
-            'x-client-name': 'afdx',
-          },
-        })
-      );
-    }
-
-    return Promise.all(promises);
+  protected getAgentIdForStorage(): string {
+    return basename(this.options.aabDirectory);
   }
 
-  /**
-   * Send a message to the agent using the session ID obtained by calling `start()`.
-   *
-   * @param message A message to send to the agent.
-   * @returns `AgentPreviewSendResponse`
-   */
-  private async sendMessage(message: string): Promise<AgentPreviewSendResponse> {
+  protected getTraceUrl(traceId: string): string {
+    if (!this.sessionId) {
+      throw SfError.create({ name: 'noSessionId', message: 'Session not started' });
+    }
+    return `${this.apiBase}/v1.1/preview/sessions/${this.sessionId}/plans/${traceId}`;
+  }
+
+  protected canApexDebug(): boolean {
+    return this.mockMode === 'Live Test';
+  }
+
+  protected getSendMessageUrl(): string {
+    if (!this.sessionId) {
+      throw SfError.create({ name: 'noSessionId', message: 'Session not started' });
+    }
+    return `${this.apiBase}/v1.1/preview/sessions/${this.sessionId}/messages`;
+  }
+
+  protected async handleApexDebuggingSetup(): Promise<void> {
+    // ScriptAgent doesn't need trace flag setup for Apex debugging
+    // Apex debugging is handled differently for script agents
+    // Reference this to satisfy linter
+    void this;
+    return Promise.resolve();
+  }
+
+  protected async sendMessage(message: string): Promise<AgentPreviewSendResponse> {
     if (!this.agentJson) {
       throw new SfError('Agent not compiled, please call .start() first');
     }
-    if (!this.sessionId) {
-      throw new SfError('Agent not started, please call .start() first');
-    }
-    const url = `${this.apiBase}/v1.1/preview/sessions/${this.sessionId}/messages`;
-    const body = {
-      message: {
-        sequenceId: Date.now(),
-        type: 'Text',
-        text: message,
-      },
-      variables: [],
-    };
-    const agentIdForStorage = basename(this.options.aabDirectory);
-
-    try {
-      const start = Date.now();
-      if (this.apexDebugging && this.mockMode === 'Live Test') {
-        // await this.ensureTraceFlag();
-      }
-      // Store user entry for later writing
-      this.transcriptEntries.push({
-        timestamp: new Date().toISOString(),
-        agentId: agentIdForStorage,
-        sessionId: this.sessionId,
-        role: 'user',
-        text: message,
-      });
-
-      const response = await this.options.connection.request<AgentPreviewSendResponse>({
-        method: 'POST',
-        url,
-        body: JSON.stringify(body),
-        headers: {
-          'x-client-name': 'afdx',
-        },
-      });
-
-      // Store agent response entry for later writing
-      this.transcriptEntries.push({
-        timestamp: new Date().toISOString(),
-        agentId: agentIdForStorage,
-        sessionId: this.sessionId,
-        role: 'agent',
-        text: response.messages.map((m) => m.message).join('\n'),
-        raw: response.messages,
-      });
-      if (this.apexDebugging && this.mockMode === 'Live Test') {
-        const apexLog = await getDebugLog(this.options.connection, start, Date.now());
-        if (apexLog) {
-          response.apexDebugLog = apexLog;
-        }
-      }
-
-      this.planId.add(response.messages.at(0)!.planId);
-
-      return response;
-    } catch (err) {
-      throw SfError.wrap(err);
-    }
+    return super.sendMessage(message);
   }
 
-  /**
-   * Set the mock mode for the agent preview.
-   * This can be called before starting a session.
-   *
-   * @param mockMode 'Mock' for simulated actions, 'Live Test' for real actions
-   */
+  protected async saveSessionToDisc(outputDir?: string): Promise<string> {
+    if (!this.sessionId) {
+      throw SfError.create({ name: 'noSessionId', message: 'No active session. Call .start() first.' });
+    }
+
+    const agentId = this.getAgentIdForStorage();
+
+    // Read transcript entries
+    const transcriptEntries = await readTranscriptEntries(agentId);
+    const sessionTranscripts = transcriptEntries.filter((entry) => entry.sessionId === this.sessionId);
+
+    // Fetch all traces for this session
+    const traces: PlannerResponse[] = [];
+    try {
+      const allTraces = await this.getAllTracesFromSession();
+      traces.push(...allTraces);
+    } catch (error) {
+      // If traces can't be fetched, continue without them
+      // This might happen if the session has ended or traces aren't available
+    }
+
+    // Create session data structure
+    const sessionData = {
+      sessionId: this.sessionId,
+      agentId,
+      timestamp: new Date().toISOString(),
+      transcript: sessionTranscripts,
+      traces,
+      metadata: {
+        planIds: Array.from(this.planIds),
+        apexDebugging: this.apexDebugging,
+        mockMode: this.mockMode,
+      },
+    };
+
+    // Determine output directory
+    let baseDir: string;
+    if (outputDir) {
+      baseDir = join(outputDir, agentId);
+    } else {
+      const project = await SfProject.resolve();
+      baseDir = join(project.getPath(), '.sfdx', 'agents', agentId);
+    }
+    await mkdir(baseDir, { recursive: true });
+
+    const sessionFilePath = join(baseDir, `session_${this.sessionId}.json`);
+    await writeFile(sessionFilePath, JSON.stringify(sessionData, null, 2), 'utf-8');
+
+    return sessionFilePath;
+  }
+
   private setMockMode(mockMode: 'Mock' | 'Live Test'): void {
     this.mockMode = mockMode;
-  }
-
-  /**
-   * Set the Apex debugging mode for the agent preview.
-   * This can be called before starting a session.
-   *
-   * @param apexDebugging true to enable Apex debugging, false to disable
-   */
-  private setApexDebugging(apexDebugging: boolean): void {
-    this.apexDebugging = apexDebugging;
   }
 
   private async startPreview(
@@ -465,7 +446,7 @@ ${ensureArray(options.agentSpec?.topics)
     // send bypassUser=false when the compiledAgent.globalConfiguration.defaultAgentUser is INVALID
     let bypassUser =
       (
-        await this.options.connection.query(
+        await this.connection.query(
           `SELECT Id FROM USER WHERE username='${this.agentJson.globalConfiguration.defaultAgentUser}'`
         )
       ).totalSize === 1;
@@ -496,7 +477,7 @@ ${ensureArray(options.agentSpec?.topics)
     try {
       void Lifecycle.getInstance().emit('agents:simulation-starting', {});
 
-      const response = await this.options.connection.request<AgentPreviewStartResponse>(
+      const response = await this.connection.request<AgentPreviewStartResponse>(
         {
           method: 'POST',
           url: `${this.apiBase}/v1.1/preview/sessions`,
@@ -524,66 +505,5 @@ ${ensureArray(options.agentSpec?.topics)
     } catch (err) {
       throw SfError.wrap(err);
     }
-  }
-
-  /**
-   * Save the complete session data to disk including:
-   * - Transcript entries (user inputs and agent responses)
-   * - Traces (planner responses with execution plans)
-   * - Session metadata
-   *
-   * Saves to: <project>/.sfdx/agents/<agentId>/session_<sessionId>.json
-   *
-   * @returns The path to the saved session file
-   */
-  private async saveSessionToDisc(outputDir?: string): Promise<string> {
-    if (!this.sessionId) {
-      throw SfError.create({ name: 'noSessionId', message: 'No active session. Call .start() first.' });
-    }
-
-    const agentId = basename(this.options.aabDirectory);
-
-    // Read transcript entries
-    const transcriptEntries = await readTranscriptEntries(agentId);
-    const sessionTranscripts = transcriptEntries.filter((entry) => entry.sessionId === this.sessionId);
-
-    // Fetch all traces for this session
-    const traces: PlannerResponse[] = [];
-    try {
-      const allTraces = await this.getAllTracesFromSession();
-      traces.push(...allTraces);
-    } catch (error) {
-      // If traces can't be fetched, continue without them
-      // This might happen if the session has ended or traces aren't available
-    }
-
-    // Create session data structure
-    const sessionData = {
-      sessionId: this.sessionId,
-      agentId,
-      timestamp: new Date().toISOString(),
-      transcript: sessionTranscripts,
-      traces,
-      metadata: {
-        planIds: Array.from(this.planId),
-        apexDebugging: this.apexDebugging,
-        mockMode: this.mockMode,
-      },
-    };
-
-    // Determine output directory
-    let baseDir: string;
-    if (outputDir) {
-      baseDir = join(outputDir, agentId);
-    } else {
-      const project = await SfProject.resolve();
-      baseDir = join(project.getPath(), '.sfdx', 'agents', agentId);
-    }
-    await mkdir(baseDir, { recursive: true });
-
-    const sessionFilePath = join(baseDir, `session_${this.sessionId}.json`);
-    await writeFile(sessionFilePath, JSON.stringify(sessionData, null, 2), 'utf-8');
-
-    return sessionFilePath;
   }
 }
