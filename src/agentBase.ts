@@ -13,16 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { mkdir, writeFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { Connection, SfError, SfProject } from '@salesforce/core';
+import { Connection, SfError } from '@salesforce/core';
 import {
   type AgentPreviewEndResponse,
   type AgentPreviewSendResponse,
   type AgentPreviewStartResponse,
   type PlannerResponse,
 } from './types';
-import { readTranscriptEntries, type TranscriptEntry } from './utils';
+import {
+  type TranscriptEntry,
+  getSessionDir,
+  copyDirectory,
+  appendTranscriptEntryToSession,
+  writeTraceToSession,
+} from './utils';
 import { getDebugLog } from './apexUtils';
 
 /**
@@ -48,8 +54,8 @@ export abstract class AgentBase {
   public name: string | undefined;
 
   protected sessionId: string | undefined;
+  protected sessionDir: string | undefined;
   protected apexDebugging: boolean | undefined;
-  protected transcriptEntries: TranscriptEntry[] = [];
   protected planIds = new Set<string>();
 
   public abstract preview: AgentPreviewInterface;
@@ -92,14 +98,20 @@ export abstract class AgentBase {
 
       const agentId = await this.getAgentIdForStorage();
 
-      // Store user entry for later writing
-      this.transcriptEntries.push({
+      // Ensure session directory exists
+      if (!this.sessionDir) {
+        this.sessionDir = await getSessionDir(agentId, this.sessionId);
+      }
+
+      // Write user entry immediately
+      const userEntry: TranscriptEntry = {
         timestamp: new Date().toISOString(),
         agentId,
         sessionId: this.sessionId,
         role: 'user',
         text: message,
-      });
+      };
+      await appendTranscriptEntryToSession(userEntry, this.sessionDir);
 
       const response = await this.connection.request<AgentPreviewSendResponse>({
         method: 'POST',
@@ -110,21 +122,39 @@ export abstract class AgentBase {
         },
       });
 
-      this.planIds.add(response.messages.at(0)!.planId);
+      const planId = response.messages.at(0)!.planId;
+      this.planIds.add(planId);
 
-      // Store agent response entry for later writing
+      // Write agent response immediately
       const agentText = (response.messages ?? [])
         .map((m) => m.message)
         .filter(Boolean)
         .join('\n');
-      this.transcriptEntries.push({
+      const agentEntry: TranscriptEntry = {
         timestamp: new Date().toISOString(),
         agentId,
         sessionId: this.sessionId,
         role: 'agent',
         text: agentText || undefined,
         raw: response.messages,
-      });
+      };
+      await appendTranscriptEntryToSession(agentEntry, this.sessionDir);
+
+      // Fetch and write trace immediately if available
+      if (planId) {
+        try {
+          const trace = await this.connection.request<PlannerResponse>({
+            method: 'GET',
+            url: this.getTraceUrl(planId),
+            headers: {
+              'x-client-name': 'afdx',
+            },
+          });
+          await writeTraceToSession(planId, trace, this.sessionDir);
+        } catch (error) {
+          // Trace might not be available yet, that's okay
+        }
+      }
 
       if (this.apexDebugging && this.canApexDebug()) {
         const apexLog = await getDebugLog(this.connection, start, Date.now());
@@ -141,11 +171,35 @@ export abstract class AgentBase {
 
   /**
    * Get all traces from the current session
+   * Reads traces from the session directory if available, otherwise fetches from API
    */
   protected async getAllTracesFromSession(): Promise<PlannerResponse[]> {
     if (!this.sessionId) {
       throw SfError.create({ message: 'Session never created' });
     }
+
+    // If we have a session directory, try reading traces from disk first
+    if (this.sessionDir) {
+      const tracesDir = join(this.sessionDir, 'traces');
+      try {
+        const files = await readdir(tracesDir);
+        const traces: PlannerResponse[] = [];
+        const tracePromises = files
+          .filter((file) => file.endsWith('.json'))
+          .map(async (file) => {
+            const traceData = await readFile(join(tracesDir, file), 'utf-8');
+            return JSON.parse(traceData) as PlannerResponse;
+          });
+        traces.push(...(await Promise.all(tracePromises)));
+        if (traces.length > 0) {
+          return traces;
+        }
+      } catch {
+        // If traces directory doesn't exist or can't be read, fall through to API fetch
+      }
+    }
+
+    // Fallback to fetching from API
     const promises: Array<Promise<PlannerResponse>> = [];
     for (const id of this.planIds) {
       promises.push(
@@ -163,62 +217,38 @@ export abstract class AgentBase {
   }
 
   /**
-   * Save the complete session data to disk including:
-   * - Transcript entries (user inputs and agent responses)
-   * - Traces (planner responses with execution plans)
-   * - Session metadata
+   * Save the complete session data to disk by copying the session directory.
+   * The session directory is already populated during the session with:
+   * - Transcript entries (transcript.jsonl)
+   * - Traces (traces/*.json)
+   * - Session metadata (metadata.json)
+   *
+   * Session directory structure:
+   * .sfdx/agents/<agentId>/sessions/<sessionId>/
+   * ├── transcript.jsonl    # All transcript entries (one per line)
+   * ├── traces/             # Individual trace files
+   * │   ├── <planId1>.json
+   * │   └── <planId2>.json
+   * └── metadata.json       # Session metadata (start time, end time, planIds, etc.)
    *
    * @param outputDir Optional output directory. If not provided, uses default location.
-   * @returns The path to the saved session file
+   * @returns The path to the copied session directory
    */
-  protected async saveSessionToDisc(outputDir?: string): Promise<string> {
-    if (!this.sessionId) {
+  protected async saveSessionToDisc(outputDir: string): Promise<string> {
+    if (!this.sessionId || !this.sessionDir) {
       throw SfError.create({ name: 'noSessionId', message: 'No active session. Call .start() first.' });
     }
 
     const agentId = await this.getAgentIdForStorage();
 
-    // Read transcript entries
-    const transcriptEntries = await readTranscriptEntries(agentId);
-    const sessionTranscripts = transcriptEntries.filter((entry) => entry.sessionId === this.sessionId);
-
-    // Fetch all traces for this session
-    const traces: PlannerResponse[] = [];
-    try {
-      const allTraces = await this.getAllTracesFromSession();
-      traces.push(...allTraces);
-    } catch (error) {
-      // If traces can't be fetched, continue without them
-      // This might happen if the session has ended or traces aren't available
-    }
-
-    // Create session data structure
-    const sessionData = {
-      sessionId: this.sessionId,
-      agentId,
-      timestamp: new Date().toISOString(),
-      transcript: sessionTranscripts,
-      traces,
-      metadata: {
-        planIds: Array.from(this.planIds),
-        apexDebugging: this.apexDebugging,
-      },
-    };
-
     // Determine output directory
-    let baseDir: string;
-    if (outputDir) {
-      baseDir = join(outputDir, agentId);
-    } else {
-      const project = await SfProject.resolve();
-      baseDir = join(project.getPath(), '.sfdx', 'agents', agentId);
-    }
-    await mkdir(baseDir, { recursive: true });
+    const destDir = join(outputDir, agentId, `session_${this.sessionId}`);
 
-    const sessionFilePath = join(baseDir, `session_${this.sessionId}.json`);
-    await writeFile(sessionFilePath, JSON.stringify(sessionData, null, 2), 'utf-8');
+    // Copy the entire session directory from .sfdx to the output directory
+    // This includes transcript.jsonl, traces/, and metadata.json
+    await copyDirectory(this.sessionDir, destDir);
 
-    return sessionFilePath;
+    return destDir;
   }
 
   /**

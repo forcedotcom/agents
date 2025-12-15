@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 import { readdirSync, statSync } from 'node:fs';
-import { mkdir, appendFile, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, appendFile, readFile, writeFile, cp } from 'node:fs/promises';
 import * as path from 'node:path';
 import { Connection, SfError, SfProject } from '@salesforce/core';
-import { NamedUserJwtResponse } from './types';
+import { NamedUserJwtResponse, type PlannerResponse } from './types';
 
 export const metric = ['completeness', 'coherence', 'conciseness', 'output_latency_milliseconds'] as const;
 
@@ -248,19 +248,90 @@ const getLastConversationPath = async (agentId: string): Promise<string> =>
   path.join(await getConversationDir(agentId), 'history.json');
 
 /**
- * Append a transcript entry to the last conversation JSON file under the project local .sfdx folder.
- * If the entry has event: 'start', this will clear the previous conversation and start fresh.
- * Path: <project>/.sfdx/agents/conversations/<agentId>/history.json
+ * Get the session directory path for a specific session
  */
-export const appendTranscriptEntry = async (entry: TranscriptEntry, newSession = false): Promise<void> => {
-  const filePath = await getLastConversationPath(entry.agentId);
-  const line = `${JSON.stringify(entry)}\n`;
+export const getSessionDir = async (agentId: string, sessionId: string): Promise<string> => {
+  const base = (await resolveProjectLocalSfdx()) ?? path.join(process.cwd(), '.sfdx');
+  const dir = path.join(base, 'agents', agentId, 'sessions', sessionId);
+  await mkdir(dir, { recursive: true });
+  return dir;
+};
 
-  // If this is a new session start, clear the file first
-  if (newSession) {
-    await writeFile(filePath, line, 'utf-8');
-  } else {
-    await appendFile(filePath, line);
+/**
+ * Copy a directory recursively
+ */
+export const copyDirectory = async (src: string, dest: string): Promise<void> => {
+  await mkdir(dest, { recursive: true });
+  await cp(src, dest, { recursive: true });
+};
+
+/**
+ * Append a transcript entry to the session transcript file
+ */
+export const appendTranscriptEntryToSession = async (entry: TranscriptEntry, sessionDir: string): Promise<void> => {
+  const transcriptPath = path.join(sessionDir, 'transcript.jsonl');
+  const line = `${JSON.stringify(entry)}\n`;
+  await appendFile(transcriptPath, line, 'utf-8');
+};
+
+/**
+ * Write a trace to the session traces directory
+ */
+export const writeTraceToSession = async (
+  planId: string,
+  trace: PlannerResponse,
+  sessionDir: string
+): Promise<void> => {
+  const tracesDir = path.join(sessionDir, 'traces');
+  await mkdir(tracesDir, { recursive: true });
+  const tracePath = path.join(tracesDir, `${planId}.json`);
+  await writeFile(tracePath, JSON.stringify(trace, null, 2), 'utf-8');
+};
+
+/**
+ * Session metadata type
+ */
+export type SessionMetadata = {
+  sessionId: string;
+  agentId: string;
+  startTime: string;
+  endTime?: string;
+  apexDebugging?: boolean;
+  mockMode?: 'Mock' | 'Live Test';
+  planIds: string[];
+};
+
+/**
+ * Write session metadata to the session directory
+ */
+export const writeMetadataToSession = async (sessionDir: string, metadata: SessionMetadata): Promise<void> => {
+  const metadataPath = path.join(sessionDir, 'metadata.json');
+  await writeFile(metadataPath, JSON.stringify(metadata, null, 2), 'utf-8');
+};
+
+/**
+ * Update session metadata with end time and plan IDs
+ */
+export const updateMetadataEndTime = async (
+  sessionDir: string,
+  endTime: string,
+  planIds: Set<string>
+): Promise<void> => {
+  const metadataPath = path.join(sessionDir, 'metadata.json');
+  try {
+    const metadata = JSON.parse(await readFile(metadataPath, 'utf-8')) as SessionMetadata;
+    metadata.endTime = endTime;
+    metadata.planIds = Array.from(planIds);
+    await writeFile(metadataPath, JSON.stringify(metadata, null, 2), 'utf-8');
+  } catch {
+    // If metadata doesn't exist, create it
+    await writeMetadataToSession(sessionDir, {
+      sessionId: '',
+      agentId: '',
+      startTime: '',
+      endTime,
+      planIds: Array.from(planIds),
+    });
   }
 };
 

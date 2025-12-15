@@ -28,7 +28,13 @@ import {
   ProductionAgentOptions,
 } from './types';
 import { MaybeMock } from './maybe-mock';
-import { appendTranscriptEntry } from './utils';
+import {
+  getSessionDir,
+  appendTranscriptEntryToSession,
+  writeMetadataToSession,
+  updateMetadataEndTime,
+  type TranscriptEntry,
+} from './utils';
 import { createTraceFlag, findTraceFlag } from './apexUtils';
 import { AgentBase, type AgentPreviewInterface } from './agentBase';
 Messages.importMessagesDirectory(__dirname);
@@ -52,7 +58,7 @@ export class ProductionAgent extends AgentBase {
       send: (message: string): Promise<AgentPreviewSendResponse> => this.sendMessage(message),
       getAllTraces: (): Promise<PlannerResponse[]> => this.getAllTracesFromSession(),
       end: (reason: EndReason): Promise<AgentPreviewEndResponse> => this.endSession(reason),
-      saveSession: (outputDir?: string): Promise<string> => this.saveSessionToDisc(outputDir),
+      saveSession: (outputDir: string): Promise<string> => this.saveSessionToDisc(outputDir),
       setApexDebugging: (apexDebugging: boolean): void => this.setApexDebugging(apexDebugging),
     } as AgentPreviewInterface;
 
@@ -208,14 +214,37 @@ export class ProductionAgent extends AgentBase {
         },
       });
       this.sessionId = response.sessionId;
-      // Store initial agent messages (welcome, etc.) for later writing
-      this.transcriptEntries.push({
-        timestamp: new Date().toISOString(),
-        agentId: this.id!,
+
+      // Initialize session directory and write initial data
+      // Session directory structure:
+      // .sfdx/agents/<agentId>/sessions/<sessionId>/
+      // ├── transcript.jsonl    # All transcript entries (one per line)
+      // ├── traces/             # Individual trace files
+      // │   ├── <planId1>.json
+      // │   └── <planId2>.json
+      // └── metadata.json       # Session metadata (start time, end time, planIds, etc.)
+      const agentId = this.id!;
+      this.sessionDir = await getSessionDir(agentId, response.sessionId);
+
+      await appendTranscriptEntryToSession(
+        {
+          timestamp: new Date().toISOString(),
+          agentId,
+          sessionId: response.sessionId,
+          role: 'agent',
+          text: response.messages.map((m) => m.message).join('\n'),
+          raw: response.messages,
+        },
+        this.sessionDir
+      );
+
+      // Write initial metadata
+      await writeMetadataToSession(this.sessionDir, {
         sessionId: response.sessionId,
-        role: 'agent',
-        text: response.messages.map((m) => m.message).join('\n'),
-        raw: response.messages,
+        agentId,
+        startTime: new Date().toISOString(),
+        apexDebugging: this.apexDebugging,
+        planIds: [],
       });
 
       return response;
@@ -249,24 +278,25 @@ export class ProductionAgent extends AgentBase {
         },
       });
 
-      // Add end reason entry
-      this.transcriptEntries.push({
+      // Write end entry immediately
+      const endEntry: TranscriptEntry = {
         timestamp: new Date().toISOString(),
         agentId: this.id,
         sessionId: this.sessionId,
         role: 'agent',
         reason,
         raw: response.messages,
-      });
-
-      // Write all transcript entries at once (sequential to preserve order)
-      for (let i = 0; i < this.transcriptEntries.length; i++) {
-        // eslint-disable-next-line no-await-in-loop
-        await appendTranscriptEntry(this.transcriptEntries[i], i === 0);
+      };
+      if (this.sessionDir) {
+        await appendTranscriptEntryToSession(endEntry, this.sessionDir);
+        // Update metadata with end time
+        await updateMetadataEndTime(this.sessionDir, new Date().toISOString(), this.planIds);
       }
 
-      // Clear transcript entries for next session
-      this.transcriptEntries = [];
+      // Clear session data for next session
+      this.sessionId = undefined;
+      this.sessionDir = undefined;
+      this.planIds = new Set<string>();
 
       return response;
     } catch (err) {
