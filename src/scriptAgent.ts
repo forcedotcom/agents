@@ -16,7 +16,7 @@
 import fs, { mkdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { EOL } from 'node:os';
-import { writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { ensureArray, env, snakeCase } from '@salesforce/kit';
 import { Lifecycle, SfError, SfProject } from '@salesforce/core';
@@ -33,7 +33,7 @@ import {
   ScriptAgentOptions,
 } from './types';
 import { AgentPublisher } from './agentPublisher';
-import { appendTranscriptEntry } from './utils';
+import { appendTranscriptEntry, readTranscriptEntries, type TranscriptEntry } from './utils';
 import { getDebugLog } from './apexUtils';
 
 export class ScriptAgent {
@@ -48,6 +48,7 @@ export class ScriptAgent {
     env.getBoolean('SF_TEST_API') ? 'test.' : ''
   }api.salesforce.com/einstein/ai-agent`;
   private agentJson: AgentJson | undefined;
+  private transcriptEntries: TranscriptEntry[] = [];
 
   public constructor(private options: ScriptAgentOptions) {
     this.options = options;
@@ -61,11 +62,14 @@ export class ScriptAgent {
       'utf-8'
     );
     this.preview = {
-      start: (mockMode: 'Mock' | 'Live Test', apexDebugging: boolean): Promise<AgentPreviewStartResponse> =>
+      start: (mockMode?: 'Mock' | 'Live Test', apexDebugging?: boolean): Promise<AgentPreviewStartResponse> =>
         this.startPreview(mockMode, apexDebugging),
       send: (message: string): Promise<AgentPreviewSendResponse> => this.sendMessage(message),
       getAllTraces: (): Promise<PlannerResponse[]> => this.getAllTracesFromSession(),
       end: (): Promise<AgentPreviewEndResponse> => this.endSession(),
+      saveSession: (outputDir?: string): Promise<string> => this.saveSessionToDisc(outputDir),
+      setMockMode: (mockMode: 'Mock' | 'Live Test'): void => this.setMockMode(mockMode),
+      setApexDebugging: (apexDebugging: boolean): void => this.setApexDebugging(apexDebugging),
     };
   }
   /**
@@ -308,8 +312,21 @@ ${ensureArray(options.agentSpec?.topics)
    */
 
   public async endSession(): Promise<AgentPreviewEndResponse> {
+    if (!this.sessionId) {
+      return Promise.resolve({ messages: [], _links: [] } as unknown as AgentPreviewEndResponse);
+    }
+
+    // Write all transcript entries at once (sequential to preserve order)
+    for (let i = 0; i < this.transcriptEntries.length; i++) {
+      // eslint-disable-next-line no-await-in-loop
+      await appendTranscriptEntry(this.transcriptEntries[i], i === 0);
+    }
+
+    // Clear transcript entries and session data for next session
+    this.transcriptEntries = [];
     this.sessionId = undefined;
     this.planId = new Set<string>();
+
     return Promise.resolve({ messages: [], _links: [] } as unknown as AgentPreviewEndResponse);
   }
 
@@ -362,7 +379,8 @@ ${ensureArray(options.agentSpec?.topics)
       if (this.apexDebugging && this.mockMode === 'Live Test') {
         // await this.ensureTraceFlag();
       }
-      await appendTranscriptEntry({
+      // Store user entry for later writing
+      this.transcriptEntries.push({
         timestamp: new Date().toISOString(),
         agentId: agentIdForStorage,
         sessionId: this.sessionId,
@@ -379,7 +397,8 @@ ${ensureArray(options.agentSpec?.topics)
         },
       });
 
-      await appendTranscriptEntry({
+      // Store agent response entry for later writing
+      this.transcriptEntries.push({
         timestamp: new Date().toISOString(),
         agentId: agentIdForStorage,
         sessionId: this.sessionId,
@@ -402,9 +421,29 @@ ${ensureArray(options.agentSpec?.topics)
     }
   }
 
+  /**
+   * Set the mock mode for the agent preview.
+   * This can be called before starting a session.
+   *
+   * @param mockMode 'Mock' for simulated actions, 'Live Test' for real actions
+   */
+  private setMockMode(mockMode: 'Mock' | 'Live Test'): void {
+    this.mockMode = mockMode;
+  }
+
+  /**
+   * Set the Apex debugging mode for the agent preview.
+   * This can be called before starting a session.
+   *
+   * @param apexDebugging true to enable Apex debugging, false to disable
+   */
+  private setApexDebugging(apexDebugging: boolean): void {
+    this.apexDebugging = apexDebugging;
+  }
+
   private async startPreview(
-    mockMode: 'Mock' | 'Live Test',
-    apexDebugging: boolean
+    mockMode?: 'Mock' | 'Live Test',
+    apexDebugging?: boolean
   ): Promise<AgentPreviewStartResponse> {
     if (!this.agentJson) {
       void Lifecycle.getInstance().emit('agents:compiling', {});
@@ -415,8 +454,13 @@ ${ensureArray(options.agentSpec?.topics)
       throw SfError.create({ message: 'error compiling', name: 'unable to start preview' });
     }
 
-    this.mockMode = mockMode;
-    this.apexDebugging = apexDebugging;
+    // Use the provided mockMode parameter if given, otherwise keep the previously set one
+    if (mockMode !== undefined) {
+      this.mockMode = mockMode;
+    }
+    if (apexDebugging !== undefined) {
+      this.apexDebugging = apexDebugging;
+    }
 
     // send bypassUser=false when the compiledAgent.globalConfiguration.defaultAgentUser is INVALID
     let bypassUser =
@@ -433,7 +477,7 @@ ${ensureArray(options.agentSpec?.topics)
 
     const body = {
       agentDefinition: this.agentJson,
-      enableSimulationMode: mockMode === 'Mock',
+      enableSimulationMode: this.mockMode === 'Mock',
       externalSessionKey: randomUUID(),
       instanceConfig: {
         endpoint: this.options.connection.instanceUrl,
@@ -467,20 +511,79 @@ ${ensureArray(options.agentSpec?.topics)
       this.sessionId = response.sessionId;
       const agentIdForStorage = basename(this.options.aabDirectory);
 
-      await appendTranscriptEntry(
-        {
-          timestamp: new Date().toISOString(),
-          agentId: agentIdForStorage,
-          sessionId: response.sessionId,
-          role: 'agent',
-          text: response.messages.map((m) => m.message).join('\n'),
-          raw: response.messages,
-        },
-        true
-      );
+      // Store initial agent messages (welcome, etc.) for later writing
+      this.transcriptEntries.push({
+        timestamp: new Date().toISOString(),
+        agentId: agentIdForStorage,
+        sessionId: response.sessionId,
+        role: 'agent',
+        text: response.messages.map((m) => m.message).join('\n'),
+        raw: response.messages,
+      });
       return response;
     } catch (err) {
       throw SfError.wrap(err);
     }
+  }
+
+  /**
+   * Save the complete session data to disk including:
+   * - Transcript entries (user inputs and agent responses)
+   * - Traces (planner responses with execution plans)
+   * - Session metadata
+   *
+   * Saves to: <project>/.sfdx/agents/<agentId>/session_<sessionId>.json
+   *
+   * @returns The path to the saved session file
+   */
+  private async saveSessionToDisc(outputDir?: string): Promise<string> {
+    if (!this.sessionId) {
+      throw SfError.create({ name: 'noSessionId', message: 'No active session. Call .start() first.' });
+    }
+
+    const agentId = basename(this.options.aabDirectory);
+
+    // Read transcript entries
+    const transcriptEntries = await readTranscriptEntries(agentId);
+    const sessionTranscripts = transcriptEntries.filter((entry) => entry.sessionId === this.sessionId);
+
+    // Fetch all traces for this session
+    const traces: PlannerResponse[] = [];
+    try {
+      const allTraces = await this.getAllTracesFromSession();
+      traces.push(...allTraces);
+    } catch (error) {
+      // If traces can't be fetched, continue without them
+      // This might happen if the session has ended or traces aren't available
+    }
+
+    // Create session data structure
+    const sessionData = {
+      sessionId: this.sessionId,
+      agentId,
+      timestamp: new Date().toISOString(),
+      transcript: sessionTranscripts,
+      traces,
+      metadata: {
+        planIds: Array.from(this.planId),
+        apexDebugging: this.apexDebugging,
+        mockMode: this.mockMode,
+      },
+    };
+
+    // Determine output directory
+    let baseDir: string;
+    if (outputDir) {
+      baseDir = join(outputDir, agentId);
+    } else {
+      const project = await SfProject.resolve();
+      baseDir = join(project.getPath(), '.sfdx', 'agents', agentId);
+    }
+    await mkdir(baseDir, { recursive: true });
+
+    const sessionFilePath = join(baseDir, `session_${this.sessionId}.json`);
+    await writeFile(sessionFilePath, JSON.stringify(sessionData, null, 2), 'utf-8');
+
+    return sessionFilePath;
   }
 }
