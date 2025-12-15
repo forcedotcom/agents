@@ -37,7 +37,7 @@ export class ProductionAgent extends AgentBase {
   public preview: AgentPreviewInterface;
   private botMetadata: BotMetadata | undefined;
   private id: string | undefined;
-  private developerName: string | undefined;
+  private apiName: string | undefined;
 
   public constructor(private options: ProductionAgentOptions) {
     super(options.connection);
@@ -57,18 +57,18 @@ export class ProductionAgent extends AgentBase {
     if (options.nameOrId.startsWith('0Xx') && [15, 18].includes(options.nameOrId.length)) {
       this.id = options.nameOrId;
     } else {
-      this.developerName = options.nameOrId;
+      this.apiName = options.nameOrId;
     }
   }
 
   public async getBotMetadata(): Promise<BotMetadata> {
     if (!this.botMetadata) {
-      const whereClause = this.id ? `Id = '${this.id}'` : `DeveloperName = '${this.developerName!}'`;
+      const whereClause = this.id ? `Id = '${this.id}'` : `DeveloperName = '${this.apiName!}'`;
       this.botMetadata = await this.connection.singleRecordQuery<BotMetadata>(
         `SELECT FIELDS(ALL), (SELECT FIELDS(ALL) FROM BotVersions LIMIT 10) FROM BotDefinition WHERE ${whereClause} LIMIT 1`
       );
       this.id = this.botMetadata.Id;
-      this.developerName = this.botMetadata.DeveloperName;
+      this.apiName = this.botMetadata.DeveloperName;
       // Set the display name from MasterLabel
       this.name = this.botMetadata.MasterLabel;
     }
@@ -201,6 +201,9 @@ export class ProductionAgent extends AgentBase {
         method: 'POST',
         url,
         body: JSON.stringify(body),
+        headers: {
+          'x-client-name': 'afdx',
+        },
       });
       this.sessionId = response.sessionId;
       // Store initial agent messages (welcome, etc.) for later writing
@@ -233,7 +236,7 @@ export class ProductionAgent extends AgentBase {
     if (!this.id) {
       throw SfError.create({ name: 'noId', message: 'please call .getId() first' });
     }
-    const url = `${this.apiBase}/sessions/${this.sessionId}`;
+    const url = `${this.apiBase}/v1.1/sessions/${this.sessionId}`;
     try {
       // https://developer.salesforce.com/docs/einstein/genai/guide/agent-api-examples.html#end-session
       const response = await this.connection.request<AgentPreviewEndResponse>({
