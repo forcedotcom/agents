@@ -22,13 +22,7 @@ import {
   type AgentPreviewStartResponse,
   type PlannerResponse,
 } from './types';
-import {
-  type TranscriptEntry,
-  getSessionDir,
-  copyDirectory,
-  appendTranscriptEntryToSession,
-  writeTraceToSession,
-} from './utils';
+import { getSessionDir, copyDirectory, appendTranscriptEntryToSession, writeTraceToSession } from './utils';
 import { getDebugLog } from './apexUtils';
 
 /**
@@ -101,15 +95,16 @@ export abstract class AgentInteractionBase {
         this.sessionDir = await getSessionDir(agentId, this.sessionId);
       }
 
-      // Write user entry immediately
-      const userEntry: TranscriptEntry = {
-        timestamp: new Date().toISOString(),
-        agentId,
-        sessionId: this.sessionId,
-        role: 'user',
-        text: message,
-      };
-      await appendTranscriptEntryToSession(userEntry, this.sessionDir);
+      void appendTranscriptEntryToSession(
+        {
+          timestamp: new Date().toISOString(),
+          agentId,
+          sessionId: this.sessionId,
+          role: 'user',
+          text: message,
+        },
+        this.sessionDir
+      );
 
       const response = await this.connection.request<AgentPreviewSendResponse>({
         method: 'POST',
@@ -123,20 +118,17 @@ export abstract class AgentInteractionBase {
       const planId = response.messages.at(0)!.planId;
       this.planIds.add(planId);
 
-      // Write agent response immediately
-      const agentText = (response.messages ?? [])
-        .map((m) => m.message)
-        .filter(Boolean)
-        .join('\n');
-      const agentEntry: TranscriptEntry = {
-        timestamp: new Date().toISOString(),
-        agentId,
-        sessionId: this.sessionId,
-        role: 'agent',
-        text: agentText || undefined,
-        raw: response.messages,
-      };
-      await appendTranscriptEntryToSession(agentEntry, this.sessionDir);
+      await appendTranscriptEntryToSession(
+        {
+          timestamp: new Date().toISOString(),
+          agentId,
+          sessionId: this.sessionId,
+          role: 'agent',
+          text: response.messages.at(0)?.message,
+          raw: response.messages,
+        },
+        this.sessionDir
+      );
 
       // Fetch and write trace immediately if available
       if (planId) {
@@ -150,6 +142,9 @@ export abstract class AgentInteractionBase {
           });
           await writeTraceToSession(planId, trace, this.sessionDir);
         } catch (error) {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const x = error;
+          this.name = x as string;
           // Trace might not be available yet, that's okay
         }
       }

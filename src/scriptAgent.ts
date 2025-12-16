@@ -33,13 +33,7 @@ import {
   ScriptAgentOptions,
 } from './types';
 import { AgentPublisher } from './agentPublisher';
-import {
-  getSessionDir,
-  appendTranscriptEntryToSession,
-  writeMetadataToSession,
-  updateMetadataEndTime,
-  type TranscriptEntry,
-} from './utils';
+import { getSessionDir, appendTranscriptEntryToSession, writeMetadataToSession, updateMetadataEndTime } from './utils';
 import { AgentInteractionBase, type AgentPreviewInterface } from './agentInteractionBase';
 
 export class ScriptAgent extends AgentInteractionBase {
@@ -479,15 +473,17 @@ ${ensureArray(options.agentSpec?.topics)
       this.sessionDir = await getSessionDir(agentIdForStorage, response.sessionId);
 
       // Write initial agent messages immediately
-      const agentEntry: TranscriptEntry = {
-        timestamp: new Date().toISOString(),
-        agentId: agentIdForStorage,
-        sessionId: response.sessionId,
-        role: 'agent',
-        text: response.messages.map((m) => m.message).join('\n'),
-        raw: response.messages,
-      };
-      await appendTranscriptEntryToSession(agentEntry, this.sessionDir);
+      await appendTranscriptEntryToSession(
+        {
+          timestamp: new Date().toISOString(),
+          agentId: agentIdForStorage,
+          sessionId: response.sessionId,
+          role: 'agent',
+          text: response.messages.map((m) => m.message).join('\n'),
+          raw: response.messages,
+        },
+        this.sessionDir
+      );
 
       // Write initial metadata
       await writeMetadataToSession(this.sessionDir, {

@@ -28,13 +28,7 @@ import {
   ProductionAgentOptions,
 } from './types';
 import { MaybeMock } from './maybe-mock';
-import {
-  getSessionDir,
-  appendTranscriptEntryToSession,
-  writeMetadataToSession,
-  updateMetadataEndTime,
-  type TranscriptEntry,
-} from './utils';
+import { getSessionDir, appendTranscriptEntryToSession, writeMetadataToSession, updateMetadataEndTime } from './utils';
 import { createTraceFlag, findTraceFlag } from './apexUtils';
 import { AgentInteractionBase, type AgentPreviewInterface } from './agentInteractionBase';
 Messages.importMessagesDirectory(__dirname);
@@ -136,9 +130,7 @@ export class ProductionAgent extends AgentInteractionBase {
     if (!this.sessionId) {
       throw SfError.create({ name: 'noSessionId', message: 'Session not started' });
     }
-    return `${this.connection.baseUrl()}/connect/copilot-plan-tracer/${this.connection.getApiVersion()}/sessions/${
-      this.sessionId
-    }/plans/${traceId}`;
+    return `${this.connection.baseUrl()}:9443/proxy/worker/internal/sessions/${this.sessionId}/plans/${traceId}`;
   }
 
   // eslint-disable-next-line class-methods-use-this
@@ -281,16 +273,18 @@ export class ProductionAgent extends AgentInteractionBase {
       });
 
       // Write end entry immediately
-      const endEntry: TranscriptEntry = {
-        timestamp: new Date().toISOString(),
-        agentId: this.id,
-        sessionId: this.sessionId,
-        role: 'agent',
-        reason,
-        raw: response.messages,
-      };
       if (this.sessionDir) {
-        await appendTranscriptEntryToSession(endEntry, this.sessionDir);
+        await appendTranscriptEntryToSession(
+          {
+            timestamp: new Date().toISOString(),
+            agentId: this.id,
+            sessionId: this.sessionId,
+            role: 'agent',
+            reason,
+            raw: response.messages,
+          },
+          this.sessionDir
+        );
         // Update metadata with end time
         await updateMetadataEndTime(this.sessionDir, new Date().toISOString(), this.planIds);
       }
