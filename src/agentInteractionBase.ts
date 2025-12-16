@@ -52,12 +52,10 @@ export abstract class AgentInteractionBase {
    * The display name of the agent (user-friendly name, not API name)
    */
   public name: string | undefined;
-
   protected sessionId: string | undefined;
   protected sessionDir: string | undefined;
   protected apexDebugging: boolean | undefined;
   protected planIds = new Set<string>();
-
   public abstract preview: AgentPreviewInterface;
 
   protected constructor(protected readonly connection: Connection) {}

@@ -108,7 +108,9 @@ export class Agent {
       return new ScriptAgent({ ...options, connection: jwtConnection });
     } else {
       // TypeScript now knows this is ProductionAgentOptions
-      return new ProductionAgent({ ...options, connection: jwtConnection });
+      const agent = new ProductionAgent({ ...options, connection: jwtConnection });
+      await agent.getBotMetadata();
+      return agent;
     }
   }
 

@@ -49,7 +49,7 @@ export class ProductionAgent extends AgentInteractionBase {
 
   public constructor(private options: ProductionAgentOptions) {
     super(options.connection);
-    if (!options.nameOrId) {
+    if (!options.apiNameOrId) {
       throw messages.createError('missingAgentNameOrId');
     }
 
@@ -62,10 +62,10 @@ export class ProductionAgent extends AgentInteractionBase {
       setApexDebugging: (apexDebugging: boolean): void => this.setApexDebugging(apexDebugging),
     } as AgentPreviewInterface;
 
-    if (options.nameOrId.startsWith('0Xx') && [15, 18].includes(options.nameOrId.length)) {
-      this.id = options.nameOrId;
+    if (options.apiNameOrId.startsWith('0Xx') && [15, 18].includes(options.apiNameOrId.length)) {
+      this.id = options.apiNameOrId;
     } else {
-      this.apiName = options.nameOrId;
+      this.apiName = options.apiNameOrId;
     }
   }
 
@@ -136,7 +136,9 @@ export class ProductionAgent extends AgentInteractionBase {
     if (!this.sessionId) {
       throw SfError.create({ name: 'noSessionId', message: 'Session not started' });
     }
-    return `${this.connection.baseUrl()}:9443/proxy/worker/internal/sessions/${this.sessionId}/plans/${traceId}`;
+    return `${this.connection.baseUrl()}/connect/copilot-plan-tracer/${this.connection.getApiVersion()}/sessions/${
+      this.sessionId
+    }/plans/${traceId}`;
   }
 
   // eslint-disable-next-line class-methods-use-this

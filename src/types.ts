@@ -51,7 +51,7 @@ export type ScriptAgentOptions = {
 export type ProductionAgentOptions = {
   connection: Connection;
   project: SfProject;
-  nameOrId: string; // todo -> apiNameOrId
+  apiNameOrId: string;
 };
 
 /**

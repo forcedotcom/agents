@@ -149,7 +149,7 @@ describe('agent NUTs', () => {
 
     describe('getBotMetadata()', () => {
       it('should get agent bot metadata by bot developer name', async () => {
-        const agent = await Agent.init({ connection, project, nameOrId: botApiName });
+        const agent = await Agent.init({ connection, project, apiNameOrId: botApiName });
         const botMetadata = await agent.getBotMetadata();
         expect(botMetadata).to.be.an('object');
         expect(botMetadata.Id).to.be.a('string');
@@ -162,7 +162,7 @@ describe('agent NUTs', () => {
       });
 
       it('should get agent bot metadata by botId', async () => {
-        const agent = await Agent.init({ connection, project, nameOrId: botId });
+        const agent = await Agent.init({ connection, project, apiNameOrId: botId });
         const botMetadata = await agent.getBotMetadata();
         expect(botMetadata).to.be.an('object');
         expect(botMetadata.Id).to.equal(botId);
@@ -176,7 +176,7 @@ describe('agent NUTs', () => {
 
     describe('getLatestBotVersionMetadata()', () => {
       it('should get the latest agent bot version metadata by bot developer name', async () => {
-        const agent = await Agent.init({ connection, project, nameOrId: botApiName });
+        const agent = await Agent.init({ connection, project, apiNameOrId: botApiName });
         const botVersionMetadata = await agent.getLatestBotVersionMetadata();
         expect(botVersionMetadata).to.be.an('object');
         expect(botVersionMetadata.Id).to.be.a('string');
@@ -201,7 +201,7 @@ describe('agent NUTs', () => {
 
     describe('activate/deactivate', () => {
       it('should activate the agent', async () => {
-        const agent = await Agent.init({ connection, project, nameOrId: botId });
+        const agent = await Agent.init({ connection, project, apiNameOrId: botId });
         let botMetadata = await agent.getBotMetadata();
         expect(botMetadata.BotVersions.records[0].Status).to.equal('Inactive');
         try {
@@ -218,7 +218,7 @@ describe('agent NUTs', () => {
       });
 
       it('should deactivate the agent', async () => {
-        const agent = await Agent.init({ connection, project, nameOrId: botId });
+        const agent = await Agent.init({ connection, project, apiNameOrId: botId });
         let botMetadata = await agent.getBotMetadata();
         expect(botMetadata.BotVersions.records[0].Status).to.equal('Active');
         await agent.deactivate();
