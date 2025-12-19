@@ -20,7 +20,7 @@ import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection, SfError, SfProject } from '@salesforce/core';
 import { ComponentSetBuilder, ComponentSet, MetadataApiRetrieve } from '@salesforce/source-deploy-retrieve';
 import sinon from 'sinon';
-import { Agent, type AgentCreateConfig, type AgentJson } from '../src';
+import { Agent, type AgentCreateConfig, type AgentJson, ScriptAgent } from '../src';
 import { decodeResponse } from '../src/agent';
 import type { ExtendedAgentJobSpec, DraftAgentTopics } from '../src/types';
 import * as utils from '../src/utils';
@@ -118,7 +118,6 @@ describe('Agents', () => {
 
   describe('publishAgentJson', () => {
     let sfProject: SfProject;
-    let agentJson: AgentJson;
 
     beforeEach(async () => {
       sfProject = SfProject.getInstance();
@@ -213,7 +212,8 @@ describe('Agents', () => {
       $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
 
       try {
-        await Agent.publishAgentJson(connection, sfProject, agentJson);
+        const agent = await Agent.init({ connection, project: sfProject, aabDirectory: 'myAgent' });
+        await agent.publish();
         expect.fail('Expected error was not thrown');
       } catch (err) {
         expect(err).to.be.instanceOf(SfError);
@@ -311,8 +311,7 @@ describe('Agents', () => {
 
     it('should create bundle files with default values when agentSpec is not provided', async () => {
       const bundleApiName = 'TestBundle_Default';
-      await Agent.createAuthoringBundle({
-        connection,
+      await ScriptAgent.createAuthoringBundle({
         project: sfProject,
         bundleApiName,
       });
@@ -361,9 +360,7 @@ describe('Agents', () => {
           },
         ] as unknown as DraftAgentTopics,
       };
-
-      await Agent.createAuthoringBundle({
-        connection,
+      await ScriptAgent.createAuthoringBundle({
         project: sfProject,
         bundleApiName,
         agentSpec,
@@ -399,8 +396,7 @@ describe('Agents', () => {
 
     it('should create bundle files in custom outputDir when provided', async () => {
       const bundleApiName = 'TestBundle_CustomDir';
-      await Agent.createAuthoringBundle({
-        connection,
+      await ScriptAgent.createAuthoringBundle({
         project: sfProject,
         bundleApiName,
         outputDir: testOutputDir,
@@ -434,9 +430,7 @@ describe('Agents', () => {
           },
         ] as unknown as DraftAgentTopics,
       };
-
-      await Agent.createAuthoringBundle({
-        connection,
+      await ScriptAgent.createAuthoringBundle({
         project: sfProject,
         bundleApiName,
         outputDir: testOutputDir,
@@ -472,8 +466,7 @@ describe('Agents', () => {
         topics: [] as unknown as DraftAgentTopics,
       };
 
-      await Agent.createAuthoringBundle({
-        connection,
+      await ScriptAgent.createAuthoringBundle({
         project: sfProject,
         bundleApiName,
         agentSpec,

@@ -50,7 +50,7 @@ export class ProductionAgent extends AgentInteractionBase {
     this.preview = {
       start: (apexDebugging?: boolean): Promise<AgentPreviewStartResponse> => this.startPreview(apexDebugging),
       send: (message: string): Promise<AgentPreviewSendResponse> => this.sendMessage(message),
-      getAllTraces: (): Promise<PlannerResponse[]> => this.getAllTracesFromSession(),
+      getAllTraces: (): Promise<PlannerResponse[]> => this.getAllTracesFromDisc(),
       end: (reason: EndReason): Promise<AgentPreviewEndResponse> => this.endSession(reason),
       saveSession: (outputDir: string): Promise<string> => this.saveSessionToDisc(outputDir),
       setApexDebugging: (apexDebugging: boolean): void => this.setApexDebugging(apexDebugging),
@@ -90,6 +90,19 @@ export class ProductionAgent extends AgentInteractionBase {
     return botVersions[botVersions.length - 1];
   }
 
+  // eslint-disable-next-line @typescript-eslint/require-await,class-methods-use-this,@typescript-eslint/no-unused-vars
+  public async getTrace(planId: string): Promise<PlannerResponse | undefined> {
+    // return this.connection.request<PlannerResponse>({
+    //   method: 'GET',
+    //   url: `${this.connection.getConnectionOptions().instanceUrl!}:9443/proxy/worker/internal/sessions/${this
+    //     .sessionId!}/plans/${planId}`,
+    //   headers: {
+    //     'x-client-name': 'afdx',
+    //   },
+    // });
+    return undefined;
+  }
+
   /**
    * Returns the ID for this agent.
    *
@@ -124,13 +137,6 @@ export class ProductionAgent extends AgentInteractionBase {
       throw SfError.create({ name: 'noId', message: 'Agent ID not found. Call .getBotMetadata() first.' });
     }
     return this.id;
-  }
-
-  protected getTraceUrl(traceId: string): string {
-    if (!this.sessionId) {
-      throw SfError.create({ name: 'noSessionId', message: 'Session not started' });
-    }
-    return `${this.connection.baseUrl()}:9443/proxy/worker/internal/sessions/${this.sessionId}/plans/${traceId}`;
   }
 
   // eslint-disable-next-line class-methods-use-this

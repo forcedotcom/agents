@@ -133,19 +133,10 @@ export abstract class AgentInteractionBase {
       // Fetch and write trace immediately if available
       if (planId) {
         try {
-          const trace = await this.connection.request<PlannerResponse>({
-            method: 'GET',
-            url: this.getTraceUrl(planId),
-            headers: {
-              'x-client-name': 'afdx',
-            },
-          });
+          const trace = await this.getTrace(planId);
           await writeTraceToSession(planId, trace, this.sessionDir);
         } catch (error) {
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const x = error;
-          this.name = x as string;
-          // Trace might not be available yet, that's okay
+          throw SfError.wrap(error);
         }
       }
 
@@ -166,47 +157,23 @@ export abstract class AgentInteractionBase {
    * Get all traces from the current session
    * Reads traces from the session directory if available, otherwise fetches from API
    */
-  protected async getAllTracesFromSession(): Promise<PlannerResponse[]> {
-    if (!this.sessionId) {
-      throw SfError.create({ message: 'Session never created' });
+  protected async getAllTracesFromDisc(): Promise<PlannerResponse[]> {
+    if (!this.sessionDir) {
+      throw SfError.create({ message: 'history never created' });
     }
+    const traces: PlannerResponse[] = [];
 
     // If we have a session directory, try reading traces from disk first
-    if (this.sessionDir) {
-      const tracesDir = join(this.sessionDir, 'traces');
-      try {
-        const files = await readdir(tracesDir);
-        const traces: PlannerResponse[] = [];
-        const tracePromises = files
-          .filter((file) => file.endsWith('.json'))
-          .map(async (file) => {
-            const traceData = await readFile(join(tracesDir, file), 'utf-8');
-            return JSON.parse(traceData) as PlannerResponse;
-          });
-        traces.push(...(await Promise.all(tracePromises)));
-        if (traces.length > 0) {
-          return traces;
-        }
-      } catch {
-        // If traces directory doesn't exist or can't be read, fall through to API fetch
-      }
-    }
-
-    // Fallback to fetching from API
-    const promises: Array<Promise<PlannerResponse>> = [];
-    for (const id of this.planIds) {
-      promises.push(
-        this.connection.request<PlannerResponse>({
-          method: 'GET',
-          url: this.getTraceUrl(id),
-          headers: {
-            'x-client-name': 'afdx',
-          },
-        })
-      );
-    }
-
-    return Promise.all(promises);
+    const tracesDir = join(this.sessionDir, 'traces');
+    const files = await readdir(tracesDir);
+    const tracePromises = files
+      .filter((file) => file.endsWith('.json'))
+      .map(async (file) => {
+        const traceData = await readFile(join(tracesDir, file), 'utf-8');
+        return JSON.parse(traceData) as PlannerResponse;
+      });
+    traces.push(...(await Promise.all(tracePromises)));
+    return traces;
   }
 
   /**
@@ -260,11 +227,6 @@ export abstract class AgentInteractionBase {
   protected abstract getAgentIdForStorage(): string | Promise<string>;
 
   /**
-   * Get the URL for fetching traces
-   */
-  protected abstract getTraceUrl(traceId: string): string;
-
-  /**
    * Check if Apex debugging should be enabled for this agent type
    */
   protected abstract canApexDebug(): boolean;
@@ -273,6 +235,8 @@ export abstract class AgentInteractionBase {
    * Handle Apex debugging setup before sending a message
    */
   protected abstract handleApexDebuggingSetup(): Promise<void>;
+
+  protected abstract getTrace(planId: string): Promise<PlannerResponse | undefined>;
 
   /**
    * Get the URL for sending messages

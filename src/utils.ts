@@ -279,13 +279,13 @@ export const appendTranscriptEntryToSession = async (entry: TranscriptEntry, ses
  */
 export const writeTraceToSession = async (
   planId: string,
-  trace: PlannerResponse,
+  trace: PlannerResponse | undefined,
   sessionDir: string
 ): Promise<void> => {
   const tracesDir = path.join(sessionDir, 'traces');
   await mkdir(tracesDir, { recursive: true });
   const tracePath = path.join(tracesDir, `${planId}.json`);
-  await writeFile(tracePath, JSON.stringify(trace, null, 2), 'utf-8');
+  await writeFile(tracePath, JSON.stringify(trace ?? {}, null, 2), 'utf-8');
 };
 
 /**

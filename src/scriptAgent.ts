@@ -64,7 +64,7 @@ export class ScriptAgent extends AgentInteractionBase {
       start: (mockMode?: 'Mock' | 'Live Test', apexDebugging?: boolean): Promise<AgentPreviewStartResponse> =>
         this.startPreview(mockMode, apexDebugging),
       send: (message: string): Promise<AgentPreviewSendResponse> => this.sendMessage(message),
-      getAllTraces: (): Promise<PlannerResponse[]> => this.getAllTracesFromSession(),
+      getAllTraces: (): Promise<PlannerResponse[]> => this.getAllTracesFromDisc(),
       end: (): Promise<AgentPreviewEndResponse> => this.endSession(),
       saveSession: (outputDir: string): Promise<string> => this.saveSessionToDisc(outputDir),
       setMockMode: (mockMode: 'Mock' | 'Live Test'): void => this.setMockMode(mockMode),
@@ -246,6 +246,16 @@ ${ensureArray(options.agentSpec?.topics)
     await this.compile();
   }
 
+  public async getTrace(planId: string): Promise<PlannerResponse> {
+    return this.connection.request<PlannerResponse>({
+      method: 'GET',
+      url: `${this.apiBase}/v1.1/preview/sessions/${this.sessionId!}/plans/${planId}`,
+      headers: {
+        'x-client-name': 'afdx',
+      },
+    });
+  }
+
   /**
    * Compiles AgentScript returning agent JSON when successful, otherwise the compile errors are returned.
    *
@@ -349,13 +359,6 @@ ${ensureArray(options.agentSpec?.topics)
     return basename(this.options.aabDirectory);
   }
 
-  protected getTraceUrl(traceId: string): string {
-    if (!this.sessionId) {
-      throw SfError.create({ name: 'noSessionId', message: 'Session not started' });
-    }
-    return `${this.apiBase}/v1.1/preview/sessions/${this.sessionId}/plans/${traceId}`;
-  }
-
   protected canApexDebug(): boolean {
     return this.mockMode === 'Live Test';
   }
@@ -380,12 +383,6 @@ ${ensureArray(options.agentSpec?.topics)
       throw new SfError('Agent not compiled, please call .start() first');
     }
     return super.sendMessage(message);
-  }
-
-  protected async saveSessionToDisc(outputDir: string): Promise<string> {
-    // This method is inherited from AgentInteractionBase and will use the parent implementation
-    // which copies the session directory
-    return super.saveSessionToDisc(outputDir);
   }
 
   private setMockMode(mockMode: 'Mock' | 'Live Test'): void {

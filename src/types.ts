@@ -59,7 +59,7 @@ export type ProductionAgentOptions = {
  */
 export type PreviewableAgent = {
   name: string;
-  source: 'org' | 'script';
+  source: AgentSource;
   id?: string; // Bot ID for org agents
   developerName?: string; // Developer name for org agents
   aabDirectory?: string; // Path to authoring bundle directory for script agents
