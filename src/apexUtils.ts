@@ -113,6 +113,19 @@ export const createTraceFlag = async (connection: Connection, userId: string): P
   }
 };
 
+// once we're previewing agents in the org, with mockActions = false, we'll have to figure out how to get the correct user that was simulated for apex invocattion
+export async function ensureTraceFlag(username: string, connection: Connection): Promise<ApexTraceFlag | undefined> {
+  const userId = (
+    await connection.singleRecordQuery<{ Id: string }>(`SELECT Id FROM User WHERE Username = '${username}'`)
+  ).Id;
+
+  const apexTraceFlag = await findTraceFlag(connection, userId);
+  if (!apexTraceFlag) {
+    await createTraceFlag(connection, userId);
+  }
+  return apexTraceFlag;
+}
+
 /**
  * Find a trace flag for the given user id.
  *

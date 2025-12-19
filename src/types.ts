@@ -40,13 +40,30 @@ export type BaseAgentConfig = {
 /**
  * Options for creating instances of agents from an org.
  */
-export type AgentOptions = {
+
+export type AgentOptions = ScriptAgentOptions | ProductionAgentOptions;
+export type ScriptAgentOptions = {
   connection: Connection;
-  project?: SfProject;
-  /**
-   * The API name or ID of the agent (Bot) that exists in the org.
-   */
-  nameOrId: string;
+  project: SfProject;
+  // path to AAB dir, e.g. force-app/main/default/aiAuthoringBundles/myBundle
+  aabDirectory: string;
+};
+export type ProductionAgentOptions = {
+  connection: Connection;
+  project: SfProject;
+  apiNameOrId: string;
+};
+
+/**
+ * Represents an agent available for preview, either from the org or from a local script file
+ */
+export type PreviewableAgent = {
+  name: string;
+  source: AgentSource;
+  id?: string; // Bot ID for org agents
+  developerName?: string; // Developer name for org agents
+  aabDirectory?: string; // Path to authoring bundle directory for script agents
+  label?: string; // MasterLabel for org agents
 };
 
 export type BotMetadata = {
@@ -770,8 +787,8 @@ export enum AgentSource {
   SCRIPT = 'script',
 }
 
-export type ScriptAgent = { DeveloperName: string; source: AgentSource.SCRIPT; path: string };
-export type PublishedAgent = {
+export type ScriptAgentType = { DeveloperName: string; source: AgentSource.SCRIPT; path: string };
+export type ProductionAgentType = {
   Id: string;
   DeveloperName: string;
   source: AgentSource.PUBLISHED;
