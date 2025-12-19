@@ -32,7 +32,7 @@ import {
   PreviewableAgent,
   ScriptAgentOptions,
   AgentSource,
-} from './types.js';
+} from './types';
 import { MaybeMock } from './maybe-mock';
 import { decodeHtmlEntities, findLocalAgents, useNamedUserJwt } from './utils';
 import { ScriptAgent } from './scriptAgent';

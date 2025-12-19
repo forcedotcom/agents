@@ -20,9 +20,9 @@ import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection, SfError, SfProject } from '@salesforce/core';
 import { ComponentSetBuilder, ComponentSet, MetadataApiRetrieve } from '@salesforce/source-deploy-retrieve';
 import sinon from 'sinon';
-import { Agent, type AgentCreateConfig, type AgentJson, ScriptAgent } from '../src';
-import { decodeResponse } from '../src/agent';
-import type { ExtendedAgentJobSpec, DraftAgentTopics } from '../src/types';
+import { Agent, decodeResponse } from '../src/agent';
+import type { AgentCreateConfig, DraftAgentTopics, ExtendedAgentJobSpec } from '../src/types';
+import { ScriptAgent } from '../src/scriptAgent';
 import * as utils from '../src/utils';
 import { AgentPublisher } from '../src/agentPublisher';
 
@@ -137,12 +137,63 @@ describe('Agents', () => {
       $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
       $$.SANDBOX.stub(ComponentSetBuilder, 'build').resolves(compSet);
 
-      // Create test agent JSON
-      agentJson = {
+      // Create test directory structure for ScriptAgent
+      // ScriptAgent requires aabDirectory with .agent and .bundle-meta.xml files
+      const aabDirectory = join('force-app', 'main', 'default', 'aiAuthoringBundles', 'myAgent');
+      await fs.mkdir(aabDirectory, { recursive: true });
+
+      // Create .agent file
+      await fs.writeFile(
+        join(aabDirectory, 'myAgent.agent'),
+        'system:\n  instructions: "You are an AI Agent."\n  developer_name: "myAgent"\n  agent_label: "My Agent"'
+      );
+
+      // Create .bundle-meta.xml file
+      await fs.writeFile(
+        join(aabDirectory, 'myAgent.bundle-meta.xml'),
+        '<?xml version="1.0" encoding="UTF-8"?>\n<AiAuthoringBundle xmlns="http://soap.sforce.com/2006/04/metadata">\n    <bundleType>AGENT</bundleType>\n</AiAuthoringBundle>'
+      );
+    });
+
+    afterEach(async () => {
+      await fs.rm(join('force-app'), { recursive: true, force: true });
+    });
+
+    it('should throw error when API call fails', async () => {
+      // Mock failed API response
+      process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishAgentJson-Error');
+
+      // Mock AgentPublisher constructor to avoid bundle validation
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const validateStub = $$.SANDBOX.stub(AgentPublisher.prototype as any, 'validateDeveloperName').returns({
+        developerName: 'myAgent',
+        bundleDir: join('force-app', 'main', 'default', 'aiAuthoringBundles', 'myAgent'),
+        bundleMetaPath: join(
+          'force-app',
+          'main',
+          'default',
+          'aiAuthoringBundles',
+          'myAgent',
+          'myAgent.bundle-meta.xml'
+        ),
+      });
+
+      // Mock connection.singleRecordQuery to return undefined (no existing bot)
+      $$.SANDBOX.stub(connection, 'singleRecordQuery')
+        .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='myAgent'")
+        .rejects(new Error('No records found'));
+
+      // Mock useNamedUserJwt to return the connection without making HTTP calls
+      $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
+      // Mock connection.refreshAuth to avoid making HTTP calls during auth refresh
+      $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
+
+      // Create a minimal AgentJson for the test
+      const testAgentJson = {
         schemaVersion: '1.0',
         globalConfiguration: {
-          developerName: 'test_agent_v1',
-          label: 'Test Agent',
+          developerName: 'myAgent',
+          label: 'My Agent',
           description: 'A test agent',
           agentType: 'AgentforceServiceAgent',
           enableEnhancedEventLogs: false,
@@ -152,7 +203,7 @@ describe('Agents', () => {
           contextVariables: [],
         },
         agentVersion: {
-          developerName: 'test_agent_v1',
+          developerName: 'myAgent',
           plannerType: 'Atlas__ConcurrentMultiAgentOrchestration',
           systemMessages: [],
           modalityParameters: {
@@ -180,39 +231,17 @@ describe('Agents', () => {
         },
       };
 
-      // Create test directory structure and files
-      const bundlePath = join('force-app', 'main', 'default', 'genAiPlannerBundles');
-      const bundleFilePath = join(bundlePath, 'test_agent_v1.genAiPlannerBundle-meta.xml');
-      await fs.mkdir(bundlePath, { recursive: true });
-      await fs.writeFile(
-        bundleFilePath,
-        '<?xml version="1.0" encoding="UTF-8"?>\n<GenAiPlannerBundle xmlns="http://soap.sforce.com/2006/04/metadata">\n    <Target>old_value</Target>\n</GenAiPlannerBundle>'
-      );
-    });
-
-    afterEach(async () => {
-      await fs.rm(join('force-app'), { recursive: true, force: true });
-    });
-
-    it('should throw error when API call fails', async () => {
-      // Mock failed API response
-      process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishAgentJson-Error');
-
-      // Mock AgentPublisher constructor to avoid bundle validation
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const validateStub = $$.SANDBOX.stub(AgentPublisher.prototype as any, 'validateDeveloperName').returns({
-        developerName: 'test_agent_v1',
-        bundleDir: 'test-bundle-dir',
-        bundleMetaPath: 'test-meta-path',
-      });
-
-      // Mock useNamedUserJwt to return the connection without making HTTP calls
-      $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
-      // Mock connection.refreshAuth to avoid making HTTP calls during auth refresh
-      $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
-
       try {
-        const agent = await Agent.init({ connection, project: sfProject, aabDirectory: 'myAgent' });
+        const agent = await Agent.init({
+          connection,
+          project: sfProject,
+          aabDirectory: join('force-app', 'main', 'default', 'aiAuthoringBundles', 'myAgent'),
+        });
+
+        // Set agentJson directly to avoid needing to compile
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+        (agent as any).agentJson = testAgentJson;
+
         await agent.publish();
         expect.fail('Expected error was not thrown');
       } catch (err) {
