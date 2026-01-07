@@ -17,7 +17,16 @@
 import { inspect } from 'node:util';
 import * as path from 'node:path';
 import { stat, readdir } from 'node:fs/promises';
-import { Connection, Lifecycle, Logger, Messages, SfError, SfProject, generateApiName } from '@salesforce/core';
+import {
+  Connection,
+  Lifecycle,
+  Logger,
+  Messages,
+  SfError,
+  SfProject,
+  generateApiName,
+  AuthInfo,
+} from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { Duration } from '@salesforce/kit';
 import {
@@ -94,7 +103,16 @@ export class Agent {
   public static async init(
     options: ProductionAgentOptions | ScriptAgentOptions
   ): Promise<ScriptAgent | ProductionAgent> {
-    const jwtConnection = await useNamedUserJwt(options.connection);
+    const username = options.connection.getUsername();
+
+    // Create a fresh connection instance for agent operations
+    // This ensures we don't modify the original connection passed in
+    // The original connection remains unchanged and can be used for other operations, mid agent-operation
+    const authInfo = await AuthInfo.create({ username });
+    const isolatedConnection = await Connection.create({ authInfo });
+
+    // Upgrade the isolated connection with JWT
+    const jwtConnection = await useNamedUserJwt(isolatedConnection);
 
     // Type guard: check if it's ScriptAgentOptions by looking for 'aabDirectory'
     if ('aabDirectory' in options) {
@@ -163,8 +181,6 @@ export class Agent {
   public static async listPreviewable(connection: Connection, project: SfProject): Promise<PreviewableAgent[]> {
     const results = new Array<PreviewableAgent>();
 
-    // Get agents from the org
-    await useNamedUserJwt(connection);
     const orgAgents = await this.listRemote(connection);
     for (const agent of orgAgents) {
       const previewableAgent: PreviewableAgent = {

@@ -19,7 +19,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { env } from '@salesforce/kit';
 import { XMLBuilder, XMLParser } from 'fast-xml-parser';
-import { Connection, Logger, Messages, SfError, SfProject } from '@salesforce/core';
+import { Connection, Logger, Messages, SfError, SfProject, AuthInfo } from '@salesforce/core';
 import { ComponentSet, ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { MaybeMock } from './maybe-mock';
 import { type AgentJson, type PublishAgentJsonResponse, type PublishAgent } from './types.js';
@@ -47,6 +47,12 @@ export class AgentPublisher {
   private developerName: string;
   private bundleMetaPath: string;
   private bundleDir: string;
+  /**
+   * Original connection username, stored to create fresh connections for metadata operations.
+   * This ensures metadata operations (retrieve/deploy) use a standard connection that hasn't
+   * been upgraded with JWT, which is required for SOAP API operations.
+   */
+  private readonly originalUsername: string;
 
   private API_URL = `https://${
     env.getBoolean('SF_TEST_API') ? 'test.' : ''
@@ -68,6 +74,15 @@ export class AgentPublisher {
     this.connection = connection;
     this.project = project;
     this.agentJson = agentJson;
+    // Store the original username to create fresh connections for metadata operations
+    const username = connection.getUsername();
+    if (!username) {
+      throw SfError.create({
+        name: 'ConnectionError',
+        message: 'Connection must have a username',
+      });
+    }
+    this.originalUsername = username;
 
     // Validate and get developer name and bundle directory
     const validationResult = this.validateDeveloperName();
@@ -122,7 +137,21 @@ export class AgentPublisher {
       });
     }
   }
-
+  /**
+   * Creates a fresh standard connection for metadata operations (retrieve/deploy).
+   * This ensures metadata operations use a connection that hasn't been upgraded with JWT,
+   * which is required for SOAP API operations.
+   *
+   * @returns A fresh Connection instance with standard authentication
+   */
+  private async createStandardConnection(): Promise<Connection> {
+    const authInfo = await AuthInfo.create({
+      username: this.originalUsername,
+    });
+    return Connection.create({
+      authInfo,
+    });
+  }
   /**
    * Validates and extracts the developer name from the agent configuration,
    * and locates the corresponding authoring bundle directory and metadata file.
@@ -162,11 +191,14 @@ export class AgentPublisher {
   /**
    * Retrieve the agent metadata from the org after publishing
    *
-   * @param developerName The developer name of the agent
-   * @param originalConnection The original connection to use for retrieval
+   * @param botVersionName The bot version name
    */
   private async retrieveAgentMetadata(botVersionName: string): Promise<void> {
     const defaultPackagePath = path.resolve(this.project.getDefaultPackage().path);
+
+    // Create a fresh standard connection for metadata operations
+    // This ensures SOAP API operations work correctly (JWT tokens don't work with SOAP)
+    const standardConnection = await this.createStandardConnection();
 
     const cs = await ComponentSetBuilder.build({
       metadata: {
@@ -174,12 +206,12 @@ export class AgentPublisher {
         directoryPaths: [defaultPackagePath],
       },
       org: {
-        username: this.connection.getUsername() as string,
+        username: this.originalUsername,
         exclude: [],
       },
     });
     const retrieve = await cs.retrieve({
-      usernameOrConnection: this.connection,
+      usernameOrConnection: standardConnection,
       merge: true,
       format: 'source',
       output: path.resolve(this.project.getPath(), defaultPackagePath),
@@ -243,8 +275,11 @@ export class AgentPublisher {
     await writeFile(this.bundleMetaPath, xmlBuilder.build(authoringBundle));
 
     // 2. attempt to deploy the authoring bundle to the org
+    // Create a fresh standard connection for metadata operations
+    // This ensures SOAP API operations work correctly (JWT tokens don't work with SOAP)
+    const standardConnection = await this.createStandardConnection();
     const deploy = await ComponentSet.fromSource(this.bundleDir).deploy({
-      usernameOrConnection: this.connection.getUsername() as string,
+      usernameOrConnection: standardConnection,
     });
     const deployResult = await deploy.pollStatus();
 
