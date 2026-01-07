@@ -1,5 +1,5 @@
 /*
- * Copyright 2025, Salesforce, Inc.
+ * Copyright 2026, Salesforce, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,7 +42,11 @@ describe('AgentPublisher', () => {
     );
   }
 
-  function createValidateDeveloperNameStub(developerName = 'test_agent', bundleDir = 'test-bundle-dir', bundleMetaPath = 'test-meta-path') {
+  function createValidateDeveloperNameStub(
+    developerName = 'test_agent',
+    bundleDir = 'test-bundle-dir',
+    bundleMetaPath = 'test-meta-path'
+  ) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return $$.SANDBOX.stub(AgentPublisher.prototype as any, 'validateDeveloperName').returns({
       developerName,
@@ -272,7 +276,11 @@ describe('AgentPublisher', () => {
   describe('deployAuthoringBundle', () => {
     it('should handle missing bundle directory', async () => {
       // Create minimal publisher instance by mocking validateDeveloperName
-      const validateStub = createValidateDeveloperNameStub('test_agent', '/nonexistent/path', '/nonexistent/path/test_agent.bundle-meta.xml');
+      const validateStub = createValidateDeveloperNameStub(
+        'test_agent',
+        '/nonexistent/path',
+        '/nonexistent/path/test_agent.bundle-meta.xml'
+      );
 
       const publisher = new AgentPublisher(connection, sfProject, agentJson);
 
@@ -304,7 +312,7 @@ describe('AgentPublisher', () => {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
       const syncAuthoringBundle = (publisher as any).syncAuthoringBundle.bind(publisher);
       const botVersionName = 'test_version_1';
-      
+
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       await syncAuthoringBundle(botVersionName);
 
