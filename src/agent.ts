@@ -44,8 +44,8 @@ import {
 } from './types';
 import { MaybeMock } from './maybe-mock';
 import { decodeHtmlEntities, findLocalAgents, useNamedUserJwt } from './utils';
-import { ScriptAgent } from './scriptAgent';
-import { ProductionAgent } from './productionAgent';
+import { ScriptAgent } from './agents/scriptAgent';
+import { ProductionAgent } from './agents/productionAgent';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agents');
@@ -70,14 +70,24 @@ export const AgentCreateLifecycleStages = {
 };
 
 /**
- * A client side representation of an agent within an org. Also provides utilities
+ * A client side representation of an agent. Also provides utilities
  * such as creating agents, listing agents, and creating agent specs.
  *
  * **Examples**
  *
  * Create a new instance and get the ID (uses the `Bot` ID):
  *
- * `const id = new Agent({connection, name}).getId();`
+ * `const id = await Agent.init({connection, project, apiNameOrId: 'myBot' }).getId();`
+ *
+ * Create a new instance of an agent script based agent
+ *
+ * const agent = await Agent.init({connection, project, aabDirectory: 'force-app/main/default/aiAuthoringBundles/myBot' });
+ *
+ * Start a preview session
+ *
+ * const agent = await Agent.init({connection, project, aabDirectory: 'force-app/main/default/aiAuthoringBundles/myBot' });
+ * await agent.preview.start();
+ * await agent.preview.send('hi there');
  *
  * Create a new agent in the org:
  *
@@ -88,14 +98,6 @@ export const AgentCreateLifecycleStages = {
  * `const agentList = await Agent.list(project);`
  */
 export class Agent {
-  /**
-   * Create an instance of an agent in an org. Must provide a connection to an org
-   * and the agent (Bot) API name or ID as part of `AgentOptions`.
-   *
-   * @param options
-   */
-  public constructor() {}
-
   // Overload signatures for type inference
   public static async init(options: ScriptAgentOptions): Promise<ScriptAgent>;
   public static async init(options: ProductionAgentOptions): Promise<ProductionAgent>;

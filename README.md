@@ -18,6 +18,8 @@ A Typescript toolkit for working with Salesforce Agentforce Agents. Built to sup
 - Create Agent Specs
 - Interact with Agents
 - Run Agent Tests
+- Publish Agents
+- Activate/Deactivate Agents
 
 ## Usage
 

@@ -15,7 +15,6 @@
  */
 import { randomUUID } from 'node:crypto';
 import { Messages, SfError } from '@salesforce/core';
-import { env } from '@salesforce/kit';
 import {
   type AgentPreviewEndResponse,
   type AgentPreviewSendResponse,
@@ -26,20 +25,27 @@ import {
   type EndReason,
   PlannerResponse,
   ProductionAgentOptions,
-} from './types';
-import { MaybeMock } from './maybe-mock';
-import { getSessionDir, appendTranscriptEntryToSession, writeMetadataToSession, updateMetadataEndTime } from './utils';
-import { createTraceFlag, findTraceFlag } from './apexUtils';
-import { AgentInteractionBase, type AgentPreviewInterface } from './agentInteractionBase';
+} from '../types';
+import { MaybeMock } from '../maybe-mock';
+import {
+  getSessionDir,
+  appendTranscriptEntryToSession,
+  writeMetadataToSession,
+  updateMetadataEndTime,
+  writeTraceToSession,
+  getEndpoint,
+} from '../utils';
+import { createTraceFlag, findTraceFlag, getDebugLog } from '../apexUtils';
+import { AgentBase, type AgentPreviewInterface } from './agentBase';
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agents');
 
-export class ProductionAgent extends AgentInteractionBase {
+export class ProductionAgent extends AgentBase {
   public preview: AgentPreviewInterface;
   private botMetadata: BotMetadata | undefined;
   private id: string | undefined;
   private apiName: string | undefined;
-  private apiBase = `https://${env.getBoolean('SF_TEST_API') ? 'test.' : ''}api.salesforce.com/einstein/ai-agent/v1`;
+  private apiBase = `https://${getEndpoint()}api.salesforce.com/einstein/ai-agent/v1`;
 
   public constructor(private options: ProductionAgentOptions) {
     super(options.connection);
@@ -154,11 +160,93 @@ export class ProductionAgent extends AgentInteractionBase {
     }
   }
 
-  protected getSendMessageUrl(): string {
+  protected async sendMessage(message: string): Promise<AgentPreviewSendResponse> {
     if (!this.sessionId) {
-      throw SfError.create({ name: 'noSessionId', message: 'Session not started' });
+      throw SfError.create({ name: 'noSessionId', message: 'Agent not started, please call .start() first' });
     }
-    return `${this.apiBase}/sessions/${this.sessionId}/messages`;
+
+    const url = `${this.apiBase}/sessions/${this.sessionId}/messages`;
+
+    const body = {
+      message: {
+        sequenceId: Date.now(),
+        type: 'Text',
+        text: message,
+      },
+      variables: [],
+    };
+
+    try {
+      const start = Date.now();
+
+      // Handle Apex debugging setup if needed
+      if (this.apexDebugging && this.canApexDebug()) {
+        await this.handleApexDebuggingSetup();
+      }
+
+      const agentId = this.getAgentIdForStorage();
+
+      // Ensure session directory exists
+      if (!this.sessionDir) {
+        this.sessionDir = await getSessionDir(agentId, this.sessionId);
+      }
+
+      void appendTranscriptEntryToSession(
+        {
+          timestamp: new Date().toISOString(),
+          agentId,
+          sessionId: this.sessionId,
+          role: 'user',
+          text: message,
+        },
+        this.sessionDir
+      );
+
+      const response = await this.connection.request<AgentPreviewSendResponse>({
+        method: 'POST',
+        url,
+        body: JSON.stringify(body),
+        headers: {
+          'x-client-name': 'afdx',
+        },
+      });
+
+      const planId = response.messages.at(0)!.planId;
+      this.planIds.add(planId);
+
+      await appendTranscriptEntryToSession(
+        {
+          timestamp: new Date().toISOString(),
+          agentId,
+          sessionId: this.sessionId,
+          role: 'agent',
+          text: response.messages.at(0)?.message,
+          raw: response.messages,
+        },
+        this.sessionDir
+      );
+
+      // Fetch and write trace immediately if available
+      if (planId) {
+        try {
+          const trace = await this.getTrace(planId);
+          await writeTraceToSession(planId, trace, this.sessionDir);
+        } catch (error) {
+          throw SfError.wrap(error);
+        }
+      }
+
+      if (this.apexDebugging && this.canApexDebug()) {
+        const apexLog = await getDebugLog(this.connection, start, Date.now());
+        if (apexLog) {
+          response.apexDebugLog = apexLog;
+        }
+      }
+
+      return response;
+    } catch (err) {
+      throw SfError.wrap(err);
+    }
   }
 
   private async setAgentStatus(desiredState: 'Active' | 'Inactive'): Promise<void> {

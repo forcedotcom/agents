@@ -18,7 +18,7 @@ import { basename, join } from 'node:path';
 import { EOL } from 'node:os';
 import { writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-import { ensureArray, env, snakeCase } from '@salesforce/kit';
+import { ensureArray, snakeCase } from '@salesforce/kit';
 import { Lifecycle, SfError, SfProject } from '@salesforce/core';
 import {
   AgentJson,
@@ -31,12 +31,20 @@ import {
   PlannerResponse,
   PublishAgent,
   ScriptAgentOptions,
-} from './types';
-import { AgentPublisher } from './agentPublisher';
-import { getSessionDir, appendTranscriptEntryToSession, writeMetadataToSession, updateMetadataEndTime } from './utils';
-import { AgentInteractionBase, type AgentPreviewInterface } from './agentInteractionBase';
+} from '../types';
+import { AgentPublisher } from '../agentPublisher';
+import {
+  getSessionDir,
+  appendTranscriptEntryToSession,
+  writeMetadataToSession,
+  updateMetadataEndTime,
+  writeTraceToSession,
+  getEndpoint,
+} from '../utils';
+import { getDebugLog } from '../apexUtils';
+import { AgentBase, type AgentPreviewInterface } from './agentBase';
 
-export class ScriptAgent extends AgentInteractionBase {
+export class ScriptAgent extends AgentBase {
   public preview: AgentPreviewInterface & {
     setMockMode: (mockMode: 'Mock' | 'Live Test') => void;
   };
@@ -44,7 +52,7 @@ export class ScriptAgent extends AgentInteractionBase {
   private agentScriptContent: AgentScriptContent;
   private metaContent: string;
   private agentJson: AgentJson | undefined;
-  private apiBase = `https://${env.getBoolean('SF_TEST_API') ? 'test.' : ''}api.salesforce.com/einstein/ai-agent`;
+  private apiBase = `https://${getEndpoint()}api.salesforce.com/einstein/ai-agent`;
   public constructor(private options: ScriptAgentOptions) {
     super(options.connection);
     this.options = options;
@@ -263,9 +271,7 @@ ${ensureArray(options.agentSpec?.topics)
    * @beta
    */
   public async compile(): Promise<CompileAgentScriptResponse> {
-    const url = `https://${
-      env.getBoolean('SF_TEST_API') ? 'test.' : ''
-    }api.salesforce.com/einstein/ai-agent/v1.1/authoring/scripts`;
+    const url = `https://${getEndpoint()}api.salesforce.com/einstein/ai-agent/v1.1/authoring/scripts`;
 
     const compileData = {
       assets: [
@@ -322,7 +328,7 @@ ${ensureArray(options.agentSpec?.topics)
 
   /**
    * Ending is not required
-   * this will save all of the transcripts to disc
+   * this will save all the transcripts to disc
    *
    * @returns `AgentPreviewEndResponse`
    */
@@ -363,13 +369,6 @@ ${ensureArray(options.agentSpec?.topics)
     return this.mockMode === 'Live Test';
   }
 
-  protected getSendMessageUrl(): string {
-    if (!this.sessionId) {
-      throw SfError.create({ name: 'noSessionId', message: 'Session not started' });
-    }
-    return `${this.apiBase}/v1.1/preview/sessions/${this.sessionId}/messages`;
-  }
-
   protected async handleApexDebuggingSetup(): Promise<void> {
     // ScriptAgent doesn't need trace flag setup for Apex debugging
     // Apex debugging is handled differently for script agents
@@ -379,10 +378,92 @@ ${ensureArray(options.agentSpec?.topics)
   }
 
   protected async sendMessage(message: string): Promise<AgentPreviewSendResponse> {
-    if (!this.agentJson) {
-      throw new SfError('Agent not compiled, please call .start() first');
+    if (!this.sessionId) {
+      throw SfError.create({ name: 'noSessionId', message: 'Agent not started, please call .start() first' });
     }
-    return super.sendMessage(message);
+
+    const url = `${this.apiBase}/v1.1/preview/sessions/${this.sessionId}/messages`;
+
+    const body = {
+      message: {
+        sequenceId: Date.now(),
+        type: 'Text',
+        text: message,
+      },
+      variables: [],
+    };
+
+    try {
+      const start = Date.now();
+
+      // Handle Apex debugging setup if needed
+      if (this.apexDebugging && this.canApexDebug()) {
+        await this.handleApexDebuggingSetup();
+      }
+
+      const agentId = this.getAgentIdForStorage();
+
+      // Ensure session directory exists
+      if (!this.sessionDir) {
+        this.sessionDir = await getSessionDir(agentId, this.sessionId);
+      }
+
+      void appendTranscriptEntryToSession(
+        {
+          timestamp: new Date().toISOString(),
+          agentId,
+          sessionId: this.sessionId,
+          role: 'user',
+          text: message,
+        },
+        this.sessionDir
+      );
+
+      const response = await this.connection.request<AgentPreviewSendResponse>({
+        method: 'POST',
+        url,
+        body: JSON.stringify(body),
+        headers: {
+          'x-client-name': 'afdx',
+        },
+      });
+
+      const planId = response.messages.at(0)!.planId;
+      this.planIds.add(planId);
+
+      await appendTranscriptEntryToSession(
+        {
+          timestamp: new Date().toISOString(),
+          agentId,
+          sessionId: this.sessionId,
+          role: 'agent',
+          text: response.messages.at(0)?.message,
+          raw: response.messages,
+        },
+        this.sessionDir
+      );
+
+      // Fetch and write trace immediately if available
+      if (planId) {
+        try {
+          const trace = await this.getTrace(planId);
+          await writeTraceToSession(planId, trace, this.sessionDir);
+        } catch (error) {
+          throw SfError.wrap(error);
+        }
+      }
+
+      if (this.apexDebugging && this.canApexDebug()) {
+        const apexLog = await getDebugLog(this.connection, start, Date.now());
+        if (apexLog) {
+          response.apexDebugLog = apexLog;
+        }
+      }
+
+      return response;
+    } catch (err) {
+      throw SfError.wrap(err);
+    }
   }
 
   private setMockMode(mockMode: 'Mock' | 'Live Test'): void {

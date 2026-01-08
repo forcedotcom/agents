@@ -17,6 +17,7 @@ import { readdirSync, statSync } from 'node:fs';
 import { mkdir, appendFile, readFile, writeFile, cp } from 'node:fs/promises';
 import * as path from 'node:path';
 import { Connection, SfError, SfProject } from '@salesforce/core';
+import { env } from '@salesforce/kit';
 import { NamedUserJwtResponse, type PlannerResponse } from './types';
 
 export const metric = ['completeness', 'coherence', 'conciseness', 'output_latency_milliseconds'] as const;
@@ -287,6 +288,10 @@ export const writeTraceToSession = async (
   const tracePath = path.join(tracesDir, `${planId}.json`);
   await writeFile(tracePath, JSON.stringify(trace ?? {}, null, 2), 'utf-8');
 };
+
+export function getEndpoint(): string {
+  return env.getBoolean('SF_TEST_API') ? 'test.' : '';
+}
 
 /**
  * Session metadata type

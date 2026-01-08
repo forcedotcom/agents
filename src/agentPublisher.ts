@@ -17,13 +17,12 @@
 import * as path from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { env } from '@salesforce/kit';
 import { XMLBuilder, XMLParser } from 'fast-xml-parser';
 import { Connection, Logger, Messages, SfError, SfProject, AuthInfo } from '@salesforce/core';
 import { ComponentSet, ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { MaybeMock } from './maybe-mock';
 import { type AgentJson, type PublishAgentJsonResponse, type PublishAgent } from './types.js';
-import { findAuthoringBundle, useNamedUserJwt } from './utils';
+import { findAuthoringBundle, getEndpoint, useNamedUserJwt } from './utils';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agentPublisher');
@@ -41,11 +40,11 @@ const getLogger = (): Logger => {
  */
 export class AgentPublisher {
   private readonly maybeMock: MaybeMock;
-  private connection: Connection;
+  private readonly connection: Connection;
   private project: SfProject;
-  private agentJson: AgentJson;
-  private developerName: string;
-  private bundleMetaPath: string;
+  private readonly agentJson: AgentJson;
+  private readonly developerName: string;
+  private readonly bundleMetaPath: string;
   private bundleDir: string;
   /**
    * Original connection username, stored to create fresh connections for metadata operations.
@@ -54,9 +53,7 @@ export class AgentPublisher {
    */
   private readonly originalUsername: string;
 
-  private API_URL = `https://${
-    env.getBoolean('SF_TEST_API') ? 'test.' : ''
-  }api.salesforce.com/einstein/ai-agent/v1.1/authoring/agents`;
+  private API_URL = `https://${getEndpoint()}api.salesforce.com/einstein/ai-agent/v1.1/authoring/agents`;
   private readonly API_HEADERS = {
     'x-client-name': 'afdx',
     'content-type': 'application/json',

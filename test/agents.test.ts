@@ -22,7 +22,7 @@ import { ComponentSetBuilder, ComponentSet, MetadataApiRetrieve } from '@salesfo
 import sinon from 'sinon';
 import { Agent, decodeResponse } from '../src/agent';
 import type { AgentCreateConfig, DraftAgentTopics, ExtendedAgentJobSpec } from '../src/types';
-import { ScriptAgent } from '../src/scriptAgent';
+import { ScriptAgent } from '../src';
 import * as utils from '../src/utils';
 import { AgentPublisher } from '../src/agentPublisher';
 

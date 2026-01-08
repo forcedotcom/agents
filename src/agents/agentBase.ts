@@ -21,9 +21,8 @@ import {
   type AgentPreviewSendResponse,
   type AgentPreviewStartResponse,
   type PlannerResponse,
-} from './types';
-import { getSessionDir, copyDirectory, appendTranscriptEntryToSession, writeTraceToSession } from './utils';
-import { getDebugLog } from './apexUtils';
+} from '../types';
+import { copyDirectory } from '../utils';
 
 /**
  * Common preview interface that both ScriptAgent and ProductionAgent implement
@@ -41,7 +40,7 @@ export type AgentPreviewInterface = {
  * Abstract base class for agent preview functionality.
  * Contains shared properties and methods between ScriptAgent and ProductionAgent.
  */
-export abstract class AgentInteractionBase {
+export abstract class AgentBase {
   /**
    * The display name of the agent (user-friendly name, not API name)
    */
@@ -57,100 +56,6 @@ export abstract class AgentInteractionBase {
   public async restoreConnection(): Promise<void> {
     delete this.connection.accessToken;
     await this.connection.refreshAuth();
-  }
-
-  /**
-   * Send a message to the agent using the session ID obtained by calling `start()`.
-   *
-   * @param message A message to send to the agent.
-   * @returns `AgentPreviewSendResponse`
-   */
-  protected async sendMessage(message: string): Promise<AgentPreviewSendResponse> {
-    if (!this.sessionId) {
-      throw SfError.create({ name: 'noSessionId', message: 'Agent not started, please call .start() first' });
-    }
-
-    const url = this.getSendMessageUrl();
-    const body = {
-      message: {
-        sequenceId: Date.now(),
-        type: 'Text',
-        text: message,
-      },
-      variables: [],
-    };
-
-    try {
-      const start = Date.now();
-
-      // Handle Apex debugging setup if needed
-      if (this.apexDebugging && this.canApexDebug()) {
-        await this.handleApexDebuggingSetup();
-      }
-
-      const agentId = await this.getAgentIdForStorage();
-
-      // Ensure session directory exists
-      if (!this.sessionDir) {
-        this.sessionDir = await getSessionDir(agentId, this.sessionId);
-      }
-
-      void appendTranscriptEntryToSession(
-        {
-          timestamp: new Date().toISOString(),
-          agentId,
-          sessionId: this.sessionId,
-          role: 'user',
-          text: message,
-        },
-        this.sessionDir
-      );
-
-      const response = await this.connection.request<AgentPreviewSendResponse>({
-        method: 'POST',
-        url,
-        body: JSON.stringify(body),
-        headers: {
-          'x-client-name': 'afdx',
-        },
-      });
-
-      const planId = response.messages.at(0)!.planId;
-      this.planIds.add(planId);
-
-      await appendTranscriptEntryToSession(
-        {
-          timestamp: new Date().toISOString(),
-          agentId,
-          sessionId: this.sessionId,
-          role: 'agent',
-          text: response.messages.at(0)?.message,
-          raw: response.messages,
-        },
-        this.sessionDir
-      );
-
-      // Fetch and write trace immediately if available
-      if (planId) {
-        try {
-          const trace = await this.getTrace(planId);
-          await writeTraceToSession(planId, trace, this.sessionDir);
-        } catch (error) {
-          throw SfError.wrap(error);
-        }
-      }
-
-      if (this.apexDebugging && this.canApexDebug()) {
-        const apexLog = await getDebugLog(this.connection, start, Date.now());
-        if (apexLog) {
-          response.apexDebugLog = apexLog;
-        }
-      }
-
-      return response;
-    } catch (err) {
-      throw SfError.wrap(err);
-    }
   }
 
   /**
@@ -220,7 +125,14 @@ export abstract class AgentInteractionBase {
   protected setApexDebugging(apexDebugging: boolean): void {
     this.apexDebugging = apexDebugging;
   }
+  /**
+   * Send a message to the agent using the session ID obtained by calling `start()`.
+   *
+   * @param message A message to send to the agent.
+   * @returns `AgentPreviewSendResponse`
+   */
 
+  protected abstract sendMessage(message: string): Promise<AgentPreviewSendResponse>;
   /**
    * Get the agent ID to use for storage/transcript purposes
    */
@@ -237,9 +149,4 @@ export abstract class AgentInteractionBase {
   protected abstract handleApexDebuggingSetup(): Promise<void>;
 
   protected abstract getTrace(planId: string): Promise<PlannerResponse | undefined>;
-
-  /**
-   * Get the URL for sending messages
-   */
-  protected abstract getSendMessageUrl(): string;
 }
