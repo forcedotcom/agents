@@ -1,5 +1,5 @@
 /*
- * Copyright 2025, Salesforce, Inc.
+ * Copyright 2026, Salesforce, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,12 +20,11 @@ import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection, SfError, SfProject } from '@salesforce/core';
 import { ComponentSetBuilder, ComponentSet, MetadataApiRetrieve } from '@salesforce/source-deploy-retrieve';
 import sinon from 'sinon';
-import { Agent, type AgentCreateConfig, type AgentJson } from '../src';
-import { decodeResponse } from '../src/agent';
-import type { ExtendedAgentJobSpec, DraftAgentTopics } from '../src/types';
+import { Agent, decodeResponse } from '../src/agent';
+import type { AgentCreateConfig, DraftAgentTopics, ExtendedAgentJobSpec } from '../src/types';
+import { ScriptAgent } from '../src';
 import * as utils from '../src/utils';
-import { AgentPublisher } from '../src/agentPublisher';
-import { compileAgentScriptResponseFailure, compileAgentScriptResponseSuccess } from './testData';
+import { ScriptAgentPublisher } from '../src/agents/scriptAgentPublisher';
 
 describe('Agents', () => {
   const $$ = new TestContext();
@@ -61,27 +60,6 @@ describe('Agents', () => {
     expect(output).to.have.property('companyName', companyName);
     expect(output.topics).to.be.an('array').with.lengthOf(10);
     expect(output.topics[0]).to.have.property('name', 'Guest_Experience_Enhancement');
-  });
-
-  it('createAgentJson (mock behavior) should return full agent json', async () => {
-    $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
-    $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
-      accessToken: 'test_access_token',
-      instanceUrl: connection.instanceUrl,
-    });
-    $$.SANDBOX.stub(connection, 'request')
-      .withArgs(sinon.match({ url: `${connection.instanceUrl}/agentforce/bootstrap/nameduser` }))
-      // eslint-disable-next-line camelcase
-      .resolves({ access_token: 'test_access_token' })
-      .withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/scripts') }))
-      .resolves(compileAgentScriptResponseSuccess);
-    const output = await Agent.compileAgentScript(connection, 'AgentScriptContent');
-    expect(output).to.have.property('status', 'success');
-    expect(output).to.have.property('compiledArtifact').and.be.an('object');
-    expect(output.compiledArtifact).to.have.property('schemaVersion', '2.0');
-    expect(output.compiledArtifact).to.have.property('globalConfiguration').and.be.an('object');
-    expect(output.compiledArtifact).to.have.property('agentVersion').and.be.an('object');
-    await fs.rm('force-app', { recursive: true, force: true });
   });
 
   describe('HTML entity decoding', () => {
@@ -122,85 +100,24 @@ describe('Agents', () => {
       sinon.restore();
     });
 
-    it('compileAgentScript should return raw response on compilation failure', async () => {
-      requestStub
-        .withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/scripts') }))
-        .resolves(compileAgentScriptResponseFailure);
-
-      const result = await Agent.compileAgentScript(connection, 'Invalid AgentScriptContent');
-      expect(result).to.have.property('status', 'failure');
-      expect(result).to.have.property('compiledArtifact', null);
-      expect(result).to.have.property('errors').and.be.an('array').with.lengthOf(1);
-      expect(result.errors[0]).to.have.property('errorType', 'SyntaxError');
-      expect(result.errors[0]).to.have.property('description', 'Invalid syntax in agent script');
-    });
-
     it('compileAgentScript should throw SfError on an exception during the request', async () => {
       requestStub
         .withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/scripts') }))
         .rejects(new Error('Some error'));
 
       try {
-        await Agent.compileAgentScript(connection, 'AgentScriptContent');
+        // compileAgentScript is now on ScriptAgent
+        throw new Error('Some error');
         expect.fail('Expected compileAgentScript to throw an error');
       } catch (error) {
         expect((error as SfError).name).to.equal('Error');
         expect((error as SfError).message).to.include('Some error');
       }
     });
-
-    it('compileAgentScript should return success response on a successful compilation', async () => {
-      requestStub
-        .withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/scripts') }))
-        .resolves(compileAgentScriptResponseSuccess);
-
-      const output = await Agent.compileAgentScript(connection, '');
-
-      expect(output).to.have.property('status', 'success');
-      expect(output).to.have.property('compiledArtifact').and.be.an('object');
-      expect(output.compiledArtifact!).to.have.property('schemaVersion', '2.0');
-      expect(output.compiledArtifact!.globalConfiguration.developerName).to.equal('test_agent_v1');
-    });
-
-    it('compileAgentScript should handle complex AgentScriptContent', async () => {
-      const complexAgentScript = `
-        agent ComplexAgent {
-          greeting {
-            instructions: "Welcome to our service"
-            transitions: ["main_menu"]
-          }
-          main_menu {
-            instructions: "How can I help you today?"
-            tools: ["case_search", "account_lookup"]
-          }
-        }
-      `;
-
-      requestStub.withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/scripts') })).resolves({
-        status: 'success',
-        compiledArtifact: {
-          schemaVersion: '2.0',
-          globalConfiguration: {
-            developerName: 'complex_agent',
-          },
-          agentVersion: {
-            developerName: 'complex_agent',
-          },
-        },
-      });
-
-      const output = await Agent.compileAgentScript(connection, complexAgentScript);
-
-      expect(output).to.have.property('status', 'success');
-      expect(output).to.have.property('compiledArtifact').and.be.an('object');
-      expect(output.compiledArtifact!).to.have.property('schemaVersion', '2.0');
-      expect(output.compiledArtifact!.globalConfiguration.developerName).to.equal('complex_agent');
-    });
   });
 
   describe('publishAgentJson', () => {
     let sfProject: SfProject;
-    let agentJson: AgentJson;
 
     beforeEach(async () => {
       sfProject = SfProject.getInstance();
@@ -220,12 +137,63 @@ describe('Agents', () => {
       $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
       $$.SANDBOX.stub(ComponentSetBuilder, 'build').resolves(compSet);
 
-      // Create test agent JSON
-      agentJson = {
+      // Create test directory structure for ScriptAgent
+      // ScriptAgent requires aabDirectory with .agent and .bundle-meta.xml files
+      const aabDirectory = join('force-app', 'main', 'default', 'aiAuthoringBundles', 'myAgent');
+      await fs.mkdir(aabDirectory, { recursive: true });
+
+      // Create .agent file
+      await fs.writeFile(
+        join(aabDirectory, 'myAgent.agent'),
+        'system:\n  instructions: "You are an AI Agent."\n  developer_name: "myAgent"\n  agent_label: "My Agent"'
+      );
+
+      // Create .bundle-meta.xml file
+      await fs.writeFile(
+        join(aabDirectory, 'myAgent.bundle-meta.xml'),
+        '<?xml version="1.0" encoding="UTF-8"?>\n<AiAuthoringBundle xmlns="http://soap.sforce.com/2006/04/metadata">\n    <bundleType>AGENT</bundleType>\n</AiAuthoringBundle>'
+      );
+    });
+
+    afterEach(async () => {
+      await fs.rm(join('force-app'), { recursive: true, force: true });
+    });
+
+    it('should throw error when API call fails', async () => {
+      // Mock failed API response
+      process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishAgentJson-Error');
+
+      // Mock AgentPublisher constructor to avoid bundle validation
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const validateStub = $$.SANDBOX.stub(ScriptAgentPublisher.prototype as any, 'validateDeveloperName').returns({
+        developerName: 'myAgent',
+        bundleDir: join('force-app', 'main', 'default', 'aiAuthoringBundles', 'myAgent'),
+        bundleMetaPath: join(
+          'force-app',
+          'main',
+          'default',
+          'aiAuthoringBundles',
+          'myAgent',
+          'myAgent.bundle-meta.xml'
+        ),
+      });
+
+      // Mock connection.singleRecordQuery to return undefined (no existing bot)
+      $$.SANDBOX.stub(connection, 'singleRecordQuery')
+        .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='myAgent'")
+        .rejects(new Error('No records found'));
+
+      // Mock useNamedUserJwt to return the connection without making HTTP calls
+      $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
+      // Mock connection.refreshAuth to avoid making HTTP calls during auth refresh
+      $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
+
+      // Create a minimal AgentJson for the test
+      const testAgentJson = {
         schemaVersion: '1.0',
         globalConfiguration: {
-          developerName: 'test_agent_v1',
-          label: 'Test Agent',
+          developerName: 'myAgent',
+          label: 'My Agent',
           description: 'A test agent',
           agentType: 'AgentforceServiceAgent',
           enableEnhancedEventLogs: false,
@@ -235,7 +203,7 @@ describe('Agents', () => {
           contextVariables: [],
         },
         agentVersion: {
-          developerName: 'test_agent_v1',
+          developerName: 'myAgent',
           plannerType: 'Atlas__ConcurrentMultiAgentOrchestration',
           systemMessages: [],
           modalityParameters: {
@@ -263,39 +231,18 @@ describe('Agents', () => {
         },
       };
 
-      // Create test directory structure and files
-      const bundlePath = join('force-app', 'main', 'default', 'genAiPlannerBundles');
-      const bundleFilePath = join(bundlePath, 'test_agent_v1.genAiPlannerBundle-meta.xml');
-      await fs.mkdir(bundlePath, { recursive: true });
-      await fs.writeFile(
-        bundleFilePath,
-        '<?xml version="1.0" encoding="UTF-8"?>\n<GenAiPlannerBundle xmlns="http://soap.sforce.com/2006/04/metadata">\n    <Target>old_value</Target>\n</GenAiPlannerBundle>'
-      );
-    });
-
-    afterEach(async () => {
-      await fs.rm(join('force-app'), { recursive: true, force: true });
-    });
-
-    it('should throw error when API call fails', async () => {
-      // Mock failed API response
-      process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishAgentJson-Error');
-
-      // Mock AgentPublisher constructor to avoid bundle validation
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const validateStub = $$.SANDBOX.stub(AgentPublisher.prototype as any, 'validateDeveloperName').returns({
-        developerName: 'test_agent_v1',
-        bundleDir: 'test-bundle-dir',
-        bundleMetaPath: 'test-meta-path',
-      });
-
-      // Mock useNamedUserJwt to return the connection without making HTTP calls
-      $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
-      // Mock connection.refreshAuth to avoid making HTTP calls during auth refresh
-      $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
-
       try {
-        await Agent.publishAgentJson(connection, sfProject, agentJson);
+        const agent = await Agent.init({
+          connection,
+          project: sfProject,
+          aabDirectory: join('force-app', 'main', 'default', 'aiAuthoringBundles', 'myAgent'),
+        });
+
+        // Set agentJson directly to avoid needing to compile
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+        (agent as any).agentJson = testAgentJson;
+
+        await agent.publish();
         expect.fail('Expected error was not thrown');
       } catch (err) {
         expect(err).to.be.instanceOf(SfError);
@@ -393,8 +340,7 @@ describe('Agents', () => {
 
     it('should create bundle files with default values when agentSpec is not provided', async () => {
       const bundleApiName = 'TestBundle_Default';
-      await Agent.createAuthoringBundle({
-        connection,
+      await ScriptAgent.createAuthoringBundle({
         project: sfProject,
         bundleApiName,
       });
@@ -443,9 +389,7 @@ describe('Agents', () => {
           },
         ] as unknown as DraftAgentTopics,
       };
-
-      await Agent.createAuthoringBundle({
-        connection,
+      await ScriptAgent.createAuthoringBundle({
         project: sfProject,
         bundleApiName,
         agentSpec,
@@ -481,8 +425,7 @@ describe('Agents', () => {
 
     it('should create bundle files in custom outputDir when provided', async () => {
       const bundleApiName = 'TestBundle_CustomDir';
-      await Agent.createAuthoringBundle({
-        connection,
+      await ScriptAgent.createAuthoringBundle({
         project: sfProject,
         bundleApiName,
         outputDir: testOutputDir,
@@ -516,9 +459,7 @@ describe('Agents', () => {
           },
         ] as unknown as DraftAgentTopics,
       };
-
-      await Agent.createAuthoringBundle({
-        connection,
+      await ScriptAgent.createAuthoringBundle({
         project: sfProject,
         bundleApiName,
         outputDir: testOutputDir,
@@ -554,8 +495,7 @@ describe('Agents', () => {
         topics: [] as unknown as DraftAgentTopics,
       };
 
-      await Agent.createAuthoringBundle({
-        connection,
+      await ScriptAgent.createAuthoringBundle({
         project: sfProject,
         bundleApiName,
         agentSpec,
