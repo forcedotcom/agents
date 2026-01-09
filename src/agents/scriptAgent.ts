@@ -32,7 +32,6 @@ import {
   PublishAgent,
   ScriptAgentOptions,
 } from '../types';
-import { AgentPublisher } from '../agentPublisher';
 import {
   getSessionDir,
   appendTranscriptEntryToSession,
@@ -42,6 +41,7 @@ import {
   getEndpoint,
 } from '../utils';
 import { getDebugLog } from '../apexUtils';
+import { ScriptAgentPublisher } from './scriptAgentPublisher';
 import { AgentBase, type AgentPreviewInterface } from './agentBase';
 
 export class ScriptAgent extends AgentBase {
@@ -322,7 +322,7 @@ ${ensureArray(options.agentSpec?.topics)
     if (!this.agentJson) {
       await this.compile();
     }
-    const publisher = new AgentPublisher(this.options.connection, this.options.project, this.agentJson!);
+    const publisher = new ScriptAgentPublisher(this.connection, this.options.project, this.agentJson!);
     return publisher.publishAgentJson();
   }
 

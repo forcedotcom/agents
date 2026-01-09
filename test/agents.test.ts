@@ -24,7 +24,7 @@ import { Agent, decodeResponse } from '../src/agent';
 import type { AgentCreateConfig, DraftAgentTopics, ExtendedAgentJobSpec } from '../src/types';
 import { ScriptAgent } from '../src';
 import * as utils from '../src/utils';
-import { AgentPublisher } from '../src/agentPublisher';
+import { ScriptAgentPublisher } from '../src/agents/scriptAgentPublisher';
 
 describe('Agents', () => {
   const $$ = new TestContext();
@@ -165,7 +165,7 @@ describe('Agents', () => {
 
       // Mock AgentPublisher constructor to avoid bundle validation
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const validateStub = $$.SANDBOX.stub(AgentPublisher.prototype as any, 'validateDeveloperName').returns({
+      const validateStub = $$.SANDBOX.stub(ScriptAgentPublisher.prototype as any, 'validateDeveloperName').returns({
         developerName: 'myAgent',
         bundleDir: join('force-app', 'main', 'default', 'aiAuthoringBundles', 'myAgent'),
         bundleMetaPath: join(

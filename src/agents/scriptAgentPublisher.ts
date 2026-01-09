@@ -18,11 +18,11 @@ import * as path from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { XMLBuilder, XMLParser } from 'fast-xml-parser';
-import { Connection, Logger, Messages, SfError, SfProject, AuthInfo } from '@salesforce/core';
+import { AuthInfo, Connection, Logger, Messages, SfError, SfProject } from '@salesforce/core';
 import { ComponentSet, ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
-import { MaybeMock } from './maybe-mock';
-import { type AgentJson, type PublishAgentJsonResponse, type PublishAgent } from './types.js';
-import { findAuthoringBundle, getEndpoint, useNamedUserJwt } from './utils';
+import { MaybeMock } from '../maybe-mock';
+import { type AgentJson, type PublishAgent, type PublishAgentJsonResponse } from '../types';
+import { findAuthoringBundle, getEndpoint } from '../utils';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agentPublisher');
@@ -38,7 +38,7 @@ const getLogger = (): Logger => {
 /**
  * Service class responsible for publishing agents to Salesforce orgs
  */
-export class AgentPublisher {
+export class ScriptAgentPublisher {
   private readonly maybeMock: MaybeMock;
   private readonly connection: Connection;
   private project: SfProject;
@@ -72,14 +72,7 @@ export class AgentPublisher {
     this.project = project;
     this.agentJson = agentJson;
     // Store the original username to create fresh connections for metadata operations
-    const username = connection.getUsername();
-    if (!username) {
-      throw SfError.create({
-        name: 'ConnectionError',
-        message: 'Connection must have a username',
-      });
-    }
-    this.originalUsername = username;
+    this.originalUsername = connection.getUsername()!;
 
     // Validate and get developer name and bundle directory
     const validationResult = this.validateDeveloperName();
@@ -107,8 +100,9 @@ export class AgentPublisher {
     // before metadata operations that may use SOAP API
     let response: PublishAgentJsonResponse;
     try {
-      await useNamedUserJwt(this.connection);
       const botId = await this.getPublishedBotId(this.developerName);
+      // if we've found a botId in the org, then this agent has already been published before => ai-agent/v1.1/authoring/agents/<id>/versions
+      // if we didn't find an Id in the org, then we're publishing for the first time         => ai-agent/v1.1/authoring/agents
       const url = botId ? `${this.API_URL}/${botId}/versions` : this.API_URL;
       response = await this.maybeMock.request<PublishAgentJsonResponse>('POST', url, body, this.API_HEADERS);
     } finally {
@@ -122,8 +116,9 @@ export class AgentPublisher {
       // 1. retrieve the new Agent metadata that's in the org
       // 2. deploy the AuthoringBundle's -meta.xml file with correct target attribute
       const botVersionName = await this.getVersionDeveloperName(response.botVersionId);
-      await this.retrieveAgentMetadata(botVersionName);
-      await this.syncAuthoringBundle(botVersionName);
+      const standardConnection = await this.createStandardConnection();
+      await this.retrieveAgentMetadata(botVersionName, standardConnection);
+      await this.syncAuthoringBundle(botVersionName, standardConnection);
 
       return { ...response, developerName: this.developerName };
     } else {
@@ -189,13 +184,10 @@ export class AgentPublisher {
    * Retrieve the agent metadata from the org after publishing
    *
    * @param botVersionName The bot version name
+   * @param connection
    */
-  private async retrieveAgentMetadata(botVersionName: string): Promise<void> {
+  private async retrieveAgentMetadata(botVersionName: string, connection: Connection): Promise<void> {
     const defaultPackagePath = path.resolve(this.project.getDefaultPackage().path);
-
-    // Create a fresh standard connection for metadata operations
-    // This ensures SOAP API operations work correctly (JWT tokens don't work with SOAP)
-    const standardConnection = await this.createStandardConnection();
 
     const cs = await ComponentSetBuilder.build({
       metadata: {
@@ -208,7 +200,7 @@ export class AgentPublisher {
       },
     });
     const retrieve = await cs.retrieve({
-      usernameOrConnection: standardConnection,
+      usernameOrConnection: connection,
       merge: true,
       format: 'source',
       output: path.resolve(this.project.getPath(), defaultPackagePath),
@@ -232,11 +224,12 @@ export class AgentPublisher {
    * 2. Second deployment with target attribute commits the AAB as the published version
    *
    * @param botVersionName The bot version name to use as the target for the final published deployment
+   * @param connection
    * @private
    */
-  private async syncAuthoringBundle(botVersionName: string): Promise<void> {
-    await this.deployAuthoringBundle();
-    await this.deployAuthoringBundle(botVersionName);
+  private async syncAuthoringBundle(botVersionName: string, connection: Connection): Promise<void> {
+    await this.deployAuthoringBundle(connection);
+    await this.deployAuthoringBundle(connection, botVersionName);
   }
 
   /**
@@ -244,11 +237,11 @@ export class AgentPublisher {
    * The target attribute is required for deployment but should not remain in the
    * local source files after deployment.
    *
-   * @param botVersionId The bot version ID used to construct the target attribute
-   *
    * @throws SfError if the deployment fails or if there are component deployment errors
+   * @param botVersionName
+   * @param connection
    */
-  private async deployAuthoringBundle(botVersionName?: string): Promise<void> {
+  private async deployAuthoringBundle(connection: Connection, botVersionName?: string): Promise<void> {
     // 1. if botVersionName is provided, add the target to the local authoring bundle meta.xml file
     // 2. deploy the authoring bundle to the org
     // 3. remove the target from the localauthoring bundle meta.xml file
@@ -272,11 +265,8 @@ export class AgentPublisher {
     await writeFile(this.bundleMetaPath, xmlBuilder.build(authoringBundle));
 
     // 2. attempt to deploy the authoring bundle to the org
-    // Create a fresh standard connection for metadata operations
-    // This ensures SOAP API operations work correctly (JWT tokens don't work with SOAP)
-    const standardConnection = await this.createStandardConnection();
     const deploy = await ComponentSet.fromSource(this.bundleDir).deploy({
-      usernameOrConnection: standardConnection,
+      usernameOrConnection: connection,
     });
     const deployResult = await deploy.pollStatus();
 

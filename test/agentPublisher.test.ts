@@ -22,7 +22,7 @@ import { Connection, SfError, SfProject } from '@salesforce/core';
 import { ComponentSetBuilder, ComponentSet, MetadataApiRetrieve } from '@salesforce/source-deploy-retrieve';
 import { type AgentJson } from '../src';
 import * as utils from '../src/utils';
-import { AgentPublisher } from '../src/agentPublisher';
+import { ScriptAgentPublisher } from '../src/agents/scriptAgentPublisher';
 import { testAgentJson } from './testData';
 
 describe('AgentPublisher', () => {
@@ -48,7 +48,7 @@ describe('AgentPublisher', () => {
     bundleMetaPath = 'test-meta-path'
   ) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return $$.SANDBOX.stub(AgentPublisher.prototype as any, 'validateDeveloperName').returns({
+    return $$.SANDBOX.stub(ScriptAgentPublisher.prototype as any, 'validateDeveloperName').returns({
       developerName,
       bundleDir,
       bundleMetaPath,
@@ -86,7 +86,7 @@ describe('AgentPublisher', () => {
     it('should validate developer name and bundle directory during construction', async () => {
       await createTestBundleStructure();
 
-      const publisher = new AgentPublisher(connection, sfProject, agentJson);
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
       expect(publisher['developerName']).to.equal('test_agent');
       expect(publisher['bundleMetaPath']).to.include('test_agent.bundle-meta.xml');
     });
@@ -100,12 +100,12 @@ describe('AgentPublisher', () => {
         },
       };
 
-      expect(() => new AgentPublisher(connection, sfProject, agentJsonNoBundle)).to.throw(SfError);
+      expect(() => new ScriptAgentPublisher(connection, sfProject, agentJsonNoBundle)).to.throw(SfError);
     });
   });
 
   describe('publishAgentJson', () => {
-    let publisher: AgentPublisher;
+    let publisher: ScriptAgentPublisher;
 
     beforeEach(async () => {
       await createTestBundleStructure();
@@ -120,7 +120,7 @@ describe('AgentPublisher', () => {
         .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
         .resolves({ DeveloperName: 'v1' });
 
-      publisher = new AgentPublisher(connection, sfProject, agentJson);
+      publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
 
       // Mock useNamedUserJwt to return the connection without making HTTP calls
       $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
@@ -144,7 +144,7 @@ describe('AgentPublisher', () => {
     it('should publish new version of an existing agent when there is a bot in the org for the given developer name', async () => {
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishNewAgentVersion-Success');
 
-      publisher = new AgentPublisher(connection, sfProject, agentJson);
+      publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
 
       // Mock useNamedUserJwt to return the connection without making HTTP calls
       $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
@@ -175,7 +175,7 @@ describe('AgentPublisher', () => {
     it('should handle API errors during publishing', async () => {
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishAgentJson-Error');
 
-      publisher = new AgentPublisher(connection, sfProject, agentJson);
+      publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
 
       // Mock useNamedUserJwt to return the connection without making HTTP calls
       $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
@@ -198,7 +198,7 @@ describe('AgentPublisher', () => {
       // Create minimal publisher instance by mocking validateDeveloperName
       const validateStub = createValidateDeveloperNameStub();
 
-      const publisher = new AgentPublisher(connection, sfProject, agentJson);
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
 
       const expectedBotId = '0Xx1234567890ABC';
       $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves({ Id: expectedBotId });
@@ -216,7 +216,7 @@ describe('AgentPublisher', () => {
       // Create minimal publisher instance by mocking validateDeveloperName
       const validateStub = createValidateDeveloperNameStub();
 
-      const publisher = new AgentPublisher(connection, sfProject, agentJson);
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
 
       $$.SANDBOX.stub(connection, 'singleRecordQuery').throws(new Error('No records found'));
 
@@ -235,7 +235,7 @@ describe('AgentPublisher', () => {
       // Create minimal publisher instance by mocking validateDeveloperName
       const validateStub = createValidateDeveloperNameStub();
 
-      const publisher = new AgentPublisher(connection, sfProject, agentJson);
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
 
       const expectedVersionName = 'v1';
       $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves({ DeveloperName: expectedVersionName });
@@ -253,7 +253,7 @@ describe('AgentPublisher', () => {
       // Create minimal publisher instance by mocking validateDeveloperName
       const validateStub = createValidateDeveloperNameStub();
 
-      const publisher = new AgentPublisher(connection, sfProject, agentJson);
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
 
       $$.SANDBOX.stub(connection, 'singleRecordQuery').throws(new Error('No records found'));
 
@@ -282,7 +282,7 @@ describe('AgentPublisher', () => {
         '/nonexistent/path/test_agent.bundle-meta.xml'
       );
 
-      const publisher = new AgentPublisher(connection, sfProject, agentJson);
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
 
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
       const deployAuthoringBundle = (publisher as any).deployAuthoringBundle.bind(publisher);
@@ -304,7 +304,7 @@ describe('AgentPublisher', () => {
     it('should call deployAuthoringBundle twice with correct parameters', async () => {
       // Create minimal publisher instance by mocking validateDeveloperName
       const validateStub = createValidateDeveloperNameStub();
-      const publisher = new AgentPublisher(connection, sfProject, agentJson);
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
 
       // Mock the deployAuthoringBundle method
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -319,9 +319,10 @@ describe('AgentPublisher', () => {
       // Verify deployAuthoringBundle was called twice
       expect(deployAuthoringBundleStub.callCount).to.equal(2);
       // Verify first call was with undefined (draft deployment)
-      expect(deployAuthoringBundleStub.firstCall.args[0]).to.be.undefined;
+      expect(deployAuthoringBundleStub.firstCall.args.length).to.equal(1);
       // Verify second call was with botVersionName (published deployment)
-      expect(deployAuthoringBundleStub.secondCall.calledWithExactly(botVersionName)).to.be.true;
+      expect(deployAuthoringBundleStub.secondCall.args[1]).to.equal(botVersionName);
+      expect(deployAuthoringBundleStub.secondCall.args.length).to.equal(2);
 
       validateStub.restore();
     });
@@ -348,7 +349,7 @@ describe('AgentPublisher', () => {
       $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
       const buildStub = $$.SANDBOX.stub(ComponentSetBuilder, 'build').resolves(compSet);
 
-      const publisher = new AgentPublisher(connection, sfProject, agentJson);
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
 
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
       const retrieveAgentMetadata = (publisher as any).retrieveAgentMetadata.bind(publisher);
@@ -382,7 +383,7 @@ describe('AgentPublisher', () => {
       $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
       $$.SANDBOX.stub(ComponentSetBuilder, 'build').resolves(compSet);
 
-      const publisher = new AgentPublisher(connection, sfProject, agentJson);
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
 
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
       const retrieveAgentMetadata = (publisher as any).retrieveAgentMetadata.bind(publisher);
