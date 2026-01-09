@@ -50,7 +50,6 @@ export class ScriptAgent extends AgentBase {
   };
   private mockMode: 'Mock' | 'Live Test' = 'Mock';
   private agentScriptContent: AgentScriptContent;
-  private metaContent: string;
   private agentJson: AgentJson | undefined;
   private apiBase = `https://${getEndpoint()}api.salesforce.com/einstein/ai-agent`;
   public constructor(private options: ScriptAgentOptions) {
@@ -62,10 +61,6 @@ export class ScriptAgent extends AgentBase {
 
     this.agentScriptContent = fs.readFileSync(
       join(this.options.aabDirectory, `${basename(this.options.aabDirectory)}.agent`),
-      'utf-8'
-    );
-    this.metaContent = fs.readFileSync(
-      join(this.options.aabDirectory, `${basename(this.options.aabDirectory)}.bundle-meta.xml`),
       'utf-8'
     );
     this.preview = {
@@ -302,7 +297,6 @@ ${ensureArray(options.agentSpec?.topics)
       if (response.status === 'success') {
         this.agentJson = response.compiledArtifact;
 
-        this.agentJson.agentVersion.developerName = this.metaContent.match(/<target>.*(v\d+)<\/target>/)?.at(1) ?? 'v0';
         // Set the display name from agentJson label, or fallback to directory name
         this.name = this.agentJson.globalConfiguration.label || basename(this.options.aabDirectory);
       }
