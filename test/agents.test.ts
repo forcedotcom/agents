@@ -123,6 +123,9 @@ describe('Agents', () => {
       sfProject = SfProject.getInstance();
       // @ts-expect-error Not the full package def
       $$.SANDBOX.stub(sfProject, 'getDefaultPackage').returns({ path: 'force-app' });
+      $$.SANDBOX.stub(sfProject, 'getPackageDirectories').returns([
+        { fullPath: 'force-app', path: 'force-app', package: '', versionNumber: '', name: 'force-app' },
+      ]);
 
       // Setup default successful metadata retrieval mock
       const compSet = new ComponentSet();
@@ -138,7 +141,7 @@ describe('Agents', () => {
       $$.SANDBOX.stub(ComponentSetBuilder, 'build').resolves(compSet);
 
       // Create test directory structure for ScriptAgent
-      // ScriptAgent requires aabDirectory with .agent and .bundle-meta.xml files
+      // ScriptAgent requires an AAB with .agent and .bundle-meta.xml files
       const aabDirectory = join('force-app', 'main', 'default', 'aiAuthoringBundles', 'myAgent');
       await fs.mkdir(aabDirectory, { recursive: true });
 
@@ -235,7 +238,7 @@ describe('Agents', () => {
         const agent = await Agent.init({
           connection,
           project: sfProject,
-          aabDirectory: join('force-app', 'main', 'default', 'aiAuthoringBundles', 'myAgent'),
+          aabName: 'myAgent',
         });
 
         // Set agentJson directly to avoid needing to compile

@@ -45,8 +45,8 @@ export type AgentOptions = ScriptAgentOptions | ProductionAgentOptions;
 export type ScriptAgentOptions = {
   connection: Connection;
   project: SfProject;
-  // path to AAB dir, e.g. force-app/main/default/aiAuthoringBundles/myBundle
-  aabDirectory: string;
+  // name of the AAB, e.g. 'myBundle' - the project will be searched to find the AAB directory
+  aabName: string;
 };
 export type ProductionAgentOptions = {
   connection: Connection;
@@ -62,7 +62,7 @@ export type PreviewableAgent = {
   source: AgentSource;
   id?: string; // Bot ID for org agents
   developerName?: string; // Developer name for org agents
-  aabDirectory?: string; // Path to authoring bundle directory for script agents
+  aabName?: string; // Name of the AAB for script agents
   label?: string; // MasterLabel for org agents
 };
 

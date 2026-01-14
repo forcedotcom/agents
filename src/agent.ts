@@ -81,11 +81,11 @@ export const AgentCreateLifecycleStages = {
  *
  * Create a new instance of an agent script based agent
  *
- * const agent = await Agent.init({connection, project, aabDirectory: 'force-app/main/default/aiAuthoringBundles/myBot' });
+ * const agent = await Agent.init({connection, project, aabName: 'myBot' });
  *
  * Start a preview session
  *
- * const agent = await Agent.init({connection, project, aabDirectory: 'force-app/main/default/aiAuthoringBundles/myBot' });
+ * const agent = await Agent.init({connection, project, aabName: 'myBot' });
  * await agent.preview.start();
  * await agent.preview.send('hi there');
  *
@@ -116,8 +116,8 @@ export class Agent {
     // Upgrade the isolated connection with JWT
     const jwtConnection = await useNamedUserJwt(isolatedConnection);
 
-    // Type guard: check if it's ScriptAgentOptions by looking for 'aabDirectory'
-    if ('aabDirectory' in options) {
+    // Type guard: check if it's ScriptAgentOptions by looking for 'aabName'
+    if ('aabName' in options) {
       // TypeScript now knows this is ScriptAgentOptions
       return new ScriptAgent({ ...options, connection: jwtConnection });
     } else {
@@ -220,7 +220,7 @@ export class Agent {
             const previewableAgent: PreviewableAgent = {
               name: agentName,
               source: AgentSource.SCRIPT,
-              aabDirectory: normalizedPath,
+              aabName: agentName,
             };
             results.push(previewableAgent);
           }

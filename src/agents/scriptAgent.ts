@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 import fs, { mkdirSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { join } from 'node:path';
 import { EOL } from 'node:os';
 import { writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -39,6 +39,7 @@ import {
   updateMetadataEndTime,
   writeTraceToSession,
   getEndpoint,
+  findAuthoringBundle,
 } from '../utils';
 import { getDebugLog } from '../apexUtils';
 import { ScriptAgentPublisher } from './scriptAgentPublisher';
@@ -52,17 +53,31 @@ export class ScriptAgent extends AgentBase {
   private agentScriptContent: AgentScriptContent;
   private agentJson: AgentJson | undefined;
   private apiBase = `https://${getEndpoint()}api.salesforce.com/einstein/ai-agent`;
+  private readonly aabDirectory: string;
   public constructor(private options: ScriptAgentOptions) {
     super(options.connection);
     this.options = options;
 
-    // Set initial name from directory name (will be updated when agent is compiled)
-    this.name = basename(this.options.aabDirectory);
+    // Find the AAB directory using the project
+    const projectDirs = options.project.getPackageDirectories();
+    const searchDirs = projectDirs.map((pkgDir) => pkgDir.fullPath);
+    const foundDirectory = findAuthoringBundle(searchDirs, options.aabName);
 
-    this.agentScriptContent = fs.readFileSync(
-      join(this.options.aabDirectory, `${basename(this.options.aabDirectory)}.agent`),
-      'utf-8'
-    );
+    if (!foundDirectory) {
+      throw SfError.create({
+        name: 'AABNotFound',
+        message: `Cannot find an authoring bundle named '${
+          options.aabName
+        }' in the project. Searched in: ${searchDirs.join(', ')}`,
+      });
+    }
+
+    this.aabDirectory = foundDirectory;
+
+    // Set initial name from AAB name (will be updated when agent is compiled)
+    this.name = options.aabName;
+
+    this.agentScriptContent = fs.readFileSync(join(this.aabDirectory, `${options.aabName}.agent`), 'utf-8');
     this.preview = {
       start: (mockMode?: 'Mock' | 'Live Test', apexDebugging?: boolean): Promise<AgentPreviewStartResponse> =>
         this.startPreview(mockMode, apexDebugging),
@@ -243,7 +258,7 @@ ${ensureArray(options.agentSpec?.topics)
 
   public async refreshContent(): Promise<void> {
     this.agentScriptContent = await fs.promises.readFile(
-      join(this.options.aabDirectory, `${basename(this.options.aabDirectory)}.agent`),
+      join(this.aabDirectory, `${this.options.aabName}.agent`),
       'utf-8'
     );
     await this.compile();
@@ -297,8 +312,8 @@ ${ensureArray(options.agentSpec?.topics)
       if (response.status === 'success') {
         this.agentJson = response.compiledArtifact;
 
-        // Set the display name from agentJson label, or fallback to directory name
-        this.name = this.agentJson.globalConfiguration.label || basename(this.options.aabDirectory);
+        // Set the display name from agentJson label, or fallback to AAB name
+        this.name = this.agentJson.globalConfiguration.label || this.options.aabName;
       }
 
       return response;
@@ -356,7 +371,7 @@ ${ensureArray(options.agentSpec?.topics)
   }
 
   protected getAgentIdForStorage(): string {
-    return basename(this.options.aabDirectory);
+    return this.options.aabName;
   }
 
   protected canApexDebug(): boolean {
@@ -532,7 +547,7 @@ ${ensureArray(options.agentSpec?.topics)
         { retry: { maxRetries: 3 } }
       );
       this.sessionId = response.sessionId;
-      const agentIdForStorage = basename(this.options.aabDirectory);
+      const agentIdForStorage = this.options.aabName;
 
       // Initialize session directory and write initial data
       // Session directory structure:
