@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import fs, { mkdirSync } from 'node:fs';
+import fs, { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { EOL } from 'node:os';
 import { writeFile } from 'node:fs/promises';
@@ -54,6 +54,7 @@ export class ScriptAgent extends AgentBase {
   private agentJson: AgentJson | undefined;
   private apiBase = `https://${getEndpoint()}api.salesforce.com/einstein/ai-agent`;
   private readonly aabDirectory: string;
+  private readonly metaContent: string;
   public constructor(private options: ScriptAgentOptions) {
     super(options.connection);
     this.options = options;
@@ -77,7 +78,18 @@ export class ScriptAgent extends AgentBase {
     // Set initial name from AAB name (will be updated when agent is compiled)
     this.name = options.aabName;
 
+    // Load the .agent file
     this.agentScriptContent = fs.readFileSync(join(this.aabDirectory, `${options.aabName}.agent`), 'utf-8');
+
+    // Load and validate the bundle-meta.xml file
+    const bundleMetaPath = join(this.aabDirectory, `${options.aabName}.bundle-meta.xml`);
+    if (!existsSync(bundleMetaPath)) {
+      throw SfError.create({
+        name: 'BundleMetaNotFound',
+        message: `Cannot find bundle-meta.xml file for '${options.aabName}' at ${bundleMetaPath}`,
+      });
+    }
+    this.metaContent = fs.readFileSync(bundleMetaPath, 'utf-8');
     this.preview = {
       start: (mockMode?: 'Mock' | 'Live Test', apexDebugging?: boolean): Promise<AgentPreviewStartResponse> =>
         this.startPreview(mockMode, apexDebugging),
@@ -513,8 +525,11 @@ ${ensureArray(options.agentSpec?.topics)
       bypassUser = false;
     }
 
+    const agentDefinition = this.agentJson;
+    agentDefinition.agentVersion.developerName = this.metaContent.match(/<target>.*(v\d+)<\/target>/)?.at(1) ?? 'v0';
+
     const body = {
-      agentDefinition: this.agentJson,
+      agentDefinition,
       enableSimulationMode: this.mockMode === 'Mock',
       externalSessionKey: randomUUID(),
       instanceConfig: {
