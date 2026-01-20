@@ -16,7 +16,8 @@
 import { readFile, readdir, cp, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Connection, SfError } from '@salesforce/core';
-import { AgentPreviewInterface, type AgentPreviewSendResponse, type PlannerResponse } from '../types';
+import { AgentPreviewInterface, type AgentPreviewSendResponse, type PlannerResponse, PreviewMetadata } from '../types';
+import { TranscriptEntry } from '../utils';
 
 /**
  * Abstract base class for agent preview functionality.
@@ -132,4 +133,10 @@ export abstract class AgentBase {
   protected abstract handleApexDebuggingSetup(): Promise<void>;
 
   protected abstract getTrace(planId: string): Promise<PlannerResponse | undefined>;
+
+  protected abstract getHistoryFromDisc(): Promise<{
+    metadata: PreviewMetadata | null;
+    transcript: TranscriptEntry[];
+    traces: PlannerResponse[];
+  }>;
 }

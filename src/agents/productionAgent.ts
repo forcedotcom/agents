@@ -25,6 +25,7 @@ import {
   type BotVersionMetadata,
   type EndReason,
   PlannerResponse,
+  PreviewMetadata,
   ProductionAgentOptions,
 } from '../types';
 import { MaybeMock } from '../maybe-mock';
@@ -35,6 +36,8 @@ import {
   writeTraceToHistory,
   getEndpoint,
   getHistoryDir,
+  getAllHistory,
+  TranscriptEntry,
 } from '../utils';
 import { createTraceFlag, findTraceFlag, getDebugLog } from '../apexUtils';
 import { AgentBase } from './agentBase';
@@ -102,6 +105,16 @@ export class ProductionAgent extends AgentBase {
     return undefined;
   }
 
+  public getHistoryFromDisc(sessionId?: string): Promise<{
+    metadata: PreviewMetadata | null;
+    transcript: TranscriptEntry[];
+    traces: PlannerResponse[];
+  }> {
+    // Use provided sessionId, or fall back to this.sessionId, or let getAllHistory find the most recent
+    const actualSessionId = sessionId ?? this.sessionId;
+    return getAllHistory(this.getAgentIdForStorage(), actualSessionId);
+  }
+
   /**
    * Returns the ID for this agent.
    *
@@ -131,7 +144,7 @@ export class ProductionAgent extends AgentBase {
     return this.setAgentStatus('Inactive');
   }
 
-  protected getAgentIdForStorage(): string {
+  public getAgentIdForStorage(): string {
     if (!this.id) {
       throw SfError.create({ name: 'noId', message: 'Agent ID not found. Call .getBotMetadata() first.' });
     }

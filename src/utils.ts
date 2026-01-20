@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 import { readdirSync, statSync } from 'node:fs';
-import { mkdir, appendFile, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, appendFile, readFile, writeFile, readdir, stat } from 'node:fs/promises';
 import * as path from 'node:path';
 import { Connection, SfError, SfProject } from '@salesforce/core';
 import { env } from '@salesforce/kit';
@@ -337,6 +337,147 @@ export const updateMetadataEndTime = async (
       planIds: Array.from(planIds),
     });
   }
+};
+
+/**
+ * Find the most recent session ID for an agent by checking metadata.json startTime
+ *
+ * @param agentId gotten from Agent.getAgentIdForStorage()
+ * @returns The most recent sessionId, or undefined if no sessions found
+ */
+const findMostRecentSessionId = async (agentId: string): Promise<string | undefined> => {
+  const base = (await resolveProjectLocalSfdx()) ?? path.join(process.cwd(), '.sfdx');
+  const sessionsDir = path.join(base, 'agents', agentId, 'sessions');
+
+  try {
+    const sessionDirs = await readdir(sessionsDir);
+    if (sessionDirs.length === 0) {
+      return undefined;
+    }
+
+    // Get all sessions with their metadata to find the most recent
+    const sessionPromises = sessionDirs.map(async (sessionId) => {
+      const sessionPath = path.join(sessionsDir, sessionId);
+      const metadataPath = path.join(sessionPath, 'metadata.json');
+
+      try {
+        const metadataData = await readFile(metadataPath, 'utf-8');
+        const metadata = JSON.parse(metadataData) as PreviewMetadata;
+        const statResult = await stat(sessionPath);
+
+        return {
+          sessionId,
+          startTime: metadata.startTime ? new Date(metadata.startTime).getTime() : statResult.mtimeMs,
+          mtime: statResult.mtimeMs,
+        };
+      } catch {
+        // If metadata doesn't exist or can't be read, use directory modification time
+        try {
+          const statResult = await stat(sessionPath);
+          return {
+            sessionId,
+            startTime: statResult.mtimeMs,
+            mtime: statResult.mtimeMs,
+          };
+        } catch {
+          return null;
+        }
+      }
+    });
+
+    const sessions = (await Promise.all(sessionPromises)).filter(
+      (s): s is { sessionId: string; startTime: number; mtime: number } => s !== null
+    );
+
+    if (sessions.length === 0) {
+      return undefined;
+    }
+
+    // Sort by startTime (most recent first), fallback to mtime
+    sessions.sort((a, b) => b.startTime - a.startTime);
+    return sessions[0].sessionId;
+  } catch {
+    // Sessions directory doesn't exist or can't be read
+    return undefined;
+  }
+};
+
+/**
+ * Get all history data for a session including metadata, transcript, and traces
+ *
+ * @param agentId gotten from Agent.getAgentIdForStorage()
+ * @param sessionId optional - the preview sessions' ID, gotten originally from /start .SessionId. If not provided, returns the most recent conversation
+ * @returns Object containing parsed metadata, transcript entries, and traces
+ */
+export const getAllHistory = async (
+  agentId: string,
+  sessionId: string | undefined
+): Promise<{
+  metadata: PreviewMetadata | null;
+  transcript: TranscriptEntry[];
+  traces: PlannerResponse[];
+}> => {
+  // If sessionId is not provided, find the most recent session
+  let actualSessionId = sessionId;
+  if (!actualSessionId) {
+    actualSessionId = await findMostRecentSessionId(agentId);
+    if (!actualSessionId) {
+      throw SfError.create({
+        name: 'NoSessionFound',
+        message: `No sessions found for agent ${agentId}`,
+      });
+    }
+  }
+
+  const historyDir = await getHistoryDir(agentId, actualSessionId);
+  const result: {
+    metadata: PreviewMetadata | null;
+    transcript: TranscriptEntry[];
+    traces: PlannerResponse[];
+  } = {
+    metadata: null,
+    transcript: [],
+    traces: [],
+  };
+
+  // Read metadata.json
+  try {
+    const metadataPath = path.join(historyDir, 'metadata.json');
+    const metadataData = await readFile(metadataPath, 'utf-8');
+    result.metadata = JSON.parse(metadataData) as PreviewMetadata;
+  } catch {
+    // Metadata file doesn't exist or can't be read - leave as null
+  }
+
+  // Read transcript.jsonl
+  try {
+    const transcriptPath = path.join(historyDir, 'transcript.jsonl');
+    const transcriptData = await readFile(transcriptPath, 'utf-8');
+    result.transcript = transcriptData
+      .split('\n')
+      .filter((line) => line.trim().length > 0)
+      .map((line) => JSON.parse(line) as TranscriptEntry);
+  } catch {
+    // Transcript file doesn't exist or can't be read - leave as empty array
+  }
+
+  // Read all trace files from traces/ directory
+  try {
+    const tracesDir = path.join(historyDir, 'traces');
+    const files = await readdir(tracesDir);
+    const tracePromises = files
+      .filter((file) => file.endsWith('.json'))
+      .map(async (file) => {
+        const tracePath = path.join(tracesDir, file);
+        const traceData = await readFile(tracePath, 'utf-8');
+        return JSON.parse(traceData) as PlannerResponse;
+      });
+    result.traces = await Promise.all(tracePromises);
+  } catch {
+    // Traces directory doesn't exist or can't be read - leave as empty array
+  }
+
+  return result;
 };
 
 /**

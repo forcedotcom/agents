@@ -28,6 +28,7 @@ import {
   type CompileAgentScriptResponse,
   ExtendedAgentJobSpec,
   PlannerResponse,
+  PreviewMetadata,
   PublishAgent,
   ScriptAgentOptions,
 } from '../types';
@@ -39,6 +40,8 @@ import {
   getEndpoint,
   findAuthoringBundle,
   getHistoryDir,
+  TranscriptEntry,
+  getAllHistory,
 } from '../utils';
 import { getDebugLog } from '../apexUtils';
 import { generateAgentScript } from '../templates/agentScriptTemplate';
@@ -226,6 +229,17 @@ export class ScriptAgent extends AgentBase {
     return publisher.publishAgentJson();
   }
 
+  public getHistoryFromDisc(sessionId?: string): Promise<{
+    metadata: PreviewMetadata | null;
+    transcript: TranscriptEntry[];
+    traces: PlannerResponse[];
+  }> {
+    // Use provided sessionId, or fall back to this.sessionId, or let getAllHistory find the most recent
+    const actualSessionId = sessionId ?? this.sessionId;
+
+    return getAllHistory(this.getAgentIdForStorage(), actualSessionId);
+  }
+
   /**
    * Ending is not required
    * this will save all the transcripts to disc
@@ -261,7 +275,7 @@ export class ScriptAgent extends AgentBase {
     return Promise.resolve({ messages: [], _links: [] } as unknown as AgentPreviewEndResponse);
   }
 
-  protected getAgentIdForStorage(): string {
+  public getAgentIdForStorage(): string {
     return this.options.aabName;
   }
 
