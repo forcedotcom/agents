@@ -13,28 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile, readdir, cp, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Connection, SfError } from '@salesforce/core';
-import {
-  type AgentPreviewEndResponse,
-  type AgentPreviewSendResponse,
-  type AgentPreviewStartResponse,
-  type PlannerResponse,
-} from '../types';
-import { copyDirectory } from '../utils';
-
-/**
- * Common preview interface that both ScriptAgent and ProductionAgent implement
- */
-export type AgentPreviewInterface = {
-  start: (...args: unknown[]) => Promise<AgentPreviewStartResponse>;
-  send: (message: string) => Promise<AgentPreviewSendResponse>;
-  getAllTraces: () => Promise<PlannerResponse[]>;
-  end: (...args: unknown[]) => Promise<AgentPreviewEndResponse>;
-  saveSession: (outputDir?: string) => Promise<string>;
-  setApexDebugging: (apexDebugging: boolean) => void;
-};
+import { AgentPreviewInterface, type AgentPreviewSendResponse, type PlannerResponse } from '../types';
 
 /**
  * Abstract base class for agent preview functionality.
@@ -111,7 +93,8 @@ export abstract class AgentBase {
 
     // Copy the entire session directory from .sfdx to the output directory
     // This includes transcript.jsonl, traces/, and metadata.json
-    await copyDirectory(this.sessionDir, destDir);
+    await mkdir(destDir, { recursive: true });
+    await cp(this.sessionDir, destDir, { recursive: true });
 
     return destDir;
   }

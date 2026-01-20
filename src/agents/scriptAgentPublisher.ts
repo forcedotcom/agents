@@ -40,6 +40,7 @@ const getLogger = (): Logger => {
  */
 export class ScriptAgentPublisher {
   private readonly maybeMock: MaybeMock;
+  // this is the namedJWT connection, not to be used for deploy/retrieve
   private readonly connection: Connection;
   private project: SfProject;
   private readonly agentJson: AgentJson;
@@ -116,9 +117,8 @@ export class ScriptAgentPublisher {
       // 1. retrieve the new Agent metadata that's in the org
       // 2. deploy the AuthoringBundle's -meta.xml file with correct target attribute
       const botVersionName = await this.getVersionDeveloperName(response.botVersionId);
-      const standardConnection = await this.createStandardConnection();
-      await this.retrieveAgentMetadata(botVersionName, standardConnection);
-      await this.syncAuthoringBundle(botVersionName, standardConnection);
+      await this.retrieveAgentMetadata(botVersionName);
+      await this.syncAuthoringBundle(botVersionName);
 
       return { ...response, developerName: this.developerName };
     } else {
@@ -184,9 +184,10 @@ export class ScriptAgentPublisher {
    * Retrieve the agent metadata from the org after publishing
    *
    * @param botVersionName The bot version name
-   * @param connection
    */
-  private async retrieveAgentMetadata(botVersionName: string, connection: Connection): Promise<void> {
+  private async retrieveAgentMetadata(botVersionName: string): Promise<void> {
+    const standardConnection = await this.createStandardConnection();
+
     const defaultPackagePath = path.resolve(this.project.getDefaultPackage().path);
 
     const cs = await ComponentSetBuilder.build({
@@ -200,7 +201,7 @@ export class ScriptAgentPublisher {
       },
     });
     const retrieve = await cs.retrieve({
-      usernameOrConnection: connection,
+      usernameOrConnection: standardConnection,
       merge: true,
       format: 'source',
       output: path.resolve(this.project.getPath(), defaultPackagePath),
@@ -227,9 +228,9 @@ export class ScriptAgentPublisher {
    * @param connection
    * @private
    */
-  private async syncAuthoringBundle(botVersionName: string, connection: Connection): Promise<void> {
-    await this.deployAuthoringBundle(connection);
-    await this.deployAuthoringBundle(connection, botVersionName);
+  private async syncAuthoringBundle(botVersionName: string): Promise<void> {
+    await this.deployAuthoringBundle();
+    await this.deployAuthoringBundle(botVersionName);
   }
 
   /**
@@ -241,7 +242,7 @@ export class ScriptAgentPublisher {
    * @param botVersionName
    * @param connection
    */
-  private async deployAuthoringBundle(connection: Connection, botVersionName?: string): Promise<void> {
+  private async deployAuthoringBundle(botVersionName?: string): Promise<void> {
     // 1. if botVersionName is provided, add the target to the local authoring bundle meta.xml file
     // 2. deploy the authoring bundle to the org
     // 3. remove the target from the localauthoring bundle meta.xml file
@@ -263,10 +264,11 @@ export class ScriptAgentPublisher {
       suppressEmptyNode: false,
     });
     await writeFile(this.bundleMetaPath, xmlBuilder.build(authoringBundle));
+    const standardConnection = await this.createStandardConnection();
 
     // 2. attempt to deploy the authoring bundle to the org
     const deploy = await ComponentSet.fromSource(this.bundleDir).deploy({
-      usernameOrConnection: connection,
+      usernameOrConnection: standardConnection,
     });
     const deployResult = await deploy.pollStatus();
 

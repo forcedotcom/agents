@@ -17,6 +17,7 @@ import { randomUUID } from 'node:crypto';
 import { Messages, SfError } from '@salesforce/core';
 import {
   type AgentPreviewEndResponse,
+  AgentPreviewInterface,
   type AgentPreviewSendResponse,
   type AgentPreviewStartResponse,
   type BotActivationResponse,
@@ -36,7 +37,7 @@ import {
   getEndpoint,
 } from '../utils';
 import { createTraceFlag, findTraceFlag, getDebugLog } from '../apexUtils';
-import { AgentBase, type AgentPreviewInterface } from './agentBase';
+import { AgentBase } from './agentBase';
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agents');
 
@@ -98,14 +99,6 @@ export class ProductionAgent extends AgentBase {
 
   // eslint-disable-next-line @typescript-eslint/require-await,class-methods-use-this,@typescript-eslint/no-unused-vars
   public async getTrace(planId: string): Promise<PlannerResponse | undefined> {
-    // return this.connection.request<PlannerResponse>({
-    //   method: 'GET',
-    //   url: `${this.connection.getConnectionOptions().instanceUrl!}:9443/proxy/worker/internal/sessions/${this
-    //     .sessionId!}/plans/${planId}`,
-    //   headers: {
-    //     'x-client-name': 'afdx',
-    //   },
-    // });
     return undefined;
   }
 

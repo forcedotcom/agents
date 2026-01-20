@@ -319,10 +319,9 @@ describe('AgentPublisher', () => {
       // Verify deployAuthoringBundle was called twice
       expect(deployAuthoringBundleStub.callCount).to.equal(2);
       // Verify first call was with undefined (draft deployment)
-      expect(deployAuthoringBundleStub.firstCall.args.length).to.equal(1);
+      expect(deployAuthoringBundleStub.firstCall.args[0]).to.be.undefined;
       // Verify second call was with botVersionName (published deployment)
-      expect(deployAuthoringBundleStub.secondCall.args[1]).to.equal(botVersionName);
-      expect(deployAuthoringBundleStub.secondCall.args.length).to.equal(2);
+      expect(deployAuthoringBundleStub.secondCall.calledWithExactly(botVersionName)).to.be.true;
 
       validateStub.restore();
     });

@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 import { readdirSync, statSync } from 'node:fs';
-import { mkdir, appendFile, readFile, writeFile, cp } from 'node:fs/promises';
+import { mkdir, appendFile, readFile, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { Connection, SfError, SfProject } from '@salesforce/core';
 import { env } from '@salesforce/kit';
-import { NamedUserJwtResponse, type PlannerResponse } from './types';
+import { NamedUserJwtResponse, type PlannerResponse, SessionMetadata } from './types';
 
 export const metric = ['completeness', 'coherence', 'conciseness', 'output_latency_milliseconds'] as const;
 
@@ -159,7 +159,12 @@ export const findLocalAgents = (dir: string): string[] => {
 
   return results;
 };
-
+/**
+ * takes a connection and upgrades it to a NamedJWT connection
+ *
+ * @param {Connection} connection original Connection
+ * @returns {Promise<Connection>} upgraded connection
+ */
 export const useNamedUserJwt = async (connection: Connection): Promise<Connection> => {
   // Refresh the connection to ensure we have the latest, valid access token
   try {
@@ -249,7 +254,11 @@ const getLastConversationPath = async (agentId: string): Promise<string> =>
   path.join(await getConversationDir(agentId), 'history.json');
 
 /**
- * Get the session directory path for a specific session
+ * returns a path, and ensures it's created, to the agents history directory
+ *
+ * @param {string} agentId gotten from Agent.getAgentIdForStorage()
+ * @param {string} sessionId the preview's start call .SessionId
+ * @returns {Promise<string>} path to where history/metadata/transcripts are stored inside of local .sfdx
  */
 export const getSessionDir = async (agentId: string, sessionId: string): Promise<string> => {
   const base = (await resolveProjectLocalSfdx()) ?? path.join(process.cwd(), '.sfdx');
@@ -259,15 +268,11 @@ export const getSessionDir = async (agentId: string, sessionId: string): Promise
 };
 
 /**
- * Copy a directory recursively
- */
-export const copyDirectory = async (src: string, dest: string): Promise<void> => {
-  await mkdir(dest, { recursive: true });
-  await cp(src, dest, { recursive: true });
-};
-
-/**
  * Append a transcript entry to the session transcript file
+ *
+ * @param {TranscriptEntry} entry to save
+ * @param {string} sessionDir where to save it to
+ * @returns {Promise<void>}
  */
 export const appendTranscriptEntryToSession = async (entry: TranscriptEntry, sessionDir: string): Promise<void> => {
   const transcriptPath = path.join(sessionDir, 'transcript.jsonl');
@@ -289,23 +294,6 @@ export const writeTraceToSession = async (
   await writeFile(tracePath, JSON.stringify(trace ?? {}, null, 2), 'utf-8');
 };
 
-export function getEndpoint(): string {
-  return env.getBoolean('SF_TEST_API') ? 'test.' : '';
-}
-
-/**
- * Session metadata type
- */
-export type SessionMetadata = {
-  sessionId: string;
-  agentId: string;
-  startTime: string;
-  endTime?: string;
-  apexDebugging?: boolean;
-  mockMode?: 'Mock' | 'Live Test';
-  planIds: string[];
-};
-
 /**
  * Write session metadata to the session directory
  */
@@ -313,7 +301,14 @@ export const writeMetadataToSession = async (sessionDir: string, metadata: Sessi
   const metadataPath = path.join(sessionDir, 'metadata.json');
   await writeFile(metadataPath, JSON.stringify(metadata, null, 2), 'utf-8');
 };
-
+/**
+ * Calculates the correct endpoint based on env vars
+ *
+ * @returns {string}
+ */
+export function getEndpoint(): string {
+  return env.getBoolean('SF_TEST_API') ? 'test.' : '';
+}
 /**
  * Update session metadata with end time and plan IDs
  */

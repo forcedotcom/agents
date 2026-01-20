@@ -82,6 +82,6 @@ export { AgentTester } from './agentTester';
 export { AgentTest, AgentTestCreateLifecycleStages } from './agentTest';
 export { ProductionAgent } from './agents/productionAgent';
 export { ScriptAgent } from './agents/scriptAgent';
-export { AgentBase, type AgentPreviewInterface } from './agents/agentBase';
+export { AgentBase } from './agents/agentBase';
 export { convertTestResultsToFormat, humanFriendlyName } from './agentTestResults';
 export { writeDebugLog } from './apexUtils';

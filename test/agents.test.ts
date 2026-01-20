@@ -99,21 +99,6 @@ describe('Agents', () => {
     afterEach(() => {
       sinon.restore();
     });
-
-    it('compileAgentScript should throw SfError on an exception during the request', async () => {
-      requestStub
-        .withArgs(sinon.match({ url: sinon.match('/einstein/ai-agent/v1.1/authoring/scripts') }))
-        .rejects(new Error('Some error'));
-
-      try {
-        // compileAgentScript is now on ScriptAgent
-        throw new Error('Some error');
-        expect.fail('Expected compileAgentScript to throw an error');
-      } catch (error) {
-        expect((error as SfError).name).to.equal('Error');
-        expect((error as SfError).message).to.include('Some error');
-      }
-    });
   });
 
   describe('publishAgentJson', () => {

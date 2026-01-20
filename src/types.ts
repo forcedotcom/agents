@@ -22,11 +22,29 @@ import { metric } from './utils';
 // ====================================================
 //               Agent Runner Types
 // ====================================================
-export type AgentInteractionBase = {
-  start(): Promise<AgentPreviewStartResponse>;
-  send(sessionId: string, message: string): Promise<AgentPreviewSendResponse>;
-  end(sessionId: string, reason: EndReason): Promise<AgentPreviewEndResponse>;
-  setApexDebugMode(enable: boolean): void;
+/**
+ * Common preview interface that both ScriptAgent and ProductionAgent implement
+ */
+export type AgentPreviewInterface = {
+  start: (...args: unknown[]) => Promise<AgentPreviewStartResponse>;
+  send: (message: string) => Promise<AgentPreviewSendResponse>;
+  getAllTraces: () => Promise<PlannerResponse[]>;
+  end: (...args: unknown[]) => Promise<AgentPreviewEndResponse>;
+  saveSession: (outputDir?: string) => Promise<string>;
+  setApexDebugging: (apexDebugging: boolean) => void;
+};
+
+/**
+ * Session metadata type
+ */
+export type SessionMetadata = {
+  sessionId: string;
+  agentId: string;
+  startTime: string;
+  endTime?: string;
+  apexDebugging?: boolean;
+  mockMode?: 'Mock' | 'Live Test';
+  planIds: string[];
 };
 
 export type BaseAgentConfig = {
