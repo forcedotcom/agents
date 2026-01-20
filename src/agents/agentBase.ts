@@ -28,7 +28,7 @@ export abstract class AgentBase {
    */
   public name: string | undefined;
   protected sessionId: string | undefined;
-  protected sessionDir: string | undefined;
+  protected historyDir: string | undefined;
   protected apexDebugging: boolean | undefined;
   protected planIds = new Set<string>();
   public abstract preview: AgentPreviewInterface;
@@ -45,13 +45,13 @@ export abstract class AgentBase {
    * Reads traces from the session directory if available, otherwise fetches from API
    */
   protected async getAllTracesFromDisc(): Promise<PlannerResponse[]> {
-    if (!this.sessionDir) {
+    if (!this.historyDir) {
       throw SfError.create({ message: 'history never created' });
     }
     const traces: PlannerResponse[] = [];
 
     // If we have a session directory, try reading traces from disk first
-    const tracesDir = join(this.sessionDir, 'traces');
+    const tracesDir = join(this.historyDir, 'traces');
     const files = await readdir(tracesDir);
     const tracePromises = files
       .filter((file) => file.endsWith('.json'))
@@ -81,8 +81,8 @@ export abstract class AgentBase {
    * @param outputDir Optional output directory. If not provided, uses default location.
    * @returns The path to the copied session directory
    */
-  protected async saveSessionToDisc(outputDir: string): Promise<string> {
-    if (!this.sessionId || !this.sessionDir) {
+  protected async saveSessionTo(outputDir: string): Promise<string> {
+    if (!this.sessionId || !this.historyDir) {
       throw SfError.create({ name: 'noSessionId', message: 'No active session. Call .start() first.' });
     }
 
@@ -94,7 +94,7 @@ export abstract class AgentBase {
     // Copy the entire session directory from .sfdx to the output directory
     // This includes transcript.jsonl, traces/, and metadata.json
     await mkdir(destDir, { recursive: true });
-    await cp(this.sessionDir, destDir, { recursive: true });
+    await cp(this.historyDir, destDir, { recursive: true });
 
     return destDir;
   }

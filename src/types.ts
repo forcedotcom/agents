@@ -37,7 +37,7 @@ export type AgentPreviewInterface = {
 /**
  * Session metadata type
  */
-export type SessionMetadata = {
+export type PreviewMetadata = {
   sessionId: string;
   agentId: string;
   startTime: string;

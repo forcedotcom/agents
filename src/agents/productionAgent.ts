@@ -29,12 +29,12 @@ import {
 } from '../types';
 import { MaybeMock } from '../maybe-mock';
 import {
-  getSessionDir,
-  appendTranscriptEntryToSession,
-  writeMetadataToSession,
+  appendTranscriptToHistory,
+  writeMetaFileToHistory,
   updateMetadataEndTime,
-  writeTraceToSession,
+  writeTraceToHistory,
   getEndpoint,
+  getHistoryDir,
 } from '../utils';
 import { createTraceFlag, findTraceFlag, getDebugLog } from '../apexUtils';
 import { AgentBase } from './agentBase';
@@ -59,7 +59,7 @@ export class ProductionAgent extends AgentBase {
       send: (message: string): Promise<AgentPreviewSendResponse> => this.sendMessage(message),
       getAllTraces: (): Promise<PlannerResponse[]> => this.getAllTracesFromDisc(),
       end: (reason: EndReason): Promise<AgentPreviewEndResponse> => this.endSession(reason),
-      saveSession: (outputDir: string): Promise<string> => this.saveSessionToDisc(outputDir),
+      saveSession: (outputDir: string): Promise<string> => this.saveSessionTo(outputDir),
       setApexDebugging: (apexDebugging: boolean): void => this.setApexDebugging(apexDebugging),
     } as AgentPreviewInterface;
 
@@ -180,11 +180,11 @@ export class ProductionAgent extends AgentBase {
       const agentId = this.getAgentIdForStorage();
 
       // Ensure session directory exists
-      if (!this.sessionDir) {
-        this.sessionDir = await getSessionDir(agentId, this.sessionId);
+      if (!this.historyDir) {
+        this.historyDir = await getHistoryDir(agentId, this.sessionId);
       }
 
-      void appendTranscriptEntryToSession(
+      void appendTranscriptToHistory(
         {
           timestamp: new Date().toISOString(),
           agentId,
@@ -192,7 +192,7 @@ export class ProductionAgent extends AgentBase {
           role: 'user',
           text: message,
         },
-        this.sessionDir
+        this.historyDir
       );
 
       const response = await this.connection.request<AgentPreviewSendResponse>({
@@ -207,7 +207,7 @@ export class ProductionAgent extends AgentBase {
       const planId = response.messages.at(0)!.planId;
       this.planIds.add(planId);
 
-      await appendTranscriptEntryToSession(
+      await appendTranscriptToHistory(
         {
           timestamp: new Date().toISOString(),
           agentId,
@@ -216,14 +216,14 @@ export class ProductionAgent extends AgentBase {
           text: response.messages.at(0)?.message,
           raw: response.messages,
         },
-        this.sessionDir
+        this.historyDir
       );
 
       // Fetch and write trace immediately if available
       if (planId) {
         try {
           const trace = await this.getTrace(planId);
-          await writeTraceToSession(planId, trace, this.sessionDir);
+          await writeTraceToHistory(planId, trace, this.historyDir);
         } catch (error) {
           throw SfError.wrap(error);
         }
@@ -296,18 +296,10 @@ export class ProductionAgent extends AgentBase {
       });
       this.sessionId = response.sessionId;
 
-      // Initialize session directory and write initial data
-      // Session directory structure:
-      // .sfdx/agents/<agentId>/sessions/<sessionId>/
-      // ├── transcript.jsonl    # All transcript entries (one per line)
-      // ├── traces/             # Individual trace files
-      // │   ├── <planId1>.json
-      // │   └── <planId2>.json
-      // └── metadata.json       # Session metadata (start time, end time, planIds, etc.)
       const agentId = this.id!;
-      this.sessionDir = await getSessionDir(agentId, response.sessionId);
+      this.historyDir = await getHistoryDir(agentId, response.sessionId);
 
-      await appendTranscriptEntryToSession(
+      await appendTranscriptToHistory(
         {
           timestamp: new Date().toISOString(),
           agentId,
@@ -316,11 +308,11 @@ export class ProductionAgent extends AgentBase {
           text: response.messages.map((m) => m.message).join('\n'),
           raw: response.messages,
         },
-        this.sessionDir
+        this.historyDir
       );
 
       // Write initial metadata
-      await writeMetadataToSession(this.sessionDir, {
+      await writeMetaFileToHistory(this.historyDir, {
         sessionId: response.sessionId,
         agentId,
         startTime: new Date().toISOString(),
@@ -360,8 +352,8 @@ export class ProductionAgent extends AgentBase {
       });
 
       // Write end entry immediately
-      if (this.sessionDir) {
-        await appendTranscriptEntryToSession(
+      if (this.historyDir) {
+        await appendTranscriptToHistory(
           {
             timestamp: new Date().toISOString(),
             agentId: this.id,
@@ -370,15 +362,15 @@ export class ProductionAgent extends AgentBase {
             reason,
             raw: response.messages,
           },
-          this.sessionDir
+          this.historyDir
         );
         // Update metadata with end time
-        await updateMetadataEndTime(this.sessionDir, new Date().toISOString(), this.planIds);
+        await updateMetadataEndTime(this.historyDir, new Date().toISOString(), this.planIds);
       }
 
       // Clear session data for next session
       this.sessionId = undefined;
-      this.sessionDir = undefined;
+      this.historyDir = undefined;
       this.planIds = new Set<string>();
 
       return response;

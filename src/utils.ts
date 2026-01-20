@@ -18,7 +18,7 @@ import { mkdir, appendFile, readFile, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { Connection, SfError, SfProject } from '@salesforce/core';
 import { env } from '@salesforce/kit';
-import { NamedUserJwtResponse, type PlannerResponse, SessionMetadata } from './types';
+import { NamedUserJwtResponse, type PlannerResponse, PreviewMetadata } from './types';
 
 export const metric = ['completeness', 'coherence', 'conciseness', 'output_latency_milliseconds'] as const;
 
@@ -243,24 +243,23 @@ const resolveProjectLocalSfdx = async (): Promise<string | undefined> => {
   }
 };
 
-const getConversationDir = async (agentId: string): Promise<string> => {
-  const base = (await resolveProjectLocalSfdx()) ?? path.join(process.cwd(), '.sfdx');
-  const dir = path.join(base, 'agents', agentId);
-  await mkdir(dir, { recursive: true });
-  return dir;
-};
-
-const getLastConversationPath = async (agentId: string): Promise<string> =>
-  path.join(await getConversationDir(agentId), 'history.json');
-
 /**
  * returns a path, and ensures it's created, to the agents history directory
+ *
+ * Initialize session directory
+ * Session directory structure:
+ * .sfdx/agents/<agentId>/sessions/<sessionId>/
+ * ├── transcript.jsonl    # All transcript entries (one per line)
+ * ├── traces/             # Individual trace files
+ * │   ├── <planId1>.json
+ * │   └── <planId2>.json
+ * └── metadata.json       # Session metadata (start time, end time, planIds, etc.)
  *
  * @param {string} agentId gotten from Agent.getAgentIdForStorage()
  * @param {string} sessionId the preview's start call .SessionId
  * @returns {Promise<string>} path to where history/metadata/transcripts are stored inside of local .sfdx
  */
-export const getSessionDir = async (agentId: string, sessionId: string): Promise<string> => {
+export const getHistoryDir = async (agentId: string, sessionId: string): Promise<string> => {
   const base = (await resolveProjectLocalSfdx()) ?? path.join(process.cwd(), '.sfdx');
   const dir = path.join(base, 'agents', agentId, 'sessions', sessionId);
   await mkdir(dir, { recursive: true });
@@ -268,37 +267,42 @@ export const getSessionDir = async (agentId: string, sessionId: string): Promise
 };
 
 /**
- * Append a transcript entry to the session transcript file
+ * Append a transcript entry to the transcript.jsonl transcript file
  *
  * @param {TranscriptEntry} entry to save
- * @param {string} sessionDir where to save it to
+ * @param {string} sessionDir the preview's start call .SessionId
  * @returns {Promise<void>}
  */
-export const appendTranscriptEntryToSession = async (entry: TranscriptEntry, sessionDir: string): Promise<void> => {
+export const appendTranscriptToHistory = async (entry: TranscriptEntry, sessionDir: string): Promise<void> => {
   const transcriptPath = path.join(sessionDir, 'transcript.jsonl');
   const line = `${JSON.stringify(entry)}\n`;
   await appendFile(transcriptPath, line, 'utf-8');
 };
 
 /**
- * Write a trace to the session traces directory
+ * writes a trace to <plan-id>.json in history directory
+ *
+ * @param {string} planId
+ * @param {PlannerResponse | undefined} trace
+ * @param {string} historyDir
+ * @returns {Promise<void>}
  */
-export const writeTraceToSession = async (
+export const writeTraceToHistory = async (
   planId: string,
   trace: PlannerResponse | undefined,
-  sessionDir: string
+  historyDir: string
 ): Promise<void> => {
-  const tracesDir = path.join(sessionDir, 'traces');
+  const tracesDir = path.join(historyDir, 'traces');
   await mkdir(tracesDir, { recursive: true });
   const tracePath = path.join(tracesDir, `${planId}.json`);
   await writeFile(tracePath, JSON.stringify(trace ?? {}, null, 2), 'utf-8');
 };
 
 /**
- * Write session metadata to the session directory
+ * Write preview metadata to the history directory
  */
-export const writeMetadataToSession = async (sessionDir: string, metadata: SessionMetadata): Promise<void> => {
-  const metadataPath = path.join(sessionDir, 'metadata.json');
+export const writeMetaFileToHistory = async (historyDir: string, metadata: PreviewMetadata): Promise<void> => {
+  const metadataPath = path.join(historyDir, 'metadata.json');
   await writeFile(metadataPath, JSON.stringify(metadata, null, 2), 'utf-8');
 };
 /**
@@ -310,22 +314,22 @@ export function getEndpoint(): string {
   return env.getBoolean('SF_TEST_API') ? 'test.' : '';
 }
 /**
- * Update session metadata with end time and plan IDs
+ * Update preview metadata with end time and plan IDs
  */
 export const updateMetadataEndTime = async (
-  sessionDir: string,
+  historyDir: string,
   endTime: string,
   planIds: Set<string>
 ): Promise<void> => {
-  const metadataPath = path.join(sessionDir, 'metadata.json');
+  const metadataPath = path.join(historyDir, 'metadata.json');
   try {
-    const metadata = JSON.parse(await readFile(metadataPath, 'utf-8')) as SessionMetadata;
+    const metadata = JSON.parse(await readFile(metadataPath, 'utf-8')) as PreviewMetadata;
     metadata.endTime = endTime;
     metadata.planIds = Array.from(planIds);
     await writeFile(metadataPath, JSON.stringify(metadata, null, 2), 'utf-8');
   } catch {
     // If metadata doesn't exist, create it
-    await writeMetadataToSession(sessionDir, {
+    await writeMetaFileToHistory(historyDir, {
       sessionId: '',
       agentId: '',
       startTime: '',
@@ -337,13 +341,13 @@ export const updateMetadataEndTime = async (
 
 /**
  * Read and parse the last conversation's transcript entries from JSON.
- * Path: <project>/.sfdx/agents/conversations/<agentId>/history.json
  *
- * @param agentId The agent's API name (developerName)
+ * @param agentId gotten from Agent.getAgentIdForStorage()
+ * @param sessionId the preview sessions' ID, gotten originally from /start .SessionId
  * @returns Array of TranscriptEntry in file order (chronological append order).
  */
-export const readTranscriptEntries = async (agentId: string): Promise<TranscriptEntry[]> => {
-  const filePath = await getLastConversationPath(agentId);
+export const readTranscriptEntries = async (agentId: string, sessionId: string): Promise<TranscriptEntry[]> => {
+  const filePath = await getHistoryDir(agentId, sessionId);
   try {
     const data = await readFile(filePath, 'utf-8');
     return data
