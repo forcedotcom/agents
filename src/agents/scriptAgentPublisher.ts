@@ -225,7 +225,6 @@ export class ScriptAgentPublisher {
    * 2. Second deployment with target attribute commits the AAB as the published version
    *
    * @param botVersionName The bot version name to use as the target for the final published deployment
-   * @param connection
    * @private
    */
   private async syncAuthoringBundle(botVersionName: string): Promise<void> {
@@ -240,7 +239,6 @@ export class ScriptAgentPublisher {
    *
    * @throws SfError if the deployment fails or if there are component deployment errors
    * @param botVersionName
-   * @param connection
    */
   private async deployAuthoringBundle(botVersionName?: string): Promise<void> {
     // 1. if botVersionName is provided, add the target to the local authoring bundle meta.xml file
