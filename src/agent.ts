@@ -185,6 +185,12 @@ export class Agent {
 
     const orgAgents = await this.listRemote(connection);
     for (const agent of orgAgents) {
+      // Only include agents that have at least one active bot version
+      const hasActiveVersion = agent.BotVersions?.records?.some((version) => version.Status === 'Active') ?? false;
+      if (!hasActiveVersion) {
+        continue;
+      }
+
       const previewableAgent: PreviewableAgent = {
         name: agent.MasterLabel,
         source: AgentSource.PUBLISHED,

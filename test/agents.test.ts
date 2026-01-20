@@ -22,6 +22,7 @@ import { ComponentSetBuilder, ComponentSet, MetadataApiRetrieve } from '@salesfo
 import sinon from 'sinon';
 import { Agent, decodeResponse } from '../src/agent';
 import type { AgentCreateConfig, DraftAgentTopics, ExtendedAgentJobSpec } from '../src/types';
+import { AgentSource } from '../src/types';
 import { ScriptAgent } from '../src';
 import * as utils from '../src/utils';
 import { ScriptAgentPublisher } from '../src/agents/scriptAgentPublisher';
@@ -501,6 +502,205 @@ describe('Agents', () => {
       expect(agentContent).to.include('topic escalation:');
       expect(agentContent).to.include('topic off_topic:');
       expect(agentContent).to.include('topic ambiguous_question:');
+    });
+  });
+
+  describe('listPreviewable', () => {
+    let sfProject: SfProject;
+    let listRemoteStub: sinon.SinonStub;
+
+    beforeEach(async () => {
+      sfProject = SfProject.getInstance();
+      // @ts-expect-error Not the full package def
+      $$.SANDBOX.stub(sfProject, 'getDefaultPackage').returns({ path: 'force-app', fullPath: 'force-app' });
+      $$.SANDBOX.stub(sfProject, 'getPackageDirectories').returns([
+        { fullPath: 'force-app', path: 'force-app', package: '', versionNumber: '', name: 'force-app' },
+      ]);
+
+      // Stub listRemote to return mock agents
+      listRemoteStub = $$.SANDBOX.stub(Agent, 'listRemote');
+    });
+
+    afterEach(() => {
+      sinon.restore();
+    });
+
+    it('should only include agents with active bot versions', async () => {
+      // Mock agents with different bot version statuses
+      listRemoteStub.resolves([
+        {
+          Id: 'bot1',
+          DeveloperName: 'ActiveAgent',
+          MasterLabel: 'Active Agent',
+          BotVersions: {
+            records: [
+              {
+                Id: 'version1',
+                Status: 'Active' as const,
+                IsDeleted: false,
+                BotDefinitionId: 'bot1',
+                DeveloperName: 'v1',
+                CreatedDate: '2025-01-01T00:00:00.000+0000',
+                CreatedById: 'user1',
+                LastModifiedDate: '2025-01-01T00:00:00.000+0000',
+                LastModifiedById: 'user1',
+                SystemModstamp: '2025-01-01T00:00:00.000+0000',
+                VersionNumber: 1,
+                CopilotPrimaryLanguage: null,
+                ToneType: 'casual' as const,
+                CopilotSecondaryLanguages: null,
+              },
+            ],
+          },
+        },
+        {
+          Id: 'bot2',
+          DeveloperName: 'InactiveAgent',
+          MasterLabel: 'Inactive Agent',
+          BotVersions: {
+            records: [
+              {
+                Id: 'version2',
+                Status: 'Inactive' as const,
+                IsDeleted: false,
+                BotDefinitionId: 'bot2',
+                DeveloperName: 'v1',
+                CreatedDate: '2025-01-01T00:00:00.000+0000',
+                CreatedById: 'user1',
+                LastModifiedDate: '2025-01-01T00:00:00.000+0000',
+                LastModifiedById: 'user1',
+                SystemModstamp: '2025-01-01T00:00:00.000+0000',
+                VersionNumber: 1,
+                CopilotPrimaryLanguage: null,
+                ToneType: 'casual' as const,
+                CopilotSecondaryLanguages: null,
+              },
+            ],
+          },
+        },
+        {
+          Id: 'bot3',
+          DeveloperName: 'MixedStatusAgent',
+          MasterLabel: 'Mixed Status Agent',
+          BotVersions: {
+            records: [
+              {
+                Id: 'version3a',
+                Status: 'Inactive' as const,
+                IsDeleted: false,
+                BotDefinitionId: 'bot3',
+                DeveloperName: 'v1',
+                CreatedDate: '2025-01-01T00:00:00.000+0000',
+                CreatedById: 'user1',
+                LastModifiedDate: '2025-01-01T00:00:00.000+0000',
+                LastModifiedById: 'user1',
+                SystemModstamp: '2025-01-01T00:00:00.000+0000',
+                VersionNumber: 1,
+                CopilotPrimaryLanguage: null,
+                ToneType: 'casual' as const,
+                CopilotSecondaryLanguages: null,
+              },
+              {
+                Id: 'version3b',
+                Status: 'Active' as const,
+                IsDeleted: false,
+                BotDefinitionId: 'bot3',
+                DeveloperName: 'v2',
+                CreatedDate: '2025-01-02T00:00:00.000+0000',
+                CreatedById: 'user1',
+                LastModifiedDate: '2025-01-02T00:00:00.000+0000',
+                LastModifiedById: 'user1',
+                SystemModstamp: '2025-01-02T00:00:00.000+0000',
+                VersionNumber: 2,
+                CopilotPrimaryLanguage: null,
+                ToneType: 'casual' as const,
+                CopilotSecondaryLanguages: null,
+              },
+            ],
+          },
+        },
+        {
+          Id: 'bot4',
+          DeveloperName: 'NoVersionsAgent',
+          MasterLabel: 'No Versions Agent',
+          BotVersions: {
+            records: [],
+          },
+        },
+        {
+          Id: 'bot5',
+          DeveloperName: 'UndefinedVersionsAgent',
+          MasterLabel: 'Undefined Versions Agent',
+          BotVersions: undefined,
+        },
+      ]);
+
+      const result = await Agent.listPreviewable(connection, sfProject);
+
+      // Should only include agents with at least one active bot version
+      expect(result).to.be.an('array');
+      expect(result.length).to.equal(2); // Only ActiveAgent and MixedStatusAgent
+
+      // Verify ActiveAgent is included
+      const activeAgent = result.find((a) => a.developerName === 'ActiveAgent');
+      expect(activeAgent).to.exist;
+      expect(activeAgent?.source).to.equal(AgentSource.PUBLISHED);
+      expect(activeAgent?.id).to.equal('bot1');
+      expect(activeAgent?.name).to.equal('Active Agent');
+
+      // Verify MixedStatusAgent is included (has at least one active version)
+      const mixedAgent = result.find((a) => a.developerName === 'MixedStatusAgent');
+      expect(mixedAgent).to.exist;
+      expect(mixedAgent?.source).to.equal(AgentSource.PUBLISHED);
+      expect(mixedAgent?.id).to.equal('bot3');
+
+      // Verify InactiveAgent is NOT included
+      const inactiveAgent = result.find((a) => a.developerName === 'InactiveAgent');
+      expect(inactiveAgent).to.not.exist;
+
+      // Verify NoVersionsAgent is NOT included
+      const noVersionsAgent = result.find((a) => a.developerName === 'NoVersionsAgent');
+      expect(noVersionsAgent).to.not.exist;
+
+      // Verify UndefinedVersionsAgent is NOT included
+      const undefinedVersionsAgent = result.find((a) => a.developerName === 'UndefinedVersionsAgent');
+      expect(undefinedVersionsAgent).to.not.exist;
+    });
+
+    it('should handle agents with null BotVersions', async () => {
+      listRemoteStub.resolves([
+        {
+          Id: 'bot1',
+          DeveloperName: 'NullVersionsAgent',
+          MasterLabel: 'Null Versions Agent',
+          BotVersions: null,
+        },
+      ]);
+
+      const result = await Agent.listPreviewable(connection, sfProject);
+
+      // Should not include agents with null BotVersions
+      expect(result).to.be.an('array');
+      expect(result.length).to.equal(0);
+    });
+
+    it('should handle agents with undefined BotVersions.records', async () => {
+      listRemoteStub.resolves([
+        {
+          Id: 'bot1',
+          DeveloperName: 'UndefinedRecordsAgent',
+          MasterLabel: 'Undefined Records Agent',
+          BotVersions: {
+            records: undefined,
+          },
+        },
+      ]);
+
+      const result = await Agent.listPreviewable(connection, sfProject);
+
+      // Should not include agents with undefined records
+      expect(result).to.be.an('array');
+      expect(result.length).to.equal(0);
     });
   });
 });
