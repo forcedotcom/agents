@@ -1,5 +1,5 @@
 /*
- * Copyright 2025, Salesforce, Inc.
+ * Copyright 2026, Salesforce, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,11 +22,29 @@ import { metric } from './utils';
 // ====================================================
 //               Agent Runner Types
 // ====================================================
-export type AgentInteractionBase = {
-  start(): Promise<AgentPreviewStartResponse>;
-  send(sessionId: string, message: string): Promise<AgentPreviewSendResponse>;
-  end(sessionId: string, reason: EndReason): Promise<AgentPreviewEndResponse>;
-  setApexDebugMode(enable: boolean): void;
+/**
+ * Common preview interface that both ScriptAgent and ProductionAgent implement
+ */
+export type AgentPreviewInterface = {
+  start: (...args: unknown[]) => Promise<AgentPreviewStartResponse>;
+  send: (message: string) => Promise<AgentPreviewSendResponse>;
+  getAllTraces: () => Promise<PlannerResponse[]>;
+  end: (...args: unknown[]) => Promise<AgentPreviewEndResponse>;
+  saveSession: (outputDir?: string) => Promise<string>;
+  setApexDebugging: (apexDebugging: boolean) => void;
+};
+
+/**
+ * Session metadata type
+ */
+export type PreviewMetadata = {
+  sessionId: string;
+  agentId: string;
+  startTime: string;
+  endTime?: string;
+  apexDebugging?: boolean;
+  mockMode?: 'Mock' | 'Live Test';
+  planIds: string[];
 };
 
 export type BaseAgentConfig = {
@@ -40,13 +58,30 @@ export type BaseAgentConfig = {
 /**
  * Options for creating instances of agents from an org.
  */
-export type AgentOptions = {
+
+export type AgentOptions = ScriptAgentOptions | ProductionAgentOptions;
+export type ScriptAgentOptions = {
   connection: Connection;
-  project?: SfProject;
-  /**
-   * The API name or ID of the agent (Bot) that exists in the org.
-   */
-  nameOrId: string;
+  project: SfProject;
+  // name of the AAB, e.g. 'myBundle' - the project will be searched to find the AAB directory
+  aabName: string;
+};
+export type ProductionAgentOptions = {
+  connection: Connection;
+  project: SfProject;
+  apiNameOrId: string;
+};
+
+/**
+ * Represents an agent available for preview, either from the org or from a local script file
+ */
+export type PreviewableAgent = {
+  name: string;
+  source: AgentSource;
+  id?: string; // Bot ID for org agents
+  developerName?: string; // Developer name for org agents
+  aabName?: string; // Name of the AAB for script agents
+  label?: string; // MasterLabel for org agents
 };
 
 export type BotMetadata = {
@@ -770,8 +805,8 @@ export enum AgentSource {
   SCRIPT = 'script',
 }
 
-export type ScriptAgent = { DeveloperName: string; source: AgentSource.SCRIPT; path: string };
-export type PublishedAgent = {
+export type ScriptAgentType = { DeveloperName: string; source: AgentSource.SCRIPT; path: string };
+export type ProductionAgentType = {
   Id: string;
   DeveloperName: string;
   source: AgentSource.PUBLISHED;

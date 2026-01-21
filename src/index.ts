@@ -1,5 +1,5 @@
 /*
- * Copyright 2025, Salesforce, Inc.
+ * Copyright 2026, Salesforce, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 export {
   // Agent Runner Types
-  type AgentInteractionBase,
   type BaseAgentConfig,
   type AgentPreviewStartResponse,
   type AgentPreviewSendResponse,
@@ -37,6 +36,7 @@ export {
   type AgentType,
   type BotMetadata,
   type BotVersionMetadata,
+  type PreviewableAgent,
   type CompilationError,
   type DraftAgentTopics,
   type DraftAgentTopicsBody,
@@ -48,8 +48,8 @@ export {
   type AgentPreviewMessage,
   type AgentPreviewError,
   AgentSource,
-  type ScriptAgent,
-  type PublishedAgent,
+  type ScriptAgentType,
+  type ProductionAgentType,
 
   // Agent Testing Types
   type AgentTestResultsResponse,
@@ -80,9 +80,8 @@ export { metric, findAuthoringBundle, readTranscriptEntries } from './utils';
 export { Agent, AgentCreateLifecycleStages } from './agent';
 export { AgentTester } from './agentTester';
 export { AgentTest, AgentTestCreateLifecycleStages } from './agentTest';
-export { AgentTrace } from './agentTrace';
+export { ProductionAgent } from './agents/productionAgent';
+export { ScriptAgent } from './agents/scriptAgent';
+export { AgentBase } from './agents/agentBase';
 export { convertTestResultsToFormat, humanFriendlyName } from './agentTestResults';
-export { AgentPreview } from './agentPreview';
-export { AgentSimulate } from './agentSimulate';
 export { writeDebugLog } from './apexUtils';
-export { AgentPreviewBase } from './agentPreviewBase';

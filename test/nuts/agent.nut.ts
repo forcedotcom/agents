@@ -1,5 +1,5 @@
 /*
- * Copyright 2025, Salesforce, Inc.
+ * Copyright 2026, Salesforce, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import { Connection, Org, SfProject, User, UserFields } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { sleep } from '@salesforce/kit';
 import { Agent, type AgentJobSpec, type AgentJobSpecCreateConfig } from '../../src/index';
-import { validAgentScript } from '../testData';
 
 /* eslint-disable no-console */
 // Helper function to wait for Einstein AI services to be ready
@@ -59,6 +58,7 @@ describe('agent NUTs', () => {
   let session: TestSession;
   let connection: Connection;
   let defaultOrg: Org;
+  let project: SfProject;
   let agentSpec: AgentJobSpec;
 
   before(async () => {
@@ -77,6 +77,7 @@ describe('agent NUTs', () => {
     const username = session.orgs.get('default')!.username as string;
     defaultOrg = await Org.create({ aliasOrUsername: username });
     connection = defaultOrg.getConnection();
+    project = await SfProject.resolve(session.project.dir);
 
     // assign the EinsteinGPTPromptTemplateManager to the scratch org admin user
     const queryResult = await connection.singleRecordQuery<{ Id: string }>(
@@ -148,7 +149,7 @@ describe('agent NUTs', () => {
 
     describe('getBotMetadata()', () => {
       it('should get agent bot metadata by bot developer name', async () => {
-        const agent = new Agent({ connection, nameOrId: botApiName });
+        const agent = await Agent.init({ connection, project, apiNameOrId: botApiName });
         const botMetadata = await agent.getBotMetadata();
         expect(botMetadata).to.be.an('object');
         expect(botMetadata.Id).to.be.a('string');
@@ -158,10 +159,11 @@ describe('agent NUTs', () => {
         expect(botMetadata.BotVersions.records.length).to.equal(1);
         botId = botMetadata.Id;
         expect(botMetadata.BotVersions.records[0].BotDefinitionId).to.equal(botId);
+        await agent.restoreConnection();
       });
 
       it('should get agent bot metadata by botId', async () => {
-        const agent = new Agent({ connection, nameOrId: botId });
+        const agent = await Agent.init({ connection, project, apiNameOrId: botId });
         const botMetadata = await agent.getBotMetadata();
         expect(botMetadata).to.be.an('object');
         expect(botMetadata.Id).to.equal(botId);
@@ -170,12 +172,13 @@ describe('agent NUTs', () => {
         expect(botMetadata.DeveloperName).to.equal(botApiName);
         expect(botMetadata.BotVersions.records.length).to.equal(1);
         expect(botMetadata.BotVersions.records[0].BotDefinitionId).to.equal(botId);
+        await agent.restoreConnection();
       });
     });
 
     describe('getLatestBotVersionMetadata()', () => {
       it('should get the latest agent bot version metadata by bot developer name', async () => {
-        const agent = new Agent({ connection, nameOrId: botApiName });
+        const agent = await Agent.init({ connection, project, apiNameOrId: botApiName });
         const botVersionMetadata = await agent.getLatestBotVersionMetadata();
         expect(botVersionMetadata).to.be.an('object');
         expect(botVersionMetadata.Id).to.be.a('string');
@@ -183,6 +186,7 @@ describe('agent NUTs', () => {
         expect(botVersionMetadata.IsDeleted).to.equal(false);
         expect(botVersionMetadata.DeveloperName).to.equal('v1');
         expect(botVersionMetadata.BotDefinitionId).to.equal(botId);
+        await agent.restoreConnection();
       });
     });
 
@@ -200,7 +204,7 @@ describe('agent NUTs', () => {
 
     describe('activate/deactivate', () => {
       it('should activate the agent', async () => {
-        const agent = new Agent({ connection, nameOrId: botId });
+        const agent = await Agent.init({ connection, project, apiNameOrId: botId });
         let botMetadata = await agent.getBotMetadata();
         expect(botMetadata.BotVersions.records[0].Status).to.equal('Inactive');
         try {
@@ -214,15 +218,17 @@ describe('agent NUTs', () => {
 
         botMetadata = await agent.getBotMetadata();
         expect(botMetadata.BotVersions.records[0].Status).to.equal('Active');
+        await agent.restoreConnection();
       });
 
       it('should deactivate the agent', async () => {
-        const agent = new Agent({ connection, nameOrId: botId });
+        const agent = await Agent.init({ connection, project, apiNameOrId: botId });
         let botMetadata = await agent.getBotMetadata();
         expect(botMetadata.BotVersions.records[0].Status).to.equal('Active');
         await agent.deactivate();
         botMetadata = await agent.getBotMetadata();
         expect(botMetadata.BotVersions.records[0].Status).to.equal('Inactive');
+        await agent.restoreConnection();
       });
     });
   });
@@ -265,7 +271,6 @@ describe('agent NUTs', () => {
     });
 
     it('should create an agent from a spec', async () => {
-      const project = await SfProject.resolve(session.project.dir);
       const agentResponse = await Agent.create(connection, project, {
         agentType: agentSpec.agentType,
         saveAgent: true,
@@ -298,48 +303,6 @@ describe('agent NUTs', () => {
       expect(readdirSync(join(sourceDir, 'bots'))).to.have.lengthOf(2);
       expect(readdirSync(join(sourceDir, 'genAiPlannerBundles'))).to.have.lengthOf(2);
       expect(readdirSync(join(sourceDir, 'genAiPlugins'))).to.have.lengthOf(6);
-    });
-  });
-
-  describe('compileAgentScript', () => {
-    it('should compile a valid agent script successfully', async () => {
-      // Read the valid agent script from the project
-
-      const result = await Agent.compileAgentScript(connection, validAgentScript);
-
-      // Verify the response structure
-      expect(result).to.be.an('object');
-      expect(result).to.have.property('status', 'success');
-      expect(result).to.have.property('compiledArtifact');
-      expect(result.compiledArtifact).to.not.be.null;
-      expect(result.compiledArtifact).to.be.an('object');
-      expect(result.compiledArtifact).to.have.property('schemaVersion');
-      expect(result.compiledArtifact).to.have.property('globalConfiguration');
-      expect(result.compiledArtifact).to.have.property('agentVersion');
-    });
-
-    it('should return compilation errors for invalid agent script', async () => {
-      // Invalid agent script - missing closing brace
-      const invalidAgentScript = `
-        agent InvalidAgent {
-          greeting {
-            instructions: "Hello!"
-          // Missing closing brace for agent
-      `;
-
-      const result = await Agent.compileAgentScript(connection, invalidAgentScript);
-
-      // Verify the response indicates failure
-      expect(result).to.be.an('object');
-      expect(result).to.have.property('status', 'failure');
-      expect(result).to.have.property('errors');
-      expect(result.errors).to.be.an('array');
-      expect(result.errors.length).to.be.greaterThan(0);
-
-      // Verify error structure
-      const firstError = result.errors[0];
-      expect(firstError).to.have.property('errorType');
-      expect(firstError).to.have.property('description');
     });
   });
 });
