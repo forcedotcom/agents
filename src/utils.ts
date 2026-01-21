@@ -305,6 +305,7 @@ export const writeMetaFileToHistory = async (historyDir: string, metadata: Previ
   const metadataPath = path.join(historyDir, 'metadata.json');
   await writeFile(metadataPath, JSON.stringify(metadata, null, 2), 'utf-8');
 };
+
 /**
  * Calculates the correct endpoint based on env vars
  *
@@ -313,6 +314,7 @@ export const writeMetaFileToHistory = async (historyDir: string, metadata: Previ
 export function getEndpoint(): string {
   return env.getBoolean('SF_TEST_API') ? 'test.' : '';
 }
+
 /**
  * Update preview metadata with end time and plan IDs
  */

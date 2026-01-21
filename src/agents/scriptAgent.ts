@@ -18,6 +18,7 @@ import { join } from 'node:path';
 import { writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { Lifecycle, SfError, SfProject } from '@salesforce/core';
+import { env } from '@salesforce/kit';
 import {
   AgentJson,
   type AgentPreviewEndResponse,
@@ -159,13 +160,27 @@ export class ScriptAgent extends AgentBase {
   }
 
   public async getTrace(planId: string): Promise<PlannerResponse> {
-    return this.connection.request<PlannerResponse>({
-      method: 'GET',
-      url: `${this.apiBase}/v1.1/preview/sessions/${this.sessionId!}/plans/${planId}`,
-      headers: {
-        'x-client-name': 'afdx',
-      },
-    });
+    try {
+      return await this.connection.request<PlannerResponse>({
+        method: 'GET',
+        url: `${this.apiBase}/v1.1/preview/sessions/${this.sessionId!}/plans/${planId}`,
+        headers: {
+          'x-client-name': 'afdx',
+        },
+      });
+    } catch (error) {
+      const errorName = (error as { name?: string })?.name ?? '';
+      if (errorName.includes('404')) {
+        throw SfError.create({
+          name: 'AgentApiNotFound',
+          message: `Trace API returned 404. SF_TEST_API=${
+            env.getBoolean('SF_TEST_API') ? 'true' : 'false'
+          } If targeting a test.api environment, set SF_TEST_API=true, otherwise it's false.`,
+          cause: error,
+        });
+      }
+      throw SfError.wrap(error);
+    }
   }
 
   /**
@@ -212,6 +227,16 @@ export class ScriptAgent extends AgentBase {
 
       return response;
     } catch (error) {
+      const errorName = (error as { name?: string })?.name ?? '';
+      if (errorName.includes('404')) {
+        throw SfError.create({
+          name: 'AgentApiNotFound',
+          message: `Validation API returned 404. SF_TEST_API=${
+            env.getBoolean('SF_TEST_API') ? 'true' : 'false'
+          } If targeting a test.api environment, set SF_TEST_API=true, otherwise it's false.`,
+          cause: error,
+        });
+      }
       throw SfError.wrap(error);
     }
   }
@@ -333,14 +358,29 @@ export class ScriptAgent extends AgentBase {
         this.historyDir
       );
 
-      const response = await this.connection.request<AgentPreviewSendResponse>({
-        method: 'POST',
-        url,
-        body: JSON.stringify(body),
-        headers: {
-          'x-client-name': 'afdx',
-        },
-      });
+      let response: AgentPreviewSendResponse;
+      try {
+        response = await this.connection.request<AgentPreviewSendResponse>({
+          method: 'POST',
+          url,
+          body: JSON.stringify(body),
+          headers: {
+            'x-client-name': 'afdx',
+          },
+        });
+      } catch (error) {
+        const errorName = (error as { name?: string })?.name ?? '';
+        if (errorName.includes('404')) {
+          throw SfError.create({
+            name: 'AgentApiNotFound',
+            message: `Preview Send API returned 404. SF_TEST_API=${
+              env.getBoolean('SF_TEST_API') ? 'true' : 'false'
+            } If targeting a test.api environment, set SF_TEST_API=true, otherwise it's false.`,
+            cause: error,
+          });
+        }
+        throw SfError.wrap(error);
+      }
 
       const planId = response.messages.at(0)!.planId;
       this.planIds.add(planId);
@@ -442,18 +482,33 @@ export class ScriptAgent extends AgentBase {
     try {
       void Lifecycle.getInstance().emit('agents:simulation-starting', {});
 
-      const response = await this.connection.request<AgentPreviewStartResponse>(
-        {
-          method: 'POST',
-          url: `${this.apiBase}/v1.1/preview/sessions`,
-          headers: {
-            'x-attributed-client': 'no-builder', // <- removes markdown from responses
-            'x-client-name': 'afdx',
+      let response: AgentPreviewStartResponse;
+      try {
+        response = await this.connection.request<AgentPreviewStartResponse>(
+          {
+            method: 'POST',
+            url: `${this.apiBase}/v1.1/preview/sessions`,
+            headers: {
+              'x-attributed-client': 'no-builder', // <- removes markdown from responses
+              'x-client-name': 'afdx',
+            },
+            body: JSON.stringify(body),
           },
-          body: JSON.stringify(body),
-        },
-        { retry: { maxRetries: 3 } }
-      );
+          { retry: { maxRetries: 3 } }
+        );
+      } catch (error) {
+        const errorName = (error as { name?: string })?.name ?? '';
+        if (errorName.includes('404')) {
+          throw SfError.create({
+            name: 'AgentApiNotFound',
+            message: `Preview Start API returned 404. SF_TEST_API=${
+              env.getBoolean('SF_TEST_API') ? 'true' : 'false'
+            } If targeting a test.api environment, set SF_TEST_API=true, otherwise it's false.`,
+            cause: error,
+          });
+        }
+        throw SfError.wrap(error);
+      }
       this.sessionId = response.sessionId;
       const agentIdForStorage = this.options.aabName;
 

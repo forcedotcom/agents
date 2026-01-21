@@ -15,6 +15,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { Messages, SfError } from '@salesforce/core';
+import { env } from '@salesforce/kit';
 import {
   type AgentPreviewEndResponse,
   AgentPreviewInterface,
@@ -208,14 +209,29 @@ export class ProductionAgent extends AgentBase {
         this.historyDir
       );
 
-      const response = await this.connection.request<AgentPreviewSendResponse>({
-        method: 'POST',
-        url,
-        body: JSON.stringify(body),
-        headers: {
-          'x-client-name': 'afdx',
-        },
-      });
+      let response: AgentPreviewSendResponse;
+      try {
+        response = await this.connection.request<AgentPreviewSendResponse>({
+          method: 'POST',
+          url,
+          body: JSON.stringify(body),
+          headers: {
+            'x-client-name': 'afdx',
+          },
+        });
+      } catch (error) {
+        const errorName = (error as { name?: string })?.name ?? '';
+        if (errorName.includes('404')) {
+          throw SfError.create({
+            name: 'AgentApiNotFound',
+            message: `Preview Send API returned 404. SF_TEST_API=${
+              env.getBoolean('SF_TEST_API') ? 'true' : 'false'
+            } If targeting a test.api environment, set SF_TEST_API=true, otherwise it's false.`,
+            cause: error,
+          });
+        }
+        throw SfError.wrap(error);
+      }
 
       const planId = response.messages.at(0)!.planId;
       this.planIds.add(planId);
@@ -299,14 +315,29 @@ export class ProductionAgent extends AgentBase {
     };
 
     try {
-      const response = await this.connection.request<AgentPreviewStartResponse>({
-        method: 'POST',
-        url,
-        body: JSON.stringify(body),
-        headers: {
-          'x-client-name': 'afdx',
-        },
-      });
+      let response: AgentPreviewStartResponse;
+      try {
+        response = await this.connection.request<AgentPreviewStartResponse>({
+          method: 'POST',
+          url,
+          body: JSON.stringify(body),
+          headers: {
+            'x-client-name': 'afdx',
+          },
+        });
+      } catch (error) {
+        const errorName = (error as { name?: string })?.name ?? '';
+        if (errorName.includes('404')) {
+          throw SfError.create({
+            name: 'AgentApiNotFound',
+            message: `Preview Start API returned 404. SF_TEST_API=${
+              env.getBoolean('SF_TEST_API') ? 'true' : 'false'
+            } If targeting a test.api environment, set SF_TEST_API=true, otherwise it's false.`,
+            cause: error,
+          });
+        }
+        throw SfError.wrap(error);
+      }
       this.sessionId = response.sessionId;
 
       const agentId = this.id!;
@@ -356,13 +387,28 @@ export class ProductionAgent extends AgentBase {
     const url = `${this.apiBase}/v1.1/sessions/${this.sessionId}`;
     try {
       // https://developer.salesforce.com/docs/einstein/genai/guide/agent-api-examples.html#end-session
-      const response = await this.connection.request<AgentPreviewEndResponse>({
-        method: 'DELETE',
-        url,
-        headers: {
-          'x-session-end-reason': reason,
-        },
-      });
+      let response: AgentPreviewEndResponse;
+      try {
+        response = await this.connection.request<AgentPreviewEndResponse>({
+          method: 'DELETE',
+          url,
+          headers: {
+            'x-session-end-reason': reason,
+          },
+        });
+      } catch (error) {
+        const errorName = (error as { name?: string })?.name ?? '';
+        if (errorName.includes('404')) {
+          throw SfError.create({
+            name: 'AgentApiNotFound',
+            message: `Preview End API returned 404. SF_TEST_API=${
+              env.getBoolean('SF_TEST_API') ? 'true' : 'false'
+            } If targeting a test.api environment, set SF_TEST_API=true, otherwise it's false.`,
+            cause: error,
+          });
+        }
+        throw SfError.wrap(error);
+      }
 
       // Write end entry immediately
       if (this.historyDir) {
