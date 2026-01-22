@@ -250,7 +250,7 @@ export class ScriptAgent extends AgentBase {
     if (!this.agentJson) {
       await this.compile();
     }
-    const publisher = new ScriptAgentPublisher(this.connection, this.options.project, this.agentJson!);
+    const publisher = new ScriptAgentPublisher(this.connection, this.options.project, this.agentJson!, this.options.skipMetadataRetrieve);
     return publisher.publishAgentJson();
   }
 

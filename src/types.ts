@@ -65,6 +65,7 @@ export type ScriptAgentOptions = {
   project: SfProject;
   // name of the AAB, e.g. 'myBundle' - the project will be searched to find the AAB directory
   aabName: string;
+  skipMetadataRetrieve?: boolean;
 };
 export type ProductionAgentOptions = {
   connection: Connection;

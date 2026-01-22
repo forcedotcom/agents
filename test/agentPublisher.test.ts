@@ -141,6 +141,67 @@ describe('AgentPublisher', () => {
       expect(syncAuthoringBundleStub.calledOnce).to.be.true;
     });
 
+    it('should skip metadata retrieve when skipMetadataRetrieve is true', async () => {
+      process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishNewAgent-Success');
+      // Mock connection.singleRecordQuery to return undefined (no existing bot)
+      $$.SANDBOX.stub(connection, 'singleRecordQuery')
+        .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
+        .throws(new Error('No records found'))
+        .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
+        .resolves({ DeveloperName: 'v1' });
+
+      publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, true);
+
+      // Mock useNamedUserJwt to return the connection without making HTTP calls
+      $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
+
+      // Mock connection.refreshAuth to avoid making HTTP calls during auth refresh
+      $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
+
+      // Mock the private methods
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const retrieveAgentMetadataStub = $$.SANDBOX.stub(publisher as any, 'retrieveAgentMetadata').rejects(
+        new Error('retrieveAgentMetadata should have been skipped')
+      );
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      $$.SANDBOX.stub(publisher as any, 'deployAuthoringBundle').resolves();
+
+      const result = await publisher.publishAgentJson();
+
+      expect(result).to.have.property('developerName', 'test_agent');
+      expect(retrieveAgentMetadataStub.notCalled).to.be.true;
+    });
+
+    it('should default skipMetadataRetrieve to false when not specified', async () => {
+      process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishNewAgent-Success');
+      // Mock connection.singleRecordQuery to return undefined (no existing bot)
+      $$.SANDBOX.stub(connection, 'singleRecordQuery')
+        .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
+        .throws(new Error('No records found'))
+        .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
+        .resolves({ DeveloperName: 'v1' });
+
+      // Note: constructor called WITHOUT the 4th arg (defaults to false)
+      publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
+
+      // Mock useNamedUserJwt to return the connection without making HTTP calls
+      $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
+
+      // Mock connection.refreshAuth to avoid making HTTP calls during auth refresh
+      $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
+
+      // Mock the private methods
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const retrieveAgentMetadataStub = $$.SANDBOX.stub(publisher as any, 'retrieveAgentMetadata').resolves();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      $$.SANDBOX.stub(publisher as any, 'deployAuthoringBundle').resolves();
+
+      const result = await publisher.publishAgentJson();
+
+      expect(result).to.have.property('developerName', 'test_agent');
+      expect(retrieveAgentMetadataStub.calledOnce).to.be.true;
+    });
+
     it('should publish new version of an existing agent when there is a bot in the org for the given developer name', async () => {
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishNewAgentVersion-Success');
 
