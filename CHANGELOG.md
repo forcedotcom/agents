@@ -1,3 +1,12 @@
+## [0.21.2](https://github.com/forcedotcom/agents/compare/0.21.1...0.21.2) (2026-01-22)
+
+
+### Bug Fixes
+
+* remove double deployment on agent publishing ([bc647b9](https://github.com/forcedotcom/agents/commit/bc647b983aad4a554be4890044dada3ead41405a))
+
+
+
 ## [0.21.1](https://github.com/forcedotcom/agents/compare/0.20.0-beta.5...0.21.1) (2026-01-21)
 
 
