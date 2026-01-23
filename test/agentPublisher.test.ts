@@ -15,7 +15,7 @@
  */
 
 import { join } from 'node:path';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile, readFile } from 'node:fs/promises';
 import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection, SfError, SfProject } from '@salesforce/core';
@@ -132,13 +132,13 @@ describe('AgentPublisher', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const retrieveAgentMetadataStub = $$.SANDBOX.stub(publisher as any, 'retrieveAgentMetadata').resolves();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const syncAuthoringBundleStub = $$.SANDBOX.stub(publisher as any, 'syncAuthoringBundle').resolves();
+      const deployAuthoringBundleStub = $$.SANDBOX.stub(publisher as any, 'deployAuthoringBundle').resolves();
 
       const result = await publisher.publishAgentJson();
 
       expect(result).to.have.property('developerName', 'test_agent');
       expect(retrieveAgentMetadataStub.calledOnce).to.be.true;
-      expect(syncAuthoringBundleStub.calledOnce).to.be.true;
+      expect(deployAuthoringBundleStub.calledOnce).to.be.true;
     });
 
     it('should skip metadata retrieve when skipMetadataRetrieve is true', async () => {
@@ -224,13 +224,13 @@ describe('AgentPublisher', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const retrieveAgentMetadataStub = $$.SANDBOX.stub(publisher as any, 'retrieveAgentMetadata').resolves();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const syncAuthoringBundleStub = $$.SANDBOX.stub(publisher as any, 'syncAuthoringBundle').resolves();
+      const deployAuthoringBundleStub = $$.SANDBOX.stub(publisher as any, 'deployAuthoringBundle').resolves();
 
       const result = await publisher.publishAgentJson();
 
       expect(result).to.have.property('developerName', 'test_agent');
       expect(retrieveAgentMetadataStub.calledOnce).to.be.true;
-      expect(syncAuthoringBundleStub.calledOnce).to.be.true;
+      expect(deployAuthoringBundleStub.calledOnce).to.be.true;
     });
 
     it('should handle API errors during publishing', async () => {
@@ -359,30 +359,46 @@ describe('AgentPublisher', () => {
 
       validateStub.restore();
     });
-  });
 
-  describe('syncAuthoringBundle', () => {
-    it('should call deployAuthoringBundle twice with correct parameters', async () => {
-      // Create minimal publisher instance by mocking validateDeveloperName
-      const validateStub = createValidateDeveloperNameStub();
+    it('should deploy the Authoring Bundle by generatting a ComponentSet with correct parameters and deploying it', async () => {
+      await createTestBundleStructure('test_agent');
+      const developerName = 'test_agent';
+      const bundleDir = join('force-app', 'main', 'default', 'aiAuthoringBundles', developerName);
+      const bundleMetaPath = join(bundleDir, `${developerName}.bundle-meta.xml`);
+
+      const validateStub = createValidateDeveloperNameStub(developerName, bundleDir, bundleMetaPath);
       const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
 
-      // Mock the deployAuthoringBundle method
+      // Force a deterministic standard connection for the deploy path
+      const standardConnection = { id: 'standard-connection' } as unknown as Connection;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const deployAuthoringBundleStub = $$.SANDBOX.stub(publisher as any, 'deployAuthoringBundle').resolves();
+      $$.SANDBOX.stub(publisher as any, 'createStandardConnection').resolves(standardConnection);
+
+      // Mock ComponentSet.fromSource(...).deploy(...).pollStatus()
+      const pollStatusStub = $$.SANDBOX.stub().resolves({ response: { success: true } } as never);
+      const deployStub = $$.SANDBOX.stub().callsFake(async () => {
+        // The meta.xml must contain the computed target when deploy is invoked
+        const contentDuringDeploy = await readFile(bundleMetaPath, 'utf-8');
+        expect(contentDuringDeploy).to.include(`<target>${developerName}.v1</target>`);
+
+        return { pollStatus: pollStatusStub } as unknown;
+      });
+      const fromSourceStub = $$.SANDBOX.stub(ComponentSet, 'fromSource').returns({ deploy: deployStub } as never);
+
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-      const syncAuthoringBundle = (publisher as any).syncAuthoringBundle.bind(publisher);
-      const botVersionName = 'test_version_1';
-
+      const deployAuthoringBundle = (publisher as any).deployAuthoringBundle.bind(publisher);
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      await syncAuthoringBundle(botVersionName);
+      await deployAuthoringBundle('v1');
 
-      // Verify deployAuthoringBundle was called twice
-      expect(deployAuthoringBundleStub.callCount).to.equal(2);
-      // Verify first call was with undefined (draft deployment)
-      expect(deployAuthoringBundleStub.firstCall.args[0]).to.be.undefined;
-      // Verify second call was with botVersionName (published deployment)
-      expect(deployAuthoringBundleStub.secondCall.calledWithExactly(botVersionName)).to.be.true;
+      // Verify ComponentSet generation + deploy invocation
+      expect(fromSourceStub.calledOnce).to.be.true;
+      expect(fromSourceStub.firstCall.args[0]).to.equal(bundleDir);
+      expect(deployStub.calledOnce).to.be.true;
+      expect(deployStub.firstCall.args[0]).to.deep.equal({ usernameOrConnection: standardConnection });
+
+      // Ensure the target was removed from the local file after deploy
+      const finalContent = await readFile(bundleMetaPath, 'utf-8');
+      expect(finalContent).to.not.include('<target>');
 
       validateStub.restore();
     });
