@@ -204,6 +204,10 @@ export class ScriptAgentPublisher {
         ],
         directoryPaths: [defaultPackagePath],
       },
+      org: {
+        username: this.originalUsername,
+        exclude: [],
+      },
     });
     const retrieve = await cs.retrieve({
       usernameOrConnection: standardConnection,
