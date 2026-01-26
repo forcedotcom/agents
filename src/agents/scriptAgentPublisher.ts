@@ -190,14 +190,19 @@ export class ScriptAgentPublisher {
 
     const defaultPackagePath = path.resolve(this.project.getDefaultPackage().path);
 
+    const genAiPluginAndFunctions = this.agentJson.agentVersion.nodes.flatMap((n) => [
+      `GenAiPlugin:${n.developerName}`,
+      ...(n.tools as Array<{ name: string }>).map((t) => `GenAiFunction:${t.name}`),
+    ]);
+
     const cs = await ComponentSetBuilder.build({
       metadata: {
-        metadataEntries: [`Bot:${this.developerName}`, `Agent:${this.developerName}_${botVersionName}`],
+        metadataEntries: [
+          `Bot:${this.developerName}`,
+          ...genAiPluginAndFunctions,
+          `Agent:${this.developerName}_${botVersionName}`,
+        ],
         directoryPaths: [defaultPackagePath],
-      },
-      org: {
-        username: this.originalUsername,
-        exclude: [],
       },
     });
     const retrieve = await cs.retrieve({
