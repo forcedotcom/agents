@@ -192,7 +192,7 @@ export class ScriptAgentPublisher {
 
     const genAiPluginAndFunctions = this.agentJson.agentVersion.nodes.flatMap((n) => [
       `GenAiPlugin:${n.developerName}`,
-      ...(n.tools as Array<{ name: string }>).map((t) => `GenAiFunction:${t.name}`),
+      ...n.tools.map((t) => `GenAiFunction:${t.name}`),
     ]);
 
     const cs = await ComponentSetBuilder.build({

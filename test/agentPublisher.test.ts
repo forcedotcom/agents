@@ -414,5 +414,262 @@ describe('AgentPublisher', () => {
 
       validateStub.restore();
     });
+
+    it('should include GenAiPlugin and GenAiFunction entries when present', async () => {
+      // Create agent JSON with nodes that have tools
+      const agentJsonWithNodes: AgentJson = {
+        ...agentJson,
+        agentVersion: {
+          ...agentJson.agentVersion,
+          nodes: [
+            {
+              type: 'reasoning',
+              reasoningType: 'standard',
+              description: 'Test node 1',
+              beforeReasoning: '',
+              instructions: '',
+              focusPrompt: '',
+              tools: [
+                {
+                  type: 'action',
+                  target: '__state_update_action__',
+                  boundInputs: null,
+                  llmInputs: null,
+                  enabled: null,
+                  stateUpdates: null,
+                  name: 'Function1',
+                  description: 'Test function 1',
+                  inputParameters: null,
+                  forced: null,
+                },
+                {
+                  type: 'action',
+                  target: '__state_update_action__',
+                  boundInputs: null,
+                  llmInputs: null,
+                  enabled: null,
+                  stateUpdates: null,
+                  name: 'Function2',
+                  description: 'Test function 2',
+                  inputParameters: null,
+                  forced: null,
+                },
+              ],
+              preToolCall: null,
+              postToolCall: null,
+              afterReasoning: null,
+              developerName: 'Node1',
+              label: 'Node 1',
+              onInit: null,
+              transitions: null,
+              onExit: null,
+              actionDefinitions: [],
+            },
+            {
+              type: 'reasoning',
+              reasoningType: 'standard',
+              description: 'Test node 2',
+              beforeReasoning: '',
+              instructions: '',
+              focusPrompt: '',
+              tools: [
+                {
+                  type: 'action',
+                  target: '__state_update_action__',
+                  boundInputs: null,
+                  llmInputs: null,
+                  enabled: null,
+                  stateUpdates: null,
+                  name: 'Function3',
+                  description: 'Test function 3',
+                  inputParameters: null,
+                  forced: null,
+                },
+              ],
+              preToolCall: null,
+              postToolCall: null,
+              afterReasoning: null,
+              developerName: 'Node2',
+              label: 'Node 2',
+              onInit: null,
+              transitions: null,
+              onExit: null,
+              actionDefinitions: [],
+            },
+          ],
+        },
+      };
+
+      const validateStub = createValidateDeveloperNameStub();
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJsonWithNodes);
+
+      // Setup successful metadata retrieval mock
+      const compSet = new ComponentSet();
+      const mdApiRetrieve = new MetadataApiRetrieve({
+        usernameOrConnection: testOrg.getMockUserInfo().Username,
+        output: 'nowhere',
+      });
+      $$.SANDBOX.stub(mdApiRetrieve, 'pollStatus').resolves({
+        // @ts-expect-error only stubbed response
+        response: {
+          success: true,
+        },
+      });
+      $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
+
+      let capturedMetadataEntries: string[] = [];
+      const buildStub = $$.SANDBOX.stub(ComponentSetBuilder, 'build').callsFake(async (options) => {
+        if (options?.metadata?.metadataEntries) {
+          capturedMetadataEntries = options.metadata.metadataEntries;
+        }
+        return compSet;
+      });
+
+      // @ts-expect-error private method
+      const retrieveAgentMetadata = publisher.retrieveAgentMetadata.bind(publisher);
+      await retrieveAgentMetadata('v1');
+
+      // Verify that ComponentSetBuilder.build was called
+      expect(buildStub.calledOnce).to.be.true;
+
+      // Verify that GenAiPlugin entries are included
+      expect(capturedMetadataEntries).to.include('GenAiPlugin:Node1');
+      expect(capturedMetadataEntries).to.include('GenAiPlugin:Node2');
+
+      // Verify that GenAiFunction entries are included
+      expect(capturedMetadataEntries).to.include('GenAiFunction:Function1');
+      expect(capturedMetadataEntries).to.include('GenAiFunction:Function2');
+      expect(capturedMetadataEntries).to.include('GenAiFunction:Function3');
+
+      // Verify that Bot and Agent entries are still included
+      expect(capturedMetadataEntries).to.include('Bot:test_agent');
+      expect(capturedMetadataEntries).to.include('Agent:test_agent_v1');
+
+      validateStub.restore();
+    });
+
+    it('should not include GenAiFunction entries when nodes have no tools', async () => {
+      // Create agent JSON with nodes that have no tools
+      const agentJsonWithNodesNoTools: AgentJson = {
+        ...agentJson,
+        agentVersion: {
+          ...agentJson.agentVersion,
+          nodes: [
+            {
+              type: 'reasoning',
+              reasoningType: 'standard',
+              description: 'Test node without tools',
+              beforeReasoning: '',
+              instructions: '',
+              focusPrompt: '',
+              tools: [],
+              preToolCall: null,
+              postToolCall: null,
+              afterReasoning: null,
+              developerName: 'NodeWithoutTools',
+              label: 'Node Without Tools',
+              onInit: null,
+              transitions: null,
+              onExit: null,
+              actionDefinitions: [],
+            },
+          ],
+        },
+      };
+
+      const validateStub = createValidateDeveloperNameStub();
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJsonWithNodesNoTools);
+
+      // Setup successful metadata retrieval mock
+      const compSet = new ComponentSet();
+      const mdApiRetrieve = new MetadataApiRetrieve({
+        usernameOrConnection: testOrg.getMockUserInfo().Username,
+        output: 'nowhere',
+      });
+      $$.SANDBOX.stub(mdApiRetrieve, 'pollStatus').resolves({
+        // @ts-expect-error only stubbed response
+        response: {
+          success: true,
+        },
+      });
+      $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
+
+      let capturedMetadataEntries: string[] = [];
+      const buildStub = $$.SANDBOX.stub(ComponentSetBuilder, 'build').callsFake(async (options) => {
+        if (options?.metadata?.metadataEntries) {
+          capturedMetadataEntries = options.metadata.metadataEntries;
+        }
+        return compSet;
+      });
+
+      // @ts-expect-error private method
+      const retrieveAgentMetadata = publisher.retrieveAgentMetadata.bind(publisher);
+      await retrieveAgentMetadata('v1');
+
+      // Verify that ComponentSetBuilder.build was called
+      expect(buildStub.calledOnce).to.be.true;
+
+      // Verify that GenAiPlugin entry is included (node exists)
+      expect(capturedMetadataEntries).to.include('GenAiPlugin:NodeWithoutTools');
+
+      // Verify that NO GenAiFunction entries are included (no tools)
+      const genAiFunctionEntries = capturedMetadataEntries.filter((entry) => entry.startsWith('GenAiFunction:'));
+      expect(genAiFunctionEntries).to.be.empty;
+
+      // Verify that Bot and Agent entries are still included
+      expect(capturedMetadataEntries).to.include('Bot:test_agent');
+      expect(capturedMetadataEntries).to.include('Agent:test_agent_v1');
+
+      validateStub.restore();
+    });
+
+    it('should not include GenAiPlugin and GenAiFunction entries when nodes array is empty', async () => {
+      // Use the default agentJson which has empty nodes array
+      const validateStub = createValidateDeveloperNameStub();
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
+
+      // Setup successful metadata retrieval mock
+      const compSet = new ComponentSet();
+      const mdApiRetrieve = new MetadataApiRetrieve({
+        usernameOrConnection: testOrg.getMockUserInfo().Username,
+        output: 'nowhere',
+      });
+      $$.SANDBOX.stub(mdApiRetrieve, 'pollStatus').resolves({
+        // @ts-expect-error only stubbed response
+        response: {
+          success: true,
+        },
+      });
+      $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
+
+      let capturedMetadataEntries: string[] = [];
+      const buildStub = $$.SANDBOX.stub(ComponentSetBuilder, 'build').callsFake(async (options) => {
+        if (options?.metadata?.metadataEntries) {
+          capturedMetadataEntries = options.metadata.metadataEntries;
+        }
+        return compSet;
+      });
+
+      // @ts-expect-error private method
+      const retrieveAgentMetadata = publisher.retrieveAgentMetadata.bind(publisher);
+      await retrieveAgentMetadata('v1');
+
+      // Verify that ComponentSetBuilder.build was called
+      expect(buildStub.calledOnce).to.be.true;
+
+      // Verify that NO GenAiPlugin entries are included
+      const genAiPluginEntries = capturedMetadataEntries.filter((entry) => entry.startsWith('GenAiPlugin:'));
+      expect(genAiPluginEntries).to.be.empty;
+
+      // Verify that NO GenAiFunction entries are included
+      const genAiFunctionEntries = capturedMetadataEntries.filter((entry) => entry.startsWith('GenAiFunction:'));
+      expect(genAiFunctionEntries).to.be.empty;
+
+      // Verify that Bot and Agent entries are still included
+      expect(capturedMetadataEntries).to.include('Bot:test_agent');
+      expect(capturedMetadataEntries).to.include('Agent:test_agent_v1');
+
+      validateStub.restore();
+    });
   });
 });

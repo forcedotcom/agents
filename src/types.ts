@@ -783,7 +783,18 @@ export type AgentJson = {
       beforeReasoning: string;
       instructions: string;
       focusPrompt: string;
-      tools: [];
+      tools: Array<{
+        type: string;
+        target: string | null;
+        boundInputs: unknown;
+        llmInputs: unknown;
+        enabled: boolean | null;
+        stateUpdates: Array<Record<string, string>> | null;
+        name: string;
+        description: string;
+        inputParameters: unknown;
+        forced: boolean | null;
+      }>;
       preToolCall: null;
       postToolCall: null;
       afterReasoning: null;
