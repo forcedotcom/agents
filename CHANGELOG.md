@@ -1,3 +1,16 @@
+# [0.22.0](https://github.com/forcedotcom/agents/compare/0.21.2-beta.2...0.22.0) (2026-01-28)
+
+
+
+## [0.21.2-beta.2](https://github.com/forcedotcom/agents/compare/0.21.2...0.21.2-beta.2) (2026-01-23)
+
+
+### Features
+
+* make metadata retrieval on agent publication optinal ([ccace68](https://github.com/forcedotcom/agents/commit/ccace680927c8d0b5e2d4c9ea1cf4b235f3cb508))
+
+
+
 ## [0.21.2](https://github.com/forcedotcom/agents/compare/0.21.1...0.21.2) (2026-01-22)
 
 
