@@ -246,11 +246,11 @@ export class ScriptAgent extends AgentBase {
    * @beta
    * @returns {Promise<PublishAgentJsonResponse>} The publish response
    */
-  public async publish(): Promise<PublishAgent> {
+  public async publish(skipMetadataRetrieve?: boolean): Promise<PublishAgent> {
     if (!this.agentJson) {
       await this.compile();
     }
-    const publisher = new ScriptAgentPublisher(this.connection, this.options.project, this.agentJson!, this.options.skipMetadataRetrieve);
+    const publisher = new ScriptAgentPublisher(this.connection, this.options.project, this.agentJson!, skipMetadataRetrieve);
     return publisher.publishAgentJson();
   }
 
