@@ -47,6 +47,7 @@ export class ScriptAgentPublisher {
   private readonly developerName: string;
   private readonly bundleMetaPath: string;
   private bundleDir: string;
+  private readonly skipRetrieve: boolean;
   /**
    * Original connection username, stored to create fresh connections for metadata operations.
    * This ensures metadata operations (retrieve/deploy) use a standard connection that hasn't
@@ -66,14 +67,16 @@ export class ScriptAgentPublisher {
    * @param connection The connection to the Salesforce org
    * @param project The Salesforce project
    * @param agentJson
+   * @param skipMetadataRetrieve Whether to skip retrieving the agent metadata from the org
    */
-  public constructor(connection: Connection, project: SfProject, agentJson: AgentJson) {
+  public constructor(connection: Connection, project: SfProject, agentJson: AgentJson, skipMetadataRetrieve: boolean = false) {
     this.maybeMock = new MaybeMock(connection);
     this.connection = connection;
     this.project = project;
     this.agentJson = agentJson;
     // Store the original username to create fresh connections for metadata operations
     this.originalUsername = connection.getUsername()!;
+    this.skipRetrieve = skipMetadataRetrieve;
 
     // Validate and get developer name and bundle directory
     const validationResult = this.validateDeveloperName();
@@ -117,7 +120,9 @@ export class ScriptAgentPublisher {
       // 1. retrieve the new Agent metadata that's in the org
       // 2. deploy the AuthoringBundle's -meta.xml file with correct target attribute
       const botVersionName = await this.getVersionDeveloperName(response.botVersionId);
-      await this.retrieveAgentMetadata(botVersionName);
+      if (!this.skipRetrieve) {
+        await this.retrieveAgentMetadata(botVersionName);
+      }
       await this.deployAuthoringBundle(botVersionName);
 
       return { ...response, developerName: this.developerName };
