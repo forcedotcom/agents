@@ -507,7 +507,10 @@ describe('Agents', () => {
 
   describe('listPreviewable', () => {
     let sfProject: SfProject;
-    let listRemoteStub: sinon.SinonStub;
+    let connectionQueryStub: sinon.SinonStub;
+
+    const previewableAgentsSoql =
+      "SELECT Id, DeveloperName, MasterLabel FROM BotDefinition WHERE Id IN (SELECT BotDefinitionId FROM BotVersion WHERE Status = 'active')";
 
     beforeEach(async () => {
       sfProject = SfProject.getInstance();
@@ -517,8 +520,8 @@ describe('Agents', () => {
         { fullPath: 'force-app', path: 'force-app', package: '', versionNumber: '', name: 'force-app' },
       ]);
 
-      // Stub listRemote to return mock agents
-      listRemoteStub = $$.SANDBOX.stub(Agent, 'listRemote');
+      // Stub connection.query (used by listPreviewable for the new SOQL)
+      connectionQueryStub = $$.SANDBOX.stub(connection, 'query');
     });
 
     afterEach(() => {
@@ -526,181 +529,82 @@ describe('Agents', () => {
     });
 
     it('should only include agents with active bot versions', async () => {
-      // Mock agents with different bot version statuses
-      listRemoteStub.resolves([
-        {
-          Id: 'bot1',
-          DeveloperName: 'ActiveAgent',
-          MasterLabel: 'Active Agent',
-          BotVersions: {
-            records: [
-              {
-                Id: 'version1',
-                Status: 'Active' as const,
-                IsDeleted: false,
-                BotDefinitionId: 'bot1',
-                DeveloperName: 'v1',
-                CreatedDate: '2025-01-01T00:00:00.000+0000',
-                CreatedById: 'user1',
-                LastModifiedDate: '2025-01-01T00:00:00.000+0000',
-                LastModifiedById: 'user1',
-                SystemModstamp: '2025-01-01T00:00:00.000+0000',
-                VersionNumber: 1,
-                CopilotPrimaryLanguage: null,
-                ToneType: 'casual' as const,
-                CopilotSecondaryLanguages: null,
-              },
-            ],
-          },
-        },
-        {
-          Id: 'bot2',
-          DeveloperName: 'InactiveAgent',
-          MasterLabel: 'Inactive Agent',
-          BotVersions: {
-            records: [
-              {
-                Id: 'version2',
-                Status: 'Inactive' as const,
-                IsDeleted: false,
-                BotDefinitionId: 'bot2',
-                DeveloperName: 'v1',
-                CreatedDate: '2025-01-01T00:00:00.000+0000',
-                CreatedById: 'user1',
-                LastModifiedDate: '2025-01-01T00:00:00.000+0000',
-                LastModifiedById: 'user1',
-                SystemModstamp: '2025-01-01T00:00:00.000+0000',
-                VersionNumber: 1,
-                CopilotPrimaryLanguage: null,
-                ToneType: 'casual' as const,
-                CopilotSecondaryLanguages: null,
-              },
-            ],
-          },
-        },
-        {
-          Id: 'bot3',
-          DeveloperName: 'MixedStatusAgent',
-          MasterLabel: 'Mixed Status Agent',
-          BotVersions: {
-            records: [
-              {
-                Id: 'version3a',
-                Status: 'Inactive' as const,
-                IsDeleted: false,
-                BotDefinitionId: 'bot3',
-                DeveloperName: 'v1',
-                CreatedDate: '2025-01-01T00:00:00.000+0000',
-                CreatedById: 'user1',
-                LastModifiedDate: '2025-01-01T00:00:00.000+0000',
-                LastModifiedById: 'user1',
-                SystemModstamp: '2025-01-01T00:00:00.000+0000',
-                VersionNumber: 1,
-                CopilotPrimaryLanguage: null,
-                ToneType: 'casual' as const,
-                CopilotSecondaryLanguages: null,
-              },
-              {
-                Id: 'version3b',
-                Status: 'Active' as const,
-                IsDeleted: false,
-                BotDefinitionId: 'bot3',
-                DeveloperName: 'v2',
-                CreatedDate: '2025-01-02T00:00:00.000+0000',
-                CreatedById: 'user1',
-                LastModifiedDate: '2025-01-02T00:00:00.000+0000',
-                LastModifiedById: 'user1',
-                SystemModstamp: '2025-01-02T00:00:00.000+0000',
-                VersionNumber: 2,
-                CopilotPrimaryLanguage: null,
-                ToneType: 'casual' as const,
-                CopilotSecondaryLanguages: null,
-              },
-            ],
-          },
-        },
-        {
-          Id: 'bot4',
-          DeveloperName: 'NoVersionsAgent',
-          MasterLabel: 'No Versions Agent',
-          BotVersions: {
-            records: [],
-          },
-        },
-        {
-          Id: 'bot5',
-          DeveloperName: 'UndefinedVersionsAgent',
-          MasterLabel: 'Undefined Versions Agent',
-          BotVersions: undefined,
-        },
-      ]);
+      // SOQL filters to active-only; mock returns only those agents
+      connectionQueryStub.withArgs(previewableAgentsSoql).resolves({
+        records: [
+          { Id: 'bot1', DeveloperName: 'ActiveAgent', MasterLabel: 'Active Agent' },
+          { Id: 'bot3', DeveloperName: 'MixedStatusAgent', MasterLabel: 'Mixed Status Agent' },
+        ],
+      });
 
       const result = await Agent.listPreviewable(connection, sfProject);
 
-      // Should only include agents with at least one active bot version
       expect(result).to.be.an('array');
-      expect(result.length).to.equal(2); // Only ActiveAgent and MixedStatusAgent
+      expect(result.length).to.equal(2);
 
-      // Verify ActiveAgent is included
       const activeAgent = result.find((a) => a.developerName === 'ActiveAgent');
       expect(activeAgent).to.exist;
       expect(activeAgent?.source).to.equal(AgentSource.PUBLISHED);
       expect(activeAgent?.id).to.equal('bot1');
       expect(activeAgent?.name).to.equal('Active Agent');
 
-      // Verify MixedStatusAgent is included (has at least one active version)
       const mixedAgent = result.find((a) => a.developerName === 'MixedStatusAgent');
       expect(mixedAgent).to.exist;
       expect(mixedAgent?.source).to.equal(AgentSource.PUBLISHED);
       expect(mixedAgent?.id).to.equal('bot3');
-
-      // Verify InactiveAgent is NOT included
-      const inactiveAgent = result.find((a) => a.developerName === 'InactiveAgent');
-      expect(inactiveAgent).to.not.exist;
-
-      // Verify NoVersionsAgent is NOT included
-      const noVersionsAgent = result.find((a) => a.developerName === 'NoVersionsAgent');
-      expect(noVersionsAgent).to.not.exist;
-
-      // Verify UndefinedVersionsAgent is NOT included
-      const undefinedVersionsAgent = result.find((a) => a.developerName === 'UndefinedVersionsAgent');
-      expect(undefinedVersionsAgent).to.not.exist;
     });
 
-    it('should handle agents with null BotVersions', async () => {
-      listRemoteStub.resolves([
-        {
-          Id: 'bot1',
-          DeveloperName: 'NullVersionsAgent',
-          MasterLabel: 'Null Versions Agent',
-          BotVersions: null,
-        },
-      ]);
+    it('should handle query returning no org agents', async () => {
+      connectionQueryStub.withArgs(previewableAgentsSoql).resolves({
+        records: [],
+      });
 
       const result = await Agent.listPreviewable(connection, sfProject);
 
-      // Should not include agents with null BotVersions
       expect(result).to.be.an('array');
       expect(result.length).to.equal(0);
     });
 
-    it('should handle agents with undefined BotVersions.records', async () => {
-      listRemoteStub.resolves([
-        {
-          Id: 'bot1',
-          DeveloperName: 'UndefinedRecordsAgent',
-          MasterLabel: 'Undefined Records Agent',
-          BotVersions: {
-            records: undefined,
-          },
-        },
-      ]);
+    it('should include both org agents and local .agent file agents', async () => {
+      const localBundleDir = join('force-app', 'main', 'default', 'aiAuthoringBundles', 'MyLocalAgent');
+      const localAgentFile = join(localBundleDir, 'MyLocalAgent.agent');
 
-      const result = await Agent.listPreviewable(connection, sfProject);
+      try {
+        await fs.mkdir(localBundleDir, { recursive: true });
+        await fs.writeFile(
+          localAgentFile,
+          'system:\n  instructions: "You are an AI Agent."\nconfig:\n  developer_name: "MyLocalAgent"\n'
+        );
 
-      // Should not include agents with undefined records
-      expect(result).to.be.an('array');
-      expect(result.length).to.equal(0);
+        connectionQueryStub.withArgs(previewableAgentsSoql).resolves({
+          records: [{ Id: 'bot1', DeveloperName: 'OrgAgent', MasterLabel: 'Org Agent' }],
+        });
+
+        const result = await Agent.listPreviewable(connection, sfProject);
+
+        expect(result).to.be.an('array');
+        expect(result.length).to.equal(2);
+
+        const orgAgent = result.find((a) => a.source === AgentSource.PUBLISHED);
+        expect(orgAgent).to.exist;
+        expect(orgAgent?.developerName).to.equal('OrgAgent');
+        expect(orgAgent?.name).to.equal('Org Agent');
+        expect(orgAgent?.id).to.equal('bot1');
+        expect(orgAgent?.source).to.equal(AgentSource.PUBLISHED);
+
+        const localAgent = result.find((a) => a.source === AgentSource.SCRIPT);
+        expect(localAgent).to.exist;
+        expect(localAgent?.name).to.equal('MyLocalAgent');
+        expect(localAgent?.aabName).to.equal('MyLocalAgent');
+        expect(localAgent?.source).to.equal(AgentSource.SCRIPT);
+        expect(localAgent?.developerName).to.be.undefined;
+        expect(localAgent?.id).to.be.undefined;
+      } finally {
+        await fs.rm(join('force-app', 'main', 'default', 'aiAuthoringBundles'), {
+          recursive: true,
+          force: true,
+        });
+      }
     });
   });
 });

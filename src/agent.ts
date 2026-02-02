@@ -16,16 +16,16 @@
 
 import { inspect } from 'node:util';
 import * as path from 'node:path';
-import { stat, readdir } from 'node:fs/promises';
+import { readdir, stat } from 'node:fs/promises';
 import {
+  AuthInfo,
   Connection,
+  generateApiName,
   Lifecycle,
   Logger,
   Messages,
   SfError,
   SfProject,
-  generateApiName,
-  AuthInfo,
 } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { Duration } from '@salesforce/kit';
@@ -34,13 +34,13 @@ import {
   type AgentCreateResponse,
   type AgentJobSpec,
   type AgentJobSpecCreateConfig,
+  AgentSource,
   type BotMetadata,
   type DraftAgentTopicsBody,
   type DraftAgentTopicsResponse,
-  ProductionAgentOptions,
   PreviewableAgent,
+  ProductionAgentOptions,
   ScriptAgentOptions,
-  AgentSource,
 } from './types';
 import { MaybeMock } from './maybe-mock';
 import { decodeHtmlEntities, findLocalAgents, useNamedUserJwt } from './utils';
@@ -183,23 +183,19 @@ export class Agent {
   public static async listPreviewable(connection: Connection, project: SfProject): Promise<PreviewableAgent[]> {
     const results = new Array<PreviewableAgent>();
 
-    const orgAgents = await this.listRemote(connection);
-    for (const agent of orgAgents) {
-      // Only include agents that have at least one active bot version
-      const hasActiveVersion = agent.BotVersions?.records?.some((version) => version.Status === 'Active') ?? false;
-      if (!hasActiveVersion) {
-        continue;
-      }
-
-      const previewableAgent: PreviewableAgent = {
+    (
+      await connection.query<{ Id: string; DeveloperName: string; MasterLabel: string }>(
+        "SELECT Id, DeveloperName, MasterLabel FROM BotDefinition WHERE Id IN (SELECT BotDefinitionId FROM BotVersion WHERE Status = 'active')"
+      )
+    ).records.map((agent) =>
+      results.push({
         name: agent.MasterLabel,
         source: AgentSource.PUBLISHED,
         id: agent.Id,
         developerName: agent.DeveloperName,
         label: agent.MasterLabel,
-      };
-      results.push(previewableAgent);
-    }
+      })
+    );
 
     // Get local script agents
     const projectDirs = project.getPackageDirectories();
