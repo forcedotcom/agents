@@ -1,3 +1,12 @@
+## [0.22.2](https://github.com/forcedotcom/agents/compare/0.22.1...0.22.2) (2026-02-03)
+
+
+### Bug Fixes
+
+* do some local spidering to find genAiFunctions/Plugins ([d15077b](https://github.com/forcedotcom/agents/commit/d15077bc86638fbe0e9b020ae03e23e9a37c9f01))
+
+
+
 ## [0.22.1](https://github.com/forcedotcom/agents/compare/0.22.0...0.22.1) (2026-02-03)
 
 
