@@ -145,13 +145,13 @@ export class MaybeMock {
    *
    * @param {"GET" | "POST" | "DELETE"} method
    * @param {string} url
-   * @param {nock.RequestBodyMatcher} body
+   * @param {unknown} body
    * @returns {Promise<T>}
    */
   public async request<T extends nock.Body>(
     method: 'GET' | 'POST' | 'DELETE',
     url: string,
-    body: nock.RequestBodyMatcher = {},
+    body: unknown = {},
     headers: HttpHeaders = {}
   ): Promise<T> {
     if (this.mockDir) {
@@ -176,7 +176,7 @@ export class MaybeMock {
           break;
         case 'POST':
           for (const response of responses) {
-            scope.post(url, body).reply(getCode(response), response);
+            scope.post(url, body as nock.RequestBodyMatcher).reply(getCode(response), response);
           }
           break;
         case 'DELETE':
