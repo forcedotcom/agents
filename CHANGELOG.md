@@ -1,3 +1,12 @@
+## [0.22.1](https://github.com/forcedotcom/agents/compare/0.22.0...0.22.1) (2026-02-03)
+
+
+### Bug Fixes
+
+* bump to latest fast-xml-parser ([9acac45](https://github.com/forcedotcom/agents/commit/9acac457ad9c4aeb65222e8f677f1c1db7c8dcea))
+
+
+
 # [0.22.0](https://github.com/forcedotcom/agents/compare/0.21.2-beta.2...0.22.0) (2026-01-28)
 
 
