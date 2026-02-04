@@ -1,3 +1,12 @@
+## [0.22.3](https://github.com/forcedotcom/agents/compare/0.22.2...0.22.3) (2026-02-04)
+
+
+### Bug Fixes
+
+* fix listPreviewable soql to be correct ([81ba276](https://github.com/forcedotcom/agents/commit/81ba27644ed73d330d71bfd0a3d4d18a6f9b89a0))
+
+
+
 ## [0.22.2](https://github.com/forcedotcom/agents/compare/0.22.1...0.22.2) (2026-02-03)
 
 
