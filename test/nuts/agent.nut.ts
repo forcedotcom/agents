@@ -202,7 +202,7 @@ describe('agent NUTs', () => {
         expect(agents[0].BotVersions.records.length).to.equal(2);
         expect(agents[0].BotVersions.records[0].BotDefinitionId).to.equal(botId);
         expect(agents[0].BotVersions.records[1].BotDefinitionId).to.equal(botId); 
-        expect(new Date(agents[0].BotVersions.records[0].CreatedDate).getTime()).to.be.lessThan(new Date(agents[0].BotVersions.records[1].CreatedDate).getTime());
+        expect(agents[0].BotVersions.records[1].VersionNumber).to.be.greaterThan(agents[0].BotVersions.records[0].VersionNumber);
       });
     });
 
