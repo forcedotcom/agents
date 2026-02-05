@@ -78,7 +78,7 @@ export class ProductionAgent extends AgentBase {
     if (!this.botMetadata) {
       const whereClause = this.id ? `Id = '${this.id}'` : `DeveloperName = '${this.apiName!}'`;
       this.botMetadata = await this.connection.singleRecordQuery<BotMetadata>(
-        `SELECT FIELDS(ALL), (SELECT FIELDS(ALL) FROM BotVersions LIMIT 10) FROM BotDefinition WHERE ${whereClause} LIMIT 1`
+        `SELECT FIELDS(ALL), (SELECT FIELDS(ALL) FROM BotVersions ORDER BY VersionNumber LIMIT 200) FROM BotDefinition WHERE ${whereClause} LIMIT 1`
       );
       this.id = this.botMetadata.Id;
       this.apiName = this.botMetadata.DeveloperName;
