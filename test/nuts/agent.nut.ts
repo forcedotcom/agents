@@ -156,9 +156,10 @@ describe('agent NUTs', () => {
         expect(botMetadata.BotUserId).to.be.a('string');
         expect(botMetadata.AgentType).to.equal('EinsteinServiceAgent');
         expect(botMetadata.DeveloperName).to.equal(botApiName);
-        expect(botMetadata.BotVersions.records.length).to.equal(1);
+        expect(botMetadata.BotVersions.records.length).to.equal(2);
         botId = botMetadata.Id;
         expect(botMetadata.BotVersions.records[0].BotDefinitionId).to.equal(botId);
+        expect(botMetadata.BotVersions.records[1].BotDefinitionId).to.equal(botId);
         await agent.restoreConnection();
       });
 
@@ -170,8 +171,9 @@ describe('agent NUTs', () => {
         expect(botMetadata.BotUserId).to.be.a('string');
         expect(botMetadata.AgentType).to.equal('EinsteinServiceAgent');
         expect(botMetadata.DeveloperName).to.equal(botApiName);
-        expect(botMetadata.BotVersions.records.length).to.equal(1);
+        expect(botMetadata.BotVersions.records.length).to.equal(2);
         expect(botMetadata.BotVersions.records[0].BotDefinitionId).to.equal(botId);
+        expect(botMetadata.BotVersions.records[1].BotDefinitionId).to.equal(botId);
         await agent.restoreConnection();
       });
     });
@@ -184,7 +186,7 @@ describe('agent NUTs', () => {
         expect(botVersionMetadata.Id).to.be.a('string');
         expect(botVersionMetadata.Status).to.be.a('string');
         expect(botVersionMetadata.IsDeleted).to.equal(false);
-        expect(botVersionMetadata.DeveloperName).to.equal('v1');
+        expect(botVersionMetadata.DeveloperName).to.equal('v2');
         expect(botVersionMetadata.BotDefinitionId).to.equal(botId);
         await agent.restoreConnection();
       });
@@ -197,8 +199,10 @@ describe('agent NUTs', () => {
         expect(agents.length).to.equal(1);
         expect(agents[0].DeveloperName).to.equal(botApiName);
         expect(agents[0].Id).to.equal(botId);
-        expect(agents[0].BotVersions.records.length).to.equal(1);
+        expect(agents[0].BotVersions.records.length).to.equal(2);
         expect(agents[0].BotVersions.records[0].BotDefinitionId).to.equal(botId);
+        expect(agents[0].BotVersions.records[1].BotDefinitionId).to.equal(botId); 
+        expect(new Date(agents[0].BotVersions.records[0].CreatedDate).getTime()).to.be.lessThan(new Date(agents[0].BotVersions.records[1].CreatedDate).getTime());
       });
     });
 
@@ -206,7 +210,7 @@ describe('agent NUTs', () => {
       it('should activate the agent', async () => {
         const agent = await Agent.init({ connection, project, apiNameOrId: botId });
         let botMetadata = await agent.getBotMetadata();
-        expect(botMetadata.BotVersions.records[0].Status).to.equal('Inactive');
+        expect(botMetadata.BotVersions.records[1].Status).to.equal('Inactive');
         try {
           await agent.activate();
         } catch (err) {
@@ -217,17 +221,17 @@ describe('agent NUTs', () => {
         }
 
         botMetadata = await agent.getBotMetadata();
-        expect(botMetadata.BotVersions.records[0].Status).to.equal('Active');
+        expect(botMetadata.BotVersions.records[1].Status).to.equal('Active');
         await agent.restoreConnection();
       });
 
       it('should deactivate the agent', async () => {
         const agent = await Agent.init({ connection, project, apiNameOrId: botId });
         let botMetadata = await agent.getBotMetadata();
-        expect(botMetadata.BotVersions.records[0].Status).to.equal('Active');
+        expect(botMetadata.BotVersions.records[1].Status).to.equal('Active');
         await agent.deactivate();
         botMetadata = await agent.getBotMetadata();
-        expect(botMetadata.BotVersions.records[0].Status).to.equal('Inactive');
+        expect(botMetadata.BotVersions.records[1].Status).to.equal('Inactive');
         await agent.restoreConnection();
       });
     });
