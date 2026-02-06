@@ -47,6 +47,9 @@ import { decodeHtmlEntities, findLocalAgents, useNamedUserJwt } from './utils';
 import { ScriptAgent } from './agents/scriptAgent';
 import { ProductionAgent } from './agents/productionAgent';
 
+/** Instance type returned from Agent.init(); has setSessionId, getHistoryDir, preview, etc. */
+export type AgentInstance = ScriptAgent | ProductionAgent;
+
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agents');
 
