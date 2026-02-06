@@ -1,3 +1,12 @@
+## [0.22.4](https://github.com/forcedotcom/agents/compare/0.22.3...0.22.4) (2026-02-06)
+
+
+### Bug Fixes
+
+* remove LIMITs, select all fields explicitly ([ee97385](https://github.com/forcedotcom/agents/commit/ee97385b4af150758a4fafeb48e329fa3170cd12))
+
+
+
 ## [0.22.3](https://github.com/forcedotcom/agents/compare/0.22.2...0.22.3) (2026-02-04)
 
 
