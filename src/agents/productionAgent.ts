@@ -273,21 +273,26 @@ export class ProductionAgent extends AgentBase {
 
   private async setAgentStatus(desiredState: 'Active' | 'Inactive'): Promise<void> {
     const botMetadata = await this.getBotMetadata();
-    const botVersionMetadata = await this.getLatestBotVersionMetadata();
+    const latestBotVersionMetadata = await this.getLatestBotVersionMetadata();
 
     if (botMetadata.IsDeleted) {
       throw messages.createError('agentIsDeleted', [botMetadata.DeveloperName]);
     }
 
-    if (botVersionMetadata.Status === desiredState) {
+    if (latestBotVersionMetadata.Status === desiredState) {
       return;
     }
 
-    const url = `/connect/bot-versions/${botVersionMetadata.Id}/activation`;
+    const url = `/connect/bot-versions/${latestBotVersionMetadata.Id}/activation`;
     const maybeMock = new MaybeMock(this.connection);
     const response = await maybeMock.request<BotActivationResponse>('POST', url, { status: desiredState });
     if (response.success) {
-      this.botMetadata!.BotVersions.records[0].Status = response.isActivated ? 'Active' : 'Inactive';
+      const versionToUpdate = this.botMetadata!.BotVersions.records.find(
+        (v) => v.DeveloperName === latestBotVersionMetadata.DeveloperName
+      );
+      if (versionToUpdate) {
+        versionToUpdate.Status = response.isActivated ? 'Active' : 'Inactive';
+      }
     } else {
       throw messages.createError('agentActivationError', [response.messages?.toString() ?? 'unknown']);
     }
