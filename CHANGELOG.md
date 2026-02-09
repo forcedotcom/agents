@@ -1,3 +1,12 @@
+## [0.22.6](https://github.com/forcedotcom/agents/compare/0.22.5...0.22.6) (2026-02-09)
+
+
+### Bug Fixes
+
+* add changes requierd for program. preview ([4ba32dd](https://github.com/forcedotcom/agents/commit/4ba32dd6b61c3576e7ff89bc18c034a08746941f))
+
+
+
 ## [0.22.5](https://github.com/forcedotcom/agents/compare/0.22.4...0.22.5) (2026-02-09)
 
 
