@@ -168,7 +168,7 @@ export class Agent {
    */
   public static async listRemote(connection: Connection): Promise<BotMetadata[]> {
     const agentsQuery = await connection.query<BotMetadata>(
-      'SELECT FIELDS(ALL), (SELECT FIELDS(ALL) FROM BotVersions ORDER BY VersionNumber LIMIT 200) FROM BotDefinition LIMIT 200'
+      'SELECT Id, IsDeleted, DeveloperName, MasterLabel, CreatedDate, CreatedById, LastModifiedDate, LastModifiedById, SystemModstamp, BotUserId, Description, Type, AgentType, AgentTemplate, (SELECT Id, Status, IsDeleted, BotDefinitionId, DeveloperName, CreatedDate, CreatedById, LastModifiedDate, LastModifiedById, SystemModstamp, VersionNumber, CopilotPrimaryLanguage, ToneType, CopilotSecondaryLanguages FROM BotVersions) FROM BotDefinition'
     );
     return agentsQuery.records;
   }
