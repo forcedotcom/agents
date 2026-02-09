@@ -77,8 +77,12 @@ export class ProductionAgent extends AgentBase {
   public async getBotMetadata(): Promise<BotMetadata> {
     if (!this.botMetadata) {
       const whereClause = this.id ? `Id = '${this.id}'` : `DeveloperName = '${this.apiName!}'`;
+      const botDefinitionFields =
+        'Id, IsDeleted, DeveloperName, MasterLabel, CreatedDate, CreatedById, LastModifiedDate, LastModifiedById, SystemModstamp, BotUserId, Description, Type, AgentType, AgentTemplate';
+      const botVersionFields =
+        'Id, Status, IsDeleted, BotDefinitionId, DeveloperName, CreatedDate, CreatedById, LastModifiedDate, LastModifiedById, SystemModstamp, VersionNumber, CopilotPrimaryLanguage, ToneType, CopilotSecondaryLanguages';
       this.botMetadata = await this.connection.singleRecordQuery<BotMetadata>(
-        `SELECT Id, IsDeleted, DeveloperName, MasterLabel, CreatedDate, CreatedById, LastModifiedDate, LastModifiedById, SystemModstamp, BotUserId, Description, Type, AgentType, AgentTemplate, (SELECT Id, Status, IsDeleted, BotDefinitionId, DeveloperName, CreatedDate, CreatedById, LastModifiedDate, LastModifiedById, SystemModstamp, VersionNumber, CopilotPrimaryLanguage, ToneType, CopilotSecondaryLanguages FROM BotVersions) FROM BotDefinition WHERE ${whereClause} LIMIT 1`
+        `SELECT ${botDefinitionFields}, (SELECT ${botVersionFields} FROM BotVersions ORDER BY VersionNumber) FROM BotDefinition WHERE ${whereClause} LIMIT 1`
       );
       this.id = this.botMetadata.Id;
       this.apiName = this.botMetadata.DeveloperName;
