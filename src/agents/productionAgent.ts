@@ -393,7 +393,7 @@ export class ProductionAgent extends AgentBase {
     if (!this.id) {
       throw SfError.create({ name: 'noId', message: 'please call .getId() first' });
     }
-    const url = `${this.apiBase}/v1.1/sessions/${this.sessionId}`;
+    const url = `${this.apiBase}/sessions/${this.sessionId}`;
     try {
       // https://developer.salesforce.com/docs/einstein/genai/guide/agent-api-examples.html#end-session
       let response: AgentPreviewEndResponse;

@@ -17,7 +17,7 @@ import { readFile, readdir, cp, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Connection, SfError } from '@salesforce/core';
 import { AgentPreviewInterface, type AgentPreviewSendResponse, type PlannerResponse, PreviewMetadata } from '../types';
-import { TranscriptEntry } from '../utils';
+import { getHistoryDir, TranscriptEntry } from '../utils';
 
 /**
  * Abstract base class for agent preview functionality.
@@ -39,6 +39,17 @@ export abstract class AgentBase {
   public async restoreConnection(): Promise<void> {
     delete this.connection.accessToken;
     await this.connection.refreshAuth();
+  }
+
+  public setSessionId(sessionId: string): void {
+    this.sessionId = sessionId;
+  }
+
+  public async getHistoryDir(): Promise<string> {
+    if (!this.sessionId) {
+      throw SfError.create({ message: 'No sessionId set on agent. Call setSessionId() before getHistoryDir().' });
+    }
+    return getHistoryDir(await this.getAgentIdForStorage(), this.sessionId);
   }
 
   /**
