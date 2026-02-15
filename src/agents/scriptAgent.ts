@@ -36,6 +36,7 @@ import {
 import {
   appendTranscriptToHistory,
   writeMetaFileToHistory,
+  logSessionToIndex,
   updateMetadataEndTime,
   writeTraceToHistory,
   getEndpoint,
@@ -43,6 +44,7 @@ import {
   getHistoryDir,
   TranscriptEntry,
   getAllHistory,
+  getAgentIndexDir,
 } from '../utils';
 import { getDebugLog } from '../apexUtils';
 import { generateAgentScript } from '../templates/agentScriptTemplate';
@@ -250,7 +252,12 @@ export class ScriptAgent extends AgentBase {
     if (!this.agentJson) {
       await this.compile();
     }
-    const publisher = new ScriptAgentPublisher(this.connection, this.options.project, this.agentJson!, skipMetadataRetrieve);
+    const publisher = new ScriptAgentPublisher(
+      this.connection,
+      this.options.project,
+      this.agentJson!,
+      skipMetadataRetrieve
+    );
     return publisher.publishAgentJson();
   }
 
@@ -521,11 +528,12 @@ export class ScriptAgent extends AgentBase {
       // │   └── <planId2>.json
       // └── metadata.json       # Session metadata (start time, end time, planIds, etc.)
       this.historyDir = await getHistoryDir(agentIdForStorage, response.sessionId);
+      const startTime = new Date().toISOString();
 
       // Write initial agent messages immediately
       await appendTranscriptToHistory(
         {
-          timestamp: new Date().toISOString(),
+          timestamp: startTime,
           agentId: agentIdForStorage,
           sessionId: response.sessionId,
           role: 'agent',
@@ -539,11 +547,20 @@ export class ScriptAgent extends AgentBase {
       await writeMetaFileToHistory(this.historyDir, {
         sessionId: response.sessionId,
         agentId: agentIdForStorage,
-        startTime: new Date().toISOString(),
+        startTime,
         apexDebugging: this.apexDebugging,
         mockMode: this.mockMode,
         planIds: [],
       });
+
+      const agentDir = await getAgentIndexDir(agentIdForStorage);
+      await logSessionToIndex(agentDir, {
+        sessionId: response.sessionId,
+        startTime,
+        simulated: this.mockMode === 'Mock',
+        agentId: agentIdForStorage,
+      });
+
       return response;
     } catch (err) {
       throw SfError.wrap(err);
