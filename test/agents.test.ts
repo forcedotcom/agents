@@ -607,10 +607,10 @@ describe('Agents', () => {
       }
     });
 
-    it('should include AiAuthoringBundle in a defined package outside conventional path (e.g. not under aiAuthoringBundles)', async () => {
+    it('should include AiAuthoringBundle in a defined package outside conventional path (pattern aiAuthoringBundles/<name>/<name>.agent)', async () => {
       const projectRoot = process.cwd();
       $$.SANDBOX.stub(sfProject, 'getPath').returns(projectRoot);
-      // Override stub from beforeEach: simulate sfdx-project.json with a package that has an unconventional structure
+      // Override stub from beforeEach: simulate sfdx-project.json with a second package
       (sfProject.getPackageDirectories as sinon.SinonStub).returns([
         { fullPath: 'force-app', path: 'force-app', package: '', versionNumber: '', name: 'force-app' },
         {
@@ -622,12 +622,12 @@ describe('Agents', () => {
         },
       ]);
 
+      // Must match pattern aiAuthoringBundles/<name>/<name>.agent (different package than force-app)
       const unconventionalDir = join(
         projectRoot,
         'packages',
         'custom-pkg',
-        'scripts',
-        'weird-location',
+        'aiAuthoringBundles',
         'UnconventionalAgent'
       );
       const unconventionalAgentFile = join(unconventionalDir, 'UnconventionalAgent.agent');
@@ -651,6 +651,35 @@ describe('Agents', () => {
         expect(agent.aabName).to.equal('UnconventionalAgent');
       } finally {
         await fs.rm(join(projectRoot, 'packages'), { recursive: true, force: true });
+      }
+    });
+
+    it('should not include .agent files that do not match aiAuthoringBundles/<name>/<name>.agent', async () => {
+      const projectRoot = process.cwd();
+      $$.SANDBOX.stub(sfProject, 'getPath').returns(projectRoot);
+      (sfProject.getPackageDirectories as sinon.SinonStub).returns([
+        { fullPath: 'force-app', path: 'force-app', package: '', versionNumber: '', name: 'force-app' },
+      ]);
+
+      const outsidePatternDir = join(projectRoot, 'force-app', 'scripts', 'OtherAgent');
+      const outsidePatternFile = join(outsidePatternDir, 'OtherAgent.agent');
+
+      try {
+        await fs.mkdir(outsidePatternDir, { recursive: true });
+        await fs.writeFile(
+          outsidePatternFile,
+          'system:\n  instructions: "You are an AI Agent."\nconfig:\n  developer_name: "OtherAgent"\n'
+        );
+
+        connectionQueryStub.withArgs(previewableAgentsSoql).resolves({ records: [] });
+
+        const result = await Agent.listPreviewable(connection, sfProject);
+
+        expect(result).to.be.an('array');
+        expect(result.length).to.equal(0);
+        expect(result.find((a) => a.name === 'OtherAgent')).to.be.undefined;
+      } finally {
+        await fs.rm(join(projectRoot, 'force-app', 'scripts'), { recursive: true, force: true });
       }
     });
   });

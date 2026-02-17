@@ -129,7 +129,8 @@ export const findAuthoringBundle = (dirOrDirs: string | string[], botName: strin
 };
 
 /**
- * Find all local agent files in a directory by recursively searching for files ending with '.agent'
+ * Find all local agent files matching the pattern aiAuthoringBundles/<name>/<name>.agent
+ * Only descends into aiAuthoringBundles to check direct children (no full tree walk under it).
  *
  * @param dir - The directory to start searching from
  * @returns Array of paths to agent files
@@ -144,12 +145,21 @@ export const findLocalAgents = (dir: string): string[] => {
       const filePath = path.join(dir, file);
       const statResult = statSync(filePath, { throwIfNoEntry: false });
 
-      if (!statResult) continue;
+      if (!statResult?.isDirectory()) continue;
 
-      if (statResult.isDirectory()) {
+      if (file === 'aiAuthoringBundles') {
+        const bundlePath = filePath;
+        const children = readdirSync(bundlePath);
+        for (const name of children) {
+          const agentDir = path.join(bundlePath, name);
+          const agentFile = path.join(agentDir, `${name}.agent`);
+          const fileStat = statSync(agentFile, { throwIfNoEntry: false });
+          if (fileStat?.isFile()) {
+            results.push(agentFile);
+          }
+        }
+      } else {
         results.push(...findLocalAgents(filePath));
-      } else if (file.endsWith('.agent')) {
-        results.push(filePath);
       }
     }
   } catch (err) {
