@@ -1,3 +1,12 @@
+# [0.23.0](https://github.com/forcedotcom/agents/compare/0.22.6...0.23.0) (2026-02-17)
+
+
+### Features
+
+* log preview sessions to an index.md for agent consumption ([ef25632](https://github.com/forcedotcom/agents/commit/ef256321e8576d894c7a36d2674be06158b8fea9))
+
+
+
 ## [0.22.6](https://github.com/forcedotcom/agents/compare/0.22.5...0.22.6) (2026-02-09)
 
 
