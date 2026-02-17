@@ -92,7 +92,7 @@ describe('agent NUTs', () => {
   });
 
   after(async () => {
-    // await session?.clean();
+    await session?.clean();
   });
 
   describe('List and Get Bot Metadata', () => {
