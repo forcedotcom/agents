@@ -15,13 +15,13 @@
  */
 
 import { join } from 'node:path';
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { expect } from 'chai';
 import { genUniqueString, TestSession } from '@salesforce/cli-plugins-testkit';
 import { Connection, Org, SfProject, User, UserFields } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { sleep } from '@salesforce/kit';
-import { Agent, type AgentJobSpec, type AgentJobSpecCreateConfig } from '../../src/index';
+import { Agent, ScriptAgent, type AgentJobSpec, type AgentJobSpecCreateConfig } from '../../src/index';
 
 /* eslint-disable no-console */
 // Helper function to wait for Einstein AI services to be ready
@@ -60,6 +60,7 @@ describe('agent NUTs', () => {
   let defaultOrg: Org;
   let project: SfProject;
   let agentSpec: AgentJobSpec;
+  let defaultAgentUsername: string;
 
   before(async () => {
     session = await TestSession.create({
@@ -91,7 +92,7 @@ describe('agent NUTs', () => {
   });
 
   after(async () => {
-    await session?.clean();
+    // await session?.clean();
   });
 
   describe('List and Get Bot Metadata', () => {
@@ -106,16 +107,16 @@ describe('agent NUTs', () => {
       const profileId = queryResult.Id;
 
       // create a new unique bot user
-      const username = genUniqueString('botUser_%s@test.org');
+      defaultAgentUsername = genUniqueString('botUser_%s@test.org');
       const botUser = await User.create({ org: defaultOrg });
       // @ts-expect-error - private method. Must use this to prevent the auth flow that happens with the createUser method
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       const { userId } = (await botUser.createUserInternal({
-        username,
+        username: defaultAgentUsername,
         lastName: 'AgentUser',
         alias: 'botUser',
         timeZoneSidKey: 'America/Denver',
-        email: username,
+        email: defaultAgentUsername,
         emailEncodingKey: 'UTF-8',
         languageLocaleKey: 'en_US',
         localeSidKey: 'en_US',
@@ -127,7 +128,7 @@ describe('agent NUTs', () => {
       // Replace the botUser with the current user's username
       const botDir = join(session.project.dir, 'force-app', 'main', 'default', 'bots', botApiName);
       const botFile = readFileSync(join(botDir, 'Local_Info_Agent.bot-meta.xml'), 'utf8');
-      const updatedBotFile = botFile.replace('%BOT_USER%', username);
+      const updatedBotFile = botFile.replace('%BOT_USER%', defaultAgentUsername);
       writeFileSync(join(botDir, 'Local_Info_Agent.bot-meta.xml'), updatedBotFile);
 
       // deploy project to scratch org
@@ -201,8 +202,10 @@ describe('agent NUTs', () => {
         expect(agents[0].Id).to.equal(botId);
         expect(agents[0].BotVersions.records.length).to.equal(2);
         expect(agents[0].BotVersions.records[0].BotDefinitionId).to.equal(botId);
-        expect(agents[0].BotVersions.records[1].BotDefinitionId).to.equal(botId); 
-        expect(agents[0].BotVersions.records[1].VersionNumber).to.be.greaterThan(agents[0].BotVersions.records[0].VersionNumber);
+        expect(agents[0].BotVersions.records[1].BotDefinitionId).to.equal(botId);
+        expect(agents[0].BotVersions.records[1].VersionNumber).to.be.greaterThan(
+          agents[0].BotVersions.records[0].VersionNumber
+        );
       });
     });
 
@@ -234,6 +237,69 @@ describe('agent NUTs', () => {
         expect(botMetadata.BotVersions.records[1].Status).to.equal('Inactive');
         await agent.restoreConnection();
       });
+    });
+
+    describe('Create and preview AAB agent', () => {
+      const bundleApiName = 'Test_AAB_Preview';
+      let simulatedSessionId: string;
+
+      before(async () => {
+        await ScriptAgent.createAuthoringBundle({ project, bundleApiName });
+
+        // Set the default agent user in the agent script so we can test live preview
+        const aabDir = join(session.project.dir, 'force-app', 'main', 'default', 'aiAuthoringBundles', bundleApiName);
+        const agentScriptFile = readFileSync(join(aabDir, 'Test_AAB_Preview.agent'), 'utf8');
+        const updatedAgentScriptFile = agentScriptFile.replace('NEW AGENT USER', defaultAgentUsername);
+        writeFileSync(join(aabDir, 'Test_AAB_Preview.agent'), updatedAgentScriptFile);
+      });
+
+      it('should start a preview session (simulated)', async () => {
+        const agent = await Agent.init({ connection, project, aabName: bundleApiName });
+        const previewSession = await agent.preview.start();
+        expect(previewSession).to.be.an('object');
+        expect(previewSession.sessionId).to.be.a('string');
+        expect(previewSession.sessionId).to.not.be.empty;
+        simulatedSessionId = previewSession.sessionId;
+
+        // verify metadata files in local .sfdx directory
+        const agentBaseDir = join(project.getPath(), '.sfdx', 'agents', bundleApiName);
+        const indexMdPath = join(agentBaseDir, 'index.md');
+        expect(existsSync(indexMdPath)).to.be.true;
+        const sessionDir = join(agentBaseDir, 'sessions', simulatedSessionId);
+        expect(existsSync(sessionDir)).to.be.true;
+
+        // verify contents of index.md
+        const indexMd = readFileSync(indexMdPath, 'utf8');
+        expect(indexMd).to.contain(`# ${bundleApiName} - Sessions`);
+        expect(indexMd).to.contain(`\`${simulatedSessionId}\` | simulated`);
+      });
+
+      it('should start a preview session (live)', async () => {
+        const agent = await Agent.init({ connection, project, aabName: bundleApiName });
+        agent.preview.setMockMode('Live Test');
+        const previewSession = await agent.preview.start();
+        expect(previewSession).to.be.an('object');
+        expect(previewSession.sessionId).to.be.a('string');
+        expect(previewSession.sessionId).to.not.be.empty;
+        const liveSessionId = previewSession.sessionId;
+
+        // verify metadata files in local .sfdx directory
+        const agentBaseDir = join(project.getPath(), '.sfdx', 'agents', bundleApiName);
+        const indexMdPath = join(agentBaseDir, 'index.md');
+        expect(existsSync(indexMdPath)).to.be.true;
+        const sessionDir = join(agentBaseDir, 'sessions', liveSessionId);
+        expect(existsSync(sessionDir)).to.be.true;
+
+        // verify contents of index.md
+        const indexMd = readFileSync(indexMdPath, 'utf8');
+        expect(indexMd).to.contain(`# ${bundleApiName} - Sessions`);
+        expect(indexMd).to.contain(`\`${liveSessionId}\` | live`);
+        expect(indexMd).to.contain(`\`${simulatedSessionId}\` | simulated`);
+      });
+
+      it('should send a message to the agent');
+
+      it('should end the preview session');
     });
   });
 
