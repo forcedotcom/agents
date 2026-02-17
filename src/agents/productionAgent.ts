@@ -39,6 +39,8 @@ import {
   getHistoryDir,
   getAllHistory,
   TranscriptEntry,
+  logSessionToIndex,
+  getAgentIndexDir,
 } from '../utils';
 import { createTraceFlag, findTraceFlag, getDebugLog } from '../apexUtils';
 import { AgentBase } from './agentBase';
@@ -351,10 +353,11 @@ export class ProductionAgent extends AgentBase {
 
       const agentId = this.id!;
       this.historyDir = await getHistoryDir(agentId, response.sessionId);
+      const startTime = new Date().toISOString();
 
       await appendTranscriptToHistory(
         {
-          timestamp: new Date().toISOString(),
+          timestamp: startTime,
           agentId,
           sessionId: response.sessionId,
           role: 'agent',
@@ -368,9 +371,17 @@ export class ProductionAgent extends AgentBase {
       await writeMetaFileToHistory(this.historyDir, {
         sessionId: response.sessionId,
         agentId,
-        startTime: new Date().toISOString(),
+        startTime,
         apexDebugging: this.apexDebugging,
         planIds: [],
+      });
+
+      const agentDir = await getAgentIndexDir(agentId);
+      await logSessionToIndex(agentDir, {
+        sessionId: response.sessionId,
+        startTime,
+        simulated: false,
+        agentId,
       });
 
       return response;

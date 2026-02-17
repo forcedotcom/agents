@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { readdirSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { mkdir, appendFile, readFile, writeFile, readdir, stat } from 'node:fs/promises';
 import * as path from 'node:path';
 import { Connection, SfError, SfProject } from '@salesforce/core';
@@ -260,8 +260,27 @@ const resolveProjectLocalSfdx = async (): Promise<string | undefined> => {
  * @returns {Promise<string>} path to where history/metadata/transcripts are stored inside of local .sfdx
  */
 export const getHistoryDir = async (agentId: string, sessionId: string): Promise<string> => {
+  const agentIndexDir = await getAgentIndexDir(agentId);
+  const dir = path.join(agentIndexDir, 'sessions', sessionId);
+  await mkdir(dir, { recursive: true });
+  return dir;
+};
+
+/**
+ * Get the path to the agent index directory.  Create the directory if it doesn't exist.
+ *
+ * .sfdx/agents/<agentId>/   <-- returns this directory path
+ * ├── index.md            # Session index file
+ * │── sessions/           # Session directories
+ * │   ├── <sessionId1>/   # Session 1 directory
+ * │   └── <sessionId2>/   # Session 2 directory
+ *
+ * @param {string} agentId
+ * @returns {Promise<string>} path to the agent index directory
+ */
+export const getAgentIndexDir = async (agentId: string): Promise<string> => {
   const base = (await resolveProjectLocalSfdx()) ?? path.join(process.cwd(), '.sfdx');
-  const dir = path.join(base, 'agents', agentId, 'sessions', sessionId);
+  const dir = path.join(base, 'agents', agentId);
   await mkdir(dir, { recursive: true });
   return dir;
 };
@@ -304,6 +323,27 @@ export const writeTraceToHistory = async (
 export const writeMetaFileToHistory = async (historyDir: string, metadata: PreviewMetadata): Promise<void> => {
   const metadataPath = path.join(historyDir, 'metadata.json');
   await writeFile(metadataPath, JSON.stringify(metadata, null, 2), 'utf-8');
+};
+
+/**
+ * Write or append a session line to .sfdx/agents/<agentId>/index.md.
+ * If the file does not exist, creates it with a header and the session line.
+ * If it exists, appends the new session line.
+ */
+export const logSessionToIndex = async (
+  agentDir: string,
+  options: { sessionId: string; startTime: string; simulated: boolean; agentId: string }
+): Promise<void> => {
+  const indexPath = path.join(agentDir, 'index.md');
+  const modeLabel = options.simulated ? 'simulated' : 'live';
+  const sessionLine = `- **${options.startTime}** | \`${options.sessionId}\` | ${modeLabel}`;
+
+  if (!existsSync(indexPath)) {
+    const initialContent = `# ${options.agentId} - Sessions\n\n${sessionLine}\n`;
+    await writeFile(indexPath, initialContent, 'utf-8');
+  } else {
+    await appendFile(indexPath, `${sessionLine}\n`, 'utf-8');
+  }
 };
 
 /**
