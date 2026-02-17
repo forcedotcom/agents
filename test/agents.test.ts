@@ -606,5 +606,52 @@ describe('Agents', () => {
         });
       }
     });
+
+    it('should include AiAuthoringBundle in a defined package outside conventional path (e.g. not under aiAuthoringBundles)', async () => {
+      const projectRoot = process.cwd();
+      $$.SANDBOX.stub(sfProject, 'getPath').returns(projectRoot);
+      // Override stub from beforeEach: simulate sfdx-project.json with a package that has an unconventional structure
+      (sfProject.getPackageDirectories as sinon.SinonStub).returns([
+        { fullPath: 'force-app', path: 'force-app', package: '', versionNumber: '', name: 'force-app' },
+        {
+          fullPath: 'packages/custom-pkg',
+          path: 'packages/custom-pkg',
+          package: '',
+          versionNumber: '',
+          name: 'custom-pkg',
+        },
+      ]);
+
+      const unconventionalDir = join(
+        projectRoot,
+        'packages',
+        'custom-pkg',
+        'scripts',
+        'weird-location',
+        'UnconventionalAgent'
+      );
+      const unconventionalAgentFile = join(unconventionalDir, 'UnconventionalAgent.agent');
+
+      try {
+        await fs.mkdir(unconventionalDir, { recursive: true });
+        await fs.writeFile(
+          unconventionalAgentFile,
+          'system:\n  instructions: "You are an AI Agent."\nconfig:\n  developer_name: "UnconventionalAgent"\n'
+        );
+
+        connectionQueryStub.withArgs(previewableAgentsSoql).resolves({ records: [] });
+
+        const result = await Agent.listPreviewable(connection, sfProject);
+
+        expect(result).to.be.an('array');
+        expect(result.length).to.equal(1);
+        const agent = result[0];
+        expect(agent.source).to.equal(AgentSource.SCRIPT);
+        expect(agent.name).to.equal('UnconventionalAgent');
+        expect(agent.aabName).to.equal('UnconventionalAgent');
+      } finally {
+        await fs.rm(join(projectRoot, 'packages'), { recursive: true, force: true });
+      }
+    });
   });
 });

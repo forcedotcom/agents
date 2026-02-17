@@ -209,30 +209,22 @@ export class Agent {
     const localAgentPaths = new Set<string>();
 
     for (const pkgDir of projectDirs) {
-      // Search in typical locations for aiAuthoringBundles
-      const searchPaths = [
-        path.join(pkgDir.fullPath, 'aiAuthoringBundles'),
-        path.join(pkgDir.fullPath, 'main', 'default', 'aiAuthoringBundles'),
-      ];
+      const agentFiles = findLocalAgents(pkgDir.fullPath);
+      for (const agentFile of agentFiles) {
+        // Extract the directory path (parent of .agent file)
+        const agentDir = path.dirname(agentFile);
+        const agentName = path.basename(agentDir);
+        const normalizedPath = path.resolve(agentDir);
 
-      for (const searchPath of searchPaths) {
-        const agentFiles = findLocalAgents(searchPath);
-        for (const agentFile of agentFiles) {
-          // Extract the directory path (parent of .agent file)
-          const agentDir = path.dirname(agentFile);
-          const agentName = path.basename(agentDir);
-          const normalizedPath = path.resolve(agentDir);
-
-          // Avoid duplicates
-          if (!localAgentPaths.has(normalizedPath)) {
-            localAgentPaths.add(normalizedPath);
-            const previewableAgent: PreviewableAgent = {
-              name: agentName,
-              source: AgentSource.SCRIPT,
-              aabName: agentName,
-            };
-            results.push(previewableAgent);
-          }
+        // Avoid duplicates
+        if (!localAgentPaths.has(normalizedPath)) {
+          localAgentPaths.add(normalizedPath);
+          const previewableAgent: PreviewableAgent = {
+            name: agentName,
+            source: AgentSource.SCRIPT,
+            aabName: agentName,
+          };
+          results.push(previewableAgent);
         }
       }
     }
