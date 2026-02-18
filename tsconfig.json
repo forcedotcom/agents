@@ -4,6 +4,7 @@
     "resolveJsonModule": true,
     "outDir": "lib",
     "rootDir": "src",
+    "skipLibCheck": true,
     "plugins": [{ "transform": "@salesforce/core/messageTransformer", "import": "messageTransformer" }]
   },
   "include": ["./src/**/*.ts"]
