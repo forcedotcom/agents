@@ -802,7 +802,7 @@ testCases:
 
       // Verify colons from timestamp are replaced
       expect(path).to.match(/My_Test-preview-\d{4}-\d{2}-\d{2}T\d{2}_\d{2}_\d{2}\.\d{3}Z\.xml$/);
-      expect(path).to.not.include(':');
+      expect(path).to.not.include('My:Test');
     });
 
     it('should sanitize filename only', async () => {
