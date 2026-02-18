@@ -126,7 +126,7 @@ export class AgentTest {
     const filename = preview
       ? `${apiName}-preview-${new Date().toISOString()}.xml`
       : `${apiName}.aiEvaluationDefinition-meta.xml`;
-    const definitionPath = sanitizeFilename(join(outputDir, filename));
+      const definitionPath = join(outputDir, sanitizeFilename(filename));
 
     const xml = buildMetadataXml(convertToMetadata(agentTestSpec));
     await mkdir(outputDir, { recursive: true });

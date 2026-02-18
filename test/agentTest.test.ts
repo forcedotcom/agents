@@ -18,6 +18,7 @@ import sinon from 'sinon';
 import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection } from '@salesforce/core';
+import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { AgentTest } from '../src';
 import type { TestSpec } from '../src/types';
 
@@ -781,8 +782,9 @@ testCases:
     expectedOutcome: contacts available name available with Acme are listed
     expectedTopic: GeneralCRM`;
 
+    let writeFileStub: sinon.SinonStub;
     beforeEach(() => {
-      sinon.stub(fs, 'writeFile').resolves();
+      writeFileStub = sinon.stub(fs, 'writeFile').resolves();
       sinon.stub(fs, 'mkdir').resolves();
       sinon.stub(fs, 'readFile').resolves(yml);
       sinon.stub(AgentTest, 'list').resolves([]);
@@ -800,7 +802,31 @@ testCases:
 
       // Verify colons from timestamp are replaced
       expect(path).to.match(/My_Test-preview-\d{4}-\d{2}-\d{2}T\d{2}_\d{2}_\d{2}\.\d{3}Z\.xml$/);
-      expect(path).to.not.include(':');
+      expect(path).to.not.include('My:Test');
+    });
+
+    it('should sanitize filename only', async () => {
+      const mockDeploy = {
+        onUpdate: sinon.stub(),
+        onFinish: sinon.stub(),
+        pollStatus: sinon.stub().resolves({
+          response: { success: true, details: { componentFailures: [] } },
+        }),
+      };  
+      const mockComponentSet = {
+        deploy: sinon.stub().resolves(mockDeploy),
+      };
+      sinon
+      sinon.stub(ComponentSetBuilder, 'build').resolves(mockComponentSet as never);
+      await AgentTest.create(connection, 'PlainName', 'test.yaml', {
+        outputDir: 'tmp\\test',
+        preview: false,
+      });
+
+      expect(writeFileStub.calledOnce).to.be.true;
+      const writtenPath = writeFileStub.firstCall.args[0] as string;
+      // make sure the outputdir was not sanitized
+      expect(writtenPath).to.include('tmp\\test');
     });
 
     it('should sanitize filenames with special characters', async () => {
