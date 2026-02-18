@@ -805,7 +805,7 @@ testCases:
       expect(path).to.not.include(':');
     });
 
-    it.only('should sanitize filename only', async () => {
+    it('should sanitize filename only', async () => {
       const mockDeploy = {
         onUpdate: sinon.stub(),
         onFinish: sinon.stub(),
