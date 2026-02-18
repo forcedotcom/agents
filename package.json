@@ -11,11 +11,11 @@
     "url": "https://github.com/forcedotcom/agents.git"
   },
   "dependencies": {
-    "@salesforce/core": "^8.25.1",
+    "@salesforce/core": "^8.26.2",
     "@salesforce/kit": "^3.2.4",
-    "@salesforce/source-deploy-retrieve": "^12.31.10",
+    "@salesforce/source-deploy-retrieve": "^12.31.12",
     "@salesforce/types": "^1.6.0",
-    "fast-xml-parser": "^5.3.5",
+    "fast-xml-parser": "^5.3.6",
     "nock": "^13.5.6",
     "yaml": "^2.8.2"
   },
@@ -26,8 +26,8 @@
     "ts-morph": "^24.0.0",
     "ts-node": "^10.9.2",
     "ts-patch": "^3.3.0",
-    "typedoc": "^0.28.9",
-    "typescript": "^5.9.2"
+    "typedoc": "^0.28.17",
+    "typescript": "^5.9.3"
   },
   "resolutions": {
     "string-width": "^4.2.3"
