@@ -1,3 +1,12 @@
+## [0.23.2](https://github.com/forcedotcom/agents/compare/0.23.1...0.23.2) (2026-02-18)
+
+
+### Bug Fixes
+
+* bump dependencies and skipLibCheck ([e0f96c7](https://github.com/forcedotcom/agents/commit/e0f96c759dcbf996ad24b66fa1327821920a3f73))
+
+
+
 ## [0.23.1](https://github.com/forcedotcom/agents/compare/0.23.0...0.23.1) (2026-02-18)
 
 
