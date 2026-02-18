@@ -18,7 +18,7 @@ import fs from 'node:fs/promises';
 import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection, SfError, SfProject } from '@salesforce/core';
-import { ComponentSetBuilder, ComponentSet, MetadataApiRetrieve } from '@salesforce/source-deploy-retrieve';
+import { ComponentSet, ComponentSetBuilder, MetadataApiRetrieve } from '@salesforce/source-deploy-retrieve';
 import sinon from 'sinon';
 import { Agent, decodeResponse } from '../src/agent';
 import type { AgentCreateConfig, DraftAgentTopics, ExtendedAgentJobSpec } from '../src/types';
@@ -238,6 +238,80 @@ describe('Agents', () => {
         expect((err as SfError).name).to.equal('CreateAgentJsonError');
       } finally {
         validateStub.restore();
+      }
+    });
+
+    it('adds suspected known issues to error messages', async () => {
+      const liveTestErrorMessage =
+        "ensure the 'default_agent_user' set, is valid, and has the required permission sets assigned ['AgentforceServiceAgentBase', 'AgentforceServiceAgentUser', 'EinsteinGPTPromptTemplateUser']";
+
+      $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
+      $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
+      $$.SANDBOX.stub(connection, 'query')
+        .withArgs(sinon.match(/SELECT Id FROM USER WHERE username=/))
+        .resolves({ done: true, records: [{}], totalSize: 1 });
+
+      const internalError = new Error('Something went wrong');
+      internalError.stack = 'Error: Something went wrong\n    at Internal Error (https://example.com)';
+
+      $$.SANDBOX.stub(connection, 'request').rejects(internalError);
+
+      const agent = await Agent.init({
+        connection,
+        project: sfProject,
+        aabName: 'myAgent',
+      });
+
+      // @ts-expect-error private variable
+      agent.agentJson = {
+        schemaVersion: '1.0',
+        globalConfiguration: {
+          developerName: 'myAgent',
+          label: 'My Agent',
+          agentType: 'AgentforceServiceAgent',
+          defaultAgentUser: 'test@example.com',
+          description: '',
+          enableEnhancedEventLogs: false,
+          templateName: '',
+          defaultOutboundRouting: '',
+          contextVariables: [],
+        },
+        agentVersion: {
+          developerName: 'v1',
+          plannerType: '',
+          systemMessages: [],
+          modalityParameters: {
+            voice: {
+              inboundModel: null,
+              inboundFillerWordsDetection: null,
+              outboundVoice: null,
+              outboundModel: null,
+              outboundSpeed: null,
+              outboundStyleExaggeration: null,
+            },
+            language: {
+              defaultLocale: 'en_US',
+              additionalLocales: [],
+              allAdditionalLocales: false,
+            },
+          },
+          additionalParameters: false,
+          company: '',
+          role: '',
+          stateVariables: [],
+          initialNode: '',
+          nodes: [],
+          knowledgeDefinitions: null,
+        },
+      };
+
+      try {
+        agent.preview.setMockMode('Live Test');
+        await agent.preview.start();
+        expect.fail('Expected error was not thrown');
+      } catch (err) {
+        expect(err).to.be.instanceOf(SfError);
+        expect((err as SfError).message).to.equal(liveTestErrorMessage);
       }
     });
   });
