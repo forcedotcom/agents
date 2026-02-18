@@ -1,3 +1,12 @@
+## [0.23.1](https://github.com/forcedotcom/agents/compare/0.23.0...0.23.1) (2026-02-18)
+
+
+### Bug Fixes
+
+* aplly sanitization to filename only ([b4dd4e1](https://github.com/forcedotcom/agents/commit/b4dd4e1ad88cc4dec037ff29d2abe17422eae7f8))
+
+
+
 # [0.23.0](https://github.com/forcedotcom/agents/compare/0.22.6...0.23.0) (2026-02-17)
 
 
