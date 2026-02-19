@@ -27,6 +27,7 @@ import {
   type AgentPreviewStartResponse,
   AgentScriptContent,
   type CompileAgentScriptResponse,
+  COMPILATION_API_EXIT_CODES,
   ExtendedAgentJobSpec,
   PlannerResponse,
   PreviewMetadata,
@@ -50,6 +51,30 @@ import { getDebugLog } from '../apexUtils';
 import { generateAgentScript } from '../templates/agentScriptTemplate';
 import { ScriptAgentPublisher } from './scriptAgentPublisher';
 import { AgentBase } from './agentBase';
+
+/**
+ * Extract HTTP status code from API errors. Supports:
+ * - ERROR_HTTP_404 / ERROR_HTTP_500 style (name, errorCode, or data.errorCode)
+ * - Numeric statusCode on error, cause, or response
+ */
+function getHttpStatusCode(err: unknown): number | undefined {
+  const e = err as {
+    name?: string;
+    errorCode?: string;
+    data?: { errorCode?: string };
+    statusCode?: number;
+    cause?: unknown;
+    response?: { statusCode?: number };
+  };
+  const codeStr = e?.name ?? e?.errorCode ?? e?.data?.errorCode;
+  if (typeof codeStr === 'string') {
+    const match = /ERROR_HTTP_(\d+)/i.exec(codeStr);
+    if (match) {
+      return Number.parseInt(match[1], 10);
+    }
+  }
+  return e?.statusCode ?? getHttpStatusCode(e?.cause) ?? e?.response?.statusCode;
+}
 
 export class ScriptAgent extends AgentBase {
   public preview: AgentPreviewInterface & {
@@ -229,17 +254,22 @@ export class ScriptAgent extends AgentBase {
 
       return response;
     } catch (error) {
-      const errorName = (error as { name?: string })?.name ?? '';
-      if (errorName.includes('404')) {
+      const statusCode = getHttpStatusCode(error);
+      if (statusCode === 404) {
         throw SfError.create({
           name: 'AgentApiNotFound',
           message: `Validation API returned 404. SF_TEST_API=${
             env.getBoolean('SF_TEST_API') ? 'true' : 'false'
           } If targeting a test.api environment, set SF_TEST_API=true, otherwise it's false.`,
           cause: error,
+          exitCode: COMPILATION_API_EXIT_CODES.NOT_FOUND,
         });
       }
-      throw SfError.wrap(error);
+      const wrapped = SfError.wrap(error);
+      if (statusCode === 500) {
+        wrapped.exitCode = COMPILATION_API_EXIT_CODES.SERVER_ERROR;
+      }
+      throw wrapped;
     }
   }
   /**

@@ -20,6 +20,20 @@ import { type ApexLog } from '@salesforce/types/tooling';
 import { metric } from './utils';
 
 // ====================================================
+//     Compilation API exit codes
+// ====================================================
+/**
+ * Exit codes set on SfError when compile() fails due to server HTTP errors.
+ * Used by CLI (e.g. agent validate authoring-bundle) for scripting.
+ */
+export const COMPILATION_API_EXIT_CODES = {
+  /** Validation/compilation API returned 404 (e.g. endpoint not available) */
+  NOT_FOUND: 2,
+  /** Validation/compilation API returned 500 (server error) */
+  SERVER_ERROR: 3,
+} as const;
+
+// ====================================================
 //               Agent Runner Types
 // ====================================================
 /**
