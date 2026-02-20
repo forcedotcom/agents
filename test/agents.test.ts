@@ -22,7 +22,7 @@ import { ComponentSetBuilder, ComponentSet, MetadataApiRetrieve } from '@salesfo
 import sinon from 'sinon';
 import { Agent, decodeResponse } from '../src/agent';
 import type { AgentCreateConfig, DraftAgentTopics, ExtendedAgentJobSpec } from '../src/types';
-import { AgentSource } from '../src/types';
+import { AgentSource, COMPILATION_API_EXIT_CODES } from '../src/types';
 import { ScriptAgent } from '../src';
 import * as utils from '../src/utils';
 import { ScriptAgentPublisher } from '../src/agents/scriptAgentPublisher';
@@ -85,7 +85,9 @@ describe('Agents', () => {
 
   describe('compile AgentScript', () => {
     let requestStub: sinon.SinonStub;
-    beforeEach(() => {
+    let sfProject: SfProject;
+
+    beforeEach(async () => {
       $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
       $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
         accessToken: 'test_access_token',
@@ -96,9 +98,66 @@ describe('Agents', () => {
         .withArgs(sinon.match({ url: `${connection.instanceUrl}/agentforce/bootstrap/nameduser` }))
         // eslint-disable-next-line camelcase
         .resolves({ access_token: 'test_access_token' });
+
+      sfProject = SfProject.getInstance();
+      // @ts-expect-error Not the full package def
+      $$.SANDBOX.stub(sfProject, 'getDefaultPackage').returns({ path: 'force-app' });
+      $$.SANDBOX.stub(sfProject, 'getPackageDirectories').returns([
+        { fullPath: 'force-app', path: 'force-app', package: '', versionNumber: '', name: 'force-app' },
+      ]);
+
+      const aabDirectory = join('force-app', 'main', 'default', 'aiAuthoringBundles', 'myAgent');
+      await fs.mkdir(aabDirectory, { recursive: true });
+      await fs.writeFile(
+        join(aabDirectory, 'myAgent.agent'),
+        'system:\n  instructions: "You are an AI Agent."\n  developer_name: "myAgent"\n  agent_label: "My Agent"'
+      );
+      await fs.writeFile(
+        join(aabDirectory, 'myAgent.bundle-meta.xml'),
+        '<?xml version="1.0" encoding="UTF-8"?>\n<AiAuthoringBundle xmlns="http://soap.sforce.com/2006/04/metadata">\n    <bundleType>AGENT</bundleType>\n</AiAuthoringBundle>'
+      );
     });
-    afterEach(() => {
+
+    afterEach(async () => {
+      await fs.rm(join('force-app'), { recursive: true, force: true });
       sinon.restore();
+    });
+
+    it('should set exitCode 2 when compile API returns 404', async () => {
+      const err404 = Object.assign(new Error('Not Found'), {
+        name: 'ERROR_HTTP_404',
+        errorCode: 'ERROR_HTTP_404',
+        data: { errorCode: 'ERROR_HTTP_404', message: '' },
+      });
+      requestStub.withArgs(sinon.match.has('url', sinon.match(/authoring\/scripts/))).rejects(err404);
+
+      const agent = new ScriptAgent({ connection, project: sfProject!, aabName: 'myAgent' });
+      try {
+        await agent.compile();
+        expect.fail('Expected compile() to throw');
+      } catch (error) {
+        expect(error).to.be.instanceOf(SfError);
+        expect((error as SfError).name).to.equal('AgentApiNotFound');
+        expect((error as SfError).exitCode).to.equal(COMPILATION_API_EXIT_CODES.NOT_FOUND);
+      }
+    });
+
+    it('should set exitCode 3 when compile API returns 500', async () => {
+      const err500 = Object.assign(new Error('Internal Server Error'), {
+        name: 'ERROR_HTTP_500',
+        errorCode: 'ERROR_HTTP_500',
+        data: { errorCode: 'ERROR_HTTP_500', message: '' },
+      });
+      requestStub.withArgs(sinon.match.has('url', sinon.match(/authoring\/scripts/))).rejects(err500);
+
+      const agent = new ScriptAgent({ connection, project: sfProject!, aabName: 'myAgent' });
+      try {
+        await agent.compile();
+        expect.fail('Expected compile() to throw');
+      } catch (error) {
+        expect(error).to.be.instanceOf(SfError);
+        expect((error as SfError).exitCode).to.equal(COMPILATION_API_EXIT_CODES.SERVER_ERROR);
+      }
     });
   });
 

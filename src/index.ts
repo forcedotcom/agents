@@ -74,6 +74,9 @@ export {
   type EventStep,
   type ReasoningStep,
   type PlannerResponseStep,
+
+  // Compilation API exit codes (CLI contract)
+  COMPILATION_API_EXIT_CODES,
 } from './types';
 
 export { metric, findAuthoringBundle, readTranscriptEntries } from './utils';
