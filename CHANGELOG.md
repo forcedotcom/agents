@@ -1,3 +1,12 @@
+## [0.23.3](https://github.com/forcedotcom/agents/compare/0.23.2...0.23.3) (2026-02-20)
+
+
+### Bug Fixes
+
+* add and implement exit codes for validation ([f912836](https://github.com/forcedotcom/agents/commit/f9128366f62085d58b3d05b884a03bd8bd252f79))
+
+
+
 ## [0.23.2](https://github.com/forcedotcom/agents/compare/0.23.1...0.23.2) (2026-02-18)
 
 
