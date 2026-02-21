@@ -15,7 +15,7 @@
     "@salesforce/kit": "^3.2.4",
     "@salesforce/source-deploy-retrieve": "^12.31.12",
     "@salesforce/types": "^1.6.0",
-    "fast-xml-parser": "^5.3.6",
+    "fast-xml-parser": "^5.3.7",
     "nock": "^13.5.6",
     "yaml": "^2.8.2"
   },
