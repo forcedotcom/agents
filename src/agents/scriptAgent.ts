@@ -534,8 +534,8 @@ export class ScriptAgent extends AgentBase {
           { retry: { maxRetries: 3 } }
         );
       } catch (error) {
-        const errorName = (error as { name?: string })?.name ?? '';
-        if (errorName.includes('404')) {
+        const err = SfError.wrap(error);
+        if (err.name.includes('404')) {
           throw SfError.create({
             name: 'AgentApiNotFound',
             message: `Preview Start API returned 404. SF_TEST_API=${
@@ -544,7 +544,12 @@ export class ScriptAgent extends AgentBase {
             cause: error,
           });
         }
-        throw SfError.wrap(error);
+        const stackToCheck = (err.cause as Error)?.stack ?? err.stack;
+        if (this.mockMode === 'Live Test' && stackToCheck?.includes('Internal Error')) {
+          err.message =
+            "ensure the 'default_agent_user' set, is valid, and has the required permission sets assigned ['AgentforceServiceAgentBase', 'AgentforceServiceAgentUser', 'EinsteinGPTPromptTemplateUser']";
+        }
+        throw err;
       }
       this.sessionId = response.sessionId;
       const agentIdForStorage = this.options.aabName;
