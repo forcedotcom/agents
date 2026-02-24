@@ -1,3 +1,12 @@
+## [0.23.4](https://github.com/forcedotcom/agents/compare/0.23.3...0.23.4) (2026-02-24)
+
+
+### Bug Fixes
+
+* add information to Live Test errors ([0c19bcf](https://github.com/forcedotcom/agents/commit/0c19bcfdaa2fea2cee41bc7f27d49438a9526e33))
+
+
+
 ## [0.23.3](https://github.com/forcedotcom/agents/compare/0.23.2...0.23.3) (2026-02-20)
 
 
