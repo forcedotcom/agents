@@ -51,9 +51,11 @@ export class ProductionAgent extends AgentBase {
   private botMetadata: BotMetadata | undefined;
   private id: string | undefined;
   private apiName: string | undefined;
+  private readonly apiBase: string;
 
   public constructor(private options: ProductionAgentOptions) {
     super(options.connection);
+    this.apiBase = `https://${getEndpoint(this.connection.instanceUrl)}api.salesforce.com/einstein/ai-agent/v1`;
     if (!options.apiNameOrId) {
       throw messages.createError('missingAgentNameOrId');
     }
@@ -72,10 +74,6 @@ export class ProductionAgent extends AgentBase {
     } else {
       this.apiName = options.apiNameOrId;
     }
-  }
-
-  private get apiBase(): string {
-    return `https://${getEndpoint(this.connection.instanceUrl)}api.salesforce.com/einstein/ai-agent/v1`;
   }
 
   public async getBotMetadata(): Promise<BotMetadata> {

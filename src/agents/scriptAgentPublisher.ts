@@ -54,6 +54,7 @@ export class ScriptAgentPublisher {
    * been upgraded with JWT, which is required for SOAP API operations.
    */
   private readonly originalUsername: string;
+  private readonly API_URL: string;
   private readonly API_HEADERS = {
     'x-client-name': 'afdx',
     'content-type': 'application/json',
@@ -80,18 +81,15 @@ export class ScriptAgentPublisher {
     // Store the original username to create fresh connections for metadata operations
     this.originalUsername = connection.getUsername()!;
     this.skipRetrieve = skipMetadataRetrieve;
+    this.API_URL = `https://${getEndpoint(
+      connection.instanceUrl
+    )}api.salesforce.com/einstein/ai-agent/v1.1/authoring/agents`;
 
     // Validate and get developer name and bundle directory
     const validationResult = this.validateDeveloperName();
     this.developerName = validationResult.developerName;
     this.bundleMetaPath = validationResult.bundleMetaPath;
     this.bundleDir = validationResult.bundleDir;
-  }
-
-  private get API_URL(): string {
-    return `https://${getEndpoint(
-      this.connection.instanceUrl
-    )}api.salesforce.com/einstein/ai-agent/v1.1/authoring/agents`;
   }
 
   /**

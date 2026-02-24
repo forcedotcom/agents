@@ -82,11 +82,13 @@ export class ScriptAgent extends AgentBase {
   private mockMode: 'Mock' | 'Live Test' = 'Mock';
   private agentScriptContent: AgentScriptContent;
   private agentJson: AgentJson | undefined;
+  private readonly apiBase: string;
   private readonly aabDirectory: string;
   private readonly metaContent: string;
   public constructor(private options: ScriptAgentOptions) {
     super(options.connection);
     this.options = options;
+    this.apiBase = `https://${getEndpoint(this.connection.instanceUrl)}api.salesforce.com/einstein/ai-agent`;
 
     // Find the AAB directory using the project
     const projectDirs = options.project.getPackageDirectories();
@@ -129,10 +131,6 @@ export class ScriptAgent extends AgentBase {
       setMockMode: (mockMode: 'Mock' | 'Live Test'): void => this.setMockMode(mockMode),
       setApexDebugging: (apexDebugging: boolean): void => this.setApexDebugging(apexDebugging),
     } as AgentPreviewInterface & { setMockMode: (mockMode: 'Mock' | 'Live Test') => void };
-  }
-
-  private get apiBase(): string {
-    return `https://${getEndpoint(this.connection.instanceUrl)}api.salesforce.com/einstein/ai-agent`;
   }
 
   /**
@@ -217,9 +215,7 @@ export class ScriptAgent extends AgentBase {
    * @beta
    */
   public async compile(): Promise<CompileAgentScriptResponse> {
-    const url = `https://${getEndpoint(
-      this.connection.instanceUrl
-    )}api.salesforce.com/einstein/ai-agent/v1.1/authoring/scripts`;
+    const url = `${this.apiBase}/v1.1/authoring/scripts`;
 
     const compileData = {
       assets: [
