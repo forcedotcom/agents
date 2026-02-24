@@ -362,21 +362,19 @@ export const logSessionToIndex = async (
  * - OrgFarm/Falcon orgs (*.pc-rnd.salesforce.com, *.pc-rnd.force.com; test1, test2, sdb*, perf*, dev*) → test.api
  * - Everything else (production, sandbox, etc.) → api
  *
- * Env overrides (checked in order):
- * - SF_TEST_API=true → test. (legacy, backwards compatible)
- * - SF_API='test' | 'dev' → test. or dev.; unset = use URL-based detection
+ * Env override: SF_TEST_API (single var, case-insensitive)
+ * - true | test → test.api
+ * - dev → dev.api
+ * - false | unset | other → use URL-based detection
  *
  * @param instanceUrl - The org's instance URL (e.g. from connection.instanceUrl)
  * @returns The subdomain prefix including the trailing dot: 'dev.', 'test.', or ''
  */
 export function getEndpoint(instanceUrl: string): string {
-  if (env.getBoolean('SF_TEST_API')) {
-    return 'test.';
-  }
-  const override = env.getString('SF_API');
+  const override = env.getString('SF_TEST_API');
   if (override) {
     const normalized = override.toLowerCase().trim();
-    if (normalized === 'test') return 'test.';
+    if (normalized === 'true' || normalized === 'test') return 'test.';
     if (normalized === 'dev') return 'dev.';
   }
 

@@ -89,71 +89,54 @@ describe('getEndpoint', () => {
     });
   });
 
-  describe('SF_TEST_API env (legacy, backwards compatible)', () => {
-    const productionUrl = 'https://mydomain.my.salesforce.com';
-    let savedTestApi: string | undefined;
-
-    afterEach(() => {
-      if (savedTestApi !== undefined) {
-        process.env.SF_TEST_API = savedTestApi;
-      } else {
-        delete process.env.SF_TEST_API;
-      }
-    });
-
-    it('SF_TEST_API=true forces test. (same as before)', () => {
-      savedTestApi = process.env.SF_TEST_API;
-      process.env.SF_TEST_API = 'true';
-      expect(getEndpoint(productionUrl)).to.equal('test.');
-    });
-
-    it('SF_TEST_API unset or false uses URL-based detection', () => {
-      savedTestApi = process.env.SF_TEST_API;
-      delete process.env.SF_TEST_API;
-      expect(getEndpoint(productionUrl)).to.equal('');
-    });
-  });
-
-  describe('SF_API env override (backwards support)', () => {
+  describe('SF_TEST_API env override (true | test | dev | false)', () => {
     const productionUrl = 'https://mydomain.my.salesforce.com';
     let saved: string | undefined;
 
     afterEach(() => {
       if (saved !== undefined) {
-        process.env.SF_API = saved;
+        process.env.SF_TEST_API = saved;
       } else {
-        delete process.env.SF_API;
+        delete process.env.SF_TEST_API;
       }
     });
 
-    it('SF_API=test forces test. even for production URL', () => {
-      saved = process.env.SF_API;
-      process.env.SF_API = 'test';
+    it('SF_TEST_API=true forces test.', () => {
+      saved = process.env.SF_TEST_API;
+      process.env.SF_TEST_API = 'true';
       expect(getEndpoint(productionUrl)).to.equal('test.');
     });
 
-    it('SF_API=dev forces dev. even for production URL', () => {
-      saved = process.env.SF_API;
-      process.env.SF_API = 'dev';
+    it('SF_TEST_API=test forces test.', () => {
+      saved = process.env.SF_TEST_API;
+      process.env.SF_TEST_API = 'test';
+      expect(getEndpoint(productionUrl)).to.equal('test.');
+    });
+
+    it('SF_TEST_API=dev forces dev.', () => {
+      saved = process.env.SF_TEST_API;
+      process.env.SF_TEST_API = 'dev';
       expect(getEndpoint(productionUrl)).to.equal('dev.');
     });
 
-    it('SF_API=TEST (case-insensitive) forces test.', () => {
-      saved = process.env.SF_API;
-      process.env.SF_API = 'TEST';
+    it('SF_TEST_API is case-insensitive (TEST → test.)', () => {
+      saved = process.env.SF_TEST_API;
+      process.env.SF_TEST_API = 'TEST';
       expect(getEndpoint(productionUrl)).to.equal('test.');
     });
 
-    it('SF_API unset uses URL-based detection', () => {
-      saved = process.env.SF_API;
-      delete process.env.SF_API;
+    it('SF_TEST_API unset uses URL-based detection', () => {
+      saved = process.env.SF_TEST_API;
+      delete process.env.SF_TEST_API;
       expect(getEndpoint(productionUrl)).to.equal('');
       expect(getEndpoint('https://foo.wb.crm.dev')).to.equal('dev.');
     });
 
-    it('SF_API=production or other value falls through to URL-based detection', () => {
-      saved = process.env.SF_API;
-      process.env.SF_API = 'production';
+    it('SF_TEST_API=false or other value falls through to URL-based detection', () => {
+      saved = process.env.SF_TEST_API;
+      process.env.SF_TEST_API = 'false';
+      expect(getEndpoint(productionUrl)).to.equal('');
+      process.env.SF_TEST_API = 'production';
       expect(getEndpoint(productionUrl)).to.equal('');
     });
   });
