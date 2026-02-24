@@ -394,6 +394,15 @@ export function getEndpoint(instanceUrl: string): string {
 }
 
 /**
+ * Builds hint text for 404 errors that include current SF_TEST_API and override options.
+ */
+export function getEndpoint404Hint(instanceUrl: string): string {
+  const current = env.getString('SF_TEST_API');
+  const currentDisplay = current ? `"${current}"` : 'unset';
+  return `Instance: ${instanceUrl}. SF_TEST_API is ${currentDisplay}. Override: SF_TEST_API=true|"test" for test.api, "dev" for dev.api, or unset for auto-detect from instance URL.`;
+}
+
+/**
  * Update preview metadata with end time and plan IDs
  */
 export const updateMetadataEndTime = async (

@@ -35,6 +35,7 @@ import {
   updateMetadataEndTime,
   writeTraceToHistory,
   getEndpoint,
+  getEndpoint404Hint,
   getHistoryDir,
   getAllHistory,
   TranscriptEntry,
@@ -230,7 +231,7 @@ export class ProductionAgent extends AgentBase {
         if (errorName.includes('404')) {
           throw SfError.create({
             name: 'AgentApiNotFound',
-            message: `Preview Send API returned 404. Endpoint is chosen from instance URL (${this.connection.instanceUrl}). Workspace (.crm.dev)→dev.api; OrgFarm (test1/sdb/pc-rnd)→test.api; else→api.`,
+            message: `Preview Send API returned 404. ${getEndpoint404Hint(this.connection.instanceUrl)}`,
             cause: error,
           });
         }
@@ -339,7 +340,7 @@ export class ProductionAgent extends AgentBase {
         if (errorName.includes('404')) {
           throw SfError.create({
             name: 'AgentApiNotFound',
-            message: `Preview Start API returned 404. Endpoint is chosen from instance URL (${this.connection.instanceUrl}). Workspace (.crm.dev)→dev.api; OrgFarm (test1/sdb/pc-rnd)→test.api; else→api.`,
+            message: `Preview Start API returned 404. ${getEndpoint404Hint(String(this.connection.instanceUrl))}`,
             cause: error,
           });
         }
@@ -417,7 +418,7 @@ export class ProductionAgent extends AgentBase {
         if (errorName.includes('404')) {
           throw SfError.create({
             name: 'AgentApiNotFound',
-            message: `Preview End API returned 404. Endpoint is chosen from instance URL (${this.connection.instanceUrl}). Workspace (.crm.dev)→dev.api; OrgFarm (test1/sdb/pc-rnd)→test.api; else→api.`,
+            message: `Preview End API returned 404. ${getEndpoint404Hint(String(this.connection.instanceUrl))}`,
             cause: error,
           });
         }

@@ -40,6 +40,7 @@ import {
   updateMetadataEndTime,
   writeTraceToHistory,
   getEndpoint,
+  getEndpoint404Hint,
   findAuthoringBundle,
   getHistoryDir,
   TranscriptEntry,
@@ -200,7 +201,7 @@ export class ScriptAgent extends AgentBase {
       if (errorName.includes('404')) {
         throw SfError.create({
           name: 'AgentApiNotFound',
-          message: `Trace API returned 404. Endpoint is chosen from instance URL (${this.connection.instanceUrl}). Workspace (.crm.dev)→dev.api; OrgFarm (test1/sdb/pc-rnd)→test.api; else→api.`,
+          message: `Trace API returned 404. ${getEndpoint404Hint(this.connection.instanceUrl)}`,
           cause: error,
         });
       }
@@ -256,7 +257,7 @@ export class ScriptAgent extends AgentBase {
       if (statusCode === 404) {
         throw SfError.create({
           name: 'AgentApiNotFound',
-          message: `Validation API returned 404. Endpoint is chosen from instance URL (${this.connection.instanceUrl}). Workspace (.crm.dev)→dev.api; OrgFarm (test1/sdb/pc-rnd)→test.api; else→api.`,
+          message: `Validation API returned 404. ${getEndpoint404Hint(this.connection.instanceUrl)}`,
           cause: error,
           exitCode: COMPILATION_API_EXIT_CODES.NOT_FOUND,
         });
@@ -406,7 +407,7 @@ export class ScriptAgent extends AgentBase {
         if (errorName.includes('404')) {
           throw SfError.create({
             name: 'AgentApiNotFound',
-            message: `Preview Send API returned 404. Endpoint is chosen from instance URL (${this.connection.instanceUrl}). Workspace (.crm.dev)→dev.api; OrgFarm (test1/sdb/pc-rnd)→test.api; else→api.`,
+            message: `Preview Send API returned 404. ${getEndpoint404Hint(String(this.connection.instanceUrl))}`,
             cause: error,
           });
         }
@@ -532,7 +533,7 @@ export class ScriptAgent extends AgentBase {
         if (errorName.includes('404')) {
           throw SfError.create({
             name: 'AgentApiNotFound',
-            message: `Preview Start API returned 404. Endpoint is chosen from instance URL (${this.connection.instanceUrl}). Workspace (.crm.dev)→dev.api; OrgFarm (test1/sdb/pc-rnd)→test.api; else→api.`,
+            message: `Preview Start API returned 404. ${getEndpoint404Hint(String(this.connection.instanceUrl))}`,
             cause: error,
           });
         }
