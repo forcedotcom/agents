@@ -18,7 +18,6 @@ import { join } from 'node:path';
 import { writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { Lifecycle, SfError, SfProject } from '@salesforce/core';
-import { env } from '@salesforce/kit';
 import {
   AgentJson,
   type AgentPreviewEndResponse,
@@ -83,7 +82,6 @@ export class ScriptAgent extends AgentBase {
   private mockMode: 'Mock' | 'Live Test' = 'Mock';
   private agentScriptContent: AgentScriptContent;
   private agentJson: AgentJson | undefined;
-  private apiBase = `https://${getEndpoint()}api.salesforce.com/einstein/ai-agent`;
   private readonly aabDirectory: string;
   private readonly metaContent: string;
   public constructor(private options: ScriptAgentOptions) {
@@ -131,6 +129,10 @@ export class ScriptAgent extends AgentBase {
       setMockMode: (mockMode: 'Mock' | 'Live Test'): void => this.setMockMode(mockMode),
       setApexDebugging: (apexDebugging: boolean): void => this.setApexDebugging(apexDebugging),
     } as AgentPreviewInterface & { setMockMode: (mockMode: 'Mock' | 'Live Test') => void };
+  }
+
+  private get apiBase(): string {
+    return `https://${getEndpoint(this.connection.instanceUrl)}api.salesforce.com/einstein/ai-agent`;
   }
 
   /**
@@ -200,9 +202,7 @@ export class ScriptAgent extends AgentBase {
       if (errorName.includes('404')) {
         throw SfError.create({
           name: 'AgentApiNotFound',
-          message: `Trace API returned 404. SF_TEST_API=${
-            env.getBoolean('SF_TEST_API') ? 'true' : 'false'
-          } If targeting a test.api environment, set SF_TEST_API=true, otherwise it's false.`,
+          message: `Trace API returned 404. Endpoint is chosen from instance URL (${this.connection.instanceUrl}). Workspace (.crm.dev)→dev.api; OrgFarm (test1/sdb/pc-rnd)→test.api; else→api.`,
           cause: error,
         });
       }
@@ -217,7 +217,9 @@ export class ScriptAgent extends AgentBase {
    * @beta
    */
   public async compile(): Promise<CompileAgentScriptResponse> {
-    const url = `https://${getEndpoint()}api.salesforce.com/einstein/ai-agent/v1.1/authoring/scripts`;
+    const url = `https://${getEndpoint(
+      this.connection.instanceUrl
+    )}api.salesforce.com/einstein/ai-agent/v1.1/authoring/scripts`;
 
     const compileData = {
       assets: [
@@ -258,9 +260,7 @@ export class ScriptAgent extends AgentBase {
       if (statusCode === 404) {
         throw SfError.create({
           name: 'AgentApiNotFound',
-          message: `Validation API returned 404. SF_TEST_API=${
-            env.getBoolean('SF_TEST_API') ? 'true' : 'false'
-          } If targeting a test.api environment, set SF_TEST_API=true, otherwise it's false.`,
+          message: `Validation API returned 404. Endpoint is chosen from instance URL (${this.connection.instanceUrl}). Workspace (.crm.dev)→dev.api; OrgFarm (test1/sdb/pc-rnd)→test.api; else→api.`,
           cause: error,
           exitCode: COMPILATION_API_EXIT_CODES.NOT_FOUND,
         });
@@ -410,9 +410,7 @@ export class ScriptAgent extends AgentBase {
         if (errorName.includes('404')) {
           throw SfError.create({
             name: 'AgentApiNotFound',
-            message: `Preview Send API returned 404. SF_TEST_API=${
-              env.getBoolean('SF_TEST_API') ? 'true' : 'false'
-            } If targeting a test.api environment, set SF_TEST_API=true, otherwise it's false.`,
+            message: `Preview Send API returned 404. Endpoint is chosen from instance URL (${this.connection.instanceUrl}). Workspace (.crm.dev)→dev.api; OrgFarm (test1/sdb/pc-rnd)→test.api; else→api.`,
             cause: error,
           });
         }
@@ -538,9 +536,7 @@ export class ScriptAgent extends AgentBase {
         if (errorName.includes('404')) {
           throw SfError.create({
             name: 'AgentApiNotFound',
-            message: `Preview Start API returned 404. SF_TEST_API=${
-              env.getBoolean('SF_TEST_API') ? 'true' : 'false'
-            } If targeting a test.api environment, set SF_TEST_API=true, otherwise it's false.`,
+            message: `Preview Start API returned 404. Endpoint is chosen from instance URL (${this.connection.instanceUrl}). Workspace (.crm.dev)→dev.api; OrgFarm (test1/sdb/pc-rnd)→test.api; else→api.`,
             cause: error,
           });
         }

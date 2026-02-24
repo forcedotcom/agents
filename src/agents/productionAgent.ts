@@ -15,7 +15,6 @@
  */
 import { randomUUID } from 'node:crypto';
 import { Messages, SfError } from '@salesforce/core';
-import { env } from '@salesforce/kit';
 import {
   type AgentPreviewEndResponse,
   AgentPreviewInterface,
@@ -52,7 +51,6 @@ export class ProductionAgent extends AgentBase {
   private botMetadata: BotMetadata | undefined;
   private id: string | undefined;
   private apiName: string | undefined;
-  private apiBase = `https://${getEndpoint()}api.salesforce.com/einstein/ai-agent/v1`;
 
   public constructor(private options: ProductionAgentOptions) {
     super(options.connection);
@@ -74,6 +72,10 @@ export class ProductionAgent extends AgentBase {
     } else {
       this.apiName = options.apiNameOrId;
     }
+  }
+
+  private get apiBase(): string {
+    return `https://${getEndpoint(this.connection.instanceUrl)}api.salesforce.com/einstein/ai-agent/v1`;
   }
 
   public async getBotMetadata(): Promise<BotMetadata> {
@@ -230,9 +232,7 @@ export class ProductionAgent extends AgentBase {
         if (errorName.includes('404')) {
           throw SfError.create({
             name: 'AgentApiNotFound',
-            message: `Preview Send API returned 404. SF_TEST_API=${
-              env.getBoolean('SF_TEST_API') ? 'true' : 'false'
-            } If targeting a test.api environment, set SF_TEST_API=true, otherwise it's false.`,
+            message: `Preview Send API returned 404. Endpoint is chosen from instance URL (${this.connection.instanceUrl}). Workspace (.crm.dev)→dev.api; OrgFarm (test1/sdb/pc-rnd)→test.api; else→api.`,
             cause: error,
           });
         }
@@ -341,9 +341,7 @@ export class ProductionAgent extends AgentBase {
         if (errorName.includes('404')) {
           throw SfError.create({
             name: 'AgentApiNotFound',
-            message: `Preview Start API returned 404. SF_TEST_API=${
-              env.getBoolean('SF_TEST_API') ? 'true' : 'false'
-            } If targeting a test.api environment, set SF_TEST_API=true, otherwise it's false.`,
+            message: `Preview Start API returned 404. Endpoint is chosen from instance URL (${this.connection.instanceUrl}). Workspace (.crm.dev)→dev.api; OrgFarm (test1/sdb/pc-rnd)→test.api; else→api.`,
             cause: error,
           });
         }
@@ -421,9 +419,7 @@ export class ProductionAgent extends AgentBase {
         if (errorName.includes('404')) {
           throw SfError.create({
             name: 'AgentApiNotFound',
-            message: `Preview End API returned 404. SF_TEST_API=${
-              env.getBoolean('SF_TEST_API') ? 'true' : 'false'
-            } If targeting a test.api environment, set SF_TEST_API=true, otherwise it's false.`,
+            message: `Preview End API returned 404. Endpoint is chosen from instance URL (${this.connection.instanceUrl}). Workspace (.crm.dev)→dev.api; OrgFarm (test1/sdb/pc-rnd)→test.api; else→api.`,
             cause: error,
           });
         }

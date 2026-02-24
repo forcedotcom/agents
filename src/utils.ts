@@ -357,12 +357,42 @@ export const logSessionToIndex = async (
 };
 
 /**
- * Calculates the correct endpoint based on env vars
+ * Determines the API subdomain from the org's instance URL.
+ * - Workspace orgs (*.crm.dev, e.g. .wa.crm.dev, .wb.crm.dev, .ac.crm.dev) → dev.api
+ * - OrgFarm/Falcon orgs (*.pc-rnd.salesforce.com, *.pc-rnd.force.com; test1, test2, sdb*, perf*, dev*) → test.api
+ * - Everything else (production, sandbox, etc.) → api
  *
- * @returns {string}
+ * Env overrides (checked in order):
+ * - SF_TEST_API=true → test. (legacy, backwards compatible)
+ * - SF_API='test' | 'dev' → test. or dev.; unset = use URL-based detection
+ *
+ * @param instanceUrl - The org's instance URL (e.g. from connection.instanceUrl)
+ * @returns The subdomain prefix including the trailing dot: 'dev.', 'test.', or ''
  */
-export function getEndpoint(): string {
-  return env.getBoolean('SF_TEST_API') ? 'test.' : '';
+export function getEndpoint(instanceUrl: string): string {
+  if (env.getBoolean('SF_TEST_API')) {
+    return 'test.';
+  }
+  const override = env.getString('SF_API');
+  if (override) {
+    const normalized = override.toLowerCase().trim();
+    if (normalized === 'test') return 'test.';
+    if (normalized === 'dev') return 'dev.';
+  }
+
+  const host = instanceUrl
+    .replace(/^https?:\/\//i, '')
+    .split('/')[0]
+    .toLowerCase();
+  // Workspace: *.crm.dev (zones: .wa, .wb, .wc, .ac), optional :port
+  if (/\.crm\.dev(:\d+)?$/.test(host)) {
+    return 'dev.';
+  }
+  // OrgFarm: *.pc-rnd.salesforce.com or *.pc-rnd.force.com (test1, test2, sdb*, perf*, dev*), optional :port
+  if (/\.pc-rnd\.(salesforce|force)\.com(:\d+)?$/.test(host)) {
+    return 'test.';
+  }
+  return '';
 }
 
 /**
