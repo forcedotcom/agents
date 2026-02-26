@@ -252,6 +252,61 @@ describe('AgentPublisher', () => {
         expect((error as SfError).name).to.equal('CreateAgentJsonError');
       }
     });
+
+    it('should call refreshAuth in finally block when connection has a refresh token', async () => {
+      process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishNewAgent-Success');
+      $$.SANDBOX.stub(connection, 'singleRecordQuery')
+        .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
+        .throws(new Error('No records found'))
+        .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
+        .resolves({ DeveloperName: 'v1' });
+
+      publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
+
+      $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
+
+      // Stub getAuthInfoFields to return a refresh token
+      $$.SANDBOX.stub(connection, 'getAuthInfoFields').returns({
+        refreshToken: 'some-refresh-token',
+      });
+      const refreshStub = $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      $$.SANDBOX.stub(publisher as any, 'retrieveAgentMetadata').resolves();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      $$.SANDBOX.stub(publisher as any, 'deployAuthoringBundle').resolves();
+
+      await publisher.publishAgentJson();
+
+      expect(refreshStub.calledOnce).to.be.true;
+    });
+
+    it('should skip refreshAuth in finally block when connection has no refresh token (ECA auth)', async () => {
+      process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishNewAgent-Success');
+      $$.SANDBOX.stub(connection, 'singleRecordQuery')
+        .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
+        .throws(new Error('No records found'))
+        .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
+        .resolves({ DeveloperName: 'v1' });
+
+      publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
+
+      $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
+
+      // Stub getAuthInfoFields to return NO refresh token (ECA auth)
+      $$.SANDBOX.stub(connection, 'getAuthInfoFields').returns({});
+      const refreshStub = $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      $$.SANDBOX.stub(publisher as any, 'retrieveAgentMetadata').resolves();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      $$.SANDBOX.stub(publisher as any, 'deployAuthoringBundle').resolves();
+
+      await publisher.publishAgentJson();
+
+      // refreshAuth should NOT be called when there's no refresh token
+      expect(refreshStub.called).to.be.false;
+    });
   });
 
   describe('getPublishedBotId', () => {

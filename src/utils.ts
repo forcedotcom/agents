@@ -176,15 +176,19 @@ export const findLocalAgents = (dir: string): string[] => {
  * @returns {Promise<Connection>} upgraded connection
  */
 export const useNamedUserJwt = async (connection: Connection): Promise<Connection> => {
-  // Refresh the connection to ensure we have the latest, valid access token
-  try {
-    await connection.refreshAuth();
-  } catch (error) {
-    throw SfError.create({
-      name: 'ApiAccessError',
-      message: 'Error refreshing connection',
-      cause: error,
-    });
+  // If the connection has a refresh token, refresh the connection to ensure we have the
+  // latest, valid access token.
+  const authFields = connection.getAuthInfoFields();
+  if (authFields.refreshToken) {
+    try {
+      await connection.refreshAuth();
+    } catch (error) {
+      throw SfError.create({
+        name: 'ApiAccessError',
+        message: 'Error refreshing connection',
+        cause: error,
+      });
+    }
   }
 
   const { accessToken, instanceUrl } = connection.getConnectionOptions();
@@ -202,7 +206,7 @@ export const useNamedUserJwt = async (connection: Connection): Promise<Connectio
   }
 
   const url = `${instanceUrl}/agentforce/bootstrap/nameduser`;
-  // For the namdeduser endpoint request to work we need to delete the access token
+  // For the nameduser endpoint request to work we need to delete the access token
   delete connection.accessToken;
   try {
     const response = await connection.request<NamedUserJwtResponse>(
