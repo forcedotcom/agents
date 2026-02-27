@@ -1,3 +1,12 @@
+# [0.24.0](https://github.com/forcedotcom/agents/compare/0.23.4...0.24.0) (2026-02-27)
+
+
+### Features
+
+* only refresh auth for refreshable connections ([7d02ad4](https://github.com/forcedotcom/agents/commit/7d02ad4f2e5d48717c2c28db9a2bdfe002732241))
+
+
+
 ## [0.23.4](https://github.com/forcedotcom/agents/compare/0.23.3...0.23.4) (2026-02-24)
 
 
