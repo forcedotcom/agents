@@ -16,7 +16,7 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { mkdir, appendFile, readFile, writeFile, readdir, stat } from 'node:fs/promises';
 import * as path from 'node:path';
-import { Connection, SfError, SfProject } from '@salesforce/core';
+import { Connection, Logger, SfError, SfProject } from '@salesforce/core';
 import { NamedUserJwtResponse, type PlannerResponse, PreviewMetadata } from './types';
 
 export const metric = ['completeness', 'coherence', 'conciseness', 'output_latency_milliseconds'] as const;
@@ -420,6 +420,7 @@ export async function requestWithEndpointFallback<T>(
 ): Promise<T> {
   const endpoints = ['', 'test.', 'dev.']; // Try production, test, dev in that order
   const attemptedEndpoints: string[] = [];
+  const logger = Logger.childFromRoot('AgentApiRequest');
 
   let lastError: unknown;
 
@@ -452,11 +453,12 @@ export async function requestWithEndpointFallback<T>(
   }
 
   // All endpoints failed with 404
+  logger.debug(`Attempted endpoints: ${attemptedEndpoints.join(', ')}`);
   throw SfError.create({
     name: 'AgentApiNotFound',
-    message: `API endpoint not found after trying: ${attemptedEndpoints.join(', ')}. Instance URL: ${
-      connection.instanceUrl
-    }`,
+    message: `Unable to access the Salesforce Agent APIs. Ensure the user '${
+      connection.getUsername() ?? ''
+    }' has the necessary permissions and authorization to perform this action.`,
     cause: lastError,
   });
 }

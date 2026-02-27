@@ -119,9 +119,7 @@ describe('requestWithEndpointFallback', () => {
     } catch (error) {
       expect(error).to.be.instanceOf(SfError);
       expect((error as SfError).name).to.equal('AgentApiNotFound');
-      expect((error as SfError).message).to.include('production api.salesforce.com');
-      expect((error as SfError).message).to.include('test.api.salesforce.com');
-      expect((error as SfError).message).to.include('dev.api.salesforce.com');
+      expect((error as SfError).message).to.include('Unable to access the Salesforce Agent API');
     }
 
     expect(requestStub.calledThrice).to.be.true;

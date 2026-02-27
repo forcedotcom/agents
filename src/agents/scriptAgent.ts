@@ -395,7 +395,7 @@ export class ScriptAgent extends AgentBase {
 
       return response;
     } catch (err) {
-      throw err instanceof SfError ? err : SfError.wrap(err);
+      throw SfError.wrap(err);
     }
   }
 
@@ -533,7 +533,7 @@ export class ScriptAgent extends AgentBase {
 
       return response;
     } catch (err) {
-      throw err instanceof SfError ? err : SfError.wrap(err);
+      throw SfError.wrap(err);
     }
   }
 }

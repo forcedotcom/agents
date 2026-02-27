@@ -29,10 +29,6 @@
     "typedoc": "^0.28.17",
     "typescript": "^5.9.3"
   },
-  "resolutions": {
-    "string-width": "^4.2.3",
-    "ajv": "^6.12.6"
-  },
   "engines": {
     "node": ">=18.0.0"
   },

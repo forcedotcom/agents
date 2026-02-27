@@ -254,7 +254,7 @@ export class ProductionAgent extends AgentBase {
 
       return response;
     } catch (err) {
-      throw err instanceof SfError ? err : SfError.wrap(err);
+      throw SfError.wrap(err);
     }
   }
 
@@ -352,7 +352,7 @@ export class ProductionAgent extends AgentBase {
 
       return response;
     } catch (err) {
-      throw err instanceof SfError ? err : SfError.wrap(err);
+      throw SfError.wrap(err);
     }
   }
 
@@ -405,7 +405,7 @@ export class ProductionAgent extends AgentBase {
 
       return response;
     } catch (err) {
-      throw err instanceof SfError ? err : SfError.wrap(err);
+      throw SfError.wrap(err);
     }
   }
 }
