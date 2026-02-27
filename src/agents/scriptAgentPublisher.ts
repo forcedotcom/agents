@@ -260,7 +260,7 @@ export class ScriptAgentPublisher {
       AiAuthoringBundle: { target?: string };
     };
     const target = `${this.developerName}.${botVersionName}`;
-    authoringBundle.AiAuthoringBundle.target = `${this.developerName}.${botVersionName}`;
+    authoringBundle.AiAuthoringBundle.target = target;
     getLogger().debug(`Setting target to ${target} in ${this.bundleMetaPath}`);
     const xmlBuilder = new XMLBuilder({
       ignoreAttributes: false,

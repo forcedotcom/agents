@@ -241,12 +241,8 @@ export class ProductionAgent extends AgentBase {
 
       // Fetch and write trace immediately if available
       if (planId) {
-        try {
-          const trace = await this.getTrace(planId);
-          await writeTraceToHistory(planId, trace, this.historyDir);
-        } catch (error) {
-          throw SfError.wrap(error);
-        }
+        const trace = await this.getTrace(planId);
+        await writeTraceToHistory(planId, trace, this.historyDir);
       }
 
       if (this.apexDebugging && this.canApexDebug()) {
@@ -258,7 +254,7 @@ export class ProductionAgent extends AgentBase {
 
       return response;
     } catch (err) {
-      throw SfError.wrap(err);
+      throw err instanceof SfError ? err : SfError.wrap(err);
     }
   }
 
@@ -356,7 +352,7 @@ export class ProductionAgent extends AgentBase {
 
       return response;
     } catch (err) {
-      throw SfError.wrap(err);
+      throw err instanceof SfError ? err : SfError.wrap(err);
     }
   }
 
@@ -409,7 +405,7 @@ export class ProductionAgent extends AgentBase {
 
       return response;
     } catch (err) {
-      throw SfError.wrap(err);
+      throw err instanceof SfError ? err : SfError.wrap(err);
     }
   }
 }

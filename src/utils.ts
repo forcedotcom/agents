@@ -364,7 +364,14 @@ export const logSessionToIndex = async (
  * - ERROR_HTTP_404 / ERROR_HTTP_500 style (name, errorCode, or data.errorCode)
  * - Numeric statusCode on error, cause, or response
  */
-export function getHttpStatusCode(err: unknown, visited = new Set<unknown>()): number | undefined {
+export function getHttpStatusCode(err: unknown): number | undefined {
+  return getHttpStatusCodeInternal(err, new Set());
+}
+
+/**
+ * Internal implementation with circular reference tracking
+ */
+function getHttpStatusCodeInternal(err: unknown, visited: Set<unknown>): number | undefined {
   // Prevent infinite recursion from circular references
   if (visited.has(err)) {
     return undefined;
@@ -386,8 +393,15 @@ export function getHttpStatusCode(err: unknown, visited = new Set<unknown>()): n
       return Number.parseInt(match[1], 10);
     }
   }
-  return e?.statusCode ?? getHttpStatusCode(e?.cause, visited) ?? e?.response?.statusCode;
+  return e?.statusCode ?? getHttpStatusCodeInternal(e?.cause, visited) ?? e?.response?.statusCode;
 }
+
+export type RequestInfo = {
+  url: string;
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD';
+  headers?: Record<string, string>;
+  body?: string;
+};
 
 /**
  * Makes an API request with automatic endpoint fallback.
@@ -401,12 +415,7 @@ export function getHttpStatusCode(err: unknown, visited = new Set<unknown>()): n
  */
 export async function requestWithEndpointFallback<T>(
   connection: Connection,
-  requestInfo: {
-    url: string;
-    method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD';
-    headers?: Record<string, string>;
-    body?: string;
-  },
+  requestInfo: RequestInfo,
   options?: { retry?: { maxRetries?: number } }
 ): Promise<T> {
   const endpoints = ['', 'test.', 'dev.']; // Try production, test, dev in that order

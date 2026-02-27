@@ -17,15 +17,7 @@
 import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection, SfError } from '@salesforce/core';
-import { requestWithEndpointFallback } from '../src/utils';
-import { useNamedUserJwt } from '../src/utils';
-
-type RequestInfo = {
-  url: string;
-  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD';
-  headers?: Record<string, string>;
-  body?: string;
-};
+import { requestWithEndpointFallback, useNamedUserJwt, type RequestInfo } from '../src/utils';
 
 describe('requestWithEndpointFallback', () => {
   const $$ = new TestContext();
