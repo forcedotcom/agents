@@ -65,7 +65,7 @@ export class ScriptAgent extends AgentBase {
   public constructor(private options: ScriptAgentOptions) {
     super(options.connection);
     this.options = options;
-    this.apiBase = `https://api.salesforce.com/einstein/ai-agent`;
+    this.apiBase = 'https://api.salesforce.com/einstein/ai-agent';
 
     // Find the AAB directory using the project
     const projectDirs = options.project.getPackageDirectories();
@@ -537,7 +537,7 @@ export class ScriptAgent extends AgentBase {
 
       return response;
     } catch (err) {
-      throw SfError.wrap(err);
+      throw err instanceof SfError ? err : SfError.wrap(err);
     }
   }
 }

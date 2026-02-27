@@ -15,10 +15,17 @@
  */
 
 import { expect } from 'chai';
-import { requestWithEndpointFallback } from '../src/utils';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection, SfError } from '@salesforce/core';
+import { requestWithEndpointFallback } from '../src/utils';
 import { useNamedUserJwt } from '../src/utils';
+
+type RequestInfo = {
+  url: string;
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD';
+  headers?: Record<string, string>;
+  body?: string;
+};
 
 describe('requestWithEndpointFallback', () => {
   const $$ = new TestContext();
@@ -44,12 +51,14 @@ describe('requestWithEndpointFallback', () => {
 
     expect(result).to.deep.equal({ success: true });
     expect(requestStub.calledOnce).to.be.true;
-    expect((requestStub.firstCall.args[0] as any).url).to.equal('https://api.salesforce.com/einstein/ai-agent/v1/test');
+    expect((requestStub.firstCall.args[0] as RequestInfo).url).to.equal(
+      'https://api.salesforce.com/einstein/ai-agent/v1/test'
+    );
   });
 
   it('should retry with test endpoint on 404', async () => {
-    const error404 = new Error('Not Found');
-    (error404 as any).name = 'ERROR_HTTP_404';
+    const error404 = new Error('Not Found') as Error & { name: string };
+    error404.name = 'ERROR_HTTP_404';
 
     const requestStub = $$.SANDBOX.stub(connection, 'request');
     requestStub.onFirstCall().rejects(error404);
@@ -64,15 +73,17 @@ describe('requestWithEndpointFallback', () => {
 
     expect(result).to.deep.equal({ success: true });
     expect(requestStub.calledTwice).to.be.true;
-    expect((requestStub.firstCall.args[0] as any).url).to.equal('https://api.salesforce.com/einstein/ai-agent/v1/test');
-    expect((requestStub.secondCall.args[0] as any).url).to.equal(
+    expect((requestStub.firstCall.args[0] as RequestInfo).url).to.equal(
+      'https://api.salesforce.com/einstein/ai-agent/v1/test'
+    );
+    expect((requestStub.secondCall.args[0] as RequestInfo).url).to.equal(
       'https://test.api.salesforce.com/einstein/ai-agent/v1/test'
     );
   });
 
   it('should retry with dev endpoint after test endpoint 404', async () => {
-    const error404 = new Error('Not Found');
-    (error404 as any).name = 'ERROR_HTTP_404';
+    const error404 = new Error('Not Found') as Error & { name: string };
+    error404.name = 'ERROR_HTTP_404';
 
     const requestStub = $$.SANDBOX.stub(connection, 'request');
     requestStub.onFirstCall().rejects(error404);
@@ -88,18 +99,20 @@ describe('requestWithEndpointFallback', () => {
 
     expect(result).to.deep.equal({ success: true });
     expect(requestStub.calledThrice).to.be.true;
-    expect((requestStub.firstCall.args[0] as any).url).to.equal('https://api.salesforce.com/einstein/ai-agent/v1/test');
-    expect((requestStub.secondCall.args[0] as any).url).to.equal(
+    expect((requestStub.firstCall.args[0] as RequestInfo).url).to.equal(
+      'https://api.salesforce.com/einstein/ai-agent/v1/test'
+    );
+    expect((requestStub.secondCall.args[0] as RequestInfo).url).to.equal(
       'https://test.api.salesforce.com/einstein/ai-agent/v1/test'
     );
-    expect((requestStub.thirdCall.args[0] as any).url).to.equal(
+    expect((requestStub.thirdCall.args[0] as RequestInfo).url).to.equal(
       'https://dev.api.salesforce.com/einstein/ai-agent/v1/test'
     );
   });
 
   it('should throw AgentApiNotFound after all endpoints fail with 404', async () => {
     const error404 = new Error('Not Found');
-    (error404 as any).name = 'ERROR_HTTP_404';
+    error404.name = 'ERROR_HTTP_404';
 
     const requestStub = $$.SANDBOX.stub(connection, 'request').rejects(error404);
 
@@ -123,8 +136,8 @@ describe('requestWithEndpointFallback', () => {
   });
 
   it('should throw immediately on non-404 errors', async () => {
-    const error500 = new Error('Internal Server Error');
-    (error500 as any).name = 'ERROR_HTTP_500';
+    const error500 = new Error('Internal Server Error') as Error & { name: string };
+    error500.name = 'ERROR_HTTP_500';
 
     const requestStub = $$.SANDBOX.stub(connection, 'request').rejects(error500);
 
@@ -156,7 +169,9 @@ describe('requestWithEndpointFallback', () => {
     expect(result).to.deep.equal({ success: true });
     expect(requestStub.calledOnce).to.be.true;
     // Should try production first (replace test. with '')
-    expect((requestStub.firstCall.args[0] as any).url).to.equal('https://api.salesforce.com/einstein/ai-agent/v1/test');
+    expect((requestStub.firstCall.args[0] as RequestInfo).url).to.equal(
+      'https://api.salesforce.com/einstein/ai-agent/v1/test'
+    );
   });
 });
 

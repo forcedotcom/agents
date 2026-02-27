@@ -189,8 +189,9 @@ export class MaybeMock {
     }
 
     this.logger.debug(`Making ${method} request to ${url}`);
-    // Check if this is an api.salesforce.com URL that needs endpoint fallback
-    const needsEndpointFallback = /https:\/\/(?:test\.|dev\.)?api\.salesforce\.com/.test(url);
+
+    // For api.salesforce.com URLs, use endpoint fallback
+    const isApiSalesforceUrl = url.includes('https://api.salesforce.com');
 
     switch (method) {
       case 'GET':
@@ -202,7 +203,7 @@ export class MaybeMock {
             message: 'POST requests must include a body',
           });
         }
-        if (needsEndpointFallback) {
+        if (isApiSalesforceUrl) {
           return requestWithEndpointFallback<T>(
             this.connection,
             {
@@ -225,7 +226,7 @@ export class MaybeMock {
         );
       case 'DELETE':
         // We use .request() rather than .requestDelete() so that we can pass in the headers
-        if (needsEndpointFallback) {
+        if (isApiSalesforceUrl) {
           return requestWithEndpointFallback<T>(
             this.connection,
             {

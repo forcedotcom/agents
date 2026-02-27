@@ -364,7 +364,13 @@ export const logSessionToIndex = async (
  * - ERROR_HTTP_404 / ERROR_HTTP_500 style (name, errorCode, or data.errorCode)
  * - Numeric statusCode on error, cause, or response
  */
-export function getHttpStatusCode(err: unknown): number | undefined {
+export function getHttpStatusCode(err: unknown, visited = new Set<unknown>()): number | undefined {
+  // Prevent infinite recursion from circular references
+  if (visited.has(err)) {
+    return undefined;
+  }
+  visited.add(err);
+
   const e = err as {
     name?: string;
     errorCode?: string;
@@ -380,7 +386,7 @@ export function getHttpStatusCode(err: unknown): number | undefined {
       return Number.parseInt(match[1], 10);
     }
   }
-  return e?.statusCode ?? getHttpStatusCode(e?.cause) ?? e?.response?.statusCode;
+  return e?.statusCode ?? getHttpStatusCode(e?.cause, visited) ?? e?.response?.statusCode;
 }
 
 /**
@@ -417,6 +423,7 @@ export async function requestWithEndpointFallback<T>(
     attemptedEndpoints.push(`${endpoint || 'production '}api.salesforce.com`);
 
     try {
+      // eslint-disable-next-line no-await-in-loop
       return await connection.request<T>(
         {
           ...requestInfo,
@@ -438,11 +445,12 @@ export async function requestWithEndpointFallback<T>(
   // All endpoints failed with 404
   throw SfError.create({
     name: 'AgentApiNotFound',
-    message: `API endpoint not found after trying: ${attemptedEndpoints.join(', ')}. Instance URL: ${connection.instanceUrl}`,
+    message: `API endpoint not found after trying: ${attemptedEndpoints.join(', ')}. Instance URL: ${
+      connection.instanceUrl
+    }`,
     cause: lastError,
   });
 }
-
 
 /**
  * Update preview metadata with end time and plan IDs

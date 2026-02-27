@@ -55,7 +55,7 @@ export class ProductionAgent extends AgentBase {
 
   public constructor(private options: ProductionAgentOptions) {
     super(options.connection);
-    this.apiBase = `https://api.salesforce.com/einstein/ai-agent/v1`;
+    this.apiBase = 'https://api.salesforce.com/einstein/ai-agent/v1';
     if (!options.apiNameOrId) {
       throw messages.createError('missingAgentNameOrId');
     }
