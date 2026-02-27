@@ -15,133 +15,148 @@
  */
 
 import { expect } from 'chai';
-import { getEndpoint } from '../src/utils';
+import { requestWithEndpointFallback } from '../src/utils';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection, SfError } from '@salesforce/core';
 import { useNamedUserJwt } from '../src/utils';
 
-describe('getEndpoint', () => {
-  describe('Workspace orgs (*.crm.dev) → dev.', () => {
-    const workspaceUrls = [
-      'https://orgfarm-5ba2aa1c0b.my.salesforce-com.86u0trm1dva10isua0s2i92gs0ax.wb.crm.dev',
-      'https://something.wa.crm.dev',
-      'https://something.wb.crm.dev',
-      'https://something.wc.crm.dev',
-      'https://something.ac.crm.dev',
-      'https://myapp.develop.my.salesforce-app.workspace123.wc.crm.dev',
-      'https://instance.my.salesforce-com.hostname.dnsPrefixaz.wb.crm.dev:6101',
-      'http://foo.wa.crm.dev',
-    ];
+describe('requestWithEndpointFallback', () => {
+  const $$ = new TestContext();
+  let testOrg: MockTestOrgData;
+  let connection: Connection;
 
-    workspaceUrls.forEach((url) => {
-      it(`returns 'dev.' for ${url}`, () => {
-        expect(getEndpoint(url)).to.equal('dev.');
+  beforeEach(async () => {
+    testOrg = new MockTestOrgData();
+    connection = await testOrg.getConnection();
+    connection.instanceUrl = 'https://test.my.salesforce.com';
+    $$.SANDBOXES.CONNECTION.restore();
+  });
+
+  it('should succeed on first try with production endpoint', async () => {
+    const requestStub = $$.SANDBOX.stub(connection, 'request').resolves({ success: true });
+
+    const result = await requestWithEndpointFallback(connection, {
+      method: 'POST',
+      url: 'https://api.salesforce.com/einstein/ai-agent/v1/test',
+      headers: { 'x-client-name': 'test' },
+      body: '{}',
+    });
+
+    expect(result).to.deep.equal({ success: true });
+    expect(requestStub.calledOnce).to.be.true;
+    expect((requestStub.firstCall.args[0] as any).url).to.equal('https://api.salesforce.com/einstein/ai-agent/v1/test');
+  });
+
+  it('should retry with test endpoint on 404', async () => {
+    const error404 = new Error('Not Found');
+    (error404 as any).name = 'ERROR_HTTP_404';
+
+    const requestStub = $$.SANDBOX.stub(connection, 'request');
+    requestStub.onFirstCall().rejects(error404);
+    requestStub.onSecondCall().resolves({ success: true });
+
+    const result = await requestWithEndpointFallback(connection, {
+      method: 'POST',
+      url: 'https://api.salesforce.com/einstein/ai-agent/v1/test',
+      headers: { 'x-client-name': 'test' },
+      body: '{}',
+    });
+
+    expect(result).to.deep.equal({ success: true });
+    expect(requestStub.calledTwice).to.be.true;
+    expect((requestStub.firstCall.args[0] as any).url).to.equal('https://api.salesforce.com/einstein/ai-agent/v1/test');
+    expect((requestStub.secondCall.args[0] as any).url).to.equal(
+      'https://test.api.salesforce.com/einstein/ai-agent/v1/test'
+    );
+  });
+
+  it('should retry with dev endpoint after test endpoint 404', async () => {
+    const error404 = new Error('Not Found');
+    (error404 as any).name = 'ERROR_HTTP_404';
+
+    const requestStub = $$.SANDBOX.stub(connection, 'request');
+    requestStub.onFirstCall().rejects(error404);
+    requestStub.onSecondCall().rejects(error404);
+    requestStub.onThirdCall().resolves({ success: true });
+
+    const result = await requestWithEndpointFallback(connection, {
+      method: 'POST',
+      url: 'https://api.salesforce.com/einstein/ai-agent/v1/test',
+      headers: { 'x-client-name': 'test' },
+      body: '{}',
+    });
+
+    expect(result).to.deep.equal({ success: true });
+    expect(requestStub.calledThrice).to.be.true;
+    expect((requestStub.firstCall.args[0] as any).url).to.equal('https://api.salesforce.com/einstein/ai-agent/v1/test');
+    expect((requestStub.secondCall.args[0] as any).url).to.equal(
+      'https://test.api.salesforce.com/einstein/ai-agent/v1/test'
+    );
+    expect((requestStub.thirdCall.args[0] as any).url).to.equal(
+      'https://dev.api.salesforce.com/einstein/ai-agent/v1/test'
+    );
+  });
+
+  it('should throw AgentApiNotFound after all endpoints fail with 404', async () => {
+    const error404 = new Error('Not Found');
+    (error404 as any).name = 'ERROR_HTTP_404';
+
+    const requestStub = $$.SANDBOX.stub(connection, 'request').rejects(error404);
+
+    try {
+      await requestWithEndpointFallback(connection, {
+        method: 'POST',
+        url: 'https://api.salesforce.com/einstein/ai-agent/v1/test',
+        headers: { 'x-client-name': 'test' },
+        body: '{}',
       });
-    });
+      expect.fail('Expected error was not thrown');
+    } catch (error) {
+      expect(error).to.be.instanceOf(SfError);
+      expect((error as SfError).name).to.equal('AgentApiNotFound');
+      expect((error as SfError).message).to.include('production api.salesforce.com');
+      expect((error as SfError).message).to.include('test.api.salesforce.com');
+      expect((error as SfError).message).to.include('dev.api.salesforce.com');
+    }
+
+    expect(requestStub.calledThrice).to.be.true;
   });
 
-  describe('OrgFarm orgs (*.pc-rnd.salesforce.com | *.pc-rnd.force.com) → test.', () => {
-    const orgFarmUrls = [
-      'https://orgfarm-56f61201e7.test2.lightning.pc-rnd.force.com',
-      'https://orgfarm-638ed60517.test1.my.pc-rnd.salesforce.com',
-      'https://something.test1.lightning.pc-rnd.force.com',
-      'https://something.test8.my.pc-rnd.salesforce.com',
-      'https://instance.test1-uswest2.my.pc-rnd.salesforce.com',
-      'https://instance.sdb6.my.pc-rnd.salesforce.com',
-      'https://instance.sdb39.my.pc-rnd.salesforce.com',
-      'https://instance.perf1-uswest2.my.pc-rnd.salesforce.com',
-      'https://instance.perf1-useast2.my.pc-rnd.salesforce.com',
-      'https://instance.dev1-uswest2.my.pc-rnd.salesforce.com',
-      'https://instance.aws-dev4-uswest2.my.pc-rnd.salesforce.com',
-      'https://foo.pc-rnd.salesforce.com:8443',
-      'http://bar.pc-rnd.force.com',
-    ];
+  it('should throw immediately on non-404 errors', async () => {
+    const error500 = new Error('Internal Server Error');
+    (error500 as any).name = 'ERROR_HTTP_500';
 
-    orgFarmUrls.forEach((url) => {
-      it(`returns 'test.' for ${url}`, () => {
-        expect(getEndpoint(url)).to.equal('test.');
+    const requestStub = $$.SANDBOX.stub(connection, 'request').rejects(error500);
+
+    try {
+      await requestWithEndpointFallback(connection, {
+        method: 'POST',
+        url: 'https://api.salesforce.com/einstein/ai-agent/v1/test',
+        headers: { 'x-client-name': 'test' },
+        body: '{}',
       });
-    });
+      expect.fail('Expected error was not thrown');
+    } catch (error) {
+      expect(error).to.equal(error500);
+    }
+
+    expect(requestStub.calledOnce).to.be.true;
   });
 
-  describe('Production / sandbox / other → empty string', () => {
-    const productionUrls = [
-      'https://mydomain.my.salesforce.com',
-      'https://mydomain.lightning.force.com',
-      'https://mydomain.sandbox.my.salesforce.com',
-      'https://mydomain.develop.my.salesforce.com',
-      'https://mydomain.trailblaze.my.salesforce.com',
-      'https://api.salesforce.com',
-      'https://login.salesforce.com',
-    ];
+  it('should handle URLs that already have test prefix', async () => {
+    const requestStub = $$.SANDBOX.stub(connection, 'request').resolves({ success: true });
 
-    productionUrls.forEach((url) => {
-      it(`returns '' for ${url}`, () => {
-        expect(getEndpoint(url)).to.equal('');
-      });
-    });
-  });
-
-  describe('case insensitivity', () => {
-    it('treats host as case-insensitive for .crm.dev', () => {
-      expect(getEndpoint('https://FOO.WB.CRM.DEV')).to.equal('dev.');
+    const result = await requestWithEndpointFallback(connection, {
+      method: 'POST',
+      url: 'https://test.api.salesforce.com/einstein/ai-agent/v1/test',
+      headers: { 'x-client-name': 'test' },
+      body: '{}',
     });
 
-    it('treats host as case-insensitive for .pc-rnd.force.com', () => {
-      expect(getEndpoint('https://FOO.TEST1.MY.PC-RND.SALESFORCE.COM')).to.equal('test.');
-    });
-  });
-
-  describe('SF_TEST_API env override (true | test | dev | false)', () => {
-    const productionUrl = 'https://mydomain.my.salesforce.com';
-    let saved: string | undefined;
-
-    afterEach(() => {
-      if (saved !== undefined) {
-        process.env.SF_TEST_API = saved;
-      } else {
-        delete process.env.SF_TEST_API;
-      }
-    });
-
-    it('SF_TEST_API=true forces test.', () => {
-      saved = process.env.SF_TEST_API;
-      process.env.SF_TEST_API = 'true';
-      expect(getEndpoint(productionUrl)).to.equal('test.');
-    });
-
-    it('SF_TEST_API=test forces test.', () => {
-      saved = process.env.SF_TEST_API;
-      process.env.SF_TEST_API = 'test';
-      expect(getEndpoint(productionUrl)).to.equal('test.');
-    });
-
-    it('SF_TEST_API=dev forces dev.', () => {
-      saved = process.env.SF_TEST_API;
-      process.env.SF_TEST_API = 'dev';
-      expect(getEndpoint(productionUrl)).to.equal('dev.');
-    });
-
-    it('SF_TEST_API is case-insensitive (TEST → test.)', () => {
-      saved = process.env.SF_TEST_API;
-      process.env.SF_TEST_API = 'TEST';
-      expect(getEndpoint(productionUrl)).to.equal('test.');
-    });
-
-    it('SF_TEST_API unset uses URL-based detection', () => {
-      saved = process.env.SF_TEST_API;
-      delete process.env.SF_TEST_API;
-      expect(getEndpoint(productionUrl)).to.equal('');
-      expect(getEndpoint('https://foo.wb.crm.dev')).to.equal('dev.');
-    });
-
-    it('SF_TEST_API=false or other value falls through to URL-based detection', () => {
-      saved = process.env.SF_TEST_API;
-      process.env.SF_TEST_API = 'false';
-      expect(getEndpoint(productionUrl)).to.equal('');
-      process.env.SF_TEST_API = 'production';
-      expect(getEndpoint(productionUrl)).to.equal('');
-    });
+    expect(result).to.deep.equal({ success: true });
+    expect(requestStub.calledOnce).to.be.true;
+    // Should try production first (replace test. with '')
+    expect((requestStub.firstCall.args[0] as any).url).to.equal('https://api.salesforce.com/einstein/ai-agent/v1/test');
   });
 });
 

@@ -17,7 +17,6 @@ import { existsSync, readdirSync, statSync } from 'node:fs';
 import { mkdir, appendFile, readFile, writeFile, readdir, stat } from 'node:fs/promises';
 import * as path from 'node:path';
 import { Connection, SfError, SfProject } from '@salesforce/core';
-import { env } from '@salesforce/kit';
 import { NamedUserJwtResponse, type PlannerResponse, PreviewMetadata } from './types';
 
 export const metric = ['completeness', 'coherence', 'conciseness', 'output_latency_milliseconds'] as const;
@@ -361,50 +360,89 @@ export const logSessionToIndex = async (
 };
 
 /**
- * Determines the API subdomain from the org's instance URL.
- * - Workspace orgs (*.crm.dev, e.g. .wa.crm.dev, .wb.crm.dev, .ac.crm.dev) → dev.api
- * - OrgFarm/Falcon orgs (*.pc-rnd.salesforce.com, *.pc-rnd.force.com; test1, test2, sdb*, perf*, dev*) → test.api
- * - Everything else (production, sandbox, etc.) → api
- *
- * Env override: SF_TEST_API (single var, case-insensitive)
- * - true | test → test.api
- * - dev → dev.api
- * - false | unset | other → use URL-based detection
- *
- * @param instanceUrl - The org's instance URL (e.g. from connection.instanceUrl)
- * @returns The subdomain prefix including the trailing dot: 'dev.', 'test.', or ''
+ * Extract HTTP status code from API errors. Supports:
+ * - ERROR_HTTP_404 / ERROR_HTTP_500 style (name, errorCode, or data.errorCode)
+ * - Numeric statusCode on error, cause, or response
  */
-export function getEndpoint(instanceUrl: string): string {
-  const override = env.getString('SF_TEST_API');
-  if (override) {
-    const normalized = override.toLowerCase().trim();
-    if (normalized === 'true' || normalized === 'test') return 'test.';
-    if (normalized === 'dev') return 'dev.';
+export function getHttpStatusCode(err: unknown): number | undefined {
+  const e = err as {
+    name?: string;
+    errorCode?: string;
+    data?: { errorCode?: string };
+    statusCode?: number;
+    cause?: unknown;
+    response?: { statusCode?: number };
+  };
+  const codeStr = e?.name ?? e?.errorCode ?? e?.data?.errorCode;
+  if (typeof codeStr === 'string') {
+    const match = /ERROR_HTTP_(\d+)/i.exec(codeStr);
+    if (match) {
+      return Number.parseInt(match[1], 10);
+    }
   }
-
-  const host = instanceUrl
-    .replace(/^https?:\/\//i, '')
-    .split('/')[0]
-    .toLowerCase();
-  // Workspace: *.crm.dev (zones: .wa, .wb, .wc, .ac), optional :port
-  if (/\.crm\.dev(:\d+)?$/.test(host)) {
-    return 'dev.';
-  }
-  // OrgFarm: *.pc-rnd.salesforce.com or *.pc-rnd.force.com (test1, test2, sdb*, perf*, dev*), optional :port
-  if (/\.pc-rnd\.(salesforce|force)\.com(:\d+)?$/.test(host)) {
-    return 'test.';
-  }
-  return '';
+  return e?.statusCode ?? getHttpStatusCode(e?.cause) ?? e?.response?.statusCode;
 }
 
 /**
- * Builds hint text for 404 errors that include current SF_TEST_API and override options.
+ * Makes an API request with automatic endpoint fallback.
+ * Tries api.salesforce.com first, then test.api.salesforce.com on 404, then dev.api.salesforce.com on 404.
+ *
+ * @param connection - The Salesforce connection
+ * @param requestInfo - The request information (url, method, headers, body, etc.)
+ * @param options - Optional retry/timeout options
+ * @returns The API response
+ * @throws SfError if all endpoints return 404, or immediately on non-404 errors
  */
-export function getEndpoint404Hint(instanceUrl: string): string {
-  const current = env.getString('SF_TEST_API');
-  const currentDisplay = current ? `"${current}"` : 'unset';
-  return `Instance: ${instanceUrl}. SF_TEST_API is ${currentDisplay}. Override: SF_TEST_API=true|"test" for test.api, "dev" for dev.api, or unset for auto-detect from instance URL.`;
+export async function requestWithEndpointFallback<T>(
+  connection: Connection,
+  requestInfo: {
+    url: string;
+    method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD';
+    headers?: Record<string, string>;
+    body?: string;
+  },
+  options?: { retry?: { maxRetries?: number } }
+): Promise<T> {
+  const endpoints = ['', 'test.', 'dev.']; // Try production, test, dev in that order
+  const attemptedEndpoints: string[] = [];
+
+  let lastError: unknown;
+
+  for (const endpoint of endpoints) {
+    // Replace the domain with the endpoint variant
+    const modifiedUrl = requestInfo.url.replace(
+      /https:\/\/(?:test\.|dev\.)?api\.salesforce\.com/,
+      `https://${endpoint}api.salesforce.com`
+    );
+    attemptedEndpoints.push(`${endpoint || 'production '}api.salesforce.com`);
+
+    try {
+      return await connection.request<T>(
+        {
+          ...requestInfo,
+          url: modifiedUrl,
+        },
+        options
+      );
+    } catch (error) {
+      const statusCode = getHttpStatusCode(error);
+      if (statusCode === 404) {
+        lastError = error;
+        continue; // Try next endpoint
+      }
+      // Not a 404, throw immediately
+      throw error;
+    }
+  }
+
+  // All endpoints failed with 404
+  throw SfError.create({
+    name: 'AgentApiNotFound',
+    message: `API endpoint not found after trying: ${attemptedEndpoints.join(', ')}. Instance URL: ${connection.instanceUrl}`,
+    cause: lastError,
+  });
 }
+
 
 /**
  * Update preview metadata with end time and plan IDs

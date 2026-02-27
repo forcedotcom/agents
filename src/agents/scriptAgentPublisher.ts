@@ -22,7 +22,7 @@ import { AuthInfo, Connection, Logger, Messages, SfError, SfProject } from '@sal
 import { ComponentSet, ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { MaybeMock } from '../maybe-mock';
 import { type AgentJson, type PublishAgent, type PublishAgentJsonResponse } from '../types';
-import { findAuthoringBundle, getEndpoint } from '../utils';
+import { findAuthoringBundle } from '../utils';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agentPublisher');
@@ -81,9 +81,7 @@ export class ScriptAgentPublisher {
     // Store the original username to create fresh connections for metadata operations
     this.originalUsername = connection.getUsername()!;
     this.skipRetrieve = skipMetadataRetrieve;
-    this.API_URL = `https://${getEndpoint(
-      connection.instanceUrl
-    )}api.salesforce.com/einstein/ai-agent/v1.1/authoring/agents`;
+    this.API_URL = `https://api.salesforce.com/einstein/ai-agent/v1.1/authoring/agents`;
 
     // Validate and get developer name and bundle directory
     const validationResult = this.validateDeveloperName();
