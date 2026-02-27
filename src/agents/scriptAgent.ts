@@ -18,7 +18,6 @@ import { join } from 'node:path';
 import { writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { Lifecycle, SfError, SfProject } from '@salesforce/core';
-import { env } from '@salesforce/kit';
 import {
   AgentJson,
   type AgentPreviewEndResponse,
@@ -40,7 +39,8 @@ import {
   logSessionToIndex,
   updateMetadataEndTime,
   writeTraceToHistory,
-  getEndpoint,
+  getHttpStatusCode,
+  requestWithEndpointFallback,
   findAuthoringBundle,
   getHistoryDir,
   TranscriptEntry,
@@ -52,30 +52,6 @@ import { generateAgentScript } from '../templates/agentScriptTemplate';
 import { ScriptAgentPublisher } from './scriptAgentPublisher';
 import { AgentBase } from './agentBase';
 
-/**
- * Extract HTTP status code from API errors. Supports:
- * - ERROR_HTTP_404 / ERROR_HTTP_500 style (name, errorCode, or data.errorCode)
- * - Numeric statusCode on error, cause, or response
- */
-function getHttpStatusCode(err: unknown): number | undefined {
-  const e = err as {
-    name?: string;
-    errorCode?: string;
-    data?: { errorCode?: string };
-    statusCode?: number;
-    cause?: unknown;
-    response?: { statusCode?: number };
-  };
-  const codeStr = e?.name ?? e?.errorCode ?? e?.data?.errorCode;
-  if (typeof codeStr === 'string') {
-    const match = /ERROR_HTTP_(\d+)/i.exec(codeStr);
-    if (match) {
-      return Number.parseInt(match[1], 10);
-    }
-  }
-  return e?.statusCode ?? getHttpStatusCode(e?.cause) ?? e?.response?.statusCode;
-}
-
 export class ScriptAgent extends AgentBase {
   public preview: AgentPreviewInterface & {
     setMockMode: (mockMode: 'Mock' | 'Live Test') => void;
@@ -83,12 +59,13 @@ export class ScriptAgent extends AgentBase {
   private mockMode: 'Mock' | 'Live Test' = 'Mock';
   private agentScriptContent: AgentScriptContent;
   private agentJson: AgentJson | undefined;
-  private apiBase = `https://${getEndpoint()}api.salesforce.com/einstein/ai-agent`;
+  private readonly apiBase: string;
   private readonly aabDirectory: string;
   private readonly metaContent: string;
   public constructor(private options: ScriptAgentOptions) {
     super(options.connection);
     this.options = options;
+    this.apiBase = 'https://api.salesforce.com/einstein/ai-agent';
 
     // Find the AAB directory using the project
     const projectDirs = options.project.getPackageDirectories();
@@ -187,27 +164,13 @@ export class ScriptAgent extends AgentBase {
   }
 
   public async getTrace(planId: string): Promise<PlannerResponse> {
-    try {
-      return await this.connection.request<PlannerResponse>({
-        method: 'GET',
-        url: `${this.apiBase}/v1.1/preview/sessions/${this.sessionId!}/plans/${planId}`,
-        headers: {
-          'x-client-name': 'afdx',
-        },
-      });
-    } catch (error) {
-      const errorName = (error as { name?: string })?.name ?? '';
-      if (errorName.includes('404')) {
-        throw SfError.create({
-          name: 'AgentApiNotFound',
-          message: `Trace API returned 404. SF_TEST_API=${
-            env.getBoolean('SF_TEST_API') ? 'true' : 'false'
-          } If targeting a test.api environment, set SF_TEST_API=true, otherwise it's false.`,
-          cause: error,
-        });
-      }
-      throw SfError.wrap(error);
-    }
+    return requestWithEndpointFallback<PlannerResponse>(this.connection, {
+      method: 'GET',
+      url: `${this.apiBase}/v1.1/preview/sessions/${this.sessionId!}/plans/${planId}`,
+      headers: {
+        'x-client-name': 'afdx',
+      },
+    });
   }
 
   /**
@@ -217,7 +180,7 @@ export class ScriptAgent extends AgentBase {
    * @beta
    */
   public async compile(): Promise<CompileAgentScriptResponse> {
-    const url = `https://${getEndpoint()}api.salesforce.com/einstein/ai-agent/v1.1/authoring/scripts`;
+    const url = `${this.apiBase}/v1.1/authoring/scripts`;
 
     const compileData = {
       assets: [
@@ -236,7 +199,8 @@ export class ScriptAgent extends AgentBase {
     };
 
     try {
-      const response = await this.connection.request<CompileAgentScriptResponse>(
+      const response = await requestWithEndpointFallback<CompileAgentScriptResponse>(
+        this.connection,
         {
           method: 'POST',
           url,
@@ -254,17 +218,14 @@ export class ScriptAgent extends AgentBase {
 
       return response;
     } catch (error) {
-      const statusCode = getHttpStatusCode(error);
-      if (statusCode === 404) {
-        throw SfError.create({
-          name: 'AgentApiNotFound',
-          message: `Validation API returned 404. SF_TEST_API=${
-            env.getBoolean('SF_TEST_API') ? 'true' : 'false'
-          } If targeting a test.api environment, set SF_TEST_API=true, otherwise it's false.`,
-          cause: error,
-          exitCode: COMPILATION_API_EXIT_CODES.NOT_FOUND,
-        });
+      // Check if it's a 404 from our fallback function
+      const sfError = error as SfError;
+      if (sfError.name === 'AgentApiNotFound') {
+        sfError.exitCode = COMPILATION_API_EXIT_CODES.NOT_FOUND;
+        throw sfError;
       }
+      // Handle 500 errors specially
+      const statusCode = getHttpStatusCode(error);
       const wrapped = SfError.wrap(error);
       if (statusCode === 500) {
         wrapped.exitCode = COMPILATION_API_EXIT_CODES.SERVER_ERROR;
@@ -395,29 +356,14 @@ export class ScriptAgent extends AgentBase {
         this.historyDir
       );
 
-      let response: AgentPreviewSendResponse;
-      try {
-        response = await this.connection.request<AgentPreviewSendResponse>({
-          method: 'POST',
-          url,
-          body: JSON.stringify(body),
-          headers: {
-            'x-client-name': 'afdx',
-          },
-        });
-      } catch (error) {
-        const errorName = (error as { name?: string })?.name ?? '';
-        if (errorName.includes('404')) {
-          throw SfError.create({
-            name: 'AgentApiNotFound',
-            message: `Preview Send API returned 404. SF_TEST_API=${
-              env.getBoolean('SF_TEST_API') ? 'true' : 'false'
-            } If targeting a test.api environment, set SF_TEST_API=true, otherwise it's false.`,
-            cause: error,
-          });
-        }
-        throw SfError.wrap(error);
-      }
+      const response = await requestWithEndpointFallback<AgentPreviewSendResponse>(this.connection, {
+        method: 'POST',
+        url,
+        body: JSON.stringify(body),
+        headers: {
+          'x-client-name': 'afdx',
+        },
+      });
 
       const planId = response.messages.at(0)!.planId;
       this.planIds.add(planId);
@@ -436,12 +382,8 @@ export class ScriptAgent extends AgentBase {
 
       // Fetch and write trace immediately if available
       if (planId) {
-        try {
-          const trace = await this.getTrace(planId);
-          await writeTraceToHistory(planId, trace, this.historyDir);
-        } catch (error) {
-          throw SfError.wrap(error);
-        }
+        const trace = await this.getTrace(planId);
+        await writeTraceToHistory(planId, trace, this.historyDir);
       }
 
       if (this.apexDebugging && this.canApexDebug()) {
@@ -521,7 +463,8 @@ export class ScriptAgent extends AgentBase {
 
       let response: AgentPreviewStartResponse;
       try {
-        response = await this.connection.request<AgentPreviewStartResponse>(
+        response = await requestWithEndpointFallback<AgentPreviewStartResponse>(
+          this.connection,
           {
             method: 'POST',
             url: `${this.apiBase}/v1.1/preview/sessions`,
@@ -534,16 +477,8 @@ export class ScriptAgent extends AgentBase {
           { retry: { maxRetries: 3 } }
         );
       } catch (error) {
+        // If it's not a 404, add custom error handling
         const err = SfError.wrap(error);
-        if (err.name.includes('404')) {
-          throw SfError.create({
-            name: 'AgentApiNotFound',
-            message: `Preview Start API returned 404. SF_TEST_API=${
-              env.getBoolean('SF_TEST_API') ? 'true' : 'false'
-            } If targeting a test.api environment, set SF_TEST_API=true, otherwise it's false.`,
-            cause: error,
-          });
-        }
         const stackToCheck = (err.cause as Error)?.stack ?? err.stack;
         if (this.mockMode === 'Live Test' && stackToCheck?.includes('Internal Error')) {
           err.message =

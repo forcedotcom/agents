@@ -16,8 +16,7 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { mkdir, appendFile, readFile, writeFile, readdir, stat } from 'node:fs/promises';
 import * as path from 'node:path';
-import { Connection, SfError, SfProject } from '@salesforce/core';
-import { env } from '@salesforce/kit';
+import { Connection, Logger, SfError, SfProject } from '@salesforce/core';
 import { NamedUserJwtResponse, type PlannerResponse, PreviewMetadata } from './types';
 
 export const metric = ['completeness', 'coherence', 'conciseness', 'output_latency_milliseconds'] as const;
@@ -361,12 +360,107 @@ export const logSessionToIndex = async (
 };
 
 /**
- * Calculates the correct endpoint based on env vars
- *
- * @returns {string}
+ * Extract HTTP status code from API errors. Supports:
+ * - ERROR_HTTP_404 / ERROR_HTTP_500 style (name, errorCode, or data.errorCode)
+ * - Numeric statusCode on error, cause, or response
  */
-export function getEndpoint(): string {
-  return env.getBoolean('SF_TEST_API') ? 'test.' : '';
+export function getHttpStatusCode(err: unknown): number | undefined {
+  return getHttpStatusCodeInternal(err, new Set());
+}
+
+/**
+ * Internal implementation with circular reference tracking
+ */
+function getHttpStatusCodeInternal(err: unknown, visited: Set<unknown>): number | undefined {
+  // Prevent infinite recursion from circular references
+  if (visited.has(err)) {
+    return undefined;
+  }
+  visited.add(err);
+
+  const e = err as {
+    name?: string;
+    errorCode?: string;
+    data?: { errorCode?: string };
+    statusCode?: number;
+    cause?: unknown;
+    response?: { statusCode?: number };
+  };
+  const codeStr = e?.name ?? e?.errorCode ?? e?.data?.errorCode;
+  if (typeof codeStr === 'string') {
+    const match = /ERROR_HTTP_(\d+)/i.exec(codeStr);
+    if (match) {
+      return Number.parseInt(match[1], 10);
+    }
+  }
+  return e?.statusCode ?? getHttpStatusCodeInternal(e?.cause, visited) ?? e?.response?.statusCode;
+}
+
+export type RequestInfo = {
+  url: string;
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD';
+  headers?: Record<string, string>;
+  body?: string;
+};
+
+/**
+ * Makes an API request with automatic endpoint fallback.
+ * Tries api.salesforce.com first, then test.api.salesforce.com on 404, then dev.api.salesforce.com on 404.
+ *
+ * @param connection - The Salesforce connection
+ * @param requestInfo - The request information (url, method, headers, body, etc.)
+ * @param options - Optional retry/timeout options
+ * @returns The API response
+ * @throws SfError if all endpoints return 404, or immediately on non-404 errors
+ */
+export async function requestWithEndpointFallback<T>(
+  connection: Connection,
+  requestInfo: RequestInfo,
+  options?: { retry?: { maxRetries?: number } }
+): Promise<T> {
+  const endpoints = ['', 'test.', 'dev.']; // Try production, test, dev in that order
+  const attemptedEndpoints: string[] = [];
+  const logger = Logger.childFromRoot('AgentApiRequest');
+
+  let lastError: unknown;
+
+  for (const endpoint of endpoints) {
+    // Replace the domain with the endpoint variant
+    const modifiedUrl = requestInfo.url.replace(
+      /https:\/\/(?:test\.|dev\.)?api\.salesforce\.com/,
+      `https://${endpoint}api.salesforce.com`
+    );
+    attemptedEndpoints.push(`${endpoint || 'production '}api.salesforce.com`);
+
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      return await connection.request<T>(
+        {
+          ...requestInfo,
+          url: modifiedUrl,
+        },
+        options
+      );
+    } catch (error) {
+      const statusCode = getHttpStatusCode(error);
+      if (statusCode === 404) {
+        lastError = error;
+        continue; // Try next endpoint
+      }
+      // Not a 404, throw immediately
+      throw error;
+    }
+  }
+
+  // All endpoints failed with 404
+  logger.debug(`Attempted endpoints: ${attemptedEndpoints.join(', ')}`);
+  throw SfError.create({
+    name: 'AgentApiNotFound',
+    message: `Unable to access the Salesforce Agent APIs. Ensure the user '${
+      connection.getUsername() ?? ''
+    }' has the necessary permissions and authorization to perform this action.`,
+    cause: lastError,
+  });
 }
 
 /**
