@@ -69,7 +69,12 @@ export class ScriptAgentPublisher {
    * @param agentJson
    * @param skipMetadataRetrieve Whether to skip retrieving the agent metadata from the org
    */
-  public constructor(connection: Connection, project: SfProject, agentJson: AgentJson, skipMetadataRetrieve: boolean = false) {
+  public constructor(
+    connection: Connection,
+    project: SfProject,
+    agentJson: AgentJson,
+    skipMetadataRetrieve: boolean = false
+  ) {
     this.maybeMock = new MaybeMock(connection);
     this.connection = connection;
     this.project = project;
@@ -110,9 +115,14 @@ export class ScriptAgentPublisher {
       const url = botId ? `${this.API_URL}/${botId}/versions` : this.API_URL;
       response = await this.maybeMock.request<PublishAgentJsonResponse>('POST', url, body, this.API_HEADERS);
     } finally {
-      // Always restore the original connection, even if an error occurred
+      // Restore the original connection for subsequent metadata operations.
+      // Use refresh token if available.
       delete this.connection.accessToken;
-      await this.connection.refreshAuth();
+
+      const authFields = this.connection.getAuthInfoFields();
+      if (authFields.refreshToken) {
+        await this.connection.refreshAuth();
+      }
     }
 
     if (response.botId && response.botVersionId) {
