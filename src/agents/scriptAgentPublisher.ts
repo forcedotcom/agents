@@ -117,9 +117,14 @@ export class ScriptAgentPublisher {
       const url = botId ? `${this.API_URL}/${botId}/versions` : this.API_URL;
       response = await this.maybeMock.request<PublishAgentJsonResponse>('POST', url, body, this.API_HEADERS);
     } finally {
-      // Always restore the original connection, even if an error occurred
+      // Restore the original connection for subsequent metadata operations.
+      // Use refresh token if available.
       delete this.connection.accessToken;
-      await this.connection.refreshAuth();
+
+      const authFields = this.connection.getAuthInfoFields();
+      if (authFields.refreshToken) {
+        await this.connection.refreshAuth();
+      }
     }
 
     if (response.botId && response.botVersionId) {
