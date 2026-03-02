@@ -1,3 +1,13 @@
+## [0.24.1](https://github.com/forcedotcom/agents/compare/0.24.0...0.24.1) (2026-03-02)
+
+
+### Bug Fixes
+
+* calcualte endpoint in constructor ([9f73221](https://github.com/forcedotcom/agents/commit/9f732213cedd00e19366c2889535e0e82316fb65))
+* consolidated 404 message ([95f5c21](https://github.com/forcedotcom/agents/commit/95f5c2182046d28ddb0c51ee1c0e2ccc2229eb9f))
+
+
+
 # [0.24.0](https://github.com/forcedotcom/agents/compare/0.23.4...0.24.0) (2026-02-27)
 
 
