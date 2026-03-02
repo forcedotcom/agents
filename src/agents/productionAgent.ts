@@ -15,7 +15,6 @@
  */
 import { randomUUID } from 'node:crypto';
 import { Messages, SfError } from '@salesforce/core';
-import { env } from '@salesforce/kit';
 import {
   type AgentPreviewEndResponse,
   AgentPreviewInterface,
@@ -35,7 +34,7 @@ import {
   writeMetaFileToHistory,
   updateMetadataEndTime,
   writeTraceToHistory,
-  getEndpoint,
+  requestWithEndpointFallback,
   getHistoryDir,
   getAllHistory,
   TranscriptEntry,
@@ -52,10 +51,11 @@ export class ProductionAgent extends AgentBase {
   private botMetadata: BotMetadata | undefined;
   private id: string | undefined;
   private apiName: string | undefined;
-  private apiBase = `https://${getEndpoint()}api.salesforce.com/einstein/ai-agent/v1`;
+  private readonly apiBase: string;
 
   public constructor(private options: ProductionAgentOptions) {
     super(options.connection);
+    this.apiBase = 'https://api.salesforce.com/einstein/ai-agent/v1';
     if (!options.apiNameOrId) {
       throw messages.createError('missingAgentNameOrId');
     }
@@ -215,29 +215,14 @@ export class ProductionAgent extends AgentBase {
         this.historyDir
       );
 
-      let response: AgentPreviewSendResponse;
-      try {
-        response = await this.connection.request<AgentPreviewSendResponse>({
-          method: 'POST',
-          url,
-          body: JSON.stringify(body),
-          headers: {
-            'x-client-name': 'afdx',
-          },
-        });
-      } catch (error) {
-        const errorName = (error as { name?: string })?.name ?? '';
-        if (errorName.includes('404')) {
-          throw SfError.create({
-            name: 'AgentApiNotFound',
-            message: `Preview Send API returned 404. SF_TEST_API=${
-              env.getBoolean('SF_TEST_API') ? 'true' : 'false'
-            } If targeting a test.api environment, set SF_TEST_API=true, otherwise it's false.`,
-            cause: error,
-          });
-        }
-        throw SfError.wrap(error);
-      }
+      const response = await requestWithEndpointFallback<AgentPreviewSendResponse>(this.connection, {
+        method: 'POST',
+        url,
+        body: JSON.stringify(body),
+        headers: {
+          'x-client-name': 'afdx',
+        },
+      });
 
       const planId = response.messages.at(0)!.planId;
       this.planIds.add(planId);
@@ -256,12 +241,8 @@ export class ProductionAgent extends AgentBase {
 
       // Fetch and write trace immediately if available
       if (planId) {
-        try {
-          const trace = await this.getTrace(planId);
-          await writeTraceToHistory(planId, trace, this.historyDir);
-        } catch (error) {
-          throw SfError.wrap(error);
-        }
+        const trace = await this.getTrace(planId);
+        await writeTraceToHistory(planId, trace, this.historyDir);
       }
 
       if (this.apexDebugging && this.canApexDebug()) {
@@ -326,29 +307,14 @@ export class ProductionAgent extends AgentBase {
     };
 
     try {
-      let response: AgentPreviewStartResponse;
-      try {
-        response = await this.connection.request<AgentPreviewStartResponse>({
-          method: 'POST',
-          url,
-          body: JSON.stringify(body),
-          headers: {
-            'x-client-name': 'afdx',
-          },
-        });
-      } catch (error) {
-        const errorName = (error as { name?: string })?.name ?? '';
-        if (errorName.includes('404')) {
-          throw SfError.create({
-            name: 'AgentApiNotFound',
-            message: `Preview Start API returned 404. SF_TEST_API=${
-              env.getBoolean('SF_TEST_API') ? 'true' : 'false'
-            } If targeting a test.api environment, set SF_TEST_API=true, otherwise it's false.`,
-            cause: error,
-          });
-        }
-        throw SfError.wrap(error);
-      }
+      const response = await requestWithEndpointFallback<AgentPreviewStartResponse>(this.connection, {
+        method: 'POST',
+        url,
+        body: JSON.stringify(body),
+        headers: {
+          'x-client-name': 'afdx',
+        },
+      });
       this.sessionId = response.sessionId;
 
       const agentId = this.id!;
@@ -407,28 +373,13 @@ export class ProductionAgent extends AgentBase {
     const url = `${this.apiBase}/sessions/${this.sessionId}`;
     try {
       // https://developer.salesforce.com/docs/einstein/genai/guide/agent-api-examples.html#end-session
-      let response: AgentPreviewEndResponse;
-      try {
-        response = await this.connection.request<AgentPreviewEndResponse>({
-          method: 'DELETE',
-          url,
-          headers: {
-            'x-session-end-reason': reason,
-          },
-        });
-      } catch (error) {
-        const errorName = (error as { name?: string })?.name ?? '';
-        if (errorName.includes('404')) {
-          throw SfError.create({
-            name: 'AgentApiNotFound',
-            message: `Preview End API returned 404. SF_TEST_API=${
-              env.getBoolean('SF_TEST_API') ? 'true' : 'false'
-            } If targeting a test.api environment, set SF_TEST_API=true, otherwise it's false.`,
-            cause: error,
-          });
-        }
-        throw SfError.wrap(error);
-      }
+      const response = await requestWithEndpointFallback<AgentPreviewEndResponse>(this.connection, {
+        method: 'DELETE',
+        url,
+        headers: {
+          'x-session-end-reason': reason,
+        },
+      });
 
       // Write end entry immediately
       if (this.historyDir) {

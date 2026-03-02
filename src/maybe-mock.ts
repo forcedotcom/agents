@@ -20,6 +20,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { Connection, Logger, SfError } from '@salesforce/core';
 import { env } from '@salesforce/kit';
 import nock from 'nock';
+import { requestWithEndpointFallback } from './utils';
 
 type HttpHeaders = {
   [name: string]: string;
@@ -188,6 +189,10 @@ export class MaybeMock {
     }
 
     this.logger.debug(`Making ${method} request to ${url}`);
+
+    // For api.salesforce.com URLs, use endpoint fallback
+    const isApiSalesforceUrl = url.includes('https://api.salesforce.com');
+
     switch (method) {
       case 'GET':
         return this.connection.requestGet<T>(url, { retry: { maxRetries: 3 } });
@@ -197,6 +202,18 @@ export class MaybeMock {
             name: 'InvalidBody',
             message: 'POST requests must include a body',
           });
+        }
+        if (isApiSalesforceUrl) {
+          return requestWithEndpointFallback<T>(
+            this.connection,
+            {
+              method: 'POST',
+              url,
+              headers,
+              body: JSON.stringify(body),
+            },
+            { retry: { maxRetries: 3 } }
+          );
         }
         return this.connection.request<T>(
           {
@@ -209,6 +226,17 @@ export class MaybeMock {
         );
       case 'DELETE':
         // We use .request() rather than .requestDelete() so that we can pass in the headers
+        if (isApiSalesforceUrl) {
+          return requestWithEndpointFallback<T>(
+            this.connection,
+            {
+              method: 'DELETE',
+              url,
+              headers,
+            },
+            { retry: { maxRetries: 3 } }
+          );
+        }
         return this.connection.request<T>(
           {
             method: 'DELETE',

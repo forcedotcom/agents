@@ -22,7 +22,7 @@ import { AuthInfo, Connection, Logger, Messages, SfError, SfProject } from '@sal
 import { ComponentSet, ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { MaybeMock } from '../maybe-mock';
 import { type AgentJson, type PublishAgent, type PublishAgentJsonResponse } from '../types';
-import { findAuthoringBundle, getEndpoint } from '../utils';
+import { findAuthoringBundle } from '../utils';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agentPublisher');
@@ -54,8 +54,7 @@ export class ScriptAgentPublisher {
    * been upgraded with JWT, which is required for SOAP API operations.
    */
   private readonly originalUsername: string;
-
-  private API_URL = `https://${getEndpoint()}api.salesforce.com/einstein/ai-agent/v1.1/authoring/agents`;
+  private readonly API_URL: string;
   private readonly API_HEADERS = {
     'x-client-name': 'afdx',
     'content-type': 'application/json',
@@ -82,6 +81,7 @@ export class ScriptAgentPublisher {
     // Store the original username to create fresh connections for metadata operations
     this.originalUsername = connection.getUsername()!;
     this.skipRetrieve = skipMetadataRetrieve;
+    this.API_URL = 'https://api.salesforce.com/einstein/ai-agent/v1.1/authoring/agents';
 
     // Validate and get developer name and bundle directory
     const validationResult = this.validateDeveloperName();
@@ -260,7 +260,7 @@ export class ScriptAgentPublisher {
       AiAuthoringBundle: { target?: string };
     };
     const target = `${this.developerName}.${botVersionName}`;
-    authoringBundle.AiAuthoringBundle.target = `${this.developerName}.${botVersionName}`;
+    authoringBundle.AiAuthoringBundle.target = target;
     getLogger().debug(`Setting target to ${target} in ${this.bundleMetaPath}`);
     const xmlBuilder = new XMLBuilder({
       ignoreAttributes: false,
