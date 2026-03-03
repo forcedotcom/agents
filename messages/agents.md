@@ -25,3 +25,11 @@ The %s agent has been deleted and its activation state can't be changed.
 # agentActivationError
 
 Changing the agent's activation status was unsuccessful due to %s.
+
+# versionNotFound
+
+Version %s not found for this agent.
+
+# noActiveVersion
+
+No active version found for agent %s.

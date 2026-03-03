@@ -107,6 +107,33 @@ export class ProductionAgent extends AgentBase {
     return botVersions[botVersions.length - 1];
   }
 
+  /**
+   * Gets a bot version by its version number, or latest if omitted.
+   * Searches for a version with matching VersionNumber property.
+   *
+   * @param {number} version - The VersionNumber to find (e.g., 0, 1, 2, 31), or undefined for latest
+   * @returns {Promise<BotVersionMetadata>}
+   */
+  public async getBotVersionMetadata(version?: number): Promise<BotVersionMetadata> {
+    if (!this.botMetadata) {
+      this.botMetadata = await this.getBotMetadata();
+    }
+    const botVersions = this.botMetadata.BotVersions.records;
+
+    // If no version specified, return the latest (last in array)
+    if (version === undefined) {
+      return botVersions[botVersions.length - 1];
+    }
+
+    // Find the version by VersionNumber property
+    const foundVersion = botVersions.find((v) => v.VersionNumber === version);
+    if (!foundVersion) {
+      throw messages.createError('versionNotFound', [version.toString()]);
+    }
+
+    return foundVersion;
+  }
+
   // eslint-disable-next-line @typescript-eslint/require-await,class-methods-use-this,@typescript-eslint/no-unused-vars
   public async getTrace(planId: string): Promise<PlannerResponse | undefined> {
     return undefined;
@@ -136,19 +163,28 @@ export class ProductionAgent extends AgentBase {
   /**
    * Activates the agent.
    *
-   * @returns void
+   * @param version - The VersionNumber to activate (e.g., 0, 1, 2, 31), or undefined for latest
+   * @returns The activated bot version metadata
    */
-  public async activate(): Promise<void> {
-    return this.setAgentStatus('Active');
+  public async activate(version?: number): Promise<BotVersionMetadata> {
+    return this.setAgentStatus('Active', version);
   }
 
   /**
-   * Deactivates the agent.
+   * Deactivates the currently active agent version.
+   * Only one version can be active at a time, so this automatically finds and deactivates it.
    *
-   * @returns void
+   * @returns The deactivated bot version metadata
    */
-  public async deactivate(): Promise<void> {
-    return this.setAgentStatus('Inactive');
+  public async deactivate(): Promise<BotVersionMetadata> {
+    const botMetadata = await this.getBotMetadata();
+    const activeVersion = botMetadata.BotVersions.records.find((v) => v.Status === 'Active');
+
+    if (!activeVersion) {
+      throw messages.createError('noActiveVersion', [botMetadata.DeveloperName]);
+    }
+
+    return this.setAgentStatus('Inactive', activeVersion.VersionNumber);
   }
 
   public getAgentIdForStorage(): string {
@@ -258,24 +294,25 @@ export class ProductionAgent extends AgentBase {
     }
   }
 
-  private async setAgentStatus(desiredState: 'Active' | 'Inactive'): Promise<void> {
+  private async setAgentStatus(desiredState: 'Active' | 'Inactive', version?: number): Promise<BotVersionMetadata> {
     const botMetadata = await this.getBotMetadata();
-    const latestBotVersionMetadata = await this.getLatestBotVersionMetadata();
+
+    const botVersionMetadata = await this.getBotVersionMetadata(version);
 
     if (botMetadata.IsDeleted) {
       throw messages.createError('agentIsDeleted', [botMetadata.DeveloperName]);
     }
 
-    if (latestBotVersionMetadata.Status === desiredState) {
-      return;
+    if (botVersionMetadata.Status === desiredState) {
+      return botVersionMetadata;
     }
 
-    const url = `/connect/bot-versions/${latestBotVersionMetadata.Id}/activation`;
+    const url = `/connect/bot-versions/${botVersionMetadata.Id}/activation`;
     const maybeMock = new MaybeMock(this.connection);
     const response = await maybeMock.request<BotActivationResponse>('POST', url, { status: desiredState });
     if (response.success) {
       const versionToUpdate = this.botMetadata!.BotVersions.records.find(
-        (v) => v.DeveloperName === latestBotVersionMetadata.DeveloperName
+        (v) => v.DeveloperName === botVersionMetadata.DeveloperName
       );
       if (versionToUpdate) {
         versionToUpdate.Status = response.isActivated ? 'Active' : 'Inactive';
@@ -283,6 +320,8 @@ export class ProductionAgent extends AgentBase {
     } else {
       throw messages.createError('agentActivationError', [response.messages?.toString() ?? 'unknown']);
     }
+
+    return botVersionMetadata;
   }
 
   private async startPreview(apexDebugging?: boolean): Promise<AgentPreviewStartResponse> {
