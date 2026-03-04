@@ -33,3 +33,7 @@ Version %s not found for this agent.
 # noActiveVersion
 
 No active version found for agent %s.
+
+# noVersionsFound
+
+No versions found for agent %s.

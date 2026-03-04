@@ -84,7 +84,7 @@ export class ProductionAgent extends AgentBase {
       const botVersionFields =
         'Id, Status, IsDeleted, BotDefinitionId, DeveloperName, CreatedDate, CreatedById, LastModifiedDate, LastModifiedById, SystemModstamp, VersionNumber, CopilotPrimaryLanguage, ToneType, CopilotSecondaryLanguages';
       this.botMetadata = await this.connection.singleRecordQuery<BotMetadata>(
-        `SELECT ${botDefinitionFields}, (SELECT ${botVersionFields} FROM BotVersions ORDER BY VersionNumber) FROM BotDefinition WHERE ${whereClause} LIMIT 1`
+        `SELECT ${botDefinitionFields}, (SELECT ${botVersionFields} FROM BotVersions WHERE IsDeleted = false ORDER BY VersionNumber) FROM BotDefinition WHERE ${whereClause} LIMIT 1`
       );
       this.id = this.botMetadata.Id;
       this.apiName = this.botMetadata.DeveloperName;
@@ -104,6 +104,9 @@ export class ProductionAgent extends AgentBase {
       this.botMetadata = await this.getBotMetadata();
     }
     const botVersions = this.botMetadata.BotVersions.records;
+    if (botVersions.length === 0) {
+      throw messages.createError('noVersionsFound', [this.botMetadata.DeveloperName]);
+    }
     return botVersions[botVersions.length - 1];
   }
 
@@ -119,6 +122,10 @@ export class ProductionAgent extends AgentBase {
       this.botMetadata = await this.getBotMetadata();
     }
     const botVersions = this.botMetadata.BotVersions.records;
+
+    if (botVersions.length === 0) {
+      throw messages.createError('noVersionsFound', [this.botMetadata.DeveloperName]);
+    }
 
     // If no version specified, return the latest (last in array)
     if (version === undefined) {
