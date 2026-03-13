@@ -438,7 +438,7 @@ export class ScriptAgent extends AgentBase {
     }
 
     const agentDefinition = this.agentJson;
-    agentDefinition.agentVersion.developerName = this.metaContent.match(/<target>.*(v\d+)<\/target>/)?.at(1) ?? 'v1';
+    agentDefinition.agentVersion.developerName = this.metaContent.match(/<target>.*(v\d+)<\/target>/)?.at(1) ?? 'v0';
 
     const body = {
       agentDefinition,
