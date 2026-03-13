@@ -118,7 +118,10 @@ describe('AgentPublisher', () => {
         .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
         .throws(new Error('No records found'))
         .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
-        .resolves({ DeveloperName: 'v1' });
+        .resolves({ DeveloperName: 'v0' });
+
+      // Mock connection.query for bot versions (returns empty for first publish)
+      $$.SANDBOX.stub(connection, 'query').resolves({ totalSize: 0, done: true, records: [] });
 
       publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
 
@@ -139,6 +142,9 @@ describe('AgentPublisher', () => {
       expect(result).to.have.property('developerName', 'test_agent');
       expect(retrieveAgentMetadataStub.calledOnce).to.be.true;
       expect(deployAuthoringBundleStub.calledOnce).to.be.true;
+      // Verify deploy was called before publish (with predicted version v1)
+      expect(deployAuthoringBundleStub.calledBefore(retrieveAgentMetadataStub)).to.be.true;
+      expect(deployAuthoringBundleStub.firstCall.args[0]).to.equal('v1');
     });
 
     it('should skip metadata retrieve when skipMetadataRetrieve is true', async () => {
@@ -148,7 +154,10 @@ describe('AgentPublisher', () => {
         .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
         .throws(new Error('No records found'))
         .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
-        .resolves({ DeveloperName: 'v1' });
+        .resolves({ DeveloperName: 'v0' });
+
+      // Mock connection.query for bot versions (returns empty for first publish)
+      $$.SANDBOX.stub(connection, 'query').resolves({ totalSize: 0, done: true, records: [] });
 
       publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, true);
 
@@ -179,7 +188,10 @@ describe('AgentPublisher', () => {
         .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
         .throws(new Error('No records found'))
         .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
-        .resolves({ DeveloperName: 'v1' });
+        .resolves({ DeveloperName: 'v0' });
+
+      // Mock connection.query for bot versions (returns empty for first publish)
+      $$.SANDBOX.stub(connection, 'query').resolves({ totalSize: 0, done: true, records: [] });
 
       // Note: constructor called WITHOUT the 4th arg (defaults to false)
       publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
@@ -213,12 +225,19 @@ describe('AgentPublisher', () => {
       // Mock connection.refreshAuth to avoid making HTTP calls during auth refresh
       $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
 
-      // Mock connection.singleRecordQuery to return undefined (no existing bot)
+      // Mock connection.singleRecordQuery to return existing bot
       $$.SANDBOX.stub(connection, 'singleRecordQuery')
         .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
         .resolves({ Id: '0Xx000000000001' })
         .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
         .resolves({ DeveloperName: 'v2' });
+
+      // Mock connection.query for bot versions (returning v0 and v1 as existing versions)
+      $$.SANDBOX.stub(connection, 'query').resolves({
+        totalSize: 2,
+        done: true,
+        records: [{ DeveloperName: 'v1', VersionNumber: 1 }], // Latest version
+      });
 
       // Mock the private methods
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -231,6 +250,8 @@ describe('AgentPublisher', () => {
       expect(result).to.have.property('developerName', 'test_agent');
       expect(retrieveAgentMetadataStub.calledOnce).to.be.true;
       expect(deployAuthoringBundleStub.calledOnce).to.be.true;
+      // Verify deploy was called with predicted next version v2 (since latest is v1)
+      expect(deployAuthoringBundleStub.firstCall.args[0]).to.equal('v2');
     });
 
     it('should handle API errors during publishing', async () => {
@@ -243,6 +264,18 @@ describe('AgentPublisher', () => {
 
       // Mock connection.refreshAuth to avoid making HTTP calls during auth refresh
       $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
+
+      // Mock connection methods for getNextVersionName
+      $$.SANDBOX.stub(connection, 'singleRecordQuery')
+        .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
+        .throws(new Error('No records found'));
+
+      // Mock connection.query for bot versions (returns empty for first publish)
+      $$.SANDBOX.stub(connection, 'query').resolves({ totalSize: 0, done: true, records: [] });
+
+      // Mock deployAuthoringBundle since it now runs before the API call
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      $$.SANDBOX.stub(publisher as any, 'deployAuthoringBundle').resolves();
 
       try {
         await publisher.publishAgentJson();
@@ -259,7 +292,10 @@ describe('AgentPublisher', () => {
         .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
         .throws(new Error('No records found'))
         .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
-        .resolves({ DeveloperName: 'v1' });
+        .resolves({ DeveloperName: 'v0' });
+
+      // Mock connection.query for bot versions (returns empty for first publish)
+      $$.SANDBOX.stub(connection, 'query').resolves({ totalSize: 0, done: true, records: [] });
 
       publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
 
@@ -287,7 +323,10 @@ describe('AgentPublisher', () => {
         .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
         .throws(new Error('No records found'))
         .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
-        .resolves({ DeveloperName: 'v1' });
+        .resolves({ DeveloperName: 'v0' });
+
+      // Mock connection.query for bot versions (returns empty for first publish)
+      $$.SANDBOX.stub(connection, 'query').resolves({ totalSize: 0, done: true, records: [] });
 
       publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
 
@@ -306,6 +345,121 @@ describe('AgentPublisher', () => {
 
       // refreshAuth should NOT be called when there's no refresh token
       expect(refreshStub.called).to.be.false;
+    });
+
+    it('should deploy AAB before making the publish API call to allow SDR string replacement', async () => {
+      process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishNewAgent-Success');
+
+      // Track the order of operations
+      const callOrder: string[] = [];
+
+      // Mock connection methods
+      $$.SANDBOX.stub(connection, 'singleRecordQuery')
+        .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
+        .throws(new Error('No records found'))
+        .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
+        .resolves({ DeveloperName: 'v0' });
+      $$.SANDBOX.stub(connection, 'query').resolves({ totalSize: 0, done: true, records: [] });
+
+      publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
+
+      // Track when the actual publish API request happens
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+      const originalRequest = (publisher as any).maybeMock.request.bind((publisher as any).maybeMock);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      $$.SANDBOX.stub((publisher as any).maybeMock, 'request').callsFake(async (...args: unknown[]) => {
+        callOrder.push('publish-api-call');
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
+        return originalRequest(...args);
+      });
+
+      $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
+      $$.SANDBOX.stub(connection, 'getAuthInfoFields').returns({});
+
+      // Mock deployAuthoringBundle and track when it's called
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const deployStub = $$.SANDBOX.stub(publisher as any, 'deployAuthoringBundle').callsFake(
+        async (...args: unknown[]) => {
+          callOrder.push(`deploy-aab-${args[0] as string}`);
+        }
+      );
+
+      // Mock retrieveAgentMetadata
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      $$.SANDBOX.stub(publisher as any, 'retrieveAgentMetadata').resolves();
+
+      const result = await publisher.publishAgentJson();
+
+      // Verify the flow
+      expect(result).to.have.property('developerName', 'test_agent');
+      expect(result).to.have.property('botId', '0Xx000000000001');
+      expect(result).to.have.property('botVersionId', '0Bv000000000002');
+
+      // Verify deploy was called with v0 (predicted version for first publish)
+      expect(deployStub.calledOnce).to.be.true;
+      expect(deployStub.firstCall.args[0]).to.equal('v1');
+
+      // Verify deploy happened BEFORE the publish API call
+      expect(callOrder).to.have.lengthOf(2);
+      expect(callOrder[0]).to.equal('deploy-aab-v1');
+      expect(callOrder[1]).to.equal('publish-api-call');
+    });
+
+    it('should predict next version number correctly for existing agents', async () => {
+      process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishNewAgentVersion-Success');
+
+      const callOrder: string[] = [];
+
+      // Mock connection methods - agent exists with v0, v1, v2 versions
+      $$.SANDBOX.stub(connection, 'singleRecordQuery')
+        .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
+        .resolves({ Id: '0Xx000000000001' })
+        .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
+        .resolves({ DeveloperName: 'v3' });
+
+      // Return latest version as v2 (VersionNumber: 2)
+      $$.SANDBOX.stub(connection, 'query').resolves({
+        totalSize: 1,
+        done: true,
+        records: [{ DeveloperName: 'v2', VersionNumber: 2 }],
+      });
+
+      publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
+
+      // Track when the actual publish API request happens
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+      const originalRequest = (publisher as any).maybeMock.request.bind((publisher as any).maybeMock);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      $$.SANDBOX.stub((publisher as any).maybeMock, 'request').callsFake(async (...args: unknown[]) => {
+        callOrder.push('publish-api-call');
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
+        return originalRequest(...args);
+      });
+
+      $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
+      $$.SANDBOX.stub(connection, 'getAuthInfoFields').returns({});
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const deployStub = $$.SANDBOX.stub(publisher as any, 'deployAuthoringBundle').callsFake(
+        async (...args: unknown[]) => {
+          callOrder.push(`deploy-aab-${args[0] as string}`);
+        }
+      );
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      $$.SANDBOX.stub(publisher as any, 'retrieveAgentMetadata').resolves();
+
+      const result = await publisher.publishAgentJson();
+
+      expect(result).to.have.property('developerName', 'test_agent');
+      expect(deployStub.calledOnce).to.be.true;
+
+      // Verify predicted version is v3 (since latest is v2)
+      expect(deployStub.firstCall.args[0]).to.equal('v3');
+
+      // Verify deploy happened BEFORE publish
+      expect(callOrder[0]).to.equal('deploy-aab-v3');
+      expect(callOrder[1]).to.equal('publish-api-call');
     });
   });
 

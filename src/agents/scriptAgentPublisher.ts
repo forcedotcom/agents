@@ -105,7 +105,15 @@ export class ScriptAgentPublisher {
       },
     };
 
-    // Use JWT token only for the publish API call, then restore connection
+    // Step 1: Predict the next version name by querying existing versions
+    const predictedVersionName = await this.getNextVersionName();
+    getLogger().debug(`Predicted next version name: ${predictedVersionName}`);
+
+    // Step 2: Deploy the AuthoringBundle with the predicted version
+    // This must happen BEFORE publishing to allow SDR string replacement logic to work
+    await this.deployAuthoringBundle(predictedVersionName);
+
+    // Step 3: Use JWT token only for the publish API call, then restore connection
     // before metadata operations that may use SOAP API
     let response: PublishAgentJsonResponse;
     try {
@@ -126,14 +134,18 @@ export class ScriptAgentPublisher {
     }
 
     if (response.botId && response.botVersionId) {
-      // we've published the AgentJson, now we need to:
-      // 1. retrieve the new Agent metadata that's in the org
-      // 2. deploy the AuthoringBundle's -meta.xml file with correct target attribute
-      const botVersionName = await this.getVersionDeveloperName(response.botVersionId);
-      if (!this.skipRetrieve) {
-        await this.retrieveAgentMetadata(botVersionName);
+      // Step 4: Verify the published version matches our prediction
+      const actualVersionName = await this.getVersionDeveloperName(response.botVersionId);
+      if (actualVersionName !== predictedVersionName) {
+        getLogger().warn(
+          `Version name mismatch: predicted ${predictedVersionName} but got ${actualVersionName}. This may indicate a version numbering issue.`
+        );
       }
-      await this.deployAuthoringBundle(botVersionName);
+
+      // Step 5: Retrieve the new Agent metadata that's in the org
+      if (!this.skipRetrieve) {
+        await this.retrieveAgentMetadata(actualVersionName);
+      }
 
       return { ...response, developerName: this.developerName };
     } else {
@@ -331,6 +343,45 @@ export class ScriptAgentPublisher {
       const err = messages.createError('findBotVersionError', [botVersionId]);
       err.actions = [messages.getMessage('authoringBundleDeploymentErrorActions')];
       throw err;
+    }
+  }
+
+  /**
+   * Queries for all existing bot versions and predicts the next version name.
+   * Version names follow the pattern v1, v2, etc.
+   *
+   * @returns The predicted next version name (e.g., "v1" if no versions exist, "v3" if max is v2)
+   */
+  private async getNextVersionName(): Promise<string> {
+    const botId = await this.getPublishedBotId(this.developerName);
+
+    // If bot doesn't exist yet, this will be the first version
+    if (!botId) {
+      getLogger().debug('No existing bot found, next version will be v1');
+      return 'v1';
+    }
+
+    try {
+      // Query all bot versions ordered by version number
+      const queryResult = await this.connection.query<{ DeveloperName: string; VersionNumber: number }>(
+        `SELECT DeveloperName, VersionNumber FROM BotVersion WHERE BotDefinitionId='${botId}' AND IsDeleted = false ORDER BY VersionNumber DESC LIMIT 1`
+      );
+
+      if (queryResult.totalSize === 0) {
+        getLogger().debug('No existing versions found, next version will be v1');
+        return 'v1';
+      }
+
+      const latestVersion = queryResult.records[0];
+      const nextVersionNumber = latestVersion.VersionNumber + 1;
+      const nextVersionName = `v${nextVersionNumber}`;
+      getLogger().debug(
+        `Latest version is ${latestVersion.DeveloperName} (number: ${latestVersion.VersionNumber}), next version will be ${nextVersionName}`
+      );
+      return nextVersionName;
+    } catch (error) {
+      getLogger().debug(`Error querying versions: ${JSON.stringify(error)}. Defaulting to v1`);
+      return 'v1';
     }
   }
 }

@@ -231,10 +231,17 @@ describe('Agents', () => {
         .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='myAgent'")
         .rejects(new Error('No records found'));
 
+      // Mock connection.query for bot versions (returns empty for first publish)
+      $$.SANDBOX.stub(connection, 'query').resolves({ totalSize: 0, done: true, records: [] });
+
       // Mock useNamedUserJwt to return the connection without making HTTP calls
       $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
       // Mock connection.refreshAuth to avoid making HTTP calls during auth refresh
       $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
+
+      // Mock deployAuthoringBundle to avoid actual deployment during error test
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      $$.SANDBOX.stub(ScriptAgentPublisher.prototype as any, 'deployAuthoringBundle').resolves();
 
       // Create a minimal AgentJson for the test
       const testAgentJson = {
