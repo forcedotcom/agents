@@ -109,9 +109,9 @@ export class ScriptAgentPublisher {
     const predictedVersionName = await this.getNextVersionName();
     getLogger().debug(`Predicted next version name: ${predictedVersionName}`);
 
-    // Step 2: Deploy the AuthoringBundle with the predicted version
+    // Step 2: Deploy the AuthoringBundle without target
     // This must happen BEFORE publishing to allow SDR string replacement logic to work
-    await this.deployAuthoringBundle(predictedVersionName);
+    await this.deployAuthoringBundle();
 
     // Step 3: Use JWT token only for the publish API call, then restore connection
     // before metadata operations that may use SOAP API
@@ -146,6 +146,10 @@ export class ScriptAgentPublisher {
       if (!this.skipRetrieve) {
         await this.retrieveAgentMetadata(actualVersionName);
       }
+
+      // Step 6: Deploy the authoring bundle again with the actual version as target
+      // This sets the target attribute in the org's metadata to link the bundle to the version
+      await this.deployAuthoringBundle(actualVersionName);
 
       return { ...response, developerName: this.developerName };
     } else {
@@ -254,33 +258,43 @@ export class ScriptAgentPublisher {
   }
 
   /**
-   * Deploys the authoring bundle to the Salesforce org after setting the correct target attribute.
-   * The target attribute is required for deployment but should not remain in the
-   * local source files after deployment.
+   * Deploys the authoring bundle to the Salesforce org.
+   * If botVersionName is provided, sets the target attribute to link the bundle to that version.
+   * The target attribute should not remain in the local source files after deployment.
    *
    * @throws SfError if the deployment fails or if there are component deployment errors
-   * @param botVersionName
+   * @param botVersionName Optional bot version name to set as target
    */
-  private async deployAuthoringBundle(botVersionName: string): Promise<void> {
-    // 1. add the target to the local authoring bundle meta.xml file
+  private async deployAuthoringBundle(botVersionName?: string): Promise<void> {
+    // 1. if botVersionName is provided, add the target to the local authoring bundle meta.xml file
     // 2. deploy the authoring bundle to the org
-    // 3. remove the target from the localauthoring bundle meta.xml file
+    // 3. if target was added, remove it from the local authoring bundle meta.xml file
 
-    // 1. add the target to the local authoring bundle meta.xml file
+    // 1. Read and optionally modify the authoring bundle meta.xml file
     const xmlParser = new XMLParser({ ignoreAttributes: false });
     const authoringBundle = xmlParser.parse(await readFile(this.bundleMetaPath, 'utf-8')) as {
       AiAuthoringBundle: { target?: string };
     };
-    const target = `${this.developerName}.${botVersionName}`;
-    authoringBundle.AiAuthoringBundle.target = target;
-    getLogger().debug(`Setting target to ${target} in ${this.bundleMetaPath}`);
+
     const xmlBuilder = new XMLBuilder({
       ignoreAttributes: false,
       format: true,
       suppressBooleanAttributes: false,
       suppressEmptyNode: false,
     });
-    await writeFile(this.bundleMetaPath, xmlBuilder.build(authoringBundle));
+
+    if (botVersionName) {
+      const target = `${this.developerName}.${botVersionName}`;
+      authoringBundle.AiAuthoringBundle.target = target;
+      getLogger().debug(`Setting target to ${target} in ${this.bundleMetaPath}`);
+      await writeFile(this.bundleMetaPath, xmlBuilder.build(authoringBundle));
+    } else {
+      // Ensure target is removed if it exists from a previous run
+      delete authoringBundle.AiAuthoringBundle.target;
+      getLogger().debug('Deploying authoring bundle without target attribute');
+      await writeFile(this.bundleMetaPath, xmlBuilder.build(authoringBundle));
+    }
+
     const standardConnection = await this.createStandardConnection();
 
     // 2. attempt to deploy the authoring bundle to the org
@@ -289,9 +303,11 @@ export class ScriptAgentPublisher {
     });
     const deployResult = await deploy.pollStatus();
 
-    // 3.remove the target from the local authoring bundle meta.xml file
-    delete authoringBundle.AiAuthoringBundle.target;
-    await writeFile(this.bundleMetaPath, xmlBuilder.build(authoringBundle));
+    // 3. If target was added, remove it from the local authoring bundle meta.xml file
+    if (botVersionName) {
+      delete authoringBundle.AiAuthoringBundle.target;
+      await writeFile(this.bundleMetaPath, xmlBuilder.build(authoringBundle));
+    }
 
     if (!deployResult.response?.success) {
       const componentFailures = deployResult.response.details?.componentFailures;

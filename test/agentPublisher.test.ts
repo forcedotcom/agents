@@ -141,10 +141,13 @@ describe('AgentPublisher', () => {
 
       expect(result).to.have.property('developerName', 'test_agent');
       expect(retrieveAgentMetadataStub.calledOnce).to.be.true;
-      expect(deployAuthoringBundleStub.calledOnce).to.be.true;
-      // Verify deploy was called before publish (with predicted version v1)
-      expect(deployAuthoringBundleStub.calledBefore(retrieveAgentMetadataStub)).to.be.true;
-      expect(deployAuthoringBundleStub.firstCall.args[0]).to.equal('v1');
+      expect(deployAuthoringBundleStub.calledTwice).to.be.true;
+      // Verify first deploy was called before retrieve (without target since version doesn't exist yet)
+      expect(deployAuthoringBundleStub.firstCall.calledBefore(retrieveAgentMetadataStub.firstCall)).to.be.true;
+      expect(deployAuthoringBundleStub.firstCall.args[0]).to.be.undefined;
+      // Verify second deploy was called after retrieve (with actual version name)
+      expect(deployAuthoringBundleStub.secondCall.calledAfter(retrieveAgentMetadataStub.firstCall)).to.be.true;
+      expect(deployAuthoringBundleStub.secondCall.args[0]).to.equal('v0');
     });
 
     it('should skip metadata retrieve when skipMetadataRetrieve is true', async () => {
@@ -249,9 +252,11 @@ describe('AgentPublisher', () => {
 
       expect(result).to.have.property('developerName', 'test_agent');
       expect(retrieveAgentMetadataStub.calledOnce).to.be.true;
-      expect(deployAuthoringBundleStub.calledOnce).to.be.true;
-      // Verify deploy was called with predicted next version v2 (since latest is v1)
-      expect(deployAuthoringBundleStub.firstCall.args[0]).to.equal('v2');
+      expect(deployAuthoringBundleStub.calledTwice).to.be.true;
+      // Verify first deploy was called without target (deployed before version exists)
+      expect(deployAuthoringBundleStub.firstCall.args[0]).to.be.undefined;
+      // Verify second deploy was called with actual version name
+      expect(deployAuthoringBundleStub.secondCall.args[0]).to.equal('v2');
     });
 
     it('should handle API errors during publishing', async () => {
@@ -395,14 +400,16 @@ describe('AgentPublisher', () => {
       expect(result).to.have.property('botId', '0Xx000000000001');
       expect(result).to.have.property('botVersionId', '0Bv000000000002');
 
-      // Verify deploy was called with v0 (predicted version for first publish)
-      expect(deployStub.calledOnce).to.be.true;
-      expect(deployStub.firstCall.args[0]).to.equal('v1');
+      // Verify deploy was called twice: once before publish, once after
+      expect(deployStub.calledTwice).to.be.true;
+      expect(deployStub.firstCall.args[0]).to.be.undefined;
+      expect(deployStub.secondCall.args[0]).to.equal('v0');
 
-      // Verify deploy happened BEFORE the publish API call
-      expect(callOrder).to.have.lengthOf(2);
-      expect(callOrder[0]).to.equal('deploy-aab-v1');
+      // Verify correct call order: deploy without target, publish, deploy with target
+      expect(callOrder).to.have.lengthOf(3);
+      expect(callOrder[0]).to.equal('deploy-aab-undefined');
       expect(callOrder[1]).to.equal('publish-api-call');
+      expect(callOrder[2]).to.equal('deploy-aab-v0');
     });
 
     it('should predict next version number correctly for existing agents', async () => {
@@ -452,14 +459,17 @@ describe('AgentPublisher', () => {
       const result = await publisher.publishAgentJson();
 
       expect(result).to.have.property('developerName', 'test_agent');
-      expect(deployStub.calledOnce).to.be.true;
+      expect(deployStub.calledTwice).to.be.true;
 
-      // Verify predicted version is v3 (since latest is v2)
-      expect(deployStub.firstCall.args[0]).to.equal('v3');
+      // Verify first deploy called without target (before version exists)
+      expect(deployStub.firstCall.args[0]).to.be.undefined;
+      // Verify second deploy called with actual version
+      expect(deployStub.secondCall.args[0]).to.equal('v3');
 
-      // Verify deploy happened BEFORE publish
-      expect(callOrder[0]).to.equal('deploy-aab-v3');
+      // Verify correct call order
+      expect(callOrder[0]).to.equal('deploy-aab-undefined');
       expect(callOrder[1]).to.equal('publish-api-call');
+      expect(callOrder[2]).to.equal('deploy-aab-v3');
     });
   });
 
