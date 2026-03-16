@@ -111,7 +111,7 @@ export class ScriptAgentPublisher {
 
     // Step 2: Deploy the AuthoringBundle without target
     // This must happen BEFORE publishing to allow SDR string replacement logic to work
-    await this.deployAuthoringBundle();
+    await this.deployAuthoringBundle({ checkOnly: true });
 
     // Step 3: Use JWT token only for the publish API call, then restore connection
     // before metadata operations that may use SOAP API
@@ -149,7 +149,7 @@ export class ScriptAgentPublisher {
 
       // Step 6: Deploy the authoring bundle again with the actual version as target
       // This sets the target attribute in the org's metadata to link the bundle to the version
-      await this.deployAuthoringBundle(actualVersionName);
+      await this.deployAuthoringBundle({ botVersionName: actualVersionName });
 
       return { ...response, developerName: this.developerName };
     } else {
@@ -263,9 +263,13 @@ export class ScriptAgentPublisher {
    * The target attribute should not remain in the local source files after deployment.
    *
    * @throws SfError if the deployment fails or if there are component deployment errors
-   * @param botVersionName Optional bot version name to set as target
+   * @param options Optional configuration object
+   * @param options.botVersionName Optional bot version name to set as target
+   * @param options.checkOnly Optional boolean to make deploy with checkOnly
    */
-  private async deployAuthoringBundle(botVersionName?: string): Promise<void> {
+  private async deployAuthoringBundle(options?: { botVersionName?: string; checkOnly?: boolean }): Promise<void> {
+    const { botVersionName, checkOnly } = options ?? {};
+
     // 1. if botVersionName is provided, add the target to the local authoring bundle meta.xml file
     // 2. deploy the authoring bundle to the org
     // 3. if target was added, remove it from the local authoring bundle meta.xml file
@@ -299,6 +303,7 @@ export class ScriptAgentPublisher {
 
     // 2. attempt to deploy the authoring bundle to the org
     const deploy = await ComponentSet.fromSource(this.bundleDir).deploy({
+      apiOptions: { checkOnly },
       usernameOrConnection: standardConnection,
     });
     const deployResult = await deploy.pollStatus();

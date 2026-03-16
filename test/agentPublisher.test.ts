@@ -144,10 +144,10 @@ describe('AgentPublisher', () => {
       expect(deployAuthoringBundleStub.calledTwice).to.be.true;
       // Verify first deploy was called before retrieve (without target since version doesn't exist yet)
       expect(deployAuthoringBundleStub.firstCall.calledBefore(retrieveAgentMetadataStub.firstCall)).to.be.true;
-      expect(deployAuthoringBundleStub.firstCall.args[0]).to.be.undefined;
+      expect(deployAuthoringBundleStub.firstCall.args[0]).to.deep.equal({ checkOnly: true });
       // Verify second deploy was called after retrieve (with actual version name)
       expect(deployAuthoringBundleStub.secondCall.calledAfter(retrieveAgentMetadataStub.firstCall)).to.be.true;
-      expect(deployAuthoringBundleStub.secondCall.args[0]).to.equal('v0');
+      expect(deployAuthoringBundleStub.secondCall.args[0]).to.deep.equal({ botVersionName: 'v0' });
     });
 
     it('should skip metadata retrieve when skipMetadataRetrieve is true', async () => {
@@ -254,9 +254,9 @@ describe('AgentPublisher', () => {
       expect(retrieveAgentMetadataStub.calledOnce).to.be.true;
       expect(deployAuthoringBundleStub.calledTwice).to.be.true;
       // Verify first deploy was called without target (deployed before version exists)
-      expect(deployAuthoringBundleStub.firstCall.args[0]).to.be.undefined;
+      expect(deployAuthoringBundleStub.firstCall.args[0]).to.deep.equal({ checkOnly: true });
       // Verify second deploy was called with actual version name
-      expect(deployAuthoringBundleStub.secondCall.args[0]).to.equal('v2');
+      expect(deployAuthoringBundleStub.secondCall.args[0]).to.deep.equal({ botVersionName: 'v2' });
     });
 
     it('should handle API errors during publishing', async () => {
@@ -384,8 +384,10 @@ describe('AgentPublisher', () => {
       // Mock deployAuthoringBundle and track when it's called
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const deployStub = $$.SANDBOX.stub(publisher as any, 'deployAuthoringBundle').callsFake(
-        async (...args: unknown[]) => {
-          callOrder.push(`deploy-aab-${args[0] as string}`);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        async (...args: any[]) => {
+          const options = args[0] as { botVersionName?: string; checkOnly?: boolean } | undefined;
+          callOrder.push(`deploy-aab-${options?.botVersionName ?? 'undefined'}`);
         }
       );
 
@@ -402,8 +404,8 @@ describe('AgentPublisher', () => {
 
       // Verify deploy was called twice: once before publish, once after
       expect(deployStub.calledTwice).to.be.true;
-      expect(deployStub.firstCall.args[0]).to.be.undefined;
-      expect(deployStub.secondCall.args[0]).to.equal('v0');
+      expect(deployStub.firstCall.args[0]).to.deep.equal({ checkOnly: true });
+      expect(deployStub.secondCall.args[0]).to.deep.equal({ botVersionName: 'v0' });
 
       // Verify correct call order: deploy without target, publish, deploy with target
       expect(callOrder).to.have.lengthOf(3);
@@ -448,8 +450,10 @@ describe('AgentPublisher', () => {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const deployStub = $$.SANDBOX.stub(publisher as any, 'deployAuthoringBundle').callsFake(
-        async (...args: unknown[]) => {
-          callOrder.push(`deploy-aab-${args[0] as string}`);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        async (...args: any[]) => {
+          const options = args[0] as { botVersionName?: string; checkOnly?: boolean } | undefined;
+          callOrder.push(`deploy-aab-${options?.botVersionName ?? 'undefined'}`);
         }
       );
 
@@ -462,9 +466,9 @@ describe('AgentPublisher', () => {
       expect(deployStub.calledTwice).to.be.true;
 
       // Verify first deploy called without target (before version exists)
-      expect(deployStub.firstCall.args[0]).to.be.undefined;
+      expect(deployStub.firstCall.args[0]).to.deep.equal({ checkOnly: true });
       // Verify second deploy called with actual version
-      expect(deployStub.secondCall.args[0]).to.equal('v3');
+      expect(deployStub.secondCall.args[0]).to.deep.equal({ botVersionName: 'v3' });
 
       // Verify correct call order
       expect(callOrder[0]).to.equal('deploy-aab-undefined');
@@ -569,7 +573,7 @@ describe('AgentPublisher', () => {
 
       try {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-        await deployAuthoringBundle('test_bot_version_id');
+        await deployAuthoringBundle({ botVersionName: 'test_bot_version_id' });
         expect.fail('Expected error was not thrown');
       } catch (error) {
         // Expect either SfError or filesystem error
@@ -607,13 +611,16 @@ describe('AgentPublisher', () => {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
       const deployAuthoringBundle = (publisher as any).deployAuthoringBundle.bind(publisher);
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      await deployAuthoringBundle('v1');
+      await deployAuthoringBundle({ botVersionName: 'v1' });
 
       // Verify ComponentSet generation + deploy invocation
       expect(fromSourceStub.calledOnce).to.be.true;
       expect(fromSourceStub.firstCall.args[0]).to.equal(bundleDir);
       expect(deployStub.calledOnce).to.be.true;
-      expect(deployStub.firstCall.args[0]).to.deep.equal({ usernameOrConnection: standardConnection });
+      expect(deployStub.firstCall.args[0]).to.deep.equal({
+        apiOptions: { checkOnly: undefined },
+        usernameOrConnection: standardConnection,
+      });
 
       // Ensure the target was removed from the local file after deploy
       const finalContent = await readFile(bundleMetaPath, 'utf-8');
