@@ -160,7 +160,114 @@ describe('Agents', () => {
       }
     });
 
-    it('should apply string replacements before compilation', async () => {
+    it('should apply string replacements during publish', async () => {
+      // Set up environment variable for replacement
+      process.env.AGENT_INSTRUCTIONS = 'You are a helpful assistant.';
+
+      // Create agent file with placeholder
+      const aabDirectory = join('force-app', 'main', 'default', 'aiAuthoringBundles', 'myAgent');
+      await fs.writeFile(
+        join(aabDirectory, 'myAgent.agent'),
+        'system:\n  instructions: "REPLACE_INSTRUCTIONS"\n  developer_name: "myAgent"\n  agent_label: "My Agent"'
+      );
+
+      // Configure string replacements in project
+      $$.SANDBOX.stub(sfProject, 'getSfProjectJson').returns({
+        get: (key: string) => {
+          if (key === 'replacements') {
+            return [
+              {
+                glob: '**/aiAuthoringBundles/**/*.agent',
+                stringToReplace: 'REPLACE_INSTRUCTIONS',
+                replaceWithEnv: 'AGENT_INSTRUCTIONS',
+              },
+            ];
+          }
+          return undefined;
+        },
+      } as never);
+
+      $$.SANDBOX.stub(sfProject, 'getPath').returns(process.cwd());
+
+      // Mock successful compilation response
+      requestStub.withArgs(sinon.match.has('url', sinon.match(/authoring\/scripts/))).resolves({
+        status: 'success',
+        compiledArtifact: {
+          schemaVersion: '1.0',
+          globalConfiguration: {
+            developerName: 'myAgent',
+            label: 'My Agent',
+            description: '',
+            enableEnhancedEventLogs: false,
+            agentType: 'AgentforceServiceAgent',
+            templateName: '',
+            defaultAgentUser: '',
+            defaultOutboundRouting: '',
+            contextVariables: [],
+          },
+          agentVersion: {
+            developerName: null,
+            plannerType: 'standard',
+            systemMessages: [],
+            modalityParameters: {
+              voice: {
+                inboundModel: null,
+                inboundFillerWordsDetection: null,
+                outboundVoice: null,
+                outboundModel: null,
+                outboundSpeed: null,
+                outboundStyleExaggeration: null,
+              },
+              language: {
+                defaultLocale: 'en_US',
+                additionalLocales: [],
+                allAdditionalLocales: false,
+              },
+            },
+            additionalParameters: false,
+            company: '',
+            role: '',
+            stateVariables: [],
+            initialNode: '',
+            nodes: [],
+            knowledgeDefinitions: null,
+          },
+        },
+        errors: [],
+        syntacticMap: { blocks: [] },
+        dslVersion: '0.0.3.rc29',
+      });
+
+      // Mock publish flow
+      $$.SANDBOX.stub(ScriptAgentPublisher.prototype, 'publishAgentJson').resolves({
+        id: 'test-id',
+        entityId: 'test-entity-id',
+      } as never);
+
+      const agent = new ScriptAgent({ connection, project: sfProject!, aabName: 'myAgent' });
+      // Replacements are applied during publish flow
+      await agent.publish();
+
+      // Verify that the compile request was called with replaced content
+      const calls = requestStub.getCalls();
+      const compileCall = calls.find(
+        (call) =>
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+          call.args[0]?.url?.includes('authoring/scripts') as boolean
+      );
+      expect(compileCall).to.exist;
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      const requestBody = JSON.parse(compileCall!.args[0].body as string) as {
+        assets: Array<{ content: string }>;
+      };
+      expect(requestBody.assets[0].content).to.include('You are a helpful assistant.');
+      expect(requestBody.assets[0].content).to.not.include('REPLACE_INSTRUCTIONS');
+
+      delete process.env.AGENT_INSTRUCTIONS;
+    });
+
+    it('should NOT apply string replacements on regular compile', async () => {
       // Set up environment variable for replacement
       process.env.AGENT_INSTRUCTIONS = 'You are a helpful assistant.';
 
@@ -239,11 +346,12 @@ describe('Agents', () => {
       });
 
       const agent = new ScriptAgent({ connection, project: sfProject!, aabName: 'myAgent' });
+      // compile() never applies replacements (only publish does)
       const compileResult = await agent.compile();
 
       expect(compileResult.status).to.equal('success');
 
-      // Verify that the request was called with replaced content
+      // Verify that the request was called with ORIGINAL content (no replacements)
       const calls = requestStub.getCalls();
       const compileCall = calls.find(
         (call) =>
@@ -256,8 +364,9 @@ describe('Agents', () => {
       const requestBody = JSON.parse(compileCall!.args[0].body as string) as {
         assets: Array<{ content: string }>;
       };
-      expect(requestBody.assets[0].content).to.include('You are a helpful assistant.');
-      expect(requestBody.assets[0].content).to.not.include('REPLACE_INSTRUCTIONS');
+      // Should still have the placeholder, NOT the replacement
+      expect(requestBody.assets[0].content).to.include('REPLACE_INSTRUCTIONS');
+      expect(requestBody.assets[0].content).to.not.include('You are a helpful assistant.');
 
       delete process.env.AGENT_INSTRUCTIONS;
     });
@@ -310,7 +419,6 @@ describe('Agents', () => {
     });
 
     it('should throw error when API call fails', async () => {
-      // Mock failed API response
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishAgentJson-Error');
 
       // Mock AgentPublisher constructor to avoid bundle validation
@@ -331,12 +439,88 @@ describe('Agents', () => {
       // Mock connection.singleRecordQuery to return undefined (no existing bot)
       $$.SANDBOX.stub(connection, 'singleRecordQuery')
         .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='myAgent'")
-        .rejects(new Error('No records found'));
+        .resolves(undefined);
 
       // Mock useNamedUserJwt to return the connection without making HTTP calls
       $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
       // Mock connection.refreshAuth to avoid making HTTP calls during auth refresh
       $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
+      // Mock connection.getConnectionOptions for compile
+      $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
+        accessToken: 'test_access_token',
+        instanceUrl: connection.instanceUrl,
+      });
+      // Mock connection.getAuthInfoFields for publisher finally block
+      $$.SANDBOX.stub(connection, 'getAuthInfoFields').returns({
+        refreshToken: 'test_refresh_token',
+      } as never);
+
+      // Mock compile endpoint to succeed
+      const requestStub = $$.SANDBOX.stub(connection, 'request');
+      requestStub.withArgs(sinon.match({ url: sinon.match(/authoring\/scripts/) })).resolves({
+        status: 'success',
+        compiledArtifact: {
+          schemaVersion: '1.0',
+          globalConfiguration: {
+            developerName: 'myAgent',
+            label: 'My Agent',
+            description: '',
+            enableEnhancedEventLogs: false,
+            agentType: 'AgentforceServiceAgent',
+            templateName: '',
+            defaultAgentUser: '',
+            defaultOutboundRouting: '',
+            contextVariables: [],
+          },
+          agentVersion: {
+            developerName: null,
+            plannerType: 'standard',
+            systemMessages: [],
+            modalityParameters: {
+              voice: {
+                inboundModel: null,
+                inboundFillerWordsDetection: null,
+                outboundVoice: null,
+                outboundModel: null,
+                outboundSpeed: null,
+                outboundStyleExaggeration: null,
+              },
+              language: {
+                defaultLocale: 'en_US',
+                additionalLocales: [],
+                allAdditionalLocales: false,
+              },
+            },
+            additionalParameters: false,
+            company: '',
+            role: '',
+            stateVariables: [],
+            initialNode: '',
+            nodes: [],
+            knowledgeDefinitions: null,
+          },
+        },
+        errors: [],
+        syntacticMap: { blocks: [] },
+        dslVersion: '0.0.3.rc29',
+      });
+      // Bootstrap endpoint for compile
+      requestStub
+        .withArgs(sinon.match({ url: `${connection.instanceUrl}/agentforce/bootstrap/nameduser` }))
+        // eslint-disable-next-line camelcase
+        .resolves({ access_token: 'test_access_token' });
+      // Publish endpoint should return error response
+      requestStub.withArgs(sinon.match({ url: sinon.match(/ai-agent\/v1\.1\/authoring\/agents/) })).resolves({
+        isSuccess: false,
+        botDeveloperName: null,
+        errorMessage: 'Failed to publish agent',
+      });
+
+      // Mock project for string replacements (no replacements configured)
+      $$.SANDBOX.stub(sfProject, 'getSfProjectJson').returns({
+        get: () => undefined,
+      } as never);
+      $$.SANDBOX.stub(sfProject, 'getPath').returns(process.cwd());
 
       // Create a minimal AgentJson for the test
       const testAgentJson = {

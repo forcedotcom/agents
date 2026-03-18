@@ -182,28 +182,12 @@ export class ScriptAgent extends AgentBase {
   public async compile(): Promise<CompileAgentScriptResponse> {
     const url = `${this.apiBase}/v1.1/authoring/scripts`;
 
-    // Apply string replacements before compilation
-    const replacementResult = await applyStringReplacementsToAgent(
-      this.agentFilePath,
-      this.agentScriptContent,
-      this.options.project
-    );
-
-    const contentToCompile = replacementResult.content;
-
-    // Log replacements if any were made
-    if (replacementResult.replacementsMade > 0) {
-      void Lifecycle.getInstance().emit('agents:string-replacements-applied', {
-        replacements: replacementResult.replacements,
-      });
-    }
-
     const compileData = {
       assets: [
         {
           type: 'AFScript',
           name: 'AFScript',
-          content: contentToCompile,
+          content: this.agentScriptContent,
         },
       ],
       afScriptVersion: '1.0.1',
@@ -256,9 +240,31 @@ export class ScriptAgent extends AgentBase {
    * @returns {Promise<PublishAgentJsonResponse>} The publish response
    */
   public async publish(skipMetadataRetrieve?: boolean): Promise<PublishAgent> {
-    if (!this.agentJson) {
+    // Apply string replacements before compiling for publish
+    const originalContent = this.agentScriptContent;
+    try {
+      const replacementResult = await applyStringReplacementsToAgent(
+        this.agentFilePath,
+        this.agentScriptContent,
+        this.options.project
+      );
+
+      // Temporarily replace content with the result of string replacements
+      this.agentScriptContent = replacementResult.content;
+
+      // Log replacements if any were made
+      if (replacementResult.replacementsMade > 0) {
+        void Lifecycle.getInstance().emit('agents:string-replacements-applied', {
+          replacements: replacementResult.replacements,
+        });
+      }
+
       await this.compile();
+    } finally {
+      // Always restore original content after compilation
+      this.agentScriptContent = originalContent;
     }
+
     const publisher = new ScriptAgentPublisher(
       this.connection,
       this.options.project,
