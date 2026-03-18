@@ -14,37 +14,23 @@
  * limitations under the License.
  */
 
-import { readFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { glob } from 'glob';
-import { SfError, SfProject } from '@salesforce/core';
+import { SfProject, SfError } from '@salesforce/core';
+// Use SDR's ReplacementConfig type to ensure compatibility with sfdx-project.json schema
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore - importing type from internal SDR path for compatibility
+import type { ReplacementConfig } from '@salesforce/source-deploy-retrieve/lib/src/convert/types';
+// Import helper functions from SDR that handle the replacement logic
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore - importing from internal SDR path
+import {
+  matchesFile,
+  envFilter,
+  getContentsOfReplacementFile,
+  stringToRegex,
+} from '@salesforce/source-deploy-retrieve/lib/src/convert/replacements';
 
-/**
- * Configuration for a single string replacement operation
- */
-export type ReplacementConfig = {
-  // Location of files
-  filename?: string;
-  glob?: string;
-
-  // String to be replaced
-  stringToReplace?: string;
-  regexToReplace?: string;
-
-  // Replacement value
-  replaceWithEnv?: string;
-  replaceWithFile?: string;
-
-  // Conditional processing
-  replaceWhenEnv?: Array<{
-    env: string;
-    value: string;
-  }>;
-
-  // Optional flags
-  allowUnsetEnvVariable?: boolean;
-};
+// Re-export ReplacementConfig from SDR for convenience
+export type { ReplacementConfig };
 
 /**
  * Result of applying string replacements to content
@@ -60,177 +46,10 @@ export type ReplacementResult = {
 };
 
 /**
- * Validates that a replacement configuration has required fields
- */
-function validateReplacementConfig(config: ReplacementConfig): void {
-  // Must have either filename or glob
-  if (!config.filename && !config.glob) {
-    throw SfError.create({
-      name: 'InvalidReplacementConfig',
-      message: 'Each replacement must specify either "filename" or "glob"',
-    });
-  }
-
-  // Must have either stringToReplace or regexToReplace
-  if (!config.stringToReplace && !config.regexToReplace) {
-    throw SfError.create({
-      name: 'InvalidReplacementConfig',
-      message: 'Each replacement must specify either "stringToReplace" or "regexToReplace"',
-    });
-  }
-
-  // Must have either replaceWithEnv or replaceWithFile
-  if (!config.replaceWithEnv && !config.replaceWithFile) {
-    throw SfError.create({
-      name: 'InvalidReplacementConfig',
-      message: 'Each replacement must specify either "replaceWithEnv" or "replaceWithFile"',
-    });
-  }
-}
-
-/**
- * Checks if conditional replacement should be applied based on environment variables
- */
-function shouldApplyReplacement(config: ReplacementConfig): boolean {
-  if (!config.replaceWhenEnv || config.replaceWhenEnv.length === 0) {
-    return true;
-  }
-
-  // All conditions must be met
-  return config.replaceWhenEnv.every((condition) => {
-    const envValue = process.env[condition.env];
-    return envValue === condition.value;
-  });
-}
-
-/**
- * Gets the replacement value from environment variable or file
- */
-async function getReplacementValue(config: ReplacementConfig, projectPath: string): Promise<string> {
-  if (config.replaceWithEnv) {
-    const envValue = process.env[config.replaceWithEnv];
-
-    if (envValue === undefined) {
-      if (config.allowUnsetEnvVariable) {
-        // Replace with empty string (remove the matched string)
-        return '';
-      } else {
-        throw SfError.create({
-          name: 'UnsetEnvironmentVariable',
-          message: `Environment variable "${config.replaceWithEnv}" is not set. Set the variable or use "allowUnsetEnvVariable": true to replace with empty string.`,
-        });
-      }
-    }
-
-    return envValue;
-  }
-
-  if (config.replaceWithFile) {
-    const filePath = resolve(projectPath, config.replaceWithFile);
-
-    if (!existsSync(filePath)) {
-      throw SfError.create({
-        name: 'ReplacementFileNotFound',
-        message: `Replacement file not found: ${filePath}`,
-      });
-    }
-
-    return (await readFile(filePath, 'utf-8')).trim();
-  }
-
-  throw SfError.create({
-    name: 'InvalidReplacementConfig',
-    message: 'No replacement value specified',
-  });
-}
-
-/**
- * Applies string replacements to content
- */
-function applyReplacementToContent(
-  content: string,
-  config: ReplacementConfig,
-  replacementValue: string
-): { content: string; count: number; pattern: string } {
-  let newContent: string;
-  let count = 0;
-  let pattern: string;
-
-  if (config.stringToReplace) {
-    pattern = config.stringToReplace;
-    // Count occurrences
-    const regex = new RegExp(escapeRegExp(config.stringToReplace), 'g');
-    const matches = content.match(regex);
-    count = matches ? matches.length : 0;
-
-    // Replace all occurrences
-    newContent = content.split(config.stringToReplace).join(replacementValue);
-  } else if (config.regexToReplace) {
-    pattern = config.regexToReplace;
-    const regex = new RegExp(config.regexToReplace, 'g');
-
-    // Count matches
-    const matches = content.match(regex);
-    count = matches ? matches.length : 0;
-
-    // Replace using regex
-    newContent = content.replace(regex, replacementValue);
-  } else {
-    throw SfError.create({
-      name: 'InvalidReplacementConfig',
-      message: 'No string or regex pattern specified',
-    });
-  }
-
-  return { content: newContent, count, pattern };
-}
-
-/**
- * Escapes special regex characters in a string
- */
-function escapeRegExp(string: string): string {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/**
- * Gets the list of files to process based on filename or glob pattern
- */
-async function getFilesToProcess(config: ReplacementConfig, projectPath: string): Promise<string[]> {
-  if (config.filename) {
-    const filePath = resolve(projectPath, config.filename);
-    if (!existsSync(filePath)) {
-      throw SfError.create({
-        name: 'FileNotFound',
-        message: `File not found: ${filePath}`,
-      });
-    }
-    return [filePath];
-  }
-
-  if (config.glob) {
-    // Use glob pattern relative to project path
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const files = await glob(config.glob, {
-      cwd: projectPath,
-      absolute: true,
-      nodir: true,
-    });
-
-    if (files.length === 0) {
-      throw SfError.create({
-        name: 'NoFilesMatched',
-        message: `No files matched glob pattern: ${config.glob}`,
-      });
-    }
-
-    return files;
-  }
-
-  return [];
-}
-
-/**
  * Applies string replacements to a specific file's content
+ *
+ * This uses SDR's replacement configuration format and helper functions
+ * to maintain compatibility with the standard sfdx-project.json replacement schema.
  *
  * @param filePath - The file to check for replacements
  * @param content - The content of the file
@@ -243,9 +62,9 @@ export async function applyStringReplacements(
   project: SfProject
 ): Promise<ReplacementResult> {
   const projectJson = project.getSfProjectJson();
-  const replacements = projectJson.get('replacements') as ReplacementConfig[] | undefined;
+  const replacementConfigs = projectJson.get('replacements') as ReplacementConfig[] | undefined;
 
-  if (!replacements || replacements.length === 0) {
+  if (!replacementConfigs || replacementConfigs.length === 0) {
     return {
       content,
       replacementsMade: 0,
@@ -253,8 +72,6 @@ export async function applyStringReplacements(
     };
   }
 
-  const projectPath = project.getPath();
-  const normalizedFilePath = resolve(filePath);
   let modifiedContent = content;
   const appliedReplacements: Array<{
     file: string;
@@ -262,36 +79,70 @@ export async function applyStringReplacements(
     replacedWith: string;
   }> = [];
 
-  for (const config of replacements) {
-    // Validate configuration
-    validateReplacementConfig(config);
+  // Filter replacements using SDR's envFilter to check environment conditionals
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+  const envFilteredReplacements = replacementConfigs.filter(envFilter as (r: ReplacementConfig) => boolean);
 
-    // Check if this replacement applies to the current file
-    // eslint-disable-next-line no-await-in-loop
-    const filesToProcess = await getFilesToProcess(config, projectPath);
-    const shouldProcessFile = filesToProcess.some((f) => resolve(f) === normalizedFilePath);
+  // eslint-disable-next-line no-await-in-loop -- replacements must be applied sequentially
+  for (const config of envFilteredReplacements) {
+    // Use SDR's matchesFile function to check if this replacement applies to the current file
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+    const fileMatchesFn = matchesFile(filePath) as (r: ReplacementConfig) => boolean;
+    const fileMatches = fileMatchesFn(config);
 
-    if (!shouldProcessFile) {
-      continue;
-    }
-
-    // Check conditional replacements
-    if (!shouldApplyReplacement(config)) {
+    if (!fileMatches) {
       continue;
     }
 
     // Get replacement value
-    // eslint-disable-next-line no-await-in-loop
-    const replacementValue = await getReplacementValue(config, projectPath);
+    let replacementValue: string;
+    if (config.replaceWithEnv) {
+      const envValue = process.env[config.replaceWithEnv];
+      if (envValue === undefined) {
+        if (config.allowUnsetEnvVariable) {
+          replacementValue = '';
+        } else {
+          throw SfError.create({
+            name: 'UnsetEnvironmentVariable',
+            message: `Environment variable "${config.replaceWithEnv}" is not set. Set the variable or use "allowUnsetEnvVariable": true to replace with empty string.`,
+          });
+        }
+      } else {
+        replacementValue = envValue;
+      }
+    } else if (config.replaceWithFile) {
+      // Use SDR's getContentsOfReplacementFile to read the file
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, no-await-in-loop
+      replacementValue = await getContentsOfReplacementFile(config.replaceWithFile);
+    } else {
+      continue;
+    }
 
-    // Apply replacement
-    const result = applyReplacementToContent(modifiedContent, config, replacementValue);
-    modifiedContent = result.content;
+    // Build regex for replacement
+    let regex: RegExp;
+    let patternStr: string;
 
-    if (result.count > 0) {
+    if (config.stringToReplace) {
+      patternStr = config.stringToReplace;
+      // Use SDR's stringToRegex to properly escape the string
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      regex = stringToRegex(config.stringToReplace);
+    } else if (config.regexToReplace) {
+      patternStr = config.regexToReplace;
+      regex = new RegExp(config.regexToReplace, 'g');
+    } else {
+      continue;
+    }
+
+    // Count occurrences before replacement
+    const matches = modifiedContent.match(regex);
+    if (matches && matches.length > 0) {
+      // Apply replacement
+      modifiedContent = modifiedContent.replace(regex, replacementValue);
+
       appliedReplacements.push({
         file: filePath,
-        stringReplaced: result.pattern,
+        stringReplaced: patternStr,
         replacedWith: replacementValue,
       });
     }

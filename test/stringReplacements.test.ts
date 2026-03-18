@@ -209,7 +209,8 @@ describe('String Replacements', () => {
         expect.fail('Should have thrown an error');
       } catch (error) {
         expect(error).to.be.instanceOf(SfError);
-        expect((error as SfError).name).to.equal('ReplacementFileNotFound');
+        // SDR uses "ReplacementsFileNotReadError" for missing replacement files
+        expect((error as SfError).name).to.equal('ReplacementsFileNotReadError');
       }
     });
   });
@@ -354,7 +355,7 @@ describe('String Replacements', () => {
   });
 
   describe('validation', () => {
-    it('should throw error when neither filename nor glob is specified', async () => {
+    it('should skip replacements when neither filename nor glob is specified', async () => {
       const testFile = join(testDir, 'test.agent');
       const content = 'Hello REPLACE_ME world';
       await writeFile(testFile, content);
@@ -371,19 +372,20 @@ describe('String Replacements', () => {
         get: (key: string) => (key === 'replacements' ? replacements : undefined),
       } as never);
 
-      try {
-        await applyStringReplacements(testFile, content, sfProject);
-        expect.fail('Should have thrown an error');
-      } catch (error) {
-        expect(error).to.be.instanceOf(SfError);
-        expect((error as SfError).name).to.equal('InvalidReplacementConfig');
-      }
+      // SDR's logic skips invalid configs instead of throwing errors
+      const result = await applyStringReplacements(testFile, content, sfProject);
+
+      // Content should be unchanged since the replacement was skipped
+      expect(result.content).to.equal(content);
+      expect(result.replacementsMade).to.equal(0);
     });
 
-    it('should throw error when neither stringToReplace nor regexToReplace is specified', async () => {
+    it('should skip replacements when neither stringToReplace nor regexToReplace is specified', async () => {
       const testFile = join(testDir, 'test.agent');
       const content = 'Hello REPLACE_ME world';
       await writeFile(testFile, content);
+
+      process.env.TEST_VAR = 'Replaced';
 
       const replacements: ReplacementConfig[] = [
         {
@@ -397,16 +399,17 @@ describe('String Replacements', () => {
         get: (key: string) => (key === 'replacements' ? replacements : undefined),
       } as never);
 
-      try {
-        await applyStringReplacements(testFile, content, sfProject);
-        expect.fail('Should have thrown an error');
-      } catch (error) {
-        expect(error).to.be.instanceOf(SfError);
-        expect((error as SfError).name).to.equal('InvalidReplacementConfig');
-      }
+      // SDR's logic skips invalid configs instead of throwing errors
+      const result = await applyStringReplacements(testFile, content, sfProject);
+
+      // Content should be unchanged since the replacement was skipped
+      expect(result.content).to.equal(content);
+      expect(result.replacementsMade).to.equal(0);
+
+      delete process.env.TEST_VAR;
     });
 
-    it('should throw error when neither replaceWithEnv nor replaceWithFile is specified', async () => {
+    it('should skip replacements when neither replaceWithEnv nor replaceWithFile is specified', async () => {
       const testFile = join(testDir, 'test.agent');
       const content = 'Hello REPLACE_ME world';
       await writeFile(testFile, content);
@@ -423,13 +426,12 @@ describe('String Replacements', () => {
         get: (key: string) => (key === 'replacements' ? replacements : undefined),
       } as never);
 
-      try {
-        await applyStringReplacements(testFile, content, sfProject);
-        expect.fail('Should have thrown an error');
-      } catch (error) {
-        expect(error).to.be.instanceOf(SfError);
-        expect((error as SfError).name).to.equal('InvalidReplacementConfig');
-      }
+      // SDR's logic skips invalid configs instead of throwing errors
+      const result = await applyStringReplacements(testFile, content, sfProject);
+
+      // Content should be unchanged since the replacement was skipped
+      expect(result.content).to.equal(content);
+      expect(result.replacementsMade).to.equal(0);
     });
   });
 
