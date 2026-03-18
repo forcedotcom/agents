@@ -79,16 +79,31 @@ export async function applyStringReplacements(
     replacedWith: string;
   }> = [];
 
+  // Normalize file path to use forward slashes for cross-platform compatibility
+  // Glob patterns always use forward slashes, even on Windows
+  // Windows paths like C:\path\to\file.txt become C:/path/to/file.txt
+  const normalizedFilePath = filePath.replace(/\\/g, '/');
+
   // Filter replacements using SDR's envFilter to check environment conditionals
   // eslint-disable-next-line @typescript-eslint/no-unsafe-call
   const envFilteredReplacements = replacementConfigs.filter(envFilter as (r: ReplacementConfig) => boolean);
 
   // eslint-disable-next-line no-await-in-loop -- replacements must be applied sequentially
   for (const config of envFilteredReplacements) {
+    // Normalize config paths for cross-platform matching
+    // Create a normalized version of the config for matching (don't mutate original)
+    const normalizedConfig = { ...config };
+    if (normalizedConfig.filename) {
+      normalizedConfig.filename = normalizedConfig.filename.replace(/\\/g, '/');
+    }
+    if (normalizedConfig.glob) {
+      normalizedConfig.glob = normalizedConfig.glob.replace(/\\/g, '/');
+    }
+
     // Use SDR's matchesFile function to check if this replacement applies to the current file
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-    const fileMatchesFn = matchesFile(filePath) as (r: ReplacementConfig) => boolean;
-    const fileMatches = fileMatchesFn(config);
+    const fileMatchesFn = matchesFile(normalizedFilePath) as (r: ReplacementConfig) => boolean;
+    const fileMatches = fileMatchesFn(normalizedConfig);
 
     if (!fileMatches) {
       continue;
