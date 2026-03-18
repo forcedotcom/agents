@@ -88,3 +88,9 @@ export { ScriptAgent } from './agents/scriptAgent';
 export { AgentBase } from './agents/agentBase';
 export { convertTestResultsToFormat, humanFriendlyName } from './agentTestResults';
 export { writeDebugLog } from './apexUtils';
+export {
+  applyStringReplacements,
+  applyStringReplacementsToAgent,
+  type ReplacementConfig,
+  type ReplacementResult,
+} from './stringReplacements';

@@ -159,6 +159,108 @@ describe('Agents', () => {
         expect((error as SfError).exitCode).to.equal(COMPILATION_API_EXIT_CODES.SERVER_ERROR);
       }
     });
+
+    it('should apply string replacements before compilation', async () => {
+      // Set up environment variable for replacement
+      process.env.AGENT_INSTRUCTIONS = 'You are a helpful assistant.';
+
+      // Create agent file with placeholder
+      const aabDirectory = join('force-app', 'main', 'default', 'aiAuthoringBundles', 'myAgent');
+      await fs.writeFile(
+        join(aabDirectory, 'myAgent.agent'),
+        'system:\n  instructions: "REPLACE_INSTRUCTIONS"\n  developer_name: "myAgent"\n  agent_label: "My Agent"'
+      );
+
+      // Configure string replacements in project
+      $$.SANDBOX.stub(sfProject, 'getSfProjectJson').returns({
+        get: (key: string) => {
+          if (key === 'replacements') {
+            return [
+              {
+                glob: '**/aiAuthoringBundles/**/*.agent',
+                stringToReplace: 'REPLACE_INSTRUCTIONS',
+                replaceWithEnv: 'AGENT_INSTRUCTIONS',
+              },
+            ];
+          }
+          return undefined;
+        },
+      } as never);
+
+      $$.SANDBOX.stub(sfProject, 'getPath').returns(process.cwd());
+
+      // Mock successful compilation response
+      requestStub.withArgs(sinon.match.has('url', sinon.match(/authoring\/scripts/))).resolves({
+        status: 'success',
+        compiledArtifact: {
+          schemaVersion: '1.0',
+          globalConfiguration: {
+            developerName: 'myAgent',
+            label: 'My Agent',
+            description: '',
+            enableEnhancedEventLogs: false,
+            agentType: 'AgentforceServiceAgent',
+            templateName: '',
+            defaultAgentUser: '',
+            defaultOutboundRouting: '',
+            contextVariables: [],
+          },
+          agentVersion: {
+            developerName: null,
+            plannerType: 'standard',
+            systemMessages: [],
+            modalityParameters: {
+              voice: {
+                inboundModel: null,
+                inboundFillerWordsDetection: null,
+                outboundVoice: null,
+                outboundModel: null,
+                outboundSpeed: null,
+                outboundStyleExaggeration: null,
+              },
+              language: {
+                defaultLocale: 'en_US',
+                additionalLocales: [],
+                allAdditionalLocales: false,
+              },
+            },
+            additionalParameters: false,
+            company: '',
+            role: '',
+            stateVariables: [],
+            initialNode: '',
+            nodes: [],
+            knowledgeDefinitions: null,
+          },
+        },
+        errors: [],
+        syntacticMap: { blocks: [] },
+        dslVersion: '0.0.3.rc29',
+      });
+
+      const agent = new ScriptAgent({ connection, project: sfProject!, aabName: 'myAgent' });
+      const compileResult = await agent.compile();
+
+      expect(compileResult.status).to.equal('success');
+
+      // Verify that the request was called with replaced content
+      const calls = requestStub.getCalls();
+      const compileCall = calls.find(
+        (call) =>
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+          call.args[0]?.url?.includes('authoring/scripts') as boolean
+      );
+      expect(compileCall).to.exist;
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      const requestBody = JSON.parse(compileCall!.args[0].body as string) as {
+        assets: Array<{ content: string }>;
+      };
+      expect(requestBody.assets[0].content).to.include('You are a helpful assistant.');
+      expect(requestBody.assets[0].content).to.not.include('REPLACE_INSTRUCTIONS');
+
+      delete process.env.AGENT_INSTRUCTIONS;
+    });
   });
 
   describe('publishAgentJson', () => {
