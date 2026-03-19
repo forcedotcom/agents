@@ -1,3 +1,12 @@
+## [0.24.3](https://github.com/forcedotcom/agents/compare/0.24.2...0.24.3) (2026-03-19)
+
+
+### Bug Fixes
+
+* string replacements on publish ([81d70c5](https://github.com/forcedotcom/agents/commit/81d70c58be5a088d318335a500f42823d817e994))
+
+
+
 ## [0.24.2](https://github.com/forcedotcom/agents/compare/0.24.1...0.24.2) (2026-03-10)
 
 
