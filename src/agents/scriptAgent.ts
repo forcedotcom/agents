@@ -49,6 +49,7 @@ import {
 } from '../utils';
 import { getDebugLog } from '../apexUtils';
 import { generateAgentScript } from '../templates/agentScriptTemplate';
+import { applyStringReplacementsToAgent } from '../stringReplacements';
 import { ScriptAgentPublisher } from './scriptAgentPublisher';
 import { AgentBase } from './agentBase';
 
@@ -62,6 +63,7 @@ export class ScriptAgent extends AgentBase {
   private readonly apiBase: string;
   private readonly aabDirectory: string;
   private readonly metaContent: string;
+  private readonly agentFilePath: string;
   public constructor(private options: ScriptAgentOptions) {
     super(options.connection);
     this.options = options;
@@ -87,7 +89,8 @@ export class ScriptAgent extends AgentBase {
     this.name = options.aabName;
 
     // Load the .agent file
-    this.agentScriptContent = fs.readFileSync(join(this.aabDirectory, `${options.aabName}.agent`), 'utf-8');
+    this.agentFilePath = join(this.aabDirectory, `${options.aabName}.agent`);
+    this.agentScriptContent = fs.readFileSync(this.agentFilePath, 'utf-8');
 
     // Load and validate the bundle-meta.xml file
     const bundleMetaPath = join(this.aabDirectory, `${options.aabName}.bundle-meta.xml`);
@@ -156,10 +159,7 @@ export class ScriptAgent extends AgentBase {
   }
 
   public async refreshContent(): Promise<void> {
-    this.agentScriptContent = await fs.promises.readFile(
-      join(this.aabDirectory, `${this.options.aabName}.agent`),
-      'utf-8'
-    );
+    this.agentScriptContent = await fs.promises.readFile(this.agentFilePath, 'utf-8');
     await this.compile();
   }
 
@@ -240,9 +240,31 @@ export class ScriptAgent extends AgentBase {
    * @returns {Promise<PublishAgentJsonResponse>} The publish response
    */
   public async publish(skipMetadataRetrieve?: boolean): Promise<PublishAgent> {
-    if (!this.agentJson) {
+    // Apply string replacements before compiling for publish
+    const originalContent = this.agentScriptContent;
+    try {
+      const replacementResult = await applyStringReplacementsToAgent(
+        this.agentFilePath,
+        this.agentScriptContent,
+        this.options.project
+      );
+
+      // Temporarily replace content with the result of string replacements
+      this.agentScriptContent = replacementResult.content;
+
+      // Log replacements if any were made
+      if (replacementResult.replacementsMade > 0) {
+        void Lifecycle.getInstance().emit('agents:string-replacements-applied', {
+          replacements: replacementResult.replacements,
+        });
+      }
+
       await this.compile();
+    } finally {
+      // Always restore original content after compilation
+      this.agentScriptContent = originalContent;
     }
+
     const publisher = new ScriptAgentPublisher(
       this.connection,
       this.options.project,
