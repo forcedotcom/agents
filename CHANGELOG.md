@@ -1,3 +1,12 @@
+## [0.24.5](https://github.com/forcedotcom/agents/compare/0.24.4...0.24.5) (2026-03-20)
+
+
+### Bug Fixes
+
+* **deps:** bump flatted from 3.3.3 to 3.4.2 ([12cec3d](https://github.com/forcedotcom/agents/commit/12cec3d16a8a1f64196060a8250b87219a98cfcf))
+
+
+
 ## [0.24.4](https://github.com/forcedotcom/agents/compare/0.24.3...0.24.4) (2026-03-20)
 
 
