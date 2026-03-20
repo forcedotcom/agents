@@ -1,3 +1,12 @@
+## [0.24.6](https://github.com/forcedotcom/agents/compare/0.24.5...0.24.6) (2026-03-20)
+
+
+### Bug Fixes
+
+* **deps:** bump @salesforce/types from 1.6.0 to 1.7.1 ([35e0ecd](https://github.com/forcedotcom/agents/commit/35e0ecd74be413d62f83de91f121999b6a0a7ea9))
+
+
+
 ## [0.24.5](https://github.com/forcedotcom/agents/compare/0.24.4...0.24.5) (2026-03-20)
 
 
