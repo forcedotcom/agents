@@ -1,3 +1,12 @@
+## [0.24.9](https://github.com/forcedotcom/agents/compare/0.24.8...0.24.9) (2026-03-22)
+
+
+### Bug Fixes
+
+* **deps:** bump fast-xml-parser from 5.5.7 to 5.5.8 ([456c01f](https://github.com/forcedotcom/agents/commit/456c01f23cabc017eb19c3fc8135f54d1aed9ea4))
+
+
+
 ## [0.24.8](https://github.com/forcedotcom/agents/compare/0.24.7...0.24.8) (2026-03-21)
 
 
