@@ -1,3 +1,12 @@
+## [0.24.10](https://github.com/forcedotcom/agents/compare/0.24.9...0.24.10) (2026-03-25)
+
+
+### Bug Fixes
+
+* **deps:** bump basic-ftp from 5.1.0 to 5.2.0 ([7d514c4](https://github.com/forcedotcom/agents/commit/7d514c4986843cbc55491336ece4564bf4ca1245))
+
+
+
 ## [0.24.9](https://github.com/forcedotcom/agents/compare/0.24.8...0.24.9) (2026-03-22)
 
 
