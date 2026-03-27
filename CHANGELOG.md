@@ -1,3 +1,12 @@
+## [0.24.11](https://github.com/forcedotcom/agents/compare/0.24.10...0.24.11) (2026-03-27)
+
+
+### Bug Fixes
+
+* **deps:** bump yaml from 2.8.2 to 2.8.3 ([dfd38d2](https://github.com/forcedotcom/agents/commit/dfd38d27b1ea4e7d121ce8abfa680f9a2dd0c0f3))
+
+
+
 ## [0.24.10](https://github.com/forcedotcom/agents/compare/0.24.9...0.24.10) (2026-03-25)
 
 
