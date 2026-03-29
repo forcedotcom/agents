@@ -693,7 +693,7 @@
     strip-ansi "6.0.1"
     ts-retry-promise "^0.8.1"
 
-"@salesforce/core@^8.26.3", "@salesforce/core@^8.27.0", "@salesforce/core@^8.27.1":
+"@salesforce/core@^8.26.3", "@salesforce/core@^8.27.1":
   version "8.27.1"
   resolved "https://registry.yarnpkg.com/@salesforce/core/-/core-8.27.1.tgz#26b08b0d68dd1fc210d1dd7a7e3770e3b9f27e74"
   integrity sha512-1WpVt9tQAEINGzsQsSiVRmcmYUpKeK4P54624f9HvLIv7o7jTjdARwirJpOqivIihbDE8OJnYOdsr0vV5Dz93A==
@@ -767,25 +767,25 @@
   resolved "https://registry.yarnpkg.com/@salesforce/prettier-config/-/prettier-config-0.0.3.tgz#ba648d4886bb38adabe073dbea0b3a91b3753bb0"
   integrity sha512-hYOhoPTCSYMDYn+U1rlEk16PoBeAJPkrdg4/UtAzupM1mRRJOwEPMG1d7U8DxJFKuXW3DMEYWr2MwAIBDaHmFg==
 
-"@salesforce/source-deploy-retrieve@^12.31.24":
-  version "12.31.24"
-  resolved "https://registry.yarnpkg.com/@salesforce/source-deploy-retrieve/-/source-deploy-retrieve-12.31.24.tgz#06e74409bc95000703f1f158ac6b700fb975ee74"
-  integrity sha512-8folNyLjlzblAOAG7dxHuPJo4QDVU2nytxotHdHHhYk00djXr3CdchuGSVG/+2w0LO/zFZ68V17qpU2x1VqxXg==
+"@salesforce/source-deploy-retrieve@^12.31.30":
+  version "12.31.30"
+  resolved "https://registry.yarnpkg.com/@salesforce/source-deploy-retrieve/-/source-deploy-retrieve-12.31.30.tgz#2a1ac651601526be200e86c2d960a2188832755f"
+  integrity sha512-gTEkoFPypIWmmnC9e1TigP+tnAdUUXcU4ZGYwL/vmd5McCXKLN11EhLCngmrnafJmM8cMPMcdnVI0cFGNgoIeQ==
   dependencies:
-    "@salesforce/core" "^8.27.0"
+    "@salesforce/core" "^8.27.1"
     "@salesforce/kit" "^3.2.4"
     "@salesforce/ts-types" "^2.0.12"
     "@salesforce/types" "^1.6.0"
     fast-levenshtein "^3.0.0"
-    fast-xml-parser "^5.3.6"
+    fast-xml-parser "^5.5.7"
     got "^11.8.6"
     graceful-fs "^4.2.11"
     ignore "^5.3.2"
     jszip "^3.10.1"
     mime "2.6.0"
-    minimatch "^9.0.5"
-    proxy-agent "^6.4.0"
-    yaml "^2.8.1"
+    minimatch "^9.0.7"
+    proxy-agent "^6.5.0"
+    yaml "^2.8.3"
 
 "@salesforce/ts-types@^2.0.11", "@salesforce/ts-types@^2.0.12":
   version "2.0.12"
@@ -1507,6 +1507,13 @@ brace-expansion@^2.0.1:
   version "2.0.2"
   resolved "https://registry.yarnpkg.com/brace-expansion/-/brace-expansion-2.0.2.tgz#54fc53237a613d854c7bd37463aad17df87214e7"
   integrity sha512-Jt0vHyM+jmUBqojB7E1NIYadt0vI0Qxjxd2TErW94wDz+E2LAm5vKMXXwg6ZZBTHPuUlDgQHKXvjGBdfcF1ZDQ==
+  dependencies:
+    balanced-match "^1.0.0"
+
+brace-expansion@^2.0.2:
+  version "2.0.3"
+  resolved "https://registry.yarnpkg.com/brace-expansion/-/brace-expansion-2.0.3.tgz#0493338bdd58e319b1039c67cf7ee439892c01d9"
+  integrity sha512-MCV/fYJEbqx68aE58kv2cA/kiky1G8vux3OR6/jbS+jIMe/6fJWa0DTzJU7dqijOWYwHi1t29FlfYI9uytqlpA==
   dependencies:
     balanced-match "^1.0.0"
 
@@ -2730,14 +2737,14 @@ fast-xml-builder@^1.1.4:
   dependencies:
     path-expression-matcher "^1.1.3"
 
-fast-xml-parser@^5.3.6, fast-xml-parser@^5.5.8:
-  version "5.5.8"
-  resolved "https://registry.yarnpkg.com/fast-xml-parser/-/fast-xml-parser-5.5.8.tgz#929571ed8c5eb96e6d9bd572ba14fc4b84875716"
-  integrity sha512-Z7Fh2nVQSb2d+poDViM063ix2ZGt9jmY1nWhPfHBOK2Hgnb/OW3P4Et3P/81SEej0J7QbWtJqxO05h8QYfK7LQ==
+fast-xml-parser@^5.5.7, fast-xml-parser@^5.5.8:
+  version "5.5.9"
+  resolved "https://registry.yarnpkg.com/fast-xml-parser/-/fast-xml-parser-5.5.9.tgz#e59637abebec3dbfbb4053b532d787af6ea11527"
+  integrity sha512-jldvxr1MC6rtiZKgrFnDSvT8xuH+eJqxqOBThUVjYrxssYTo1avZLGql5l0a0BAERR01CadYzZ83kVEkbyDg+g==
   dependencies:
     fast-xml-builder "^1.1.4"
     path-expression-matcher "^1.2.0"
-    strnum "^2.2.0"
+    strnum "^2.2.2"
 
 fastest-levenshtein@^1.0.7:
   version "1.0.16"
@@ -4365,12 +4372,12 @@ minimatch@^5.0.1, minimatch@^5.1.6:
   dependencies:
     brace-expansion "^2.0.1"
 
-minimatch@^9.0.4, minimatch@^9.0.5:
-  version "9.0.5"
-  resolved "https://registry.yarnpkg.com/minimatch/-/minimatch-9.0.5.tgz#d74f9dd6b57d83d8e98cfb82133b03978bc929e5"
-  integrity sha512-G6T0ZX48xgozx7587koeX9Ys2NYy6Gmv//P89sEte9V9whIapMNF4idKxnW2QtCcLiTWlb/wfCabAtAFWhhBow==
+minimatch@^9.0.4, minimatch@^9.0.5, minimatch@^9.0.7:
+  version "9.0.9"
+  resolved "https://registry.yarnpkg.com/minimatch/-/minimatch-9.0.9.tgz#9b0cb9fcb78087f6fd7eababe2511c4d3d60574e"
+  integrity sha512-OBwBN9AL4dqmETlpS2zasx+vTeWclWzkblfZk7KTA5j3jeOONz/tRCnZomUyvNg83wL5Zv9Ss6HMJXAgL8R2Yg==
   dependencies:
-    brace-expansion "^2.0.1"
+    brace-expansion "^2.0.2"
 
 minimist-options@4.1.0:
   version "4.1.0"
@@ -5019,7 +5026,7 @@ property-information@^7.0.0:
   resolved "https://registry.yarnpkg.com/property-information/-/property-information-7.1.0.tgz#b622e8646e02b580205415586b40804d3e8bfd5d"
   integrity sha512-TwEZ+X+yCJmYfL7TPUOcvBZ4QfoT5YenQiJuX//0th53DE6w0xxLEtfK3iyryQFddXuvkIk51EEgrJQ0WJkOmQ==
 
-proxy-agent@^6.4.0:
+proxy-agent@^6.5.0:
   version "6.5.0"
   resolved "https://registry.yarnpkg.com/proxy-agent/-/proxy-agent-6.5.0.tgz#9e49acba8e4ee234aacb539f89ed9c23d02f232d"
   integrity sha512-TmatMXdr2KlRiA2CyDu8GqR8EjahTG3aY3nXjdzFyoZbmB8hrBsTyMezhULIXKnC0jpfjlmiZ3+EaCzoInSu/A==
@@ -5828,10 +5835,10 @@ strip-json-comments@^3.1.1:
   resolved "https://registry.yarnpkg.com/strip-json-comments/-/strip-json-comments-3.1.1.tgz#31f1281b3832630434831c310c01cccda8cbe006"
   integrity sha512-6fPc+R4ihwqP6N/aIv2f1gMH8lOVtWQHoqC4yK6oSDVVocumAsfCqjkXnqiYMhmMwS/mEHLp7Vehlt3ql6lEig==
 
-strnum@^2.2.0:
-  version "2.2.1"
-  resolved "https://registry.yarnpkg.com/strnum/-/strnum-2.2.1.tgz#d28f896b4ef9985212494ce8bcf7ca304fad8368"
-  integrity sha512-BwRvNd5/QoAtyW1na1y1LsJGQNvRlkde6Q/ipqqEaivoMdV+B1OMOTVdwR+N/cwVUcIt9PYyHmV8HyexCZSupg==
+strnum@^2.2.2:
+  version "2.2.2"
+  resolved "https://registry.yarnpkg.com/strnum/-/strnum-2.2.2.tgz#f11fd94ab62b536ba2ecc615858f3747c2881b3f"
+  integrity sha512-DnR90I+jtXNSTXWdwrEy9FakW7UX+qUZg28gj5fk2vxxl7uS/3bpI4fjFYVmdK9etptYBPNkpahuQnEwhwECqA==
 
 supports-color@^7, supports-color@^7.1.0:
   version "7.2.0"
@@ -6491,7 +6498,7 @@ yallist@^4.0.0:
   resolved "https://registry.yarnpkg.com/yallist/-/yallist-4.0.0.tgz#9bb92790d9c0effec63be73519e11a35019a3a72"
   integrity sha512-3wdGidZyq5PB084XLES5TpOSRA3wjXAlIWMhum2kRcv/41Sn2emQ0dycQW4uZXLejwKvg6EsvbdlVL+FYEct7A==
 
-yaml@^2.5.1, yaml@^2.8.1, yaml@^2.8.2, yaml@^2.8.3:
+yaml@^2.5.1, yaml@^2.8.2, yaml@^2.8.3:
   version "2.8.3"
   resolved "https://registry.yarnpkg.com/yaml/-/yaml-2.8.3.tgz#a0d6bd2efb3dd03c59370223701834e60409bd7d"
   integrity sha512-AvbaCLOO2Otw/lW5bmh9d/WEdcDFdQp2Z2ZUH3pX9U2ihyUY0nvLv7J6TrWowklRGPYbB/IuIMfYgxaCPg5Bpg==
