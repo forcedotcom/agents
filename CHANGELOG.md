@@ -1,3 +1,12 @@
+## [0.24.12](https://github.com/forcedotcom/agents/compare/0.24.11...0.24.12) (2026-03-29)
+
+
+### Bug Fixes
+
+* **deps:** bump @salesforce/kit from 3.2.4 to 3.2.6 ([dcb4cf2](https://github.com/forcedotcom/agents/commit/dcb4cf2b2f5560679708b3f33a81a9439e2f139d))
+
+
+
 ## [0.24.11](https://github.com/forcedotcom/agents/compare/0.24.10...0.24.11) (2026-03-27)
 
 
