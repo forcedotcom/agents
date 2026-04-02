@@ -243,6 +243,8 @@ export type TranscriptEntry = {
   role: TranscriptRole;
   text?: string;
   reason?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  raw?: any;
 };
 
 export type TurnIndexEntry = {
@@ -507,15 +509,15 @@ export const updateTurnWithTrace = async (sessionDir: string, turnNumber: number
 /**
  * Log a turn to history - combines transcript and turn index writes
  *
- * @param {string} sessionDir path to the session directory
  * @param {TranscriptEntry} entry the transcript entry to log
  * @param {number} turnNumber the turn number (1-based)
+ * @param {string} sessionDir path to the session directory
  * @returns {Promise<void>}
  */
 export const logTurnToHistory = async (
-  sessionDir: string,
   entry: TranscriptEntry,
-  turnNumber: number
+  turnNumber: number,
+  sessionDir: string
 ): Promise<void> => {
   await appendTranscriptToHistory(entry, sessionDir);
   await appendTurnToIndex(sessionDir, entry, turnNumber);

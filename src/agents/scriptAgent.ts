@@ -307,8 +307,9 @@ export class ScriptAgent extends AgentBase {
         sessionId: this.sessionId,
         role: 'agent' as const,
         reason: 'UserRequest',
+        raw: [],
       };
-      await logTurnToHistory(this.historyDir, endEntry, ++this.turnCounter);
+      await logTurnToHistory(endEntry, ++this.turnCounter, this.historyDir);
       // Update metadata with end time
       await updateMetadataEndTime(this.historyDir, new Date().toISOString(), this.planIds);
     }
@@ -369,7 +370,6 @@ export class ScriptAgent extends AgentBase {
       }
 
       await logTurnToHistory(
-        this.historyDir,
         {
           timestamp: new Date().toISOString(),
           agentId,
@@ -377,7 +377,8 @@ export class ScriptAgent extends AgentBase {
           role: 'user' as const,
           text: message,
         },
-        ++this.turnCounter
+        ++this.turnCounter,
+        this.historyDir
       );
 
       const response = await requestWithEndpointFallback<AgentPreviewSendResponse>(this.connection, {
@@ -394,15 +395,16 @@ export class ScriptAgent extends AgentBase {
 
       const agentTurn = ++this.turnCounter;
       await logTurnToHistory(
-        this.historyDir,
         {
           timestamp: new Date().toISOString(),
           agentId,
           sessionId: this.sessionId,
           role: 'agent' as const,
           text: response.messages.at(0)?.message,
+          raw: response.messages,
         },
-        agentTurn
+        agentTurn,
+        this.historyDir
       );
 
       // Fetch and write trace immediately if available
@@ -538,8 +540,9 @@ export class ScriptAgent extends AgentBase {
         sessionId: response.sessionId,
         role: 'agent' as const,
         text: response.messages.map((m) => m.message).join('\n'),
+        raw: response.messages,
       };
-      await logTurnToHistory(this.historyDir, initialEntry, ++this.turnCounter);
+      await logTurnToHistory(initialEntry, ++this.turnCounter, this.historyDir);
 
       // Write initial metadata
       await writeMetaFileToHistory(this.historyDir, {

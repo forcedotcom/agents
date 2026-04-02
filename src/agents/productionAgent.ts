@@ -258,7 +258,7 @@ export class ProductionAgent extends AgentBase {
         role: 'user' as const,
         text: message,
       };
-      await logTurnToHistory(this.historyDir, userEntry, ++this.turnCounter);
+      await logTurnToHistory(userEntry, ++this.turnCounter, this.historyDir);
 
       const response = await requestWithEndpointFallback<AgentPreviewSendResponse>(this.connection, {
         method: 'POST',
@@ -278,9 +278,10 @@ export class ProductionAgent extends AgentBase {
         sessionId: this.sessionId,
         role: 'agent' as const,
         text: response.messages.at(0)?.message,
+        raw: response.messages,
       };
       const agentTurn = ++this.turnCounter;
-      await logTurnToHistory(this.historyDir, agentEntry, agentTurn);
+      await logTurnToHistory(agentEntry, agentTurn, this.historyDir);
 
       // Fetch and write trace immediately if available
       if (planId) {
@@ -379,8 +380,9 @@ export class ProductionAgent extends AgentBase {
         sessionId: response.sessionId,
         role: 'agent' as const,
         text: response.messages.map((m) => m.message).join('\n'),
+        raw: response.messages,
       };
-      await logTurnToHistory(this.historyDir, initialEntry, ++this.turnCounter);
+      await logTurnToHistory(initialEntry, ++this.turnCounter, this.historyDir);
 
       // Write initial metadata
       await writeMetaFileToHistory(this.historyDir, {
@@ -438,8 +440,9 @@ export class ProductionAgent extends AgentBase {
           sessionId: this.sessionId,
           role: 'agent' as const,
           reason,
+          raw: response.messages,
         };
-        await logTurnToHistory(this.historyDir, endEntry, ++this.turnCounter);
+        await logTurnToHistory(endEntry, ++this.turnCounter, this.historyDir);
         // Update metadata with end time
         await updateMetadataEndTime(this.historyDir, new Date().toISOString(), this.planIds);
       }

@@ -85,7 +85,7 @@ describe('Session History - Turn Index and PlanIds', () => {
         text: 'How do I create an account?',
       };
 
-      await logTurnToHistory(testHistoryDir, userEntry, 1);
+      await logTurnToHistory(userEntry, 1, testHistoryDir);
 
       const indexPath = join(testHistoryDir, 'turn-index.json');
       const content = await readFile(indexPath, 'utf-8');
@@ -119,7 +119,7 @@ describe('Session History - Turn Index and PlanIds', () => {
         text: longText,
       };
 
-      await logTurnToHistory(testHistoryDir, userEntry, 1);
+      await logTurnToHistory(userEntry, 1, testHistoryDir);
 
       const indexPath = join(testHistoryDir, 'turn-index.json');
       const content = await readFile(indexPath, 'utf-8');
@@ -144,7 +144,7 @@ describe('Session History - Turn Index and PlanIds', () => {
         text: 'I can help you create an account.',
       };
 
-      await logTurnToHistory(testHistoryDir, agentEntry, 1);
+      await logTurnToHistory(agentEntry, 1, testHistoryDir);
 
       const planId = 'plan-uuid-123';
       await updateTurnWithTrace(testHistoryDir, 1, planId);
@@ -165,7 +165,6 @@ describe('Session History - Turn Index and PlanIds', () => {
 
       // Turn 1: Agent greeting
       await logTurnToHistory(
-        testHistoryDir,
         {
           timestamp: '2026-04-02T10:00:00.000Z',
           agentId,
@@ -173,12 +172,12 @@ describe('Session History - Turn Index and PlanIds', () => {
           role: 'agent',
           text: 'Hello! How can I help?',
         },
-        1
+        1,
+        testHistoryDir
       );
 
       // Turn 2: User message
       await logTurnToHistory(
-        testHistoryDir,
         {
           timestamp: '2026-04-02T10:00:05.000Z',
           agentId,
@@ -186,12 +185,12 @@ describe('Session History - Turn Index and PlanIds', () => {
           role: 'user',
           text: 'Create an account',
         },
-        2
+        2,
+        testHistoryDir
       );
 
       // Turn 3: Agent response
       await logTurnToHistory(
-        testHistoryDir,
         {
           timestamp: '2026-04-02T10:00:10.000Z',
           agentId,
@@ -199,7 +198,8 @@ describe('Session History - Turn Index and PlanIds', () => {
           role: 'agent',
           text: 'I will create an account for you.',
         },
-        3
+        3,
+        testHistoryDir
       );
 
       // Update turn 3 with trace
@@ -294,7 +294,6 @@ describe('Session History - Turn Index and PlanIds', () => {
 
       // Turn 1: Agent greeting
       await logTurnToHistory(
-        testHistoryDir,
         {
           timestamp: '2026-04-02T10:00:00.000Z',
           agentId,
@@ -302,12 +301,12 @@ describe('Session History - Turn Index and PlanIds', () => {
           role: 'agent',
           text: 'Hello! How can I help you today?',
         },
-        1
+        1,
+        testHistoryDir
       );
 
       // Turn 2: User asks question
       await logTurnToHistory(
-        testHistoryDir,
         {
           timestamp: '2026-04-02T10:00:05.000Z',
           agentId,
@@ -315,12 +314,12 @@ describe('Session History - Turn Index and PlanIds', () => {
           role: 'user',
           text: 'Create an account for me',
         },
-        2
+        2,
+        testHistoryDir
       );
 
       // Turn 3: Agent responds with plan
       await logTurnToHistory(
-        testHistoryDir,
         {
           timestamp: '2026-04-02T10:00:10.000Z',
           agentId,
@@ -328,7 +327,8 @@ describe('Session History - Turn Index and PlanIds', () => {
           role: 'agent',
           text: 'I will create an account for you right away.',
         },
-        3
+        3,
+        testHistoryDir
       );
 
       const planId1 = 'plan-create-account-123';
@@ -337,7 +337,6 @@ describe('Session History - Turn Index and PlanIds', () => {
 
       // Turn 4: User asks another question
       await logTurnToHistory(
-        testHistoryDir,
         {
           timestamp: '2026-04-02T10:00:15.000Z',
           agentId,
@@ -345,12 +344,12 @@ describe('Session History - Turn Index and PlanIds', () => {
           role: 'user',
           text: 'What is the account ID?',
         },
-        4
+        4,
+        testHistoryDir
       );
 
       // Turn 5: Agent responds with second plan
       await logTurnToHistory(
-        testHistoryDir,
         {
           timestamp: '2026-04-02T10:00:20.000Z',
           agentId,
@@ -358,7 +357,8 @@ describe('Session History - Turn Index and PlanIds', () => {
           role: 'agent',
           text: 'The account ID is ACC-12345',
         },
-        5
+        5,
+        testHistoryDir
       );
 
       const planId2 = 'plan-get-account-456';
@@ -473,7 +473,7 @@ describe('Session History - Turn Index and PlanIds', () => {
 
       for (let i = 0; i < entries.length; i++) {
         // eslint-disable-next-line no-await-in-loop
-        await logTurnToHistory(testHistoryDir, entries[i], i + 1);
+        await logTurnToHistory(entries[i], i + 1, testHistoryDir);
       }
 
       // Read transcript.jsonl
@@ -517,7 +517,7 @@ describe('Session History - Turn Index and PlanIds', () => {
       };
 
       // This should not throw - it should create the index automatically
-      await logTurnToHistory(testHistoryDir, userEntry, 1);
+      await logTurnToHistory(userEntry, 1, testHistoryDir);
 
       // Verify the index was created
       const indexPath = join(testHistoryDir, 'turn-index.json');
@@ -547,7 +547,7 @@ describe('Session History - Turn Index and PlanIds', () => {
       };
 
       // This should not throw - it should reinitialize the index
-      await logTurnToHistory(testHistoryDir, userEntry, 1);
+      await logTurnToHistory(userEntry, 1, testHistoryDir);
 
       // Verify the index was recreated
       const content = await readFile(indexPath, 'utf-8');
