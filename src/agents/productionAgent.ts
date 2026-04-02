@@ -285,9 +285,11 @@ export class ProductionAgent extends AgentBase {
 
       // Fetch and write trace immediately if available
       if (planId) {
-        const trace = await this.getTrace(planId);
-        await recordTraceForTurn(this.historyDir, agentTurn, planId, trace, this.historyBuffer);
+        await recordTraceForTurn(this.historyDir, agentTurn, planId, undefined, this.historyBuffer);
       }
+
+      // Flush buffer to keep turn-index.json and metadata.json up to date
+      await this.historyBuffer.flush();
 
       if (this.apexDebugging && this.canApexDebug()) {
         const apexLog = await getDebugLog(this.connection, start, Date.now());
@@ -381,6 +383,9 @@ export class ProductionAgent extends AgentBase {
         raw: response.messages,
       };
       await logTurnToHistory(initialEntry, ++this.turnCounter, this.historyDir, this.historyBuffer);
+
+      // Write turn-index.json and metadata.json immediately so they exist after session start
+      await this.historyBuffer.flush();
 
       const agentDir = await getAgentIndexDir(agentId);
       await logSessionToIndex(agentDir, {

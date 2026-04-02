@@ -310,7 +310,7 @@ export class ScriptAgent extends AgentBase {
       await logTurnToHistory(endEntry, ++this.turnCounter, this.historyDir, this.historyBuffer);
 
       // Flush all buffered data to disk (turn-index.json and metadata.json)
-      await this.historyBuffer.flush(endTime, this.mockMode);
+      await this.historyBuffer.flush(endTime);
     }
 
     // Clear session data for next session
@@ -417,6 +417,9 @@ export class ScriptAgent extends AgentBase {
         const trace = await this.getTrace(planId);
         await recordTraceForTurn(this.historyDir, agentTurn, planId, trace, this.historyBuffer);
       }
+
+      // Flush buffer to keep turn-index.json and metadata.json up to date
+      await this.historyBuffer.flush();
 
       if (this.apexDebugging && this.canApexDebug()) {
         const apexLog = await getDebugLog(this.connection, start, Date.now());
@@ -533,7 +536,13 @@ export class ScriptAgent extends AgentBase {
       const startTime = new Date().toISOString();
 
       // Initialize history buffer (no file I/O yet)
-      this.historyBuffer = new SessionHistoryBuffer(this.historyDir, response.sessionId, agentIdForStorage, startTime);
+      this.historyBuffer = new SessionHistoryBuffer(
+        this.historyDir,
+        response.sessionId,
+        agentIdForStorage,
+        startTime,
+        this.mockMode
+      );
       this.turnCounter = 0;
 
       // Write initial agent messages immediately
@@ -546,6 +555,9 @@ export class ScriptAgent extends AgentBase {
         raw: response.messages,
       };
       await logTurnToHistory(initialEntry, ++this.turnCounter, this.historyDir, this.historyBuffer);
+
+      // Write turn-index.json and metadata.json immediately so they exist after session start
+      await this.historyBuffer.flush();
 
       const agentDir = await getAgentIndexDir(agentIdForStorage);
       await logSessionToIndex(agentDir, {

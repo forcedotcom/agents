@@ -256,6 +256,7 @@ export type TurnIndexEntry = {
   multiModal: string | null;
   traceFile: string | null;
   planId: string | null;
+  reason?: string;
 };
 
 export type TurnIndex = {
@@ -351,14 +352,6 @@ export const writeTraceToHistory = async (
 };
 
 /**
- * Write preview metadata to the history directory
- */
-export const writeMetaFileToHistory = async (historyDir: string, metadata: PreviewMetadata): Promise<void> => {
-  const metadataPath = path.join(historyDir, 'metadata.json');
-  await writeFile(metadataPath, JSON.stringify(metadata, null, 2), 'utf-8');
-};
-
-/**
  * Write or append a session line to .sfdx/agents/<agentId>/index.md.
  * If the file does not exist, creates it with a header and the session line.
  * If it exists, appends the new session line.
@@ -414,7 +407,8 @@ export class SessionHistoryBuffer {
     private readonly sessionDir: string,
     private readonly sessionId: string,
     private readonly agentId: string,
-    private readonly created: string
+    private readonly created: string,
+    private readonly mockMode?: 'Mock' | 'Live Test'
   ) {}
 
   /**
@@ -443,9 +437,10 @@ export class SessionHistoryBuffer {
   }
 
   /**
-   * Flush all buffered data to disk - called at session end
+   * Flush all buffered data to disk
+   * Called at session start (to create initial files), after each turn (to keep real-time), and at session end (to finalize)
    */
-  public async flush(endTime?: string, mockMode?: 'Mock' | 'Live Test'): Promise<void> {
+  public async flush(endTime?: string): Promise<void> {
     const turnIndexPath = path.join(this.sessionDir, 'turn-index.json');
     const metadataPath = path.join(this.sessionDir, 'metadata.json');
 
@@ -467,8 +462,8 @@ export class SessionHistoryBuffer {
     if (endTime) {
       metadata.endTime = endTime;
     }
-    if (mockMode) {
-      metadata.mockMode = mockMode;
+    if (this.mockMode) {
+      metadata.mockMode = this.mockMode;
     }
 
     // Write both files in parallel
@@ -508,6 +503,7 @@ export const logTurnToHistory = async (
     multiModal: null,
     traceFile: null,
     planId: null,
+    reason: entry.reason,
   });
 };
 
@@ -641,32 +637,6 @@ export const recordTraceForTurn = async (
   // Update in memory (no I/O)
   buffer.updateTurnWithTrace(turnNumber, planId);
   buffer.addPlanId(planId);
-};
-
-/**
- * Update preview metadata with end time and plan IDs
- */
-export const updateMetadataEndTime = async (
-  historyDir: string,
-  endTime: string,
-  planIds: Set<string>
-): Promise<void> => {
-  const metadataPath = path.join(historyDir, 'metadata.json');
-  try {
-    const metadata = JSON.parse(await readFile(metadataPath, 'utf-8')) as PreviewMetadata;
-    metadata.endTime = endTime;
-    metadata.planIds = Array.from(planIds);
-    await writeFile(metadataPath, JSON.stringify(metadata, null, 2), 'utf-8');
-  } catch {
-    // If metadata doesn't exist, create it
-    await writeMetaFileToHistory(historyDir, {
-      sessionId: '',
-      agentId: '',
-      startTime: '',
-      endTime,
-      planIds: Array.from(planIds),
-    });
-  }
 };
 
 /**
