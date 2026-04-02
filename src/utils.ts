@@ -242,9 +242,26 @@ export type TranscriptEntry = {
   sessionId: string;
   role: TranscriptRole;
   text?: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  raw?: any;
   reason?: string;
+};
+
+export type TurnIndexEntry = {
+  turn: number;
+  timestamp: string;
+  role: TranscriptRole;
+  summary: string;
+  summaryTruncated: boolean;
+  multiModal: string | null;
+  traceFile: string | null;
+  planId: string | null;
+};
+
+export type TurnIndex = {
+  version: string;
+  sessionId: string;
+  agentId: string;
+  created: string;
+  turns: TurnIndexEntry[];
 };
 
 const resolveProjectLocalSfdx = async (): Promise<string | undefined> => {
@@ -263,6 +280,7 @@ const resolveProjectLocalSfdx = async (): Promise<string | undefined> => {
  * Session directory structure:
  * .sfdx/agents/<agentId>/sessions/<sessionId>/
  * ├── transcript.jsonl    # All transcript entries (one per line)
+ * ├── turn-index.json     # Turn-trace correlation index
  * ├── traces/             # Individual trace files
  * │   ├── <planId1>.json
  * │   └── <planId2>.json
@@ -357,6 +375,127 @@ export const logSessionToIndex = async (
   } else {
     await appendFile(indexPath, `${sessionLine}\n`, 'utf-8');
   }
+};
+
+/**
+ * Helper function to create a summary with truncation
+ */
+function createSummary(text: string | undefined, multiModal: string | null): { summary: string; truncated: boolean } {
+  const MAX_SUMMARY_LENGTH = 100;
+
+  if (multiModal) {
+    return { summary: `[${multiModal}]`, truncated: false };
+  }
+
+  if (!text) {
+    return { summary: '', truncated: false };
+  }
+
+  if (text.length <= MAX_SUMMARY_LENGTH) {
+    return { summary: text, truncated: false };
+  }
+
+  return {
+    summary: text.substring(0, MAX_SUMMARY_LENGTH) + '...',
+    truncated: true,
+  };
+}
+
+/**
+ * Initialize turn index file at session start
+ *
+ * @param {string} sessionDir path to the session directory
+ * @param {string} sessionId the session ID
+ * @param {string} agentId the agent ID
+ * @returns {Promise<void>}
+ */
+export const initializeTurnIndex = async (sessionDir: string, sessionId: string, agentId: string): Promise<void> => {
+  const indexPath = path.join(sessionDir, 'turn-index.json');
+  const index: TurnIndex = {
+    version: '1.0',
+    sessionId,
+    agentId,
+    created: new Date().toISOString(),
+    turns: [],
+  };
+  await writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
+};
+
+/**
+ * Append a turn entry to the turn index
+ *
+ * @param {string} sessionDir path to the session directory
+ * @param {TranscriptEntry} entry the transcript entry to add
+ * @param {number} turnNumber the turn number (1-based)
+ * @returns {Promise<void>}
+ */
+export const appendTurnToIndex = async (
+  sessionDir: string,
+  entry: TranscriptEntry,
+  turnNumber: number
+): Promise<void> => {
+  const indexPath = path.join(sessionDir, 'turn-index.json');
+
+  // Read existing index
+  const content = await readFile(indexPath, 'utf-8');
+  const index = JSON.parse(content) as TurnIndex;
+
+  // Create turn entry
+  const { summary, truncated } = createSummary(entry.text, null);
+
+  const turnEntry: TurnIndexEntry = {
+    turn: turnNumber,
+    timestamp: entry.timestamp,
+    role: entry.role,
+    summary,
+    summaryTruncated: truncated,
+    multiModal: null,
+    traceFile: null,
+    planId: null,
+  };
+
+  index.turns.push(turnEntry);
+  await writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
+};
+
+/**
+ * Update a turn entry with trace file reference
+ *
+ * @param {string} sessionDir path to the session directory
+ * @param {number} turnNumber the turn number to update
+ * @param {string} planId the plan ID associated with this turn
+ * @returns {Promise<void>}
+ */
+export const updateTurnWithTrace = async (sessionDir: string, turnNumber: number, planId: string): Promise<void> => {
+  const indexPath = path.join(sessionDir, 'turn-index.json');
+
+  const content = await readFile(indexPath, 'utf-8');
+  const index = JSON.parse(content) as TurnIndex;
+
+  const turn = index.turns.find((t) => t.turn === turnNumber);
+  if (turn) {
+    turn.traceFile = `traces/${planId}.json`;
+    turn.planId = planId;
+  }
+
+  await writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
+};
+
+/**
+ * Log a turn to history - combines transcript and turn index writes
+ *
+ * @param {string} sessionDir path to the session directory
+ * @param {TranscriptEntry} entry the transcript entry to log
+ * @param {number} turnNumber the turn number (1-based)
+ * @returns {Promise<void>}
+ */
+export const logTurnToHistory = async (
+  sessionDir: string,
+  entry: TranscriptEntry,
+  turnNumber: number
+): Promise<void> => {
+  await appendTranscriptToHistory(entry, sessionDir);
+  await appendTurnToIndex(sessionDir, entry, turnNumber);
 };
 
 /**
