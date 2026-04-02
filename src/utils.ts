@@ -436,9 +436,22 @@ export const appendTurnToIndex = async (
 ): Promise<void> => {
   const indexPath = path.join(sessionDir, 'turn-index.json');
 
+  // Initialize index if it doesn't exist (defensive: handles case where sendMessage is called before start)
+  if (!existsSync(indexPath)) {
+    await initializeTurnIndex(sessionDir, entry.sessionId, entry.agentId);
+  }
+
   // Read existing index
-  const content = await readFile(indexPath, 'utf-8');
-  const index = JSON.parse(content) as TurnIndex;
+  let index: TurnIndex;
+  try {
+    const content = await readFile(indexPath, 'utf-8');
+    index = JSON.parse(content) as TurnIndex;
+  } catch (error) {
+    // If file is corrupted or unreadable, reinitialize it
+    await initializeTurnIndex(sessionDir, entry.sessionId, entry.agentId);
+    const content = await readFile(indexPath, 'utf-8');
+    index = JSON.parse(content) as TurnIndex;
+  }
 
   // Create turn entry
   const { summary, truncated } = createSummary(entry.text, null);
@@ -469,16 +482,26 @@ export const appendTurnToIndex = async (
 export const updateTurnWithTrace = async (sessionDir: string, turnNumber: number, planId: string): Promise<void> => {
   const indexPath = path.join(sessionDir, 'turn-index.json');
 
-  const content = await readFile(indexPath, 'utf-8');
-  const index = JSON.parse(content) as TurnIndex;
+  // If index doesn't exist, return early (defensive: can't update what doesn't exist)
+  if (!existsSync(indexPath)) {
+    return;
+  }
+
+  let index: TurnIndex;
+  try {
+    const content = await readFile(indexPath, 'utf-8');
+    index = JSON.parse(content) as TurnIndex;
+  } catch (error) {
+    // If file is corrupted or unreadable, log and return
+    return;
+  }
 
   const turn = index.turns.find((t) => t.turn === turnNumber);
   if (turn) {
     turn.traceFile = `traces/${planId}.json`;
     turn.planId = planId;
+    await writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
   }
-
-  await writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
 };
 
 /**

@@ -21,7 +21,7 @@ import { genUniqueString, TestSession } from '@salesforce/cli-plugins-testkit';
 import { Connection, Org, SfProject, User, UserFields } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { sleep } from '@salesforce/kit';
-import { Agent, ScriptAgent, type AgentJobSpec, type AgentJobSpecCreateConfig } from '../../src/index';
+import { Agent, ScriptAgent, type AgentJobSpec, type AgentJobSpecCreateConfig } from '../../src';
 
 /* eslint-disable no-console */
 // Helper function to wait for Einstein AI services to be ready
@@ -272,6 +272,42 @@ describe('agent NUTs', () => {
         const indexMd = readFileSync(indexMdPath, 'utf8');
         expect(indexMd).to.contain(`# ${bundleApiName} - Sessions`);
         expect(indexMd).to.contain(`\`${simulatedSessionId}\` | simulated`);
+
+        // verify turn-index.json exists and has proper structure
+        const turnIndexPath = join(sessionDir, 'turn-index.json');
+        expect(existsSync(turnIndexPath), 'turn-index.json should exist').to.be.true;
+
+        const turnIndexContent = readFileSync(turnIndexPath, 'utf8');
+        const turnIndex = JSON.parse(turnIndexContent) as {
+          version: string;
+          sessionId: string;
+          agentId: string;
+          created: string;
+          turns: Array<{ turn: number; timestamp: string; role: string }>;
+        };
+
+        expect(turnIndex.version).to.equal('1.0');
+        expect(turnIndex.sessionId).to.equal(simulatedSessionId);
+        expect(turnIndex.agentId).to.equal(bundleApiName);
+        expect(turnIndex.turns).to.be.an('array');
+        expect(turnIndex.turns.length).to.be.greaterThan(0); // At least initial greeting
+
+        // verify metadata.json exists
+        const metadataPath = join(sessionDir, 'metadata.json');
+        expect(existsSync(metadataPath), 'metadata.json should exist').to.be.true;
+
+        const metadataContent = readFileSync(metadataPath, 'utf8');
+        const metadata = JSON.parse(metadataContent) as {
+          sessionId: string;
+          agentId: string;
+          startTime: string;
+          planIds: string[];
+        };
+
+        expect(metadata.sessionId).to.equal(simulatedSessionId);
+        expect(metadata.agentId).to.equal(bundleApiName);
+        expect(metadata.startTime).to.be.a('string');
+        expect(metadata.planIds).to.be.an('array');
       });
 
       it('should start a preview session (live)', async () => {
@@ -295,11 +331,140 @@ describe('agent NUTs', () => {
         expect(indexMd).to.contain(`# ${bundleApiName} - Sessions`);
         expect(indexMd).to.contain(`\`${liveSessionId}\` | live`);
         expect(indexMd).to.contain(`\`${simulatedSessionId}\` | simulated`);
+
+        // verify turn-index.json exists for live session
+        const turnIndexPath = join(sessionDir, 'turn-index.json');
+        expect(existsSync(turnIndexPath), 'turn-index.json should exist for live session').to.be.true;
+
+        const turnIndexContent = readFileSync(turnIndexPath, 'utf8');
+        const turnIndex = JSON.parse(turnIndexContent) as {
+          version: string;
+          sessionId: string;
+          agentId: string;
+          turns: Array<{ turn: number }>;
+        };
+
+        expect(turnIndex.version).to.equal('1.0');
+        expect(turnIndex.sessionId).to.equal(liveSessionId);
+        expect(turnIndex.agentId).to.equal(bundleApiName);
+        expect(turnIndex.turns).to.be.an('array');
+
+        // verify metadata.json has correct mode
+        const metadataPath = join(sessionDir, 'metadata.json');
+        const metadataContent = readFileSync(metadataPath, 'utf8');
+        const metadata = JSON.parse(metadataContent) as { mockMode?: string };
+        expect(metadata.mockMode).to.equal('Live Test');
       });
 
-      it('should send a message to the agent');
+      it('should send a message to the agent', async () => {
+        const agent = await Agent.init({ connection, project, aabName: bundleApiName });
+        const previewSession = await agent.preview.start();
+        const sessionId = previewSession.sessionId;
 
-      it('should end the preview session');
+        // Send a message
+        const response = await agent.preview.send('What can you help me with?');
+        expect(response).to.be.an('object');
+        expect(response.messages).to.be.an('array');
+        expect(response.messages.length).to.be.greaterThan(0);
+
+        const sessionDir = join(project.getPath(), '.sfdx', 'agents', bundleApiName, 'sessions', sessionId);
+
+        // Verify turn-index.json was updated with the conversation
+        const turnIndexPath = join(sessionDir, 'turn-index.json');
+        const turnIndexContent = readFileSync(turnIndexPath, 'utf8');
+        const turnIndex = JSON.parse(turnIndexContent) as {
+          turns: Array<{
+            turn: number;
+            timestamp: string;
+            role: string;
+            summary: string;
+            traceFile: string | null;
+            planId: string | null;
+          }>;
+        };
+
+        expect(turnIndex.turns.length).to.be.greaterThan(1); // At least greeting + user message + agent response
+
+        // Verify turns have sequential turn numbers
+        turnIndex.turns.forEach((turn, index) => {
+          expect(turn.turn).to.equal(index + 1);
+          expect(turn.timestamp).to.be.a('string');
+          expect(turn.role).to.be.oneOf(['user', 'agent']);
+          expect(turn.summary).to.be.a('string');
+        });
+
+        // Verify at least one agent turn has a trace file
+        const agentTurnsWithTraces = turnIndex.turns.filter((turn) => turn.role === 'agent' && turn.traceFile !== null);
+        expect(agentTurnsWithTraces.length).to.be.greaterThan(0, 'At least one agent turn should have a trace file');
+
+        // Verify metadata.json has planIds populated
+        const metadataPath = join(sessionDir, 'metadata.json');
+        const metadataContent = readFileSync(metadataPath, 'utf8');
+        const metadata = JSON.parse(metadataContent) as { planIds: string[] };
+
+        expect(metadata.planIds).to.be.an('array');
+        expect(metadata.planIds.length).to.be.greaterThan(0, 'planIds array should be populated');
+
+        // Verify planIds in metadata match planIds in turn-index
+        const planIdsFromTurnIndex = turnIndex.turns.filter((turn) => turn.planId !== null).map((turn) => turn.planId);
+        expect(metadata.planIds).to.have.members(planIdsFromTurnIndex);
+
+        // Verify transcript.jsonl correlates with turn-index
+        const transcriptPath = join(sessionDir, 'transcript.jsonl');
+        const transcriptContent = readFileSync(transcriptPath, 'utf8');
+        const transcriptLines = transcriptContent.trim().split('\n');
+        expect(transcriptLines.length).to.equal(turnIndex.turns.length);
+
+        // Verify trace files exist for turns that have traceFile references
+        agentTurnsWithTraces.forEach((turn) => {
+          if (turn.traceFile) {
+            const tracePath = join(sessionDir, turn.traceFile);
+            expect(existsSync(tracePath), `Trace file ${turn.traceFile} should exist`).to.be.true;
+          }
+        });
+      });
+
+      it('should end the preview session', async () => {
+        const agent = await Agent.init({ connection, project, aabName: bundleApiName });
+        const previewSession = await agent.preview.start();
+        const sessionId = previewSession.sessionId;
+
+        // Send a message to generate some history
+        await agent.preview.send('Tell me about your features');
+
+        // End the session
+        await agent.preview.end();
+
+        const sessionDir = join(project.getPath(), '.sfdx', 'agents', bundleApiName, 'sessions', sessionId);
+
+        // Verify metadata.json has endTime populated
+        const metadataPath = join(sessionDir, 'metadata.json');
+        const metadataContent = readFileSync(metadataPath, 'utf8');
+        const metadata = JSON.parse(metadataContent) as {
+          startTime: string;
+          endTime?: string;
+          planIds: string[];
+        };
+
+        expect(metadata.endTime).to.be.a('string');
+        expect(metadata.endTime).to.not.be.empty;
+        expect(new Date(metadata.endTime!).getTime()).to.be.greaterThan(new Date(metadata.startTime).getTime());
+
+        // Verify final planIds array is populated
+        expect(metadata.planIds).to.be.an('array');
+        expect(metadata.planIds.length).to.be.greaterThan(0);
+
+        // Verify turn-index has session end entry
+        const turnIndexPath = join(sessionDir, 'turn-index.json');
+        const turnIndexContent = readFileSync(turnIndexPath, 'utf8');
+        const turnIndex = JSON.parse(turnIndexContent) as {
+          turns: Array<{ role: string; reason?: string }>;
+        };
+
+        const lastTurn = turnIndex.turns[turnIndex.turns.length - 1];
+        expect(lastTurn.role).to.equal('agent');
+        expect(lastTurn.reason).to.equal('UserRequest');
+      });
     });
   });
 
