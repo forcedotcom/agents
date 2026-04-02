@@ -603,6 +603,22 @@ export async function requestWithEndpointFallback<T>(
 }
 
 /**
+ * Add a plan ID to the metadata file
+ */
+export const addPlanIdToMetadata = async (historyDir: string, planId: string): Promise<void> => {
+  const metadataPath = path.join(historyDir, 'metadata.json');
+  try {
+    const metadata = JSON.parse(await readFile(metadataPath, 'utf-8')) as PreviewMetadata;
+    if (!metadata.planIds.includes(planId)) {
+      metadata.planIds.push(planId);
+      await writeFile(metadataPath, JSON.stringify(metadata, null, 2), 'utf-8');
+    }
+  } catch {
+    // If metadata doesn't exist, ignore (it should have been created at session start)
+  }
+};
+
+/**
  * Update preview metadata with end time and plan IDs
  */
 export const updateMetadataEndTime = async (

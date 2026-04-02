@@ -42,6 +42,7 @@ import {
   initializeTurnIndex,
   logTurnToHistory,
   updateTurnWithTrace,
+  addPlanIdToMetadata,
 } from '../utils';
 import { createTraceFlag, findTraceFlag, getDebugLog } from '../apexUtils';
 import { AgentBase } from './agentBase';
@@ -286,6 +287,7 @@ export class ProductionAgent extends AgentBase {
         const trace = await this.getTrace(planId);
         await writeTraceToHistory(planId, trace, this.historyDir);
         await updateTurnWithTrace(this.historyDir, agentTurn, planId);
+        await addPlanIdToMetadata(this.historyDir, planId);
       }
 
       if (this.apexDebugging && this.canApexDebug()) {

@@ -48,6 +48,7 @@ import {
   initializeTurnIndex,
   logTurnToHistory,
   updateTurnWithTrace,
+  addPlanIdToMetadata,
 } from '../utils';
 import { getDebugLog } from '../apexUtils';
 import { generateAgentScript } from '../templates/agentScriptTemplate';
@@ -409,6 +410,7 @@ export class ScriptAgent extends AgentBase {
         const trace = await this.getTrace(planId);
         await writeTraceToHistory(planId, trace, this.historyDir);
         await updateTurnWithTrace(this.historyDir, agentTurn, planId);
+        await addPlanIdToMetadata(this.historyDir, planId);
       }
 
       if (this.apexDebugging && this.canApexDebug()) {
