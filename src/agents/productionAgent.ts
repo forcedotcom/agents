@@ -32,7 +32,6 @@ import { MaybeMock } from '../maybe-mock';
 import {
   writeMetaFileToHistory,
   updateMetadataEndTime,
-  writeTraceToHistory,
   requestWithEndpointFallback,
   getHistoryDir,
   getAllHistory,
@@ -41,8 +40,7 @@ import {
   getAgentIndexDir,
   initializeTurnIndex,
   logTurnToHistory,
-  updateTurnWithTrace,
-  addPlanIdToMetadata,
+  recordTraceForTurn,
 } from '../utils';
 import { createTraceFlag, findTraceFlag, getDebugLog } from '../apexUtils';
 import { AgentBase } from './agentBase';
@@ -285,10 +283,7 @@ export class ProductionAgent extends AgentBase {
 
       // Fetch and write trace immediately if available
       if (planId) {
-        const trace = await this.getTrace(planId);
-        await writeTraceToHistory(planId, trace, this.historyDir);
-        await updateTurnWithTrace(this.historyDir, agentTurn, planId);
-        await addPlanIdToMetadata(this.historyDir, planId);
+        await recordTraceForTurn(this.historyDir, agentTurn, planId, undefined);
       }
 
       if (this.apexDebugging && this.canApexDebug()) {

@@ -644,6 +644,75 @@ export const addPlanIdToMetadata = async (historyDir: string, planId: string): P
 };
 
 /**
+ * Record a trace for a turn - consolidates trace file write, turn index update, and metadata update
+ * Optimized to minimize file I/O by batching reads and parallelizing writes
+ *
+ * @param {string} historyDir path to the session directory
+ * @param {number} turnNumber the turn number that generated this trace
+ * @param {string} planId the plan ID for this trace
+ * @param {PlannerResponse | undefined} trace the trace data to write
+ * @returns {Promise<void>}
+ */
+export const recordTraceForTurn = async (
+  historyDir: string,
+  turnNumber: number,
+  planId: string,
+  trace: PlannerResponse | undefined
+): Promise<void> => {
+  const turnIndexPath = path.join(historyDir, 'turn-index.json');
+  const metadataPath = path.join(historyDir, 'metadata.json');
+  const tracesDir = path.join(historyDir, 'traces');
+  const tracePath = path.join(tracesDir, `${planId}.json`);
+
+  // Read both JSON files in parallel (if they exist)
+  const [turnIndexContent, metadataContent] = await Promise.all([
+    existsSync(turnIndexPath) ? readFile(turnIndexPath, 'utf-8').catch(() => null) : null,
+    readFile(metadataPath, 'utf-8').catch(() => null),
+  ]);
+
+  // Prepare updates in memory
+  const writes = [];
+
+  // Always write the trace file
+  writes.push(
+    mkdir(tracesDir, { recursive: true }).then(() =>
+      writeFile(tracePath, JSON.stringify(trace ?? {}, null, 2), 'utf-8')
+    )
+  );
+
+  // Update turn index if it exists and is valid
+  if (turnIndexContent) {
+    try {
+      const index = JSON.parse(turnIndexContent) as TurnIndex;
+      const turn = index.turns.find((t) => t.turn === turnNumber);
+      if (turn) {
+        turn.traceFile = `traces/${planId}.json`;
+        turn.planId = planId;
+        writes.push(writeFile(turnIndexPath, JSON.stringify(index, null, 2), 'utf-8'));
+      }
+    } catch {
+      // Invalid JSON, skip turn index update
+    }
+  }
+
+  // Update metadata if it exists and is valid
+  if (metadataContent) {
+    try {
+      const metadata = JSON.parse(metadataContent) as PreviewMetadata;
+      if (!metadata.planIds.includes(planId)) {
+        metadata.planIds.push(planId);
+        writes.push(writeFile(metadataPath, JSON.stringify(metadata, null, 2), 'utf-8'));
+      }
+    } catch {
+      // Invalid JSON, skip metadata update
+    }
+  }
+
+  // Execute all writes in parallel
+  await Promise.all(writes);
+};
+
+/**
  * Update preview metadata with end time and plan IDs
  */
 export const updateMetadataEndTime = async (

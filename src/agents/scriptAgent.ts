@@ -37,7 +37,6 @@ import {
   writeMetaFileToHistory,
   logSessionToIndex,
   updateMetadataEndTime,
-  writeTraceToHistory,
   getHttpStatusCode,
   requestWithEndpointFallback,
   findAuthoringBundle,
@@ -47,8 +46,7 @@ import {
   getAgentIndexDir,
   initializeTurnIndex,
   logTurnToHistory,
-  updateTurnWithTrace,
-  addPlanIdToMetadata,
+  recordTraceForTurn,
 } from '../utils';
 import { getDebugLog } from '../apexUtils';
 import { generateAgentScript } from '../templates/agentScriptTemplate';
@@ -410,9 +408,7 @@ export class ScriptAgent extends AgentBase {
       // Fetch and write trace immediately if available
       if (planId) {
         const trace = await this.getTrace(planId);
-        await writeTraceToHistory(planId, trace, this.historyDir);
-        await updateTurnWithTrace(this.historyDir, agentTurn, planId);
-        await addPlanIdToMetadata(this.historyDir, planId);
+        await recordTraceForTurn(this.historyDir, agentTurn, planId, trace);
       }
 
       if (this.apexDebugging && this.canApexDebug()) {
