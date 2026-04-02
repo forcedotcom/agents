@@ -30,17 +30,15 @@ import {
 } from '../types';
 import { MaybeMock } from '../maybe-mock';
 import {
-  writeMetaFileToHistory,
-  updateMetadataEndTime,
   requestWithEndpointFallback,
   getHistoryDir,
   getAllHistory,
   TranscriptEntry,
   logSessionToIndex,
   getAgentIndexDir,
-  initializeTurnIndex,
   logTurnToHistory,
   recordTraceForTurn,
+  SessionHistoryBuffer,
 } from '../utils';
 import { createTraceFlag, findTraceFlag, getDebugLog } from '../apexUtils';
 import { AgentBase } from './agentBase';
@@ -53,6 +51,7 @@ export class ProductionAgent extends AgentBase {
   private id: string | undefined;
   private apiName: string | undefined;
   private turnCounter = 0;
+  private historyBuffer: SessionHistoryBuffer | undefined;
   private readonly apiBase: string;
 
   public constructor(private options: ProductionAgentOptions) {
@@ -222,6 +221,9 @@ export class ProductionAgent extends AgentBase {
     if (!this.sessionId) {
       throw SfError.create({ name: 'noSessionId', message: 'Agent not started, please call .start() first' });
     }
+    if (!this.historyBuffer) {
+      throw SfError.create({ name: 'noHistoryBuffer', message: 'Session not initialized properly' });
+    }
 
     const url = `${this.apiBase}/sessions/${this.sessionId}/messages`;
 
@@ -256,7 +258,7 @@ export class ProductionAgent extends AgentBase {
         role: 'user' as const,
         text: message,
       };
-      await logTurnToHistory(userEntry, ++this.turnCounter, this.historyDir);
+      await logTurnToHistory(userEntry, ++this.turnCounter, this.historyDir, this.historyBuffer);
 
       const response = await requestWithEndpointFallback<AgentPreviewSendResponse>(this.connection, {
         method: 'POST',
@@ -279,11 +281,12 @@ export class ProductionAgent extends AgentBase {
         raw: response.messages,
       };
       const agentTurn = ++this.turnCounter;
-      await logTurnToHistory(agentEntry, agentTurn, this.historyDir);
+      await logTurnToHistory(agentEntry, agentTurn, this.historyDir, this.historyBuffer);
 
       // Fetch and write trace immediately if available
       if (planId) {
-        await recordTraceForTurn(this.historyDir, agentTurn, planId, undefined);
+        const trace = await this.getTrace(planId);
+        await recordTraceForTurn(this.historyDir, agentTurn, planId, trace, this.historyBuffer);
       }
 
       if (this.apexDebugging && this.canApexDebug()) {
@@ -365,8 +368,8 @@ export class ProductionAgent extends AgentBase {
       this.historyDir = await getHistoryDir(agentId, response.sessionId);
       const startTime = new Date().toISOString();
 
-      // Initialize turn index
-      await initializeTurnIndex(this.historyDir, response.sessionId, agentId);
+      // Initialize history buffer (no file I/O yet)
+      this.historyBuffer = new SessionHistoryBuffer(this.historyDir, response.sessionId, agentId, startTime);
       this.turnCounter = 0;
 
       const initialEntry = {
@@ -377,16 +380,7 @@ export class ProductionAgent extends AgentBase {
         text: response.messages.map((m) => m.message).join('\n'),
         raw: response.messages,
       };
-      await logTurnToHistory(initialEntry, ++this.turnCounter, this.historyDir);
-
-      // Write initial metadata
-      await writeMetaFileToHistory(this.historyDir, {
-        sessionId: response.sessionId,
-        agentId,
-        startTime,
-        apexDebugging: this.apexDebugging,
-        planIds: [],
-      });
+      await logTurnToHistory(initialEntry, ++this.turnCounter, this.historyDir, this.historyBuffer);
 
       const agentDir = await getAgentIndexDir(agentId);
       await logSessionToIndex(agentDir, {
@@ -427,24 +421,27 @@ export class ProductionAgent extends AgentBase {
         },
       });
 
-      // Write end entry immediately
-      if (this.historyDir) {
+      // Write end entry and flush buffer
+      if (this.historyDir && this.historyBuffer) {
+        const endTime = new Date().toISOString();
         const endEntry = {
-          timestamp: new Date().toISOString(),
+          timestamp: endTime,
           agentId: this.id,
           sessionId: this.sessionId,
           role: 'agent' as const,
           reason,
           raw: response.messages,
         };
-        await logTurnToHistory(endEntry, ++this.turnCounter, this.historyDir);
-        // Update metadata with end time
-        await updateMetadataEndTime(this.historyDir, new Date().toISOString(), this.planIds);
+        await logTurnToHistory(endEntry, ++this.turnCounter, this.historyDir, this.historyBuffer);
+
+        // Flush all buffered data to disk (turn-index.json and metadata.json)
+        await this.historyBuffer.flush(endTime);
       }
 
       // Clear session data for next session
       this.sessionId = undefined;
       this.historyDir = undefined;
+      this.historyBuffer = undefined;
       this.planIds = new Set<string>();
 
       return response;

@@ -404,61 +404,102 @@ function createSummary(text: string | undefined, multiModal: string | null): { s
 }
 
 /**
- * Initialize turn index file at session start
- *
- * @param {string} sessionDir path to the session directory
- * @param {string} sessionId the session ID
- * @param {string} agentId the agent ID
- * @returns {Promise<void>}
+ * In-memory buffer for session history to minimize file I/O during conversation
  */
-export const initializeTurnIndex = async (sessionDir: string, sessionId: string, agentId: string): Promise<void> => {
-  const indexPath = path.join(sessionDir, 'turn-index.json');
-  const index: TurnIndex = {
-    version: '1.0',
-    sessionId,
-    agentId,
-    created: new Date().toISOString(),
-    turns: [],
-  };
-  await writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
-};
+export class SessionHistoryBuffer {
+  private turnEntries: TurnIndexEntry[] = [];
+  private planIds: Set<string> = new Set();
+
+  public constructor(
+    private readonly sessionDir: string,
+    private readonly sessionId: string,
+    private readonly agentId: string,
+    private readonly created: string
+  ) {}
+
+  /**
+   * Add a turn to the buffer (no file I/O)
+   */
+  public addTurn(entry: TurnIndexEntry): void {
+    this.turnEntries.push(entry);
+  }
+
+  /**
+   * Add a planId to the buffer (no file I/O)
+   */
+  public addPlanId(planId: string): void {
+    this.planIds.add(planId);
+  }
+
+  /**
+   * Update an existing turn with trace info (no file I/O)
+   */
+  public updateTurnWithTrace(turnNumber: number, planId: string): void {
+    const turn = this.turnEntries.find((t) => t.turn === turnNumber);
+    if (turn) {
+      turn.traceFile = `traces/${planId}.json`;
+      turn.planId = planId;
+    }
+  }
+
+  /**
+   * Flush all buffered data to disk - called at session end
+   */
+  public async flush(endTime?: string, mockMode?: 'Mock' | 'Live Test'): Promise<void> {
+    const turnIndexPath = path.join(this.sessionDir, 'turn-index.json');
+    const metadataPath = path.join(this.sessionDir, 'metadata.json');
+
+    const turnIndex: TurnIndex = {
+      version: '1.0',
+      sessionId: this.sessionId,
+      agentId: this.agentId,
+      created: this.created,
+      turns: this.turnEntries,
+    };
+
+    const metadata: PreviewMetadata = {
+      sessionId: this.sessionId,
+      agentId: this.agentId,
+      startTime: this.created,
+      planIds: Array.from(this.planIds),
+    };
+
+    if (endTime) {
+      metadata.endTime = endTime;
+    }
+    if (mockMode) {
+      metadata.mockMode = mockMode;
+    }
+
+    // Write both files in parallel
+    await Promise.all([
+      writeFile(turnIndexPath, JSON.stringify(turnIndex, null, 2), 'utf-8'),
+      writeFile(metadataPath, JSON.stringify(metadata, null, 2), 'utf-8'),
+    ]);
+  }
+}
 
 /**
- * Append a turn entry to the turn index
+ * Log a turn to history using buffer (fast, no read-modify-write)
  *
- * @param {string} sessionDir path to the session directory
- * @param {TranscriptEntry} entry the transcript entry to add
+ * @param {TranscriptEntry} entry the transcript entry to log
  * @param {number} turnNumber the turn number (1-based)
+ * @param {string} sessionDir path to the session directory
+ * @param {SessionHistoryBuffer} buffer buffer for batched writes
  * @returns {Promise<void>}
  */
-export const appendTurnToIndex = async (
-  sessionDir: string,
+export const logTurnToHistory = async (
   entry: TranscriptEntry,
-  turnNumber: number
+  turnNumber: number,
+  sessionDir: string,
+  buffer: SessionHistoryBuffer
 ): Promise<void> => {
-  const indexPath = path.join(sessionDir, 'turn-index.json');
+  // Always append to transcript immediately (fast append-only operation)
+  await appendTranscriptToHistory(entry, sessionDir);
 
-  // Initialize index if it doesn't exist (defensive: handles case where sendMessage is called before start)
-  if (!existsSync(indexPath)) {
-    await initializeTurnIndex(sessionDir, entry.sessionId, entry.agentId);
-  }
-
-  // Read existing index
-  let index: TurnIndex;
-  try {
-    const content = await readFile(indexPath, 'utf-8');
-    index = JSON.parse(content) as TurnIndex;
-  } catch (error) {
-    // If file is corrupted or unreadable, reinitialize it
-    await initializeTurnIndex(sessionDir, entry.sessionId, entry.agentId);
-    const content = await readFile(indexPath, 'utf-8');
-    index = JSON.parse(content) as TurnIndex;
-  }
-
-  // Create turn entry
+  // Add turn to in-memory buffer (no I/O)
   const { summary, truncated } = createSummary(entry.text, null);
-
-  const turnEntry: TurnIndexEntry = {
+  buffer.addTurn({
     turn: turnNumber,
     timestamp: entry.timestamp,
     role: entry.role,
@@ -467,60 +508,7 @@ export const appendTurnToIndex = async (
     multiModal: null,
     traceFile: null,
     planId: null,
-  };
-
-  index.turns.push(turnEntry);
-  await writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
-};
-
-/**
- * Update a turn entry with trace file reference
- *
- * @param {string} sessionDir path to the session directory
- * @param {number} turnNumber the turn number to update
- * @param {string} planId the plan ID associated with this turn
- * @returns {Promise<void>}
- */
-export const updateTurnWithTrace = async (sessionDir: string, turnNumber: number, planId: string): Promise<void> => {
-  const indexPath = path.join(sessionDir, 'turn-index.json');
-
-  // If index doesn't exist, return early (defensive: can't update what doesn't exist)
-  if (!existsSync(indexPath)) {
-    return;
-  }
-
-  let index: TurnIndex;
-  try {
-    const content = await readFile(indexPath, 'utf-8');
-    index = JSON.parse(content) as TurnIndex;
-  } catch (error) {
-    // If file is corrupted or unreadable, log and return
-    return;
-  }
-
-  const turn = index.turns.find((t) => t.turn === turnNumber);
-  if (turn) {
-    turn.traceFile = `traces/${planId}.json`;
-    turn.planId = planId;
-    await writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
-  }
-};
-
-/**
- * Log a turn to history - combines transcript and turn index writes
- *
- * @param {TranscriptEntry} entry the transcript entry to log
- * @param {number} turnNumber the turn number (1-based)
- * @param {string} sessionDir path to the session directory
- * @returns {Promise<void>}
- */
-export const logTurnToHistory = async (
-  entry: TranscriptEntry,
-  turnNumber: number,
-  sessionDir: string
-): Promise<void> => {
-  await appendTranscriptToHistory(entry, sessionDir);
-  await appendTurnToIndex(sessionDir, entry, turnNumber);
+  });
 };
 
 /**
@@ -628,88 +616,31 @@ export async function requestWithEndpointFallback<T>(
 }
 
 /**
- * Add a plan ID to the metadata file
- */
-export const addPlanIdToMetadata = async (historyDir: string, planId: string): Promise<void> => {
-  const metadataPath = path.join(historyDir, 'metadata.json');
-  try {
-    const metadata = JSON.parse(await readFile(metadataPath, 'utf-8')) as PreviewMetadata;
-    if (!metadata.planIds.includes(planId)) {
-      metadata.planIds.push(planId);
-      await writeFile(metadataPath, JSON.stringify(metadata, null, 2), 'utf-8');
-    }
-  } catch {
-    // If metadata doesn't exist, ignore (it should have been created at session start)
-  }
-};
-
-/**
- * Record a trace for a turn - consolidates trace file write, turn index update, and metadata update
- * Optimized to minimize file I/O by batching reads and parallelizing writes
+ * Record a trace for a turn using buffer (fast, minimal I/O)
  *
  * @param {string} historyDir path to the session directory
  * @param {number} turnNumber the turn number that generated this trace
  * @param {string} planId the plan ID for this trace
  * @param {PlannerResponse | undefined} trace the trace data to write
+ * @param {SessionHistoryBuffer} buffer buffer for batched updates
  * @returns {Promise<void>}
  */
 export const recordTraceForTurn = async (
   historyDir: string,
   turnNumber: number,
   planId: string,
-  trace: PlannerResponse | undefined
+  trace: PlannerResponse | undefined,
+  buffer: SessionHistoryBuffer
 ): Promise<void> => {
-  const turnIndexPath = path.join(historyDir, 'turn-index.json');
-  const metadataPath = path.join(historyDir, 'metadata.json');
+  // Write the trace file immediately (one-time write)
   const tracesDir = path.join(historyDir, 'traces');
   const tracePath = path.join(tracesDir, `${planId}.json`);
+  await mkdir(tracesDir, { recursive: true });
+  await writeFile(tracePath, JSON.stringify(trace ?? {}, null, 2), 'utf-8');
 
-  // Read both JSON files in parallel (if they exist)
-  const [turnIndexContent, metadataContent] = await Promise.all([
-    existsSync(turnIndexPath) ? readFile(turnIndexPath, 'utf-8').catch(() => null) : null,
-    readFile(metadataPath, 'utf-8').catch(() => null),
-  ]);
-
-  // Prepare updates in memory
-  const writes = [];
-
-  // Always write the trace file
-  writes.push(
-    mkdir(tracesDir, { recursive: true }).then(() =>
-      writeFile(tracePath, JSON.stringify(trace ?? {}, null, 2), 'utf-8')
-    )
-  );
-
-  // Update turn index if it exists and is valid
-  if (turnIndexContent) {
-    try {
-      const index = JSON.parse(turnIndexContent) as TurnIndex;
-      const turn = index.turns.find((t) => t.turn === turnNumber);
-      if (turn) {
-        turn.traceFile = `traces/${planId}.json`;
-        turn.planId = planId;
-        writes.push(writeFile(turnIndexPath, JSON.stringify(index, null, 2), 'utf-8'));
-      }
-    } catch {
-      // Invalid JSON, skip turn index update
-    }
-  }
-
-  // Update metadata if it exists and is valid
-  if (metadataContent) {
-    try {
-      const metadata = JSON.parse(metadataContent) as PreviewMetadata;
-      if (!metadata.planIds.includes(planId)) {
-        metadata.planIds.push(planId);
-        writes.push(writeFile(metadataPath, JSON.stringify(metadata, null, 2), 'utf-8'));
-      }
-    } catch {
-      // Invalid JSON, skip metadata update
-    }
-  }
-
-  // Execute all writes in parallel
-  await Promise.all(writes);
+  // Update in memory (no I/O)
+  buffer.updateTurnWithTrace(turnNumber, planId);
+  buffer.addPlanId(planId);
 };
 
 /**
