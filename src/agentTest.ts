@@ -126,7 +126,7 @@ export class AgentTest {
     const filename = preview
       ? `${apiName}-preview-${new Date().toISOString()}.xml`
       : `${apiName}.aiEvaluationDefinition-meta.xml`;
-      const definitionPath = join(outputDir, sanitizeFilename(filename));
+    const definitionPath = join(outputDir, sanitizeFilename(filename));
 
     const xml = buildMetadataXml(convertToMetadata(agentTestSpec));
     await mkdir(outputDir, { recursive: true });
@@ -359,15 +359,15 @@ const convertToMetadata = (spec: TestSpec): AiEvaluationDefinition => ({
       })),
       {
         expectedValue: tc.expectedTopic as string,
-        name: 'topic_assertion',
+        name: 'topic_sequence_match',
       },
       {
         expectedValue: `[${(tc.expectedActions ?? []).map((v) => `'${v}'`).join(',')}]`,
-        name: 'actions_assertion',
+        name: 'action_sequence_match',
       },
       {
         expectedValue: tc.expectedOutcome as string,
-        name: 'output_validation',
+        name: 'bot_response_rating',
       },
       ...ensureArray(tc.metrics).map((m) => ({ name: m })),
     ],
