@@ -284,11 +284,11 @@ testCases:
             </parameter>
         </expectation>
           <expectation>
-            <name>topic_assertion</name>
+            <name>topic_sequence_match</name>
             <expectedValue>Weather</expectedValue>
           </expectation>
           <expectation>
-            <name>actions_assertion</name>
+            <name>action_sequence_match</name>
             <expectedValue>["GetLocation","GetWeather"]</expectedValue>
           </expectation>
           <expectation>
@@ -298,7 +298,7 @@ testCases:
             <name>coherence</name>
           </expectation>
           <expectation>
-            <name>output_validation</name>
+            <name>bot_response_rating</name>
             <expectedValue>Sunny with a high of 75F</expectedValue>
           </expectation>
         </testCase>
@@ -500,7 +500,7 @@ testCases:
             </contextVariable>
           </inputs>
           <expectation>
-            <name>topic_assertion</name>
+            <name>topic_sequence_match</name>
             <expectedValue>Weather</expectedValue>
           </expectation>
           <expectation>
@@ -523,7 +523,7 @@ testCases:
             </parameter>
           </expectation>
           <expectation>
-            <name>actions_assertion</name>
+            <name>action_sequence_match</name>
             <expectedValue>[&apos;GetLocation&apos;,&apos;GetWeather&apos;, 'myWeather', "myWeatherResponse"]</expectedValue>
           </expectation>
           <expectation>
@@ -536,7 +536,7 @@ testCases:
             <name>output_latency_milliseconds</name>
         </expectation>
           <expectation>
-            <name>output_validation</name>
+            <name>bot_response_rating</name>
             <expectedValue>Sunny with a high of 75F</expectedValue>
           </expectation>
         </testCase>
@@ -611,7 +611,7 @@ testCases:
             <utterance>What's the weather like?</utterance>
           </inputs>
           <expectation>
-            <name>topic_assertion</name>
+            <name>topic_sequence_match</name>
             <expectedValue>Weather</expectedValue>
           </expectation>
         </testCase>
@@ -658,7 +658,7 @@ testCases:
             </contextVariables>
           </inputs>
           <expectation>
-            <name>actions_assertion</name>
+            <name>action_sequence_match</name>
             <expectedValue>["GetWeather"]</expectedValue>
           </expectation>
         </testCase>
@@ -671,7 +671,7 @@ testCases:
             <utterance>Will it rain tomorrow?</utterance>
           </inputs>
           <expectation>
-            <name>actions_assertion</name>
+            <name>action_sequence_match</name>
             <expectedValue>["GetForecast"]</expectedValue>
           </expectation>
         </testCase>
@@ -699,7 +699,7 @@ testCases:
             <utterance>Test</utterance>
           </inputs>
           <expectation>
-            <name>actions_assertion</name>
+            <name>action_sequence_match</name>
             <expectedValue>invalid json</expectedValue>
           </expectation>
         </testCase>
@@ -741,7 +741,7 @@ testCases:
             </conversationHistory>
           </inputs>
           <expectation>
-            <name>topic_assertion</name>
+            <name>topic_sequence_match</name>
             <expectedValue>Music</expectedValue>
           </expectation>
         </testCase>
@@ -812,11 +812,11 @@ testCases:
         pollStatus: sinon.stub().resolves({
           response: { success: true, details: { componentFailures: [] } },
         }),
-      };  
+      };
       const mockComponentSet = {
         deploy: sinon.stub().resolves(mockDeploy),
       };
-      sinon
+      sinon;
       sinon.stub(ComponentSetBuilder, 'build').resolves(mockComponentSet as never);
       await AgentTest.create(connection, 'PlainName', 'test.yaml', {
         outputDir: 'tmp\\test',
@@ -891,15 +891,15 @@ testCases:
     <testCase>
         <expectation>
             <expectedValue>GeneralCRM</expectedValue>
-            <name>topic_assertion</name>
+            <name>topic_sequence_match</name>
         </expectation>
         <expectation>
             <expectedValue>[&apos;IdentifyRecordByName&apos;,&apos;QueryRecords&apos;]</expectedValue>
-            <name>actions_assertion</name>
+            <name>action_sequence_match</name>
         </expectation>
         <expectation>
             <expectedValue>contacts available name available with Acme are listed</expectedValue>
-            <name>output_validation</name>
+            <name>bot_response_rating</name>
         </expectation>
         <inputs>
             <utterance>List contact names associated with Acme account</utterance>
@@ -913,15 +913,15 @@ testCases:
     <testCase>
         <expectation>
             <expectedValue>GeneralCRM</expectedValue>
-            <name>topic_assertion</name>
+            <name>topic_sequence_match</name>
         </expectation>
         <expectation>
             <expectedValue>[&apos;IdentifyRecordByName&apos;,&apos;QueryRecords&apos;]</expectedValue>
-            <name>actions_assertion</name>
+            <name>action_sequence_match</name>
         </expectation>
         <expectation>
             <expectedValue>contacts available emails available with Acme are listed</expectedValue>
-            <name>output_validation</name>
+            <name>bot_response_rating</name>
         </expectation>
         <expectation>
             <name>completeness</name>
@@ -979,15 +979,15 @@ testCases:
     <testCase>
         <expectation>
             <expectedValue>Music</expectedValue>
-            <name>topic_assertion</name>
+            <name>topic_sequence_match</name>
         </expectation>
         <expectation>
             <expectedValue>[&apos;GetMusicPreferences&apos;,&apos;SummarizeData&apos;]</expectedValue>
-            <name>actions_assertion</name>
+            <name>action_sequence_match</name>
         </expectation>
         <expectation>
             <expectedValue>Here&apos;s a summary of your listening preferences based on your history</expectedValue>
-            <name>output_validation</name>
+            <name>bot_response_rating</name>
         </expectation>
         <expectation>
             <name>completeness</name>
