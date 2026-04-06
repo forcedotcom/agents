@@ -1,3 +1,12 @@
+## [0.24.16](https://github.com/forcedotcom/agents/compare/0.24.15...0.24.16) (2026-04-06)
+
+
+### Bug Fixes
+
+* use 260 AiEvalDef tags ([d836a19](https://github.com/forcedotcom/agents/commit/d836a193db7a092521bfa118cab4cb59feb9fe3e))
+
+
+
 ## [0.24.15](https://github.com/forcedotcom/agents/compare/0.24.14...0.24.15) (2026-04-05)
 
 
