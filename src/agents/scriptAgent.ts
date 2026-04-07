@@ -57,8 +57,6 @@ export class ScriptAgent extends AgentBase {
     setMockMode: (mockMode: 'Mock' | 'Live Test') => void;
   };
   private mockMode: 'Mock' | 'Live Test' = 'Mock';
-  private turnCounter = 0;
-  private historyBuffer: SessionHistoryBuffer | undefined;
   private agentScriptContent: AgentScriptContent;
   private agentJson: AgentJson | undefined;
   private readonly apiBase: string;
@@ -324,28 +322,6 @@ export class ScriptAgent extends AgentBase {
 
   public getAgentIdForStorage(): string {
     return this.options.aabName;
-  }
-
-  /**
-   * Resume an existing session by loading session state from disk
-   *
-   * @param sessionId The session ID to resume
-   */
-  public async resumeSession(sessionId: string): Promise<void> {
-    this.sessionId = sessionId;
-    const agentId = this.getAgentIdForStorage();
-    this.historyDir = await getHistoryDir(agentId, sessionId);
-
-    // Load session data from disk
-    const { buffer, turnCount } = await SessionHistoryBuffer.fromDisk(this.historyDir, sessionId, agentId);
-    this.historyBuffer = buffer;
-    this.turnCounter = turnCount;
-
-    // Load planIds from buffer
-    const history = await this.getHistoryFromDisc(sessionId);
-    if (history.metadata?.planIds) {
-      history.metadata.planIds.forEach((planId) => this.planIds.add(planId));
-    }
   }
 
   protected canApexDebug(): boolean {

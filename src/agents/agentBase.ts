@@ -17,7 +17,7 @@ import { readFile, readdir, cp, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Connection, SfError } from '@salesforce/core';
 import { AgentPreviewInterface, type AgentPreviewSendResponse, type PlannerResponse, PreviewMetadata } from '../types';
-import { getHistoryDir, TranscriptEntry } from '../utils';
+import { getHistoryDir, SessionHistoryBuffer, TranscriptEntry } from '../utils';
 
 /**
  * Abstract base class for agent preview functionality.
@@ -30,6 +30,8 @@ export abstract class AgentBase {
   public name: string | undefined;
   protected sessionId: string | undefined;
   protected historyDir: string | undefined;
+  protected historyBuffer: SessionHistoryBuffer | undefined;
+  protected turnCounter = 0;
   protected apexDebugging: boolean | undefined;
   protected planIds = new Set<string>();
   public abstract preview: AgentPreviewInterface;
@@ -50,6 +52,28 @@ export abstract class AgentBase {
       throw SfError.create({ message: 'No sessionId set on agent. Call setSessionId() before getHistoryDir().' });
     }
     return getHistoryDir(await this.getAgentIdForStorage(), this.sessionId);
+  }
+
+  /**
+   * Resume an existing session by loading session state from disk
+   *
+   * @param sessionId The session ID to resume
+   */
+  public async resumeSession(sessionId: string): Promise<void> {
+    this.sessionId = sessionId;
+    const agentId = await this.getAgentIdForStorage();
+    this.historyDir = await getHistoryDir(agentId, sessionId);
+
+    // Load session data from disk
+    const { buffer, turnCount } = await SessionHistoryBuffer.fromDisk(this.historyDir, sessionId, agentId);
+    this.historyBuffer = buffer;
+    this.turnCounter = turnCount;
+
+    // Load planIds from buffer
+    const history = await this.getHistoryFromDisc();
+    if (history.metadata?.planIds) {
+      history.metadata.planIds.forEach((planId) => this.planIds.add(planId));
+    }
   }
 
   /**

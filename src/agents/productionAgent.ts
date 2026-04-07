@@ -50,8 +50,6 @@ export class ProductionAgent extends AgentBase {
   private botMetadata: BotMetadata | undefined;
   private id: string | undefined;
   private apiName: string | undefined;
-  private turnCounter = 0;
-  private historyBuffer: SessionHistoryBuffer | undefined;
   private readonly apiBase: string;
 
   public constructor(private options: ProductionAgentOptions) {
@@ -200,28 +198,6 @@ export class ProductionAgent extends AgentBase {
       throw SfError.create({ name: 'noId', message: 'Agent ID not found. Call .getBotMetadata() first.' });
     }
     return this.id;
-  }
-
-  /**
-   * Resume an existing session by loading session state from disk
-   *
-   * @param sessionId The session ID to resume
-   */
-  public async resumeSession(sessionId: string): Promise<void> {
-    this.sessionId = sessionId;
-    const agentId = this.getAgentIdForStorage();
-    this.historyDir = await getHistoryDir(agentId, sessionId);
-
-    // Load session data from disk
-    const { buffer, turnCount } = await SessionHistoryBuffer.fromDisk(this.historyDir, sessionId, agentId);
-    this.historyBuffer = buffer;
-    this.turnCounter = turnCount;
-
-    // Load planIds from buffer
-    const history = await this.getHistoryFromDisc(sessionId);
-    if (history.metadata?.planIds) {
-      history.metadata.planIds.forEach((planId) => this.planIds.add(planId));
-    }
   }
 
   // eslint-disable-next-line class-methods-use-this
