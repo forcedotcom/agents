@@ -412,6 +412,58 @@ export class SessionHistoryBuffer {
   ) {}
 
   /**
+   * Create a SessionHistoryBuffer from existing session data on disk
+   * Used when resuming an existing session
+   */
+  public static async fromDisk(
+    sessionDir: string,
+    sessionId: string,
+    agentId: string
+  ): Promise<{ buffer: SessionHistoryBuffer; turnCount: number }> {
+    // Read existing metadata and turn-index files
+    const metadataPath = path.join(sessionDir, 'metadata.json');
+    const turnIndexPath = path.join(sessionDir, 'turn-index.json');
+
+    let metadata: PreviewMetadata | null = null;
+    let turnIndex: TurnIndex | null = null;
+
+    try {
+      const metadataContent = await readFile(metadataPath, 'utf-8');
+      metadata = JSON.parse(metadataContent) as PreviewMetadata;
+    } catch {
+      // Metadata doesn't exist yet - that's ok for a new session
+    }
+
+    try {
+      const turnIndexContent = await readFile(turnIndexPath, 'utf-8');
+      turnIndex = JSON.parse(turnIndexContent) as TurnIndex;
+    } catch {
+      // Turn index doesn't exist yet - that's ok for a new session
+    }
+
+    // Create buffer with metadata
+    const buffer = new SessionHistoryBuffer(
+      sessionDir,
+      sessionId,
+      agentId,
+      metadata?.startTime ?? new Date().toISOString(),
+      metadata?.mockMode
+    );
+
+    // Load existing turns and planIds into buffer
+    if (turnIndex?.turns) {
+      turnIndex.turns.forEach((turn) => buffer.addTurn(turn));
+    }
+    if (metadata?.planIds) {
+      metadata.planIds.forEach((planId) => buffer.addPlanId(planId));
+    }
+
+    // Return buffer and current turn count
+    const turnCount = turnIndex?.turns.length ?? 0;
+    return { buffer, turnCount };
+  }
+
+  /**
    * Add a turn to the buffer (no file I/O)
    */
   public addTurn(entry: TurnIndexEntry): void {

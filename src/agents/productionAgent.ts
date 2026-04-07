@@ -202,6 +202,28 @@ export class ProductionAgent extends AgentBase {
     return this.id;
   }
 
+  /**
+   * Resume an existing session by loading session state from disk
+   *
+   * @param sessionId The session ID to resume
+   */
+  public async resumeSession(sessionId: string): Promise<void> {
+    this.sessionId = sessionId;
+    const agentId = this.getAgentIdForStorage();
+    this.historyDir = await getHistoryDir(agentId, sessionId);
+
+    // Load session data from disk
+    const { buffer, turnCount } = await SessionHistoryBuffer.fromDisk(this.historyDir, sessionId, agentId);
+    this.historyBuffer = buffer;
+    this.turnCounter = turnCount;
+
+    // Load planIds from buffer
+    const history = await this.getHistoryFromDisc(sessionId);
+    if (history.metadata?.planIds) {
+      history.metadata.planIds.forEach((planId) => this.planIds.add(planId));
+    }
+  }
+
   // eslint-disable-next-line class-methods-use-this
   protected canApexDebug(): boolean {
     return true;
@@ -221,8 +243,14 @@ export class ProductionAgent extends AgentBase {
     if (!this.sessionId) {
       throw SfError.create({ name: 'noSessionId', message: 'Agent not started, please call .start() first' });
     }
+
+    // Auto-resume session if historyBuffer is not initialized but sessionId is set
     if (!this.historyBuffer) {
-      throw SfError.create({ name: 'noHistoryBuffer', message: 'Session not initialized properly' });
+      await this.resumeSession(this.sessionId);
+      // Double-check that resumeSession succeeded
+      if (!this.historyBuffer) {
+        throw SfError.create({ name: 'noHistoryBuffer', message: 'Failed to resume session' });
+      }
     }
 
     const url = `${this.apiBase}/sessions/${this.sessionId}/messages`;
