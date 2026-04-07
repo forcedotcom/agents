@@ -34,11 +34,7 @@ import {
   ScriptAgentOptions,
 } from '../types';
 import {
-  appendTranscriptToHistory,
-  writeMetaFileToHistory,
   logSessionToIndex,
-  updateMetadataEndTime,
-  writeTraceToHistory,
   getHttpStatusCode,
   requestWithEndpointFallback,
   findAuthoringBundle,
@@ -46,6 +42,9 @@ import {
   TranscriptEntry,
   getAllHistory,
   getAgentIndexDir,
+  logTurnToHistory,
+  recordTraceForTurn,
+  SessionHistoryBuffer,
 } from '../utils';
 import { getDebugLog } from '../apexUtils';
 import { generateAgentScript } from '../templates/agentScriptTemplate';
@@ -296,25 +295,26 @@ export class ScriptAgent extends AgentBase {
       return Promise.resolve({ messages: [], _links: [] } as unknown as AgentPreviewEndResponse);
     }
 
-    if (this.historyDir) {
-      await appendTranscriptToHistory(
-        {
-          timestamp: new Date().toISOString(),
-          agentId: this.getAgentIdForStorage(),
-          sessionId: this.sessionId,
-          role: 'agent',
-          reason: 'UserRequest',
-          raw: [],
-        },
-        this.historyDir
-      );
-      // Update metadata with end time
-      await updateMetadataEndTime(this.historyDir, new Date().toISOString(), this.planIds);
+    if (this.historyDir && this.historyBuffer) {
+      const endTime = new Date().toISOString();
+      const endEntry = {
+        timestamp: endTime,
+        agentId: this.getAgentIdForStorage(),
+        sessionId: this.sessionId,
+        role: 'agent' as const,
+        reason: 'UserRequest',
+        raw: [],
+      };
+      await logTurnToHistory(endEntry, ++this.turnCounter, this.historyDir, this.historyBuffer);
+
+      // Flush all buffered data to disk (turn-index.json and metadata.json)
+      await this.historyBuffer.flush(endTime);
     }
 
     // Clear session data for next session
     this.sessionId = undefined;
     this.historyDir = undefined;
+    this.historyBuffer = undefined;
     this.planIds = new Set<string>();
 
     return Promise.resolve({ messages: [], _links: [] } as unknown as AgentPreviewEndResponse);
@@ -339,6 +339,15 @@ export class ScriptAgent extends AgentBase {
   protected async sendMessage(message: string): Promise<AgentPreviewSendResponse> {
     if (!this.sessionId) {
       throw SfError.create({ name: 'noSessionId', message: 'Agent not started, please call .start() first' });
+    }
+
+    // Auto-resume session if historyBuffer is not initialized but sessionId is set
+    if (!this.historyBuffer) {
+      await this.resumeSession(this.sessionId);
+      // Double-check that resumeSession succeeded
+      if (!this.historyBuffer) {
+        throw SfError.create({ name: 'noHistoryBuffer', message: 'Failed to resume session' });
+      }
     }
 
     const url = `${this.apiBase}/v1.1/preview/sessions/${this.sessionId}/messages`;
@@ -367,15 +376,17 @@ export class ScriptAgent extends AgentBase {
         this.historyDir = await getHistoryDir(agentId, this.sessionId);
       }
 
-      void appendTranscriptToHistory(
+      await logTurnToHistory(
         {
           timestamp: new Date().toISOString(),
           agentId,
           sessionId: this.sessionId,
-          role: 'user',
+          role: 'user' as const,
           text: message,
         },
-        this.historyDir
+        ++this.turnCounter,
+        this.historyDir,
+        this.historyBuffer
       );
 
       const response = await requestWithEndpointFallback<AgentPreviewSendResponse>(this.connection, {
@@ -390,23 +401,29 @@ export class ScriptAgent extends AgentBase {
       const planId = response.messages.at(0)!.planId;
       this.planIds.add(planId);
 
-      await appendTranscriptToHistory(
+      const agentTurn = ++this.turnCounter;
+      await logTurnToHistory(
         {
           timestamp: new Date().toISOString(),
           agentId,
           sessionId: this.sessionId,
-          role: 'agent',
+          role: 'agent' as const,
           text: response.messages.at(0)?.message,
           raw: response.messages,
         },
-        this.historyDir
+        agentTurn,
+        this.historyDir,
+        this.historyBuffer
       );
 
       // Fetch and write trace immediately if available
       if (planId) {
         const trace = await this.getTrace(planId);
-        await writeTraceToHistory(planId, trace, this.historyDir);
+        await recordTraceForTurn(this.historyDir, agentTurn, planId, trace, this.historyBuffer);
       }
+
+      // Flush buffer to keep turn-index.json and metadata.json up to date
+      await this.historyBuffer.flush();
 
       if (this.apexDebugging && this.canApexDebug()) {
         const apexLog = await getDebugLog(this.connection, start, Date.now());
@@ -522,28 +539,29 @@ export class ScriptAgent extends AgentBase {
       this.historyDir = await getHistoryDir(agentIdForStorage, response.sessionId);
       const startTime = new Date().toISOString();
 
-      // Write initial agent messages immediately
-      await appendTranscriptToHistory(
-        {
-          timestamp: startTime,
-          agentId: agentIdForStorage,
-          sessionId: response.sessionId,
-          role: 'agent',
-          text: response.messages.map((m) => m.message).join('\n'),
-          raw: response.messages,
-        },
-        this.historyDir
-      );
-
-      // Write initial metadata
-      await writeMetaFileToHistory(this.historyDir, {
-        sessionId: response.sessionId,
-        agentId: agentIdForStorage,
+      // Initialize history buffer (no file I/O yet)
+      this.historyBuffer = new SessionHistoryBuffer(
+        this.historyDir,
+        response.sessionId,
+        agentIdForStorage,
         startTime,
-        apexDebugging: this.apexDebugging,
-        mockMode: this.mockMode,
-        planIds: [],
-      });
+        this.mockMode
+      );
+      this.turnCounter = 0;
+
+      // Write initial agent messages immediately
+      const initialEntry = {
+        timestamp: startTime,
+        agentId: agentIdForStorage,
+        sessionId: response.sessionId,
+        role: 'agent' as const,
+        text: response.messages.map((m) => m.message).join('\n'),
+        raw: response.messages,
+      };
+      await logTurnToHistory(initialEntry, ++this.turnCounter, this.historyDir, this.historyBuffer);
+
+      // Write turn-index.json and metadata.json immediately so they exist after session start
+      await this.historyBuffer.flush();
 
       const agentDir = await getAgentIndexDir(agentIdForStorage);
       await logSessionToIndex(agentDir, {
