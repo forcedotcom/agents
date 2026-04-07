@@ -24,3 +24,20 @@ jobs:
       fail-fast: false
     with:
       os: ${{ matrix.os }}
+
+  xNuts-plugin-agent:
+    needs: linux-unit-tests
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        command:
+          - 'yarn test:nuts'
+    uses: salesforcecli/github-workflows/.github/workflows/externalNut.yml@main
+    with:
+      packageName: '@salesforce/agents'
+      externalProjectGitUrl: 'https://github.com/salesforcecli/plugin-agent'
+      command: ${{matrix.command}}
+      os: ${{matrix.os}}
+      useCache: false
+    secrets: inherit
