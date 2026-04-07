@@ -1,3 +1,17 @@
+# [0.25.0](https://github.com/forcedotcom/agents/compare/0.24.16...0.25.0) (2026-04-07)
+
+
+### Bug Fixes
+
+* populate planIds array ([e6804a3](https://github.com/forcedotcom/agents/commit/e6804a3a8f2b6d313c8501e92f1f020edd90fb52))
+
+
+### Features
+
+* add trace indexes ([0e36f4a](https://github.com/forcedotcom/agents/commit/0e36f4a9563182fbdda850487fbe6b5e90d6347c))
+
+
+
 ## [0.24.16](https://github.com/forcedotcom/agents/compare/0.24.15...0.24.16) (2026-04-06)
 
 
