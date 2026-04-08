@@ -144,15 +144,7 @@ export type BotActivationResponse = {
  * to be performed by the agent.
  */
 export type AgentJobSpec = AgentJobSpecCreateConfig & {
-  /**
-   * List of subagents for the agent.
-   * Replaces the deprecated `topics` field.
-   */
-  subagents?: DraftAgentTopics;
-  /**
-   * @deprecated Use `subagents` instead. Kept for backward compatibility.
-   */
-  topics?: DraftAgentTopics;
+  topics: DraftAgentTopics;
 };
 
 export type ExtendedAgentJobSpec = AgentJobSpec & {

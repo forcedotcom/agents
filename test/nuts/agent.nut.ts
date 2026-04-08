@@ -502,9 +502,7 @@ describe('agent NUTs', () => {
       expect(agentSpec.companyName).to.equal(agentConfig.companyName);
       expect(agentSpec.companyDescription).to.equal(agentConfig.companyDescription);
       expect(agentSpec.maxNumOfTopics).to.equal(agentConfig.maxNumOfTopics);
-      // New specs should only have subagents (not topics)
-      expect(agentSpec.subagents).to.have.lengthOf(3);
-      expect(agentSpec.topics).to.be.undefined;
+      expect(agentSpec.topics).to.have.lengthOf(3);
     });
 
     it('should create an agent from a spec', async () => {
@@ -519,7 +517,7 @@ describe('agent NUTs', () => {
             role: agentSpec.role,
             companyName: agentSpec.companyName,
             companyDescription: agentSpec.companyDescription,
-            preDefinedTopics: agentSpec.subagents ?? agentSpec.topics,
+            preDefinedTopics: agentSpec.topics,
           },
         },
         generationSettings: {
