@@ -56,11 +56,14 @@ describe('Agents', () => {
       companyDescription: 'Provide vacation rentals and activities',
     });
 
-    expect(output).to.have.property('topics');
+    // New specs should only have subagents (not topics)
+    expect(output).to.have.property('subagents');
     expect(output).to.have.property('agentType', agentType);
     expect(output).to.have.property('companyName', companyName);
-    expect(output.topics).to.be.an('array').with.lengthOf(10);
-    expect(output.topics[0]).to.have.property('name', 'Guest_Experience_Enhancement');
+    expect(output.subagents).to.be.an('array').with.lengthOf(10);
+    expect(output.subagents![0]).to.have.property('name', 'Guest_Experience_Enhancement');
+    // Old field should not be present in new specs
+    expect(output.topics).to.be.undefined;
   });
 
   describe('HTML entity decoding', () => {
@@ -786,7 +789,7 @@ describe('Agents', () => {
         companyDescription: 'Provide vacation rentals and activities',
         developerName: 'Vacation_Rental_Agent',
         name: 'Vacation Rental Agent',
-        topics: [
+        subagents: [
           {
             name: 'Guest Experience Enhancement',
             description: 'Enhance the guest experience with personalized recommendations',
@@ -860,7 +863,7 @@ describe('Agents', () => {
         companyDescription: 'A test company',
         developerName: 'Internal_Helper_Agent',
         name: 'Internal Helper Agent',
-        topics: [
+        subagents: [
           {
             name: 'HR Questions',
             description: 'Answer questions about HR policies',
@@ -891,8 +894,8 @@ describe('Agents', () => {
       expect(metaXmlContent).to.include('<bundleType>AGENT</bundleType>');
     });
 
-    it('should handle empty topics array in agentSpec', async () => {
-      const bundleApiName = 'TestBundle_EmptyTopics';
+    it('should handle empty subagents array in agentSpec', async () => {
+      const bundleApiName = 'TestBundle_EmptySubagents';
       const agentSpec: ExtendedAgentJobSpec = {
         agentType: 'customer',
         role: 'test role',
@@ -900,7 +903,7 @@ describe('Agents', () => {
         companyDescription: 'Test description',
         developerName: 'Test_Agent',
         name: 'Test Agent',
-        topics: [] as unknown as DraftAgentTopics,
+        subagents: [] as unknown as DraftAgentTopics,
       };
 
       await ScriptAgent.createAuthoringBundle({
@@ -921,6 +924,41 @@ describe('Agents', () => {
       expect(agentContent).to.include('subagent escalation:');
       expect(agentContent).to.include('subagent off_topic:');
       expect(agentContent).to.include('subagent ambiguous_question:');
+    });
+
+    it('should support backward compatibility with old specs using topics field', async () => {
+      const bundleApiName = 'TestBundle_BackwardCompat';
+      // Old spec format using 'topics' instead of 'subagents'
+      const oldSpec: ExtendedAgentJobSpec = {
+        agentType: 'customer',
+        role: 'test role',
+        companyName: 'Test Company',
+        companyDescription: 'Test description',
+        developerName: 'Old_Format_Agent',
+        name: 'Old Format Agent',
+        topics: [
+          {
+            name: 'Legacy Topic',
+            description: 'A topic from an old spec',
+          },
+        ] as unknown as DraftAgentTopics,
+      };
+
+      await ScriptAgent.createAuthoringBundle({
+        project: sfProject,
+        bundleApiName,
+        agentSpec: oldSpec,
+      });
+
+      const defaultOutputDir = join('force-app', 'main', 'default', 'aiAuthoringBundles', bundleApiName);
+      const agentPath = join(defaultOutputDir, `${bundleApiName}.agent`);
+
+      const agentContent = await fs.readFile(agentPath, 'utf-8');
+
+      // Should still generate subagent keyword (not topic)
+      expect(agentContent).to.include('subagent legacy_topic:');
+      expect(agentContent).to.include('label: "Legacy Topic"');
+      expect(agentContent).to.include('go_to_legacy_topic: @utils.transition to @subagent.legacy_topic');
     });
   });
 

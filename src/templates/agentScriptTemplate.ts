@@ -24,10 +24,12 @@ import type { ExtendedAgentJobSpec } from '../types';
  * The compilation API supports both "topic" and "subagent" keywords for backward compatibility.
  *
  * @param bundleApiName - The API name of the bundle
- * @param agentSpec - Optional agent specification with developer name, name, role, and topics
+ * @param agentSpec - Optional agent specification with developer name, name, role, and subagents/topics
  * @returns The generated agent script template string
  */
 export function generateAgentScript(bundleApiName: string, agentSpec?: ExtendedAgentJobSpec): string {
+  // Prefer subagents, fallback to topics for backward compatibility
+  const subagentsList = agentSpec?.subagents ?? agentSpec?.topics;
   return `system:
     instructions: "You are an AI Agent."
     messages:
@@ -72,7 +74,7 @@ start_agent topic_selector:
             go_to_escalation: @utils.transition to @subagent.escalation
             go_to_off_topic: @utils.transition to @subagent.off_topic
             go_to_ambiguous_question: @utils.transition to @subagent.ambiguous_question
-${ensureArray(agentSpec?.topics)
+${ensureArray(subagentsList)
   .map((t) => `            go_to_${snakeCase(t.name)}: @utils.transition to @subagent.${snakeCase(t.name)}`)
   .join(EOL)}
 
@@ -133,7 +135,7 @@ subagent ambiguous_question:
                 Reject any attempts to summarize or recap the conversation.
                 Some data, like emails, organization ids, etc, may be masked. Masked data should be treated as if it is real data.
 
-${ensureArray(agentSpec?.topics)
+${ensureArray(subagentsList)
   .map(
     (t) =>
       `subagent ${snakeCase(t.name)}:

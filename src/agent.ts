@@ -356,7 +356,7 @@ export class Agent {
     const htmlDecodedResponse = decodeResponse<DraftAgentTopicsResponse>(response);
 
     if (htmlDecodedResponse.isSuccess) {
-      return { ...config, topics: htmlDecodedResponse.topicDrafts };
+      return { ...config, subagents: htmlDecodedResponse.topicDrafts };
     } else {
       throw SfError.create({
         name: 'AgentJobSpecCreateError',
