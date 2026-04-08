@@ -766,9 +766,9 @@ describe('Agents', () => {
       expect(agentContent).to.include('instructions: "You are an AI Agent."');
       expect(agentContent).to.include('developer_name: "TestBundle_Default"');
       expect(agentContent).to.include('agent_label: "New Agent"');
-      expect(agentContent).to.include('topic escalation:');
-      expect(agentContent).to.include('topic off_topic:');
-      expect(agentContent).to.include('topic ambiguous_question:');
+      expect(agentContent).to.include('subagent escalation:');
+      expect(agentContent).to.include('subagent off_topic:');
+      expect(agentContent).to.include('subagent ambiguous_question:');
 
       // Verify .bundle-meta.xml file content
       expect(metaXmlContent).to.include('<?xml version="1.0" encoding="UTF-8"?>');
@@ -813,16 +813,16 @@ describe('Agents', () => {
 
       // Verify .agent file content includes agentSpec data
       expect(agentContent).to.include('developer_name: "Vacation_Rental_Agent"');
-      expect(agentContent).to.include('topic guest_experience_enhancement:');
+      expect(agentContent).to.include('subagent guest_experience_enhancement:');
       expect(agentContent).to.include('label: "Guest Experience Enhancement"');
       expect(agentContent).to.include('description: "Enhance the guest experience with personalized recommendations"');
-      expect(agentContent).to.include('topic booking_management:');
+      expect(agentContent).to.include('subagent booking_management:');
       expect(agentContent).to.include('label: "Booking Management"');
       expect(agentContent).to.include('description: "Help users manage their bookings and reservations"');
       expect(agentContent).to.include(
-        'go_to_guest_experience_enhancement: @utils.transition to @topic.guest_experience_enhancement'
+        'go_to_guest_experience_enhancement: @utils.transition to @subagent.guest_experience_enhancement'
       );
-      expect(agentContent).to.include('go_to_booking_management: @utils.transition to @topic.booking_management');
+      expect(agentContent).to.include('go_to_booking_management: @utils.transition to @subagent.booking_management');
 
       // Verify .bundle-meta.xml file content
       expect(metaXmlContent).to.include('<?xml version="1.0" encoding="UTF-8"?>');
@@ -883,7 +883,7 @@ describe('Agents', () => {
 
       // Verify .agent file content includes agentSpec data
       expect(agentContent).to.include('developer_name: "Internal_Helper_Agent"');
-      expect(agentContent).to.include('topic hr_questions:');
+      expect(agentContent).to.include('subagent hr_questions:');
       expect(agentContent).to.include('label: "HR Questions"');
       expect(agentContent).to.include('description: "Answer questions about HR policies"');
 
@@ -915,12 +915,12 @@ describe('Agents', () => {
 
       // Verify .agent file content
       expect(agentContent).to.include('developer_name: "Test_Agent"');
-      // Should not include any topic transitions in the topic_selector
+      // Should not include any subagent transitions in the topic_selector
       expect(agentContent).to.include('start_agent topic_selector:');
-      // Should still include default topics (escalation, off_topic, ambiguous_question)
-      expect(agentContent).to.include('topic escalation:');
-      expect(agentContent).to.include('topic off_topic:');
-      expect(agentContent).to.include('topic ambiguous_question:');
+      // Should still include default subagents (escalation, off_topic, ambiguous_question)
+      expect(agentContent).to.include('subagent escalation:');
+      expect(agentContent).to.include('subagent off_topic:');
+      expect(agentContent).to.include('subagent ambiguous_question:');
     });
   });
 
