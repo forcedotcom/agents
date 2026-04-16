@@ -189,7 +189,7 @@ export class ScriptAgent extends AgentBase {
           content: this.agentScriptContent,
         },
       ],
-      afScriptVersion: '1.0.1',
+      afScriptVersion: '2.0.0',
     };
 
     const headers = {
