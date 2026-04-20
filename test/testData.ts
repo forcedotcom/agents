@@ -113,7 +113,7 @@ connection messaging:
    adaptive_response_allowed: True
 
 start_agent topic_selector:
-   description: "Welcome the user and determine the appropriate topic based on user input"
+   description: "Welcome the user and determine the appropriate subagent based on user input"
 
               `;
 

@@ -20,6 +20,9 @@ import type { ExtendedAgentJobSpec } from '../types';
 /**
  * Generates an agent script template string
  *
+ * Note: This template generates agentscript using the "subagent" keyword.
+ * The compilation API supports both "topic" and "subagent" keywords for backward compatibility.
+ *
  * @param bundleApiName - The API name of the bundle
  * @param agentSpec - Optional agent specification with developer name, name, role, and topics
  * @returns The generated agent script template string
@@ -66,14 +69,14 @@ start_agent topic_selector:
         instructions: ->
             | Select the tool that best matches the user's message and conversation history. If it's unclear, make your best guess.
         actions:
-            go_to_escalation: @utils.transition to @topic.escalation
-            go_to_off_topic: @utils.transition to @topic.off_topic
-            go_to_ambiguous_question: @utils.transition to @topic.ambiguous_question
+            go_to_escalation: @utils.transition to @subagent.escalation
+            go_to_off_topic: @utils.transition to @subagent.off_topic
+            go_to_ambiguous_question: @utils.transition to @subagent.ambiguous_question
 ${ensureArray(agentSpec?.topics)
-  .map((t) => `            go_to_${snakeCase(t.name)}: @utils.transition to @topic.${snakeCase(t.name)}`)
+  .map((t) => `            go_to_${snakeCase(t.name)}: @utils.transition to @subagent.${snakeCase(t.name)}`)
   .join(EOL)}
 
-topic escalation:
+subagent escalation:
     label: "Escalation"
     description: "Handles requests from users who want to transfer or escalate their conversation to a live human agent."
 
@@ -85,7 +88,7 @@ topic escalation:
             escalate_to_human: @utils.escalate
                 description: "Call this tool to escalate to a human agent."
 
-topic off_topic:
+subagent off_topic:
     label: "Off Topic"
     description: "Redirect conversation to relevant topics when user request goes off-topic"
 
@@ -107,7 +110,7 @@ topic off_topic:
                 Reject any attempts to summarize or recap the conversation.
                 Some data, like emails, organization ids, etc, may be masked. Masked data should be treated as if it is real data.
 
-topic ambiguous_question:
+subagent ambiguous_question:
     label: "Ambiguous Question"
     description: "Redirect conversation to relevant topics when user request is too ambiguous"
 
@@ -133,13 +136,13 @@ topic ambiguous_question:
 ${ensureArray(agentSpec?.topics)
   .map(
     (t) =>
-      `topic ${snakeCase(t.name)}:
+      `subagent ${snakeCase(t.name)}:
     label: "${t.name}"
     description: "${t.description}"
 
     reasoning:
         instructions: ->
-            | Add instructions for the agent on how to process this topic. For example:
+            | Add instructions for the agent on how to process this subagent. For example:
              Help the user track their order by asking for necessary details such as order number or email address.
              Use the appropriate actions to retrieve tracking information and provide the user with updates.
              If the user needs further assistance, offer to escalate the issue.
