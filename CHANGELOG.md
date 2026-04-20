@@ -1,3 +1,13 @@
+## [1.1.1](https://github.com/forcedotcom/agents/compare/1.1.0...1.1.1) (2026-04-20)
+
+
+### Bug Fixes
+
+* complete topic to subagent renaming in mock file ([4cc4571](https://github.com/forcedotcom/agents/commit/4cc45711b9fc425e4fc7c001c5330e93dba7d211))
+* rename topic to subagent ([4e8b5d4](https://github.com/forcedotcom/agents/commit/4e8b5d4438f649ba882f65bc08eadb8fd871a961))
+
+
+
 # [1.1.0](https://github.com/forcedotcom/agents/compare/0.25.2-tdx26.0...1.1.0) (2026-04-20)
 
 
