@@ -1,3 +1,16 @@
+# [1.1.0](https://github.com/forcedotcom/agents/compare/0.25.2-tdx26.0...1.1.0) (2026-04-20)
+
+
+
+## [0.25.2-tdx26.0](https://github.com/forcedotcom/agents/compare/0.25.1...0.25.2-tdx26.0) (2026-04-14)
+
+
+### Features
+
+* compile using v2 agent script compiler ([e81a3ab](https://github.com/forcedotcom/agents/commit/e81a3ab394821994a90642ef128ee5a8598f6d3c))
+
+
+
 ## [0.25.1](https://github.com/forcedotcom/agents/compare/0.25.0...0.25.1) (2026-04-09)
 
 
