@@ -219,9 +219,45 @@ export const useNamedUserJwt = async (connection: Connection): Promise<Connectio
       },
       { retry: { maxRetries: 3 } }
     );
+
+    // Validate the response contains a valid access token
+    if (!response) {
+      throw SfError.create({
+        name: 'ApiAccessError',
+        message: 'Error obtaining API token: empty response.',
+      });
+    }
+
+    if (!response.access_token || typeof response.access_token !== 'string' || response.access_token.trim() === '') {
+      throw SfError.create({
+        name: 'ApiAccessError',
+        message: 'Error obtaining API token: invalid or missing access token.',
+      });
+    }
+
+    // Validate token format is JWT (three parts separated by dots)
+    const tokenParts = response.access_token.split('.');
+    if (tokenParts.length !== 3) {
+      throw SfError.create({
+        name: 'ApiAccessError',
+        message: 'Error obtaining API token: access token does not have valid JWT format.',
+      });
+    }
+
     connection.accessToken = response.access_token;
     return connection;
   } catch (error) {
+    // If it's already an SfError with our specific message, re-throw it as-is
+    if (error instanceof SfError && error.name === 'ApiAccessError') {
+      error.actions = [
+        'If using your own connected app or ECA, ensure it grants access to the SFAP APIs by providing these scopes:',
+        '   * Access chatbot services (chatbot_api)',
+        '   * Access the Salesforce API Platform (sfap_api)',
+        '   * Manage user data via Web browsers (web)',
+      ];
+      throw error;
+    }
+    // Otherwise wrap it with a generic error
     throw SfError.create({
       name: 'ApiAccessError',
       message: 'Error obtaining API token',
@@ -643,6 +679,7 @@ export async function requestWithEndpointFallback<T>(
       );
     } catch (error) {
       const statusCode = getHttpStatusCode(error);
+      logger.debug(`Request failed for url ${modifiedUrl} with status code ${statusCode ?? 'unknown'}`);
       if (statusCode === 404) {
         lastError = error;
         continue; // Try next endpoint

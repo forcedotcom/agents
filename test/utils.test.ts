@@ -163,6 +163,50 @@ describe('requestWithEndpointFallback', () => {
       'https://api.salesforce.com/einstein/ai-agent/v1/test'
     );
   });
+
+  it('should continue to next endpoint after logging 404 error', async () => {
+    const error404 = new Error('Not Found') as Error & { name: string };
+    error404.name = 'ERROR_HTTP_404';
+
+    const requestStub = $$.SANDBOX.stub(connection, 'request');
+    requestStub.onFirstCall().rejects(error404);
+    requestStub.onSecondCall().resolves({ success: true });
+
+    // This test verifies that the function continues to try the next endpoint after a 404
+    // The logging happens internally, but the important behavior is the retry logic
+    const result = await requestWithEndpointFallback(connection, {
+      method: 'POST',
+      url: 'https://api.salesforce.com/einstein/ai-agent/v1/test',
+      headers: { 'x-client-name': 'test' },
+      body: '{}',
+    });
+
+    expect(result).to.deep.equal({ success: true });
+    expect(requestStub.calledTwice).to.be.true;
+  });
+
+  it('should log error and throw immediately on non-404 errors', async () => {
+    const error500 = new Error('Internal Server Error') as Error & { name: string };
+    error500.name = 'ERROR_HTTP_500';
+
+    const requestStub = $$.SANDBOX.stub(connection, 'request').rejects(error500);
+
+    // This test verifies that non-404 errors are thrown immediately
+    // The logging happens internally before throwing
+    try {
+      await requestWithEndpointFallback(connection, {
+        method: 'POST',
+        url: 'https://api.salesforce.com/einstein/ai-agent/v1/test',
+        headers: { 'x-client-name': 'test' },
+        body: '{}',
+      });
+      expect.fail('Expected error was not thrown');
+    } catch (error) {
+      expect(error).to.equal(error500);
+      // Should only be called once since non-404 errors throw immediately
+      expect(requestStub.calledOnce).to.be.true;
+    }
+  });
 });
 
 describe('useNamedUserJwt', () => {
@@ -192,9 +236,14 @@ describe('useNamedUserJwt', () => {
       instanceUrl: 'https://test.my.salesforce.com',
     });
 
-    // Stub the nameduser endpoint request
-    // eslint-disable-next-line camelcase
-    $$.SANDBOX.stub(connection, 'request').resolves({ access_token: 'new-jwt-token' });
+    // Stub the nameduser endpoint request with valid JWT token
+    const validJwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
+    $$.SANDBOX.stub(connection, 'request').resolves({
+      // eslint-disable-next-line camelcase
+      access_token: validJwtToken,
+      // eslint-disable-next-line camelcase
+      token_type: 'Bearer',
+    });
 
     await useNamedUserJwt(connection);
 
@@ -213,9 +262,14 @@ describe('useNamedUserJwt', () => {
       instanceUrl: 'https://test.my.salesforce.com',
     });
 
-    // Stub the nameduser endpoint request
-    // eslint-disable-next-line camelcase
-    $$.SANDBOX.stub(connection, 'request').resolves({ access_token: 'new-jwt-token' });
+    // Stub the nameduser endpoint request with valid JWT token
+    const validJwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
+    $$.SANDBOX.stub(connection, 'request').resolves({
+      // eslint-disable-next-line camelcase
+      access_token: validJwtToken,
+      // eslint-disable-next-line camelcase
+      token_type: 'Bearer',
+    });
 
     await useNamedUserJwt(connection);
 
@@ -250,12 +304,228 @@ describe('useNamedUserJwt', () => {
       instanceUrl: 'https://test.my.salesforce.com',
     });
 
-    // Stub the nameduser endpoint request
-    // eslint-disable-next-line camelcase
-    $$.SANDBOX.stub(connection, 'request').resolves({ access_token: 'new-jwt-token' });
+    // Stub the nameduser endpoint request with valid JWT token
+    const validJwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
+    $$.SANDBOX.stub(connection, 'request').resolves({
+      // eslint-disable-next-line camelcase
+      access_token: validJwtToken,
+      // eslint-disable-next-line camelcase
+      token_type: 'Bearer',
+    });
 
     const result = await useNamedUserJwt(connection);
 
-    expect(result.accessToken).to.equal('new-jwt-token');
+    expect(result.accessToken).to.equal(validJwtToken);
+  });
+
+  it('should succeed with valid JWT token response', async () => {
+    $$.SANDBOX.stub(connection, 'getAuthInfoFields').returns({});
+
+    $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
+      accessToken: 'valid-access-token',
+      instanceUrl: 'https://test.my.salesforce.com',
+    });
+
+    // Valid JWT token with three parts (header.payload.signature)
+    const validJwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
+    $$.SANDBOX.stub(connection, 'request').resolves({
+      // eslint-disable-next-line camelcase
+      access_token: validJwtToken,
+      // eslint-disable-next-line camelcase
+      token_format: 'jwt',
+      scope: 'full',
+      // eslint-disable-next-line camelcase
+      token_type: 'Bearer',
+      // eslint-disable-next-line camelcase
+      issued_at: Date.now(),
+      // eslint-disable-next-line camelcase
+      api_instance_url: 'https://test.my.salesforce.com',
+    });
+
+    const result = await useNamedUserJwt(connection);
+
+    expect(result.accessToken).to.equal(validJwtToken);
+  });
+
+  it('should throw ApiAccessError when response is empty', async () => {
+    $$.SANDBOX.stub(connection, 'getAuthInfoFields').returns({});
+
+    $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
+      accessToken: 'valid-access-token',
+      instanceUrl: 'https://test.my.salesforce.com',
+    });
+
+    // Return null/undefined response
+    $$.SANDBOX.stub(connection, 'request').resolves(null as never);
+
+    try {
+      await useNamedUserJwt(connection);
+      expect.fail('Expected error was not thrown');
+    } catch (error) {
+      expect(error).to.be.instanceOf(SfError);
+      expect((error as SfError).name).to.equal('ApiAccessError');
+      expect((error as SfError).message).to.equal('Error obtaining API token: empty response.');
+      expect((error as SfError).actions).to.exist;
+      expect((error as SfError).actions).to.have.lengthOf(4);
+    }
+  });
+
+  it('should throw ApiAccessError when access_token is missing', async () => {
+    $$.SANDBOX.stub(connection, 'getAuthInfoFields').returns({});
+
+    $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
+      accessToken: 'valid-access-token',
+      instanceUrl: 'https://test.my.salesforce.com',
+    });
+
+    // Response without access_token
+    $$.SANDBOX.stub(connection, 'request').resolves({
+      // eslint-disable-next-line camelcase
+      token_type: 'Bearer',
+      scope: 'full',
+    } as never);
+
+    try {
+      await useNamedUserJwt(connection);
+      expect.fail('Expected error was not thrown');
+    } catch (error) {
+      expect(error).to.be.instanceOf(SfError);
+      expect((error as SfError).name).to.equal('ApiAccessError');
+      expect((error as SfError).message).to.equal('Error obtaining API token: invalid or missing access token.');
+      expect((error as SfError).actions).to.exist;
+      expect((error as SfError).actions).to.have.lengthOf(4);
+    }
+  });
+
+  it('should throw ApiAccessError when access_token is empty string', async () => {
+    $$.SANDBOX.stub(connection, 'getAuthInfoFields').returns({});
+
+    $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
+      accessToken: 'valid-access-token',
+      instanceUrl: 'https://test.my.salesforce.com',
+    });
+
+    $$.SANDBOX.stub(connection, 'request').resolves({
+      // eslint-disable-next-line camelcase
+      access_token: '   ',
+      // eslint-disable-next-line camelcase
+      token_type: 'Bearer',
+    } as never);
+
+    try {
+      await useNamedUserJwt(connection);
+      expect.fail('Expected error was not thrown');
+    } catch (error) {
+      expect(error).to.be.instanceOf(SfError);
+      expect((error as SfError).name).to.equal('ApiAccessError');
+      expect((error as SfError).message).to.equal('Error obtaining API token: invalid or missing access token.');
+      expect((error as SfError).actions).to.exist;
+      expect((error as SfError).actions).to.have.lengthOf(4);
+    }
+  });
+
+  it('should throw ApiAccessError when access_token is not a string', async () => {
+    $$.SANDBOX.stub(connection, 'getAuthInfoFields').returns({});
+
+    $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
+      accessToken: 'valid-access-token',
+      instanceUrl: 'https://test.my.salesforce.com',
+    });
+
+    $$.SANDBOX.stub(connection, 'request').resolves({
+      // eslint-disable-next-line camelcase
+      access_token: 12345,
+      // eslint-disable-next-line camelcase
+      token_type: 'Bearer',
+    } as never);
+
+    try {
+      await useNamedUserJwt(connection);
+      expect.fail('Expected error was not thrown');
+    } catch (error) {
+      expect(error).to.be.instanceOf(SfError);
+      expect((error as SfError).name).to.equal('ApiAccessError');
+      expect((error as SfError).message).to.equal('Error obtaining API token: invalid or missing access token.');
+      expect((error as SfError).actions).to.exist;
+      expect((error as SfError).actions).to.have.lengthOf(4);
+    }
+  });
+
+  it('should throw ApiAccessError when access_token does not have valid JWT format', async () => {
+    $$.SANDBOX.stub(connection, 'getAuthInfoFields').returns({});
+
+    $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
+      accessToken: 'valid-access-token',
+      instanceUrl: 'https://test.my.salesforce.com',
+    });
+
+    // Token with only 2 parts instead of 3
+    $$.SANDBOX.stub(connection, 'request').resolves({
+      // eslint-disable-next-line camelcase
+      access_token: 'invalid.token',
+      // eslint-disable-next-line camelcase
+      token_type: 'Bearer',
+    } as never);
+
+    try {
+      await useNamedUserJwt(connection);
+      expect.fail('Expected error was not thrown');
+    } catch (error) {
+      expect(error).to.be.instanceOf(SfError);
+      expect((error as SfError).name).to.equal('ApiAccessError');
+      expect((error as SfError).message).to.equal('Error obtaining API token: access token does not have valid JWT format.');
+      expect((error as SfError).actions).to.exist;
+      expect((error as SfError).actions).to.have.lengthOf(4);
+    }
+  });
+
+  it('should throw ApiAccessError when access_token has too many parts', async () => {
+    $$.SANDBOX.stub(connection, 'getAuthInfoFields').returns({});
+
+    $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
+      accessToken: 'valid-access-token',
+      instanceUrl: 'https://test.my.salesforce.com',
+    });
+
+    // Token with 4 parts instead of 3
+    $$.SANDBOX.stub(connection, 'request').resolves({
+      // eslint-disable-next-line camelcase
+      access_token: 'part1.part2.part3.part4',
+      // eslint-disable-next-line camelcase
+      token_type: 'Bearer',
+    } as never);
+
+    try {
+      await useNamedUserJwt(connection);
+      expect.fail('Expected error was not thrown');
+    } catch (error) {
+      expect(error).to.be.instanceOf(SfError);
+      expect((error as SfError).name).to.equal('ApiAccessError');
+      expect((error as SfError).message).to.equal('Error obtaining API token: access token does not have valid JWT format.');
+      expect((error as SfError).actions).to.exist;
+      expect((error as SfError).actions).to.have.lengthOf(4);
+    }
+  });
+
+  it('should throw wrapped ApiAccessError for network errors', async () => {
+    $$.SANDBOX.stub(connection, 'getAuthInfoFields').returns({});
+
+    $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
+      accessToken: 'valid-access-token',
+      instanceUrl: 'https://test.my.salesforce.com',
+    });
+
+    const networkError = new Error('Network error');
+    $$.SANDBOX.stub(connection, 'request').rejects(networkError);
+
+    try {
+      await useNamedUserJwt(connection);
+      expect.fail('Expected error was not thrown');
+    } catch (error) {
+      expect(error).to.be.instanceOf(SfError);
+      expect((error as SfError).name).to.equal('ApiAccessError');
+      expect((error as SfError).message).to.equal('Error obtaining API token');
+      expect((error as SfError).cause).to.equal(networkError);
+    }
   });
 });
