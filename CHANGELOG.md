@@ -1,3 +1,13 @@
+## [1.1.2](https://github.com/forcedotcom/agents/compare/1.1.1...1.1.2) (2026-04-21)
+
+
+### Bug Fixes
+
+* add actions to ApiAccessError ([1cdf7e5](https://github.com/forcedotcom/agents/commit/1cdf7e55f6827ce36934b3a883a156881a0ee7c9))
+* improve error handling around the nameduser call ([69a54fc](https://github.com/forcedotcom/agents/commit/69a54fc37ebaecefa43558db30189bf51c5428d7))
+
+
+
 ## [1.1.1](https://github.com/forcedotcom/agents/compare/1.1.0...1.1.1) (2026-04-20)
 
 
