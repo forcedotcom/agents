@@ -247,6 +247,17 @@ export const useNamedUserJwt = async (connection: Connection): Promise<Connectio
     connection.accessToken = response.access_token;
     return connection;
   } catch (error) {
+    // If it's already an SfError with our specific message, re-throw it as-is
+    if (error instanceof SfError && error.name === 'ApiAccessError') {
+      error.actions = [
+        'If using your own connected app or ECA, ensure it grants access to the SFAP APIs by providing these scopes:',
+        '   * Access chatbot services (chatbot_api)',
+        '   * Access the Salesforce API Platform (sfap_api)',
+        '   * Manage user data via Web browsers (web)',
+      ];
+      throw error;
+    }
+    // Otherwise wrap it with a generic error
     throw SfError.create({
       name: 'ApiAccessError',
       message: 'Error obtaining API token',

@@ -364,7 +364,9 @@ describe('useNamedUserJwt', () => {
     } catch (error) {
       expect(error).to.be.instanceOf(SfError);
       expect((error as SfError).name).to.equal('ApiAccessError');
-      expect((error as SfError).message).to.include('Error obtaining API token');
+      expect((error as SfError).message).to.equal('Error obtaining API token: empty response.');
+      expect((error as SfError).actions).to.exist;
+      expect((error as SfError).actions).to.have.lengthOf(4);
     }
   });
 
@@ -389,7 +391,9 @@ describe('useNamedUserJwt', () => {
     } catch (error) {
       expect(error).to.be.instanceOf(SfError);
       expect((error as SfError).name).to.equal('ApiAccessError');
-      expect((error as SfError).message).to.include('Error obtaining API token');
+      expect((error as SfError).message).to.equal('Error obtaining API token: invalid or missing access token.');
+      expect((error as SfError).actions).to.exist;
+      expect((error as SfError).actions).to.have.lengthOf(4);
     }
   });
 
@@ -414,7 +418,9 @@ describe('useNamedUserJwt', () => {
     } catch (error) {
       expect(error).to.be.instanceOf(SfError);
       expect((error as SfError).name).to.equal('ApiAccessError');
-      expect((error as SfError).message).to.include('Error obtaining API token');
+      expect((error as SfError).message).to.equal('Error obtaining API token: invalid or missing access token.');
+      expect((error as SfError).actions).to.exist;
+      expect((error as SfError).actions).to.have.lengthOf(4);
     }
   });
 
@@ -439,7 +445,9 @@ describe('useNamedUserJwt', () => {
     } catch (error) {
       expect(error).to.be.instanceOf(SfError);
       expect((error as SfError).name).to.equal('ApiAccessError');
-      expect((error as SfError).message).to.include('Error obtaining API token');
+      expect((error as SfError).message).to.equal('Error obtaining API token: invalid or missing access token.');
+      expect((error as SfError).actions).to.exist;
+      expect((error as SfError).actions).to.have.lengthOf(4);
     }
   });
 
@@ -465,7 +473,9 @@ describe('useNamedUserJwt', () => {
     } catch (error) {
       expect(error).to.be.instanceOf(SfError);
       expect((error as SfError).name).to.equal('ApiAccessError');
-      expect((error as SfError).message).to.include('Error obtaining API token');
+      expect((error as SfError).message).to.equal('Error obtaining API token: access token does not have valid JWT format.');
+      expect((error as SfError).actions).to.exist;
+      expect((error as SfError).actions).to.have.lengthOf(4);
     }
   });
 
@@ -491,7 +501,9 @@ describe('useNamedUserJwt', () => {
     } catch (error) {
       expect(error).to.be.instanceOf(SfError);
       expect((error as SfError).name).to.equal('ApiAccessError');
-      expect((error as SfError).message).to.include('Error obtaining API token');
+      expect((error as SfError).message).to.equal('Error obtaining API token: access token does not have valid JWT format.');
+      expect((error as SfError).actions).to.exist;
+      expect((error as SfError).actions).to.have.lengthOf(4);
     }
   });
 
