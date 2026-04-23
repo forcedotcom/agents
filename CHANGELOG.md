@@ -1,3 +1,12 @@
+## [1.1.3](https://github.com/forcedotcom/agents/compare/1.1.2...1.1.3) (2026-04-23)
+
+
+### Bug Fixes
+
+* rename topic_selector to agent_router ([a97d5c8](https://github.com/forcedotcom/agents/commit/a97d5c8c23a0f1cc5fa4db1cf05aac3a3eace967))
+
+
+
 ## [1.1.2](https://github.com/forcedotcom/agents/compare/1.1.1...1.1.2) (2026-04-21)
 
 
