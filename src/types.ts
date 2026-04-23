@@ -425,6 +425,38 @@ export type AgentTestResultsResponse = {
 
 export type AvailableDefinition = Omit<FileProperties, 'manageableState' | 'namespacePrefix'>;
 
+// ====================================================
+//         Agent Testing Types (NGT - Next Gen)
+// ====================================================
+
+export type AgentTestNGTStartResponse = {
+  runId: string;
+  status: string;
+};
+
+export type AgentTestNGTStatusResponse = {
+  status: string;
+  startTime: string;
+  endTime?: string;
+  errorMessage?: string;
+};
+
+export type TestScorerResult = {
+  scorerName: string;
+  scorerResponse: string;
+};
+
+export type NGTTestCaseResult = {
+  subjectResponse: string;
+  testNumber: number;
+  testScorerResults: TestScorerResult[];
+};
+
+export type AgentTestNGTResultsResponse = {
+  status: string;
+  testCases: NGTTestCaseResult[];
+};
+
 // yaml type representation
 export type TestCase = {
   utterance: string;

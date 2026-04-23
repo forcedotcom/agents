@@ -17,7 +17,7 @@ import { existsSync, readdirSync, statSync } from 'node:fs';
 import { mkdir, appendFile, readFile, writeFile, readdir, stat } from 'node:fs/promises';
 import * as path from 'node:path';
 import { Connection, Logger, SfError, SfProject } from '@salesforce/core';
-import { NamedUserJwtResponse, type PlannerResponse, PreviewMetadata } from './types';
+import { AvailableDefinition, NamedUserJwtResponse, type PlannerResponse, PreviewMetadata } from './types';
 
 export const metric = ['completeness', 'coherence', 'conciseness', 'output_latency_milliseconds'] as const;
 
@@ -888,3 +888,84 @@ export const readTranscriptEntries = async (agentId: string, sessionId: string):
     return [];
   }
 };
+
+// ====================================================
+//         Agent Test Runner Detection
+// ====================================================
+
+export type TestRunnerType = 'ngt' | 'legacy';
+
+/**
+ * Determines which test runner to use based on available metadata types in the org.
+ *
+ * This function checks for the presence of:
+ * - `AiEvaluationDefinition` (legacy test runner)
+ * - `AiTestingDefinition` (NGT - Next Generation Testing)
+ *
+ * If a test definition with the same name exists in both metadata types, an error is thrown
+ * to prevent ambiguity.
+ *
+ * @param connection - The Salesforce connection
+ * @param testDefinitionName - Optional test definition name to check for conflicts
+ * @returns 'ngt' if only NGT metadata exists, 'legacy' if only legacy metadata exists
+ * @throws {SfError} if both metadata types exist with the same test definition name
+ * @throws {SfError} if neither metadata type exists
+ *
+ * @example
+ * ```typescript
+ * const runnerType = await determineTestRunner(connection, 'MyTestSuite');
+ * if (runnerType === 'ngt') {
+ *   const tester = new AgentTesterNGT(connection);
+ * } else {
+ *   const tester = new AgentTester(connection);
+ * }
+ * ```
+ */
+export async function determineTestRunner(
+  connection: Connection,
+  testDefinitionName?: string
+): Promise<TestRunnerType> {
+  // Query both metadata types in parallel
+  const [legacyDefs, ngtDefs] = await Promise.all([
+    connection.metadata.list({ type: 'AiEvaluationDefinition' }).catch(() => [] as AvailableDefinition[]),
+    connection.metadata.list({ type: 'AiTestingDefinition' }).catch(() => [] as AvailableDefinition[]),
+  ]);
+
+  // If a specific test name is provided, check for conflicts
+  if (testDefinitionName && legacyDefs.length > 0 && ngtDefs.length > 0) {
+    const legacyNames = new Set(legacyDefs.map((def) => def.fullName));
+    const ngtNames = new Set(ngtDefs.map((def) => def.fullName));
+
+    if (legacyNames.has(testDefinitionName) && ngtNames.has(testDefinitionName)) {
+      throw SfError.create({
+        name: 'AmbiguousTestDefinition',
+        message: `Test definition '${testDefinitionName}' exists in both AiEvaluationDefinition (legacy) and AiTestingDefinition (NGT). Please remove one to resolve the ambiguity.`,
+      });
+    }
+
+    if (legacyNames.has(testDefinitionName)) {
+      return 'legacy';
+    }
+
+    if (ngtNames.has(testDefinitionName)) {
+      return 'ngt';
+    }
+  }
+
+  if (legacyDefs.length > 0 && ngtDefs.length === 0) {
+    // we have legacy, no new
+    return 'legacy';
+  }
+
+  if (ngtDefs.length > 0 && legacyDefs.length === 0) {
+    // no old, all new
+    return 'ngt';
+  }
+
+  // Neither exists
+  throw SfError.create({
+    name: 'NoTestDefinitionsFound',
+    message:
+      'No test definitions found in the org. Expected either AiEvaluationDefinition (legacy) or AiTestingDefinition (NGT) metadata.',
+  });
+}

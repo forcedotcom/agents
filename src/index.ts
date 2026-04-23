@@ -65,6 +65,13 @@ export {
   type MetadataCustomEvaluation,
   type AiEvaluationDefinition,
 
+  // Agent Testing Types (NGT - Next Gen)
+  type AgentTestNGTStartResponse,
+  type AgentTestNGTStatusResponse,
+  type AgentTestNGTResultsResponse,
+  type TestScorerResult,
+  type NGTTestCaseResult,
+
   // Agent Trace Types
   type AgentTraceResponse,
   type AgentTraceStep,
@@ -79,9 +86,10 @@ export {
   COMPILATION_API_EXIT_CODES,
 } from './types';
 
-export { metric, findAuthoringBundle, readTranscriptEntries } from './utils';
+export { metric, findAuthoringBundle, readTranscriptEntries, determineTestRunner, type TestRunnerType } from './utils';
 export { Agent, AgentCreateLifecycleStages, type AgentInstance } from './agent';
 export { AgentTester } from './agentTester';
+export { AgentTesterNGT, normalizeNGTResults } from './agentTesterNGT';
 export { AgentTest, AgentTestCreateLifecycleStages } from './agentTest';
 export { ProductionAgent } from './agents/productionAgent';
 export { ScriptAgent } from './agents/scriptAgent';
