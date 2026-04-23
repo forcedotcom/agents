@@ -61,9 +61,9 @@ language:
     additional_locales: ""
     all_additional_locales: False
 
-start_agent topic_selector:
-    label: "Topic Selector"
-    description: "Welcome the user and determine the appropriate topic based on user input"
+start_agent agent_router:
+    label: "Agent Router"
+    description: "Welcome the user and determine the appropriate subagent based on user input"
 
     reasoning:
         instructions: ->

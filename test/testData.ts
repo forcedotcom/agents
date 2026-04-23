@@ -112,7 +112,7 @@ connection messaging:
    outbound_route_name: "agent_support_flow"
    adaptive_response_allowed: True
 
-start_agent topic_selector:
+start_agent agent_router:
    description: "Welcome the user and determine the appropriate subagent based on user input"
 
               `;
