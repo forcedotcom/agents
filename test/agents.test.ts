@@ -915,8 +915,8 @@ describe('Agents', () => {
 
       // Verify .agent file content
       expect(agentContent).to.include('developer_name: "Test_Agent"');
-      // Should not include any subagent transitions in the topic_selector
-      expect(agentContent).to.include('start_agent topic_selector:');
+      // Should not include any subagent transitions in the agent_router
+      expect(agentContent).to.include('start_agent agent_router:');
       // Should still include default subagents (escalation, off_topic, ambiguous_question)
       expect(agentContent).to.include('subagent escalation:');
       expect(agentContent).to.include('subagent off_topic:');
