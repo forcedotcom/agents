@@ -895,6 +895,22 @@ export const readTranscriptEntries = async (agentId: string, sessionId: string):
 
 export type TestRunnerType = 'ngt' | 'legacy';
 
+const LEGACY_RUN_ID_PREFIX = '4KB';
+const NGT_RUN_ID_PREFIX = '3A2';
+
+/**
+ * Determines the test runner type from a run ID based on its Salesforce ID prefix.
+ * Legacy run IDs start with `4KB`; NGT run IDs start with `3A2`.
+ *
+ * @param runId - The test run ID returned from a start response
+ * @returns 'ngt' or 'legacy', or undefined if the prefix is unrecognized
+ */
+export function detectTestRunnerFromId(runId: string): TestRunnerType | undefined {
+  if (runId.startsWith(NGT_RUN_ID_PREFIX)) return 'ngt';
+  if (runId.startsWith(LEGACY_RUN_ID_PREFIX)) return 'legacy';
+  return undefined;
+}
+
 /**
  * Determines which test runner to use based on available metadata types in the org.
  *

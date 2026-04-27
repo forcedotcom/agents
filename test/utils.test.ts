@@ -17,7 +17,7 @@
 import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection, SfError } from '@salesforce/core';
-import { requestWithEndpointFallback, useNamedUserJwt, type RequestInfo } from '../src/utils';
+import { requestWithEndpointFallback, useNamedUserJwt, detectTestRunnerFromId, type RequestInfo } from '../src/utils';
 
 describe('requestWithEndpointFallback', () => {
   const $$ = new TestContext();
@@ -237,7 +237,8 @@ describe('useNamedUserJwt', () => {
     });
 
     // Stub the nameduser endpoint request with valid JWT token
-    const validJwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
+    const validJwtToken =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
     $$.SANDBOX.stub(connection, 'request').resolves({
       // eslint-disable-next-line camelcase
       access_token: validJwtToken,
@@ -263,7 +264,8 @@ describe('useNamedUserJwt', () => {
     });
 
     // Stub the nameduser endpoint request with valid JWT token
-    const validJwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
+    const validJwtToken =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
     $$.SANDBOX.stub(connection, 'request').resolves({
       // eslint-disable-next-line camelcase
       access_token: validJwtToken,
@@ -305,7 +307,8 @@ describe('useNamedUserJwt', () => {
     });
 
     // Stub the nameduser endpoint request with valid JWT token
-    const validJwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
+    const validJwtToken =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
     $$.SANDBOX.stub(connection, 'request').resolves({
       // eslint-disable-next-line camelcase
       access_token: validJwtToken,
@@ -327,7 +330,8 @@ describe('useNamedUserJwt', () => {
     });
 
     // Valid JWT token with three parts (header.payload.signature)
-    const validJwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
+    const validJwtToken =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
     $$.SANDBOX.stub(connection, 'request').resolves({
       // eslint-disable-next-line camelcase
       access_token: validJwtToken,
@@ -473,7 +477,9 @@ describe('useNamedUserJwt', () => {
     } catch (error) {
       expect(error).to.be.instanceOf(SfError);
       expect((error as SfError).name).to.equal('ApiAccessError');
-      expect((error as SfError).message).to.equal('Error obtaining API token: access token does not have valid JWT format.');
+      expect((error as SfError).message).to.equal(
+        'Error obtaining API token: access token does not have valid JWT format.'
+      );
       expect((error as SfError).actions).to.exist;
       expect((error as SfError).actions).to.have.lengthOf(4);
     }
@@ -501,7 +507,9 @@ describe('useNamedUserJwt', () => {
     } catch (error) {
       expect(error).to.be.instanceOf(SfError);
       expect((error as SfError).name).to.equal('ApiAccessError');
-      expect((error as SfError).message).to.equal('Error obtaining API token: access token does not have valid JWT format.');
+      expect((error as SfError).message).to.equal(
+        'Error obtaining API token: access token does not have valid JWT format.'
+      );
       expect((error as SfError).actions).to.exist;
       expect((error as SfError).actions).to.have.lengthOf(4);
     }
@@ -527,5 +535,23 @@ describe('useNamedUserJwt', () => {
       expect((error as SfError).message).to.equal('Error obtaining API token');
       expect((error as SfError).cause).to.equal(networkError);
     }
+  });
+});
+
+describe('detectTestRunnerFromId', () => {
+  it('detects NGT from 3A2 prefix', () => {
+    expect(detectTestRunnerFromId('3A2abc123')).to.equal('ngt');
+  });
+
+  it('detects legacy from 4KB prefix', () => {
+    expect(detectTestRunnerFromId('4KBabc123')).to.equal('legacy');
+  });
+
+  it('returns undefined for unrecognized prefix', () => {
+    expect(detectTestRunnerFromId('0HOunknown')).to.be.undefined;
+  });
+
+  it('returns undefined for empty string', () => {
+    expect(detectTestRunnerFromId('')).to.be.undefined;
   });
 });

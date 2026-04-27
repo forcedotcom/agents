@@ -86,10 +86,18 @@ export {
   COMPILATION_API_EXIT_CODES,
 } from './types';
 
-export { metric, findAuthoringBundle, readTranscriptEntries, determineTestRunner, type TestRunnerType } from './utils';
+export {
+  metric,
+  findAuthoringBundle,
+  readTranscriptEntries,
+  determineTestRunner,
+  detectTestRunnerFromId,
+  type TestRunnerType,
+} from './utils';
 export { Agent, AgentCreateLifecycleStages, type AgentInstance } from './agent';
 export { AgentTester } from './agentTester';
 export { AgentTesterNGT, normalizeNGTResults } from './agentTesterNGT';
+export { createAgentTester } from './agentTesterFactory';
 export { AgentTest, AgentTestCreateLifecycleStages } from './agentTest';
 export { ProductionAgent } from './agents/productionAgent';
 export { ScriptAgent } from './agents/scriptAgent';
