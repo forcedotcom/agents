@@ -1,3 +1,12 @@
+# [1.2.0](https://github.com/forcedotcom/agents/compare/1.1.3...1.2.0) (2026-04-27)
+
+
+### Features
+
+* add preview session store functions to utils ([d2e2ef3](https://github.com/forcedotcom/agents/commit/d2e2ef33d1480138e144e3c2537b0d46daa28a31))
+
+
+
 ## [1.1.3](https://github.com/forcedotcom/agents/compare/1.1.2...1.1.3) (2026-04-23)
 
 
