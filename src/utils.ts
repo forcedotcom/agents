@@ -976,11 +976,12 @@ export async function validatePreviewSession(agent: { getHistoryDir: () => Promi
   const metaPath = path.join(historyDir, SESSION_META_FILE);
   try {
     await readFile(metaPath, 'utf-8');
-  } catch {
-    throw new SfError(
-      'No preview session found for this session ID. Run "sf agent preview start" first.',
-      'PreviewSessionNotFound'
-    );
+  } catch (error) {
+    throw SfError.create({
+      message: 'No preview session found for this session ID. Run "sf agent preview start" first.',
+      name: 'PreviewSessionNotFound',
+      cause: error,
+    });
   }
 }
 
