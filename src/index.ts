@@ -79,7 +79,21 @@ export {
   COMPILATION_API_EXIT_CODES,
 } from './types';
 
-export { metric, findAuthoringBundle, readTranscriptEntries } from './utils';
+export {
+  metric,
+  findAuthoringBundle,
+  readTranscriptEntries,
+  createPreviewSessionCache,
+  validatePreviewSession,
+  removePreviewSessionCache,
+  getCachedPreviewSessionIds,
+  getCurrentPreviewSessionId,
+  listCachedPreviewSessions,
+  type SessionType,
+  type PreviewSessionMeta,
+  type CachedPreviewSessionInfo,
+  type CachedPreviewSessionEntry,
+} from './utils';
 export { Agent, AgentCreateLifecycleStages, type AgentInstance } from './agent';
 export { AgentTester } from './agentTester';
 export { AgentTest, AgentTestCreateLifecycleStages } from './agentTest';
