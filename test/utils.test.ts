@@ -14,10 +14,25 @@
  * limitations under the License.
  */
 
+import { mkdtempSync, rmSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
-import { Connection, SfError } from '@salesforce/core';
-import { requestWithEndpointFallback, useNamedUserJwt, detectTestRunnerFromId, type RequestInfo } from '../src/utils';
+import { Connection, SfError, SfProject } from '@salesforce/core';
+import {
+  requestWithEndpointFallback,
+  useNamedUserJwt,
+  detectTestRunnerFromId,
+  type RequestInfo,
+  createPreviewSessionCache,
+  validatePreviewSession,
+  removePreviewSessionCache,
+  getCachedPreviewSessionIds,
+  getCurrentPreviewSessionId,
+  listCachedPreviewSessions,
+} from '../src/utils';
 
 describe('requestWithEndpointFallback', () => {
   const $$ = new TestContext();
@@ -553,5 +568,276 @@ describe('detectTestRunnerFromId', () => {
 
   it('returns undefined for empty string', () => {
     expect(detectTestRunnerFromId('')).to.be.undefined;
+  });
+});
+
+// ====================================================
+//           Preview Session Store Tests
+// ====================================================
+
+function makeMockProject(getPath: () => string): SfProject {
+  return { getPath } as SfProject;
+}
+
+function makeMockAgent(
+  projectDir: string,
+  agentId: string
+): {
+  setSessionId: (id: string) => void;
+  getAgentIdForStorage: () => string;
+  getHistoryDir: () => Promise<string>;
+} {
+  let sessionId: string | undefined;
+  return {
+    setSessionId(id: string) {
+      sessionId = id;
+    },
+    getAgentIdForStorage(): string {
+      return agentId;
+    },
+    async getHistoryDir(): Promise<string> {
+      if (!sessionId) throw new Error('sessionId not set');
+      const dir = join(projectDir, '.sfdx', 'agents', agentId, 'sessions', sessionId);
+      const { mkdir } = await import('node:fs/promises');
+      await mkdir(dir, { recursive: true });
+      return dir;
+    },
+  };
+}
+
+describe('Preview Session Store', () => {
+  let projectPath: string;
+
+  beforeEach(() => {
+    projectPath = mkdtempSync(join(tmpdir(), 'preview-session-store-'));
+  });
+
+  afterEach(() => {
+    rmSync(projectPath, { recursive: true, force: true });
+  });
+
+  describe('createPreviewSessionCache', () => {
+    it('saves session and validates with same agent', async () => {
+      const agent = makeMockAgent(projectPath, 'agent-1');
+      agent.setSessionId('sess-1');
+      await createPreviewSessionCache(agent);
+      agent.setSessionId('sess-1');
+      await validatePreviewSession(agent);
+    });
+
+    it('allows multiple sessions for same agent', async () => {
+      const agent = makeMockAgent(projectPath, 'agent-1');
+      agent.setSessionId('sess-a');
+      await createPreviewSessionCache(agent);
+      agent.setSessionId('sess-b');
+      await createPreviewSessionCache(agent);
+      agent.setSessionId('sess-a');
+      await validatePreviewSession(agent);
+      agent.setSessionId('sess-b');
+      await validatePreviewSession(agent);
+    });
+  });
+
+  describe('validatePreviewSession', () => {
+    it('throws PreviewSessionNotFound when session file does not exist', async () => {
+      const agent = makeMockAgent(projectPath, 'agent-1');
+      agent.setSessionId('unknown-sess');
+      try {
+        await validatePreviewSession(agent);
+        expect.fail('Expected validatePreviewSession to throw');
+      } catch (e) {
+        expect(e).to.be.instanceOf(SfError);
+        expect((e as SfError).name).to.equal('PreviewSessionNotFound');
+        expect((e as SfError).message).to.include('No preview session found');
+      }
+    });
+
+    it('throws PreviewSessionNotFound when session id is for different agent', async () => {
+      const agentA = makeMockAgent(projectPath, 'agent-a');
+      const agentB = makeMockAgent(projectPath, 'agent-b');
+      agentA.setSessionId('sess-1');
+      await createPreviewSessionCache(agentA);
+      agentB.setSessionId('sess-1');
+      try {
+        await validatePreviewSession(agentB);
+        expect.fail('Expected validatePreviewSession to throw');
+      } catch (e) {
+        expect(e).to.be.instanceOf(SfError);
+        expect((e as SfError).name).to.equal('PreviewSessionNotFound');
+      }
+    });
+  });
+
+  describe('getCachedPreviewSessionIds', () => {
+    it('returns empty when no sessions', async () => {
+      const project = makeMockProject(() => projectPath);
+      const agent = makeMockAgent(projectPath, 'agent-1');
+      const ids = await getCachedPreviewSessionIds(project, agent);
+      expect(ids).to.deep.equal([]);
+    });
+
+    it('returns session ids that have session-meta.json', async () => {
+      const project = makeMockProject(() => projectPath);
+      const agent = makeMockAgent(projectPath, 'agent-1');
+      agent.setSessionId('sess-1');
+      await createPreviewSessionCache(agent);
+      agent.setSessionId('sess-2');
+      await createPreviewSessionCache(agent);
+      const ids = await getCachedPreviewSessionIds(project, agent);
+      expect(ids).to.have.members(['sess-1', 'sess-2']);
+    });
+  });
+
+  describe('removePreviewSessionCache', () => {
+    it('removes session from cache', async () => {
+      const project = makeMockProject(() => projectPath);
+      const agent = makeMockAgent(projectPath, 'agent-1');
+      agent.setSessionId('sess-1');
+      await createPreviewSessionCache(agent);
+      agent.setSessionId('sess-2');
+      await createPreviewSessionCache(agent);
+      agent.setSessionId('sess-1');
+      await removePreviewSessionCache(agent);
+      const ids = await getCachedPreviewSessionIds(project, agent);
+      expect(ids).to.deep.equal(['sess-2']);
+    });
+
+    it('after removing one session getCurrentPreviewSessionId returns the remaining one', async () => {
+      const project = makeMockProject(() => projectPath);
+      const agent = makeMockAgent(projectPath, 'agent-1');
+      agent.setSessionId('sess-a');
+      await createPreviewSessionCache(agent);
+      agent.setSessionId('sess-b');
+      await createPreviewSessionCache(agent);
+      expect(await getCurrentPreviewSessionId(project, agent)).to.be.undefined;
+      agent.setSessionId('sess-a');
+      await removePreviewSessionCache(agent);
+      expect(await getCurrentPreviewSessionId(project, agent)).to.equal('sess-b');
+    });
+  });
+
+  describe('listCachedPreviewSessions', () => {
+    it('returns empty when no cached sessions', async () => {
+      const project = makeMockProject(() => projectPath);
+      const list = await listCachedPreviewSessions(project);
+      expect(list).to.deep.equal([]);
+    });
+
+    it('returns agent ids and session ids for all cached sessions', async () => {
+      const project = makeMockProject(() => projectPath);
+      const agent1 = makeMockAgent(projectPath, 'bundle-a');
+      agent1.setSessionId('s1');
+      await createPreviewSessionCache(agent1);
+      agent1.setSessionId('s2');
+      await createPreviewSessionCache(agent1);
+      const agent2 = makeMockAgent(projectPath, 'bundle-b');
+      agent2.setSessionId('s3');
+      await createPreviewSessionCache(agent2);
+      const list = await listCachedPreviewSessions(project);
+      expect(list).to.have.lengthOf(2);
+      const byAgent = Object.fromEntries(list.map((e) => [e.agentId, e.sessions.map((s) => s.sessionId)]));
+      expect(byAgent['bundle-a']).to.have.members(['s1', 's2']);
+      expect(byAgent['bundle-b']).to.deep.equal(['s3']);
+    });
+
+    it('returns displayName and sessionType from session-meta', async () => {
+      const project = makeMockProject(() => projectPath);
+      const agent = makeMockAgent(projectPath, 'some-id');
+      agent.setSessionId('s1');
+      await createPreviewSessionCache(agent, { displayName: 'My_Production_Agent', sessionType: 'published' });
+      const list = await listCachedPreviewSessions(project);
+      expect(list[0].displayName).to.equal('My_Production_Agent');
+      expect(list[0].sessions[0].sessionType).to.equal('published');
+    });
+
+    it('returns timestamp for each session', async () => {
+      const project = makeMockProject(() => projectPath);
+      const agent = makeMockAgent(projectPath, 'some-id');
+      agent.setSessionId('s1');
+      await createPreviewSessionCache(agent, { sessionType: 'simulated' });
+      const list = await listCachedPreviewSessions(project);
+      expect(list[0].sessions[0].timestamp)
+        .to.be.a('string')
+        .and.match(/^\d{4}-\d{2}-\d{2}T/);
+    });
+
+    it('returns sessions in creation order from index', async () => {
+      const project = makeMockProject(() => projectPath);
+      const agent = makeMockAgent(projectPath, 'bundle-a');
+      agent.setSessionId('s1');
+      await createPreviewSessionCache(agent);
+      agent.setSessionId('s2');
+      await createPreviewSessionCache(agent);
+      agent.setSessionId('s3');
+      await createPreviewSessionCache(agent);
+      const list = await listCachedPreviewSessions(project);
+      expect(list[0].sessions.map((s) => s.sessionId)).to.deep.equal(['s1', 's2', 's3']);
+    });
+
+    it('index file is written to the sessions directory', async () => {
+      const agent = makeMockAgent(projectPath, 'bundle-a');
+      agent.setSessionId('s1');
+      await createPreviewSessionCache(agent, { displayName: 'MyAgent', sessionType: 'live' });
+      const indexPath = join(projectPath, '.sfdx', 'agents', 'bundle-a', 'sessions', 'index.json');
+      const raw = await readFile(indexPath, 'utf-8');
+      const index = JSON.parse(raw) as Array<{ sessionId: string; sessionType: string }>;
+      expect(index).to.have.lengthOf(1);
+      expect(index[0].sessionId).to.equal('s1');
+      expect(index[0].sessionType).to.equal('live');
+    });
+
+    it('removes entry from index when session is ended', async () => {
+      const project = makeMockProject(() => projectPath);
+      const agent = makeMockAgent(projectPath, 'bundle-a');
+      agent.setSessionId('s1');
+      await createPreviewSessionCache(agent);
+      agent.setSessionId('s2');
+      await createPreviewSessionCache(agent);
+      agent.setSessionId('s1');
+      await removePreviewSessionCache(agent);
+      const list = await listCachedPreviewSessions(project);
+      expect(list[0].sessions.map((s) => s.sessionId)).to.deep.equal(['s2']);
+    });
+
+    it('falls back to directory scan when no index exists', async () => {
+      const project = makeMockProject(() => projectPath);
+      const agent = makeMockAgent(projectPath, 'bundle-a');
+      agent.setSessionId('s1');
+      await createPreviewSessionCache(agent);
+      // Remove the index to simulate pre-index sessions
+      const { unlink: unlinkFn } = await import('node:fs/promises');
+      await unlinkFn(join(projectPath, '.sfdx', 'agents', 'bundle-a', 'sessions', 'index.json'));
+      const list = await listCachedPreviewSessions(project);
+      expect(list[0].sessions.map((s) => s.sessionId)).to.deep.equal(['s1']);
+    });
+  });
+
+  describe('getCurrentPreviewSessionId', () => {
+    it('returns undefined when no sessions', async () => {
+      const project = makeMockProject(() => projectPath);
+      const agent = makeMockAgent(projectPath, 'agent-1');
+      const id = await getCurrentPreviewSessionId(project, agent);
+      expect(id).to.be.undefined;
+    });
+
+    it('returns session id when exactly one session', async () => {
+      const project = makeMockProject(() => projectPath);
+      const agent = makeMockAgent(projectPath, 'agent-1');
+      agent.setSessionId('sess-1');
+      await createPreviewSessionCache(agent);
+      const id = await getCurrentPreviewSessionId(project, agent);
+      expect(id).to.equal('sess-1');
+    });
+
+    it('returns undefined when multiple sessions', async () => {
+      const project = makeMockProject(() => projectPath);
+      const agent = makeMockAgent(projectPath, 'agent-1');
+      agent.setSessionId('sess-a');
+      await createPreviewSessionCache(agent);
+      agent.setSessionId('sess-b');
+      await createPreviewSessionCache(agent);
+      const id = await getCurrentPreviewSessionId(project, agent);
+      expect(id).to.be.undefined;
+    });
   });
 });

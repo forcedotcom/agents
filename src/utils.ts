@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 import { existsSync, readdirSync, statSync } from 'node:fs';
-import { mkdir, appendFile, readFile, writeFile, readdir, stat } from 'node:fs/promises';
+import { mkdir, appendFile, readFile, rename, writeFile, readdir, stat, unlink } from 'node:fs/promises';
 import * as path from 'node:path';
 import { Connection, Logger, SfError, SfProject } from '@salesforce/core';
 import { AvailableDefinition, NamedUserJwtResponse, type PlannerResponse, PreviewMetadata } from './types';
@@ -984,4 +984,254 @@ export async function determineTestRunner(
     message:
       'No test definitions found in the org. Expected either AiEvaluationDefinition (legacy) or AiTestingDefinition (NGT) metadata.',
   });
+}
+
+// ====================================================
+//               Preview Session Store
+// ====================================================
+
+const SESSION_META_FILE = 'session-meta.json';
+const SESSION_INDEX_FILE = 'index.json';
+
+export type SessionType = 'simulated' | 'live' | 'published';
+export type PreviewSessionMeta = { displayName?: string; timestamp?: string; sessionType?: SessionType };
+type PreviewSessionIndex = Array<{
+  sessionId: string;
+  displayName?: string;
+  timestamp?: string;
+  sessionType?: SessionType;
+}>;
+
+async function readPreviewSessionIndex(indexPath: string): Promise<PreviewSessionIndex> {
+  try {
+    const raw = await readFile(indexPath, 'utf-8');
+    return JSON.parse(raw) as PreviewSessionIndex;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Atomically read-modify-write the preview sessions index.
+ * Writes to a temp file then renames to avoid partial writes and reduce
+ * the window for concurrent-write races (last writer wins, no silent drops).
+ * Propagates errors so callers are aware of index failures.
+ */
+async function updatePreviewSessionIndex(
+  indexPath: string,
+  updater: (index: PreviewSessionIndex) => PreviewSessionIndex
+): Promise<void> {
+  const index = await readPreviewSessionIndex(indexPath);
+  const updated = updater(index);
+  const tmpPath = `${indexPath}.tmp`;
+  await writeFile(tmpPath, JSON.stringify(updated, null, 2), 'utf-8');
+  await rename(tmpPath, indexPath);
+}
+
+/**
+ * Save a marker so send/end can validate that the session was started for this agent.
+ * Caller must have started the session (agent has sessionId set). Uses agent.getHistoryDir() for the path.
+ * Pass displayName (authoring bundle name or production agent API name) so "agent preview sessions" can show it.
+ */
+export async function createPreviewSessionCache(
+  agent: { getHistoryDir: () => Promise<string> },
+  options?: { displayName?: string; sessionType?: SessionType }
+): Promise<void> {
+  const historyDir = await agent.getHistoryDir();
+  const metaPath = path.join(historyDir, SESSION_META_FILE);
+  const meta: PreviewSessionMeta = {
+    displayName: options?.displayName,
+    timestamp: new Date().toISOString(),
+    sessionType: options?.sessionType,
+  };
+  await writeFile(metaPath, JSON.stringify(meta), 'utf-8');
+
+  // Update the sessions index for ordered browsing
+  const sessionId = path.basename(historyDir);
+  const sessionsDir = path.dirname(historyDir);
+  const indexPath = path.join(sessionsDir, SESSION_INDEX_FILE);
+  await updatePreviewSessionIndex(indexPath, (index) => {
+    if (!index.some((e) => e.sessionId === sessionId)) {
+      index.push({
+        sessionId,
+        displayName: meta.displayName,
+        timestamp: meta.timestamp,
+        sessionType: meta.sessionType,
+      });
+    }
+    return index;
+  });
+}
+
+/**
+ * Validate that the session was started for this agent (marker file exists in agent's history dir for current sessionId).
+ * Caller must set sessionId on the agent (agent.setSessionId) before calling.
+ * Throws SfError if the session marker is not found.
+ */
+export async function validatePreviewSession(agent: { getHistoryDir: () => Promise<string> }): Promise<void> {
+  const historyDir = await agent.getHistoryDir();
+  const metaPath = path.join(historyDir, SESSION_META_FILE);
+  try {
+    await readFile(metaPath, 'utf-8');
+  } catch (error) {
+    throw SfError.create({
+      message: 'No preview session found for this session ID. Run "sf agent preview start" first.',
+      name: 'PreviewSessionNotFound',
+      cause: error,
+    });
+  }
+}
+
+/**
+ * Remove the session marker so this session is no longer considered "active" for send/end without --session-id.
+ * Call after ending the session. Caller must set sessionId on the agent before calling.
+ */
+export async function removePreviewSessionCache(agent: { getHistoryDir: () => Promise<string> }): Promise<void> {
+  const historyDir = await agent.getHistoryDir();
+  const metaPath = path.join(historyDir, SESSION_META_FILE);
+  try {
+    await unlink(metaPath);
+  } catch {
+    // already removed or never created
+  }
+
+  // Remove entry from the sessions index
+  const sessionId = path.basename(historyDir);
+  const sessionsDir = path.dirname(historyDir);
+  const indexPath = path.join(sessionsDir, SESSION_INDEX_FILE);
+  await updatePreviewSessionIndex(indexPath, (index) => index.filter((e) => e.sessionId !== sessionId));
+}
+
+/**
+ * List session IDs that have a cache marker (started via "agent preview start") for this agent.
+ * Uses project path and agent's storage ID to find .sfdx/agents/<agentId>/sessions/<sessionId>/session-meta.json.
+ */
+export async function getCachedPreviewSessionIds(
+  project: SfProject,
+  agent: { getAgentIdForStorage: () => string | Promise<string> }
+): Promise<string[]> {
+  const agentId = await agent.getAgentIdForStorage();
+  const base = path.join(project.getPath(), '.sfdx');
+  const sessionsDir = path.join(base, 'agents', agentId, 'sessions');
+  const sessionIds: string[] = [];
+  try {
+    const entries = await readdir(sessionsDir, { withFileTypes: true });
+    const dirs = entries.filter((e) => e.isDirectory()).map((e) => e.name);
+    const hasMarker = await Promise.all(
+      dirs.map(async (name) => {
+        try {
+          await readFile(path.join(sessionsDir, name, SESSION_META_FILE), 'utf-8');
+          return true;
+        } catch {
+          return false;
+        }
+      })
+    );
+    dirs.forEach((name, i) => {
+      if (hasMarker[i]) sessionIds.push(name);
+    });
+  } catch {
+    // sessions dir missing or unreadable
+  }
+  return sessionIds;
+}
+
+/**
+ * Return the single "current" session ID when safe: exactly one cached session for this agent.
+ * Returns undefined when there are zero or multiple sessions (caller should require --session-id).
+ */
+export async function getCurrentPreviewSessionId(
+  project: SfProject,
+  agent: { getAgentIdForStorage: () => string | Promise<string> }
+): Promise<string | undefined> {
+  const ids = await getCachedPreviewSessionIds(project, agent);
+  return ids.length === 1 ? ids[0] : undefined;
+}
+
+export type CachedPreviewSessionInfo = { sessionId: string; timestamp?: string; sessionType?: SessionType };
+export type CachedPreviewSessionEntry = {
+  agentId: string;
+  displayName?: string;
+  sessions: CachedPreviewSessionInfo[];
+};
+
+/**
+ * List all cached preview sessions in the project, grouped by agent ID.
+ * displayName (when present in session-meta.json) is the authoring bundle name or production agent API name for display.
+ * Use this to show users which sessions exist so they can end or clean up.
+ */
+export async function listCachedPreviewSessions(project: SfProject): Promise<CachedPreviewSessionEntry[]> {
+  const base = path.join(project.getPath(), '.sfdx', 'agents');
+  const result: CachedPreviewSessionEntry[] = [];
+  try {
+    const agentDirs = await readdir(base, { withFileTypes: true });
+    const entries = await Promise.all(
+      agentDirs
+        .filter((ent) => ent.isDirectory())
+        .map(async (ent) => {
+          const agentId = ent.name;
+          const sessionsDir = path.join(base, agentId, 'sessions');
+          let sessions: CachedPreviewSessionInfo[] = [];
+          let displayName: string | undefined;
+          try {
+            // Prefer the index for ordered, metadata-rich results
+            const index = await readPreviewSessionIndex(path.join(sessionsDir, SESSION_INDEX_FILE));
+            if (index.length > 0) {
+              // Verify each indexed session still has its marker file (guard against manual cleanup)
+              const verified = await Promise.all(
+                index.map(async (entry) => {
+                  try {
+                    await readFile(path.join(sessionsDir, entry.sessionId, SESSION_META_FILE), 'utf-8');
+                    return entry;
+                  } catch {
+                    return null;
+                  }
+                })
+              );
+              sessions = verified
+                .filter((e): e is PreviewSessionIndex[number] => e !== null)
+                .map(({ sessionId, timestamp, sessionType }) => ({ sessionId, timestamp, sessionType }));
+              displayName = index.find((e) => e.displayName !== undefined)?.displayName;
+            } else {
+              // Fallback: scan directories (no index yet, e.g. sessions started before this feature)
+              const sessionDirs = await readdir(sessionsDir, { withFileTypes: true });
+              const sessionInfos = await Promise.all(
+                sessionDirs
+                  .filter((s) => s.isDirectory())
+                  .map(async (s): Promise<(CachedPreviewSessionInfo & { displayName?: string }) | null> => {
+                    try {
+                      const raw = await readFile(path.join(sessionsDir, s.name, SESSION_META_FILE), 'utf-8');
+                      const meta = JSON.parse(raw) as PreviewSessionMeta;
+                      return {
+                        sessionId: s.name,
+                        timestamp: meta.timestamp,
+                        sessionType: meta.sessionType,
+                        displayName: meta.displayName,
+                      };
+                    } catch {
+                      return null;
+                    }
+                  })
+              );
+              const validSessions = sessionInfos.filter(
+                (s): s is CachedPreviewSessionInfo & { displayName?: string } => s !== null
+              );
+              sessions = validSessions.map(({ sessionId, timestamp, sessionType }) => ({
+                sessionId,
+                timestamp,
+                sessionType,
+              }));
+              displayName = validSessions[0]?.displayName;
+            }
+          } catch {
+            // no sessions dir or unreadable
+          }
+          return { agentId, displayName, sessions };
+        })
+    );
+    result.push(...entries.filter((e) => e.sessions.length > 0));
+  } catch {
+    // no agents dir or unreadable
+  }
+  return result;
 }

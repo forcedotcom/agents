@@ -93,6 +93,16 @@ export {
   determineTestRunner,
   detectTestRunnerFromId,
   type TestRunnerType,
+  createPreviewSessionCache,
+  validatePreviewSession,
+  removePreviewSessionCache,
+  getCachedPreviewSessionIds,
+  getCurrentPreviewSessionId,
+  listCachedPreviewSessions,
+  type SessionType,
+  type PreviewSessionMeta,
+  type CachedPreviewSessionInfo,
+  type CachedPreviewSessionEntry,
 } from './utils';
 export { Agent, AgentCreateLifecycleStages, type AgentInstance } from './agent';
 export { AgentTester } from './agentTester';
