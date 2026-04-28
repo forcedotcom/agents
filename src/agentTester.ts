@@ -151,26 +151,7 @@ export class AgentTester {
   }
 }
 
-/**
- * Normalizes test results by decoding HTML entities in utterances and test result values.
- *
- * @param results - The agent test results response object to normalize
- * @returns A new AgentTestResultsResponse with decoded HTML entities
- *
- * @example
- * ```
- * const results = {
- *   testCases: [{
- *     inputs: { utterance: "&quot;hello&quot;" },
- *     testResults: [{
- *       actualValue: "&amp;test",
- *       expectedValue: "&lt;value&gt;"
- *     }]
- *   }]
- * };
- * const normalized = normalizeResults(results);
- * ```
- */
+/** Decodes HTML entities in test result fields (utterance, actionsSequence, actualValue, expectedValue, metricExplainability). */
 export function normalizeResults(results: AgentTestResultsResponse): AgentTestResultsResponse {
   return {
     ...results,

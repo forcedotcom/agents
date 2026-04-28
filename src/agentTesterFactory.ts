@@ -27,6 +27,9 @@ export async function createAgentTester(
   connection: Connection,
   options: { runId: string } | { testDefinitionName: string }
 ): Promise<AgentTester | AgentTesterNGT> {
+  const makeTester = (runnerType: string): AgentTester | AgentTesterNGT =>
+    runnerType === 'agentforce-studio' ? new AgentTesterNGT(connection) : new AgentTester(connection);
+
   if ('runId' in options) {
     const runnerType = detectTestRunnerFromId(options.runId);
     if (!runnerType) {
@@ -35,9 +38,8 @@ export async function createAgentTester(
         message: `Cannot determine test runner from run ID '${options.runId}'. Expected a Salesforce ID starting with '3A2' (Agentforce Studio) or '4KB' (Testing Center).`,
       });
     }
-    return runnerType === 'agentforce-studio' ? new AgentTesterNGT(connection) : new AgentTester(connection);
+    return makeTester(runnerType);
   }
 
-  const runnerType = await determineTestRunner(connection, options.testDefinitionName);
-  return runnerType === 'agentforce-studio' ? new AgentTesterNGT(connection) : new AgentTester(connection);
+  return makeTester(await determineTestRunner(connection, options.testDefinitionName));
 }

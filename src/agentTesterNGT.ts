@@ -103,22 +103,26 @@ export class AgentTesterNGT {
         if (statusResponse.status.toLowerCase() !== 'new') {
           const resultsResponse = await this.results(runId);
           const totalTestCases = resultsResponse.testCases.length;
+          const isPassingScorer = (scorerResponse: string): boolean => {
+            try {
+              const { actualValue, expectedValue } = JSON.parse(scorerResponse) as {
+                actualValue?: string;
+                expectedValue?: string;
+              };
+              return actualValue !== undefined && actualValue === expectedValue;
+            } catch {
+              return false;
+            }
+          };
           const passingTestCases = resultsResponse.testCases.filter(
             (tc) =>
-              tc.testScorerResults.length > 0 &&
-              tc.testScorerResults.every((scorer) => {
-                try {
-                  const parsed = JSON.parse(scorer.scorerResponse) as { actualValue: string; expectedValue: string };
-                  return parsed.actualValue !== undefined && parsed.actualValue === parsed.expectedValue;
-                } catch {
-                  return false;
-                }
-              })
+              tc.testScorerResults.length > 0 && tc.testScorerResults.every((s) => isPassingScorer(s.scorerResponse))
           ).length;
           const failingTestCases = totalTestCases - passingTestCases;
 
           await lifecycle.emit('AGENT_TEST_POLLING_EVENT', {
-            runId,
+            // to match the other AGENT_TEST_POLLING_EVENT for consumers
+            jobId: runId,
             status: resultsResponse.status,
             totalTestCases,
             failingTestCases,
