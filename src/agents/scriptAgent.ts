@@ -103,7 +103,7 @@ export class ScriptAgent extends AgentBase {
 
     if (options.agentJson) {
       this.agentJson = options.agentJson;
-      this.name = options.agentJson.globalConfiguration.label || options.aabName;
+      this.name = options.agentJson.globalConfiguration?.label?.trim() || options.aabName;
     }
 
     this.preview = {
