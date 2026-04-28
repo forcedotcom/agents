@@ -67,7 +67,7 @@ describe('createAgentTester', () => {
       expect(tester).to.be.instanceOf(AgentTesterNGT);
     });
 
-    it('returns AgentTester when only legacy metadata exists', async () => {
+    it('returns AgentTester when only AiEvalDef metadata exists', async () => {
       $$.SANDBOX.stub(connection.metadata, 'list').callsFake((query) => {
         if ((query as { type: string }).type === 'AiEvaluationDefinition')
           return Promise.resolve([{ fullName: 'MySuite' }] as never);

@@ -893,21 +893,21 @@ export const readTranscriptEntries = async (agentId: string, sessionId: string):
 //         Agent Test Runner Detection
 // ====================================================
 
-export type TestRunnerType = 'ngt' | 'legacy';
+export type TestRunnerType = 'agentforce-studio' | 'testing-center';
 
-const LEGACY_RUN_ID_PREFIX = '4KB';
-const NGT_RUN_ID_PREFIX = '3A2';
+const TESTING_CENTER_PREFIX = '4KB';
+const AGENTFORCE_STUDIO_PREFIX = '3A2';
 
 /**
  * Determines the test runner type from a run ID based on its Salesforce ID prefix.
- * Legacy run IDs start with `4KB`; NGT run IDs start with `3A2`.
+ * Testing Center run IDs start with `4KB`; Agentforce Studio run IDs start with `3A2`.
  *
  * @param runId - The test run ID returned from a start response
- * @returns 'ngt' or 'legacy', or undefined if the prefix is unrecognized
+ * @returns 'agentforce-studio' or 'testing-center', or undefined if the prefix is unrecognized
  */
 export function detectTestRunnerFromId(runId: string): TestRunnerType | undefined {
-  if (runId.startsWith(NGT_RUN_ID_PREFIX)) return 'ngt';
-  if (runId.startsWith(LEGACY_RUN_ID_PREFIX)) return 'legacy';
+  if (runId.startsWith(AGENTFORCE_STUDIO_PREFIX)) return 'agentforce-studio';
+  if (runId.startsWith(TESTING_CENTER_PREFIX)) return 'testing-center';
   return undefined;
 }
 
@@ -915,22 +915,22 @@ export function detectTestRunnerFromId(runId: string): TestRunnerType | undefine
  * Determines which test runner to use based on available metadata types in the org.
  *
  * This function checks for the presence of:
- * - `AiEvaluationDefinition` (legacy test runner)
- * - `AiTestingDefinition` (NGT - Next Generation Testing)
+ * - `AiEvaluationDefinition` (Testing Center)
+ * - `AiTestingDefinition` (Agentforce Studio)
  *
  * If a test definition with the same name exists in both metadata types, an error is thrown
  * to prevent ambiguity.
  *
  * @param connection - The Salesforce connection
  * @param testDefinitionName - Optional test definition name to check for conflicts
- * @returns 'ngt' if only NGT metadata exists, 'legacy' if only legacy metadata exists
+ * @returns 'agentforce-studio' if only Agentforce Studio metadata exists, 'testing-center' if only Testing Center metadata exists
  * @throws {SfError} if both metadata types exist with the same test definition name
  * @throws {SfError} if neither metadata type exists
  *
  * @example
  * ```typescript
  * const runnerType = await determineTestRunner(connection, 'MyTestSuite');
- * if (runnerType === 'ngt') {
+ * if (runnerType === 'agentforce-studio') {
  *   const tester = new AgentTesterNGT(connection);
  * } else {
  *   const tester = new AgentTester(connection);
@@ -942,47 +942,45 @@ export async function determineTestRunner(
   testDefinitionName?: string
 ): Promise<TestRunnerType> {
   // Query both metadata types in parallel
-  const [legacyDefs, ngtDefs] = await Promise.all([
+  const [tcDefs, asDefs] = await Promise.all([
     connection.metadata.list({ type: 'AiEvaluationDefinition' }).catch(() => [] as AvailableDefinition[]),
     connection.metadata.list({ type: 'AiTestingDefinition' }).catch(() => [] as AvailableDefinition[]),
   ]);
 
   // If a specific test name is provided, check for conflicts
-  if (testDefinitionName && legacyDefs.length > 0 && ngtDefs.length > 0) {
-    const legacyNames = new Set(legacyDefs.map((def) => def.fullName));
-    const ngtNames = new Set(ngtDefs.map((def) => def.fullName));
+  if (testDefinitionName && tcDefs.length > 0 && asDefs.length > 0) {
+    const tcNames = new Set(tcDefs.map((def) => def.fullName));
+    const asNames = new Set(asDefs.map((def) => def.fullName));
 
-    if (legacyNames.has(testDefinitionName) && ngtNames.has(testDefinitionName)) {
+    if (tcNames.has(testDefinitionName) && asNames.has(testDefinitionName)) {
       throw SfError.create({
         name: 'AmbiguousTestDefinition',
-        message: `Test definition '${testDefinitionName}' exists in both AiEvaluationDefinition (legacy) and AiTestingDefinition (NGT). Please remove one to resolve the ambiguity.`,
+        message: `Test definition '${testDefinitionName}' exists in both AiEvaluationDefinition (Testing Center) and AiTestingDefinition (Agentforce Studio). Please remove one to resolve the ambiguity.`,
       });
     }
 
-    if (legacyNames.has(testDefinitionName)) {
-      return 'legacy';
+    if (tcNames.has(testDefinitionName)) {
+      return 'testing-center';
     }
 
-    if (ngtNames.has(testDefinitionName)) {
-      return 'ngt';
+    if (asNames.has(testDefinitionName)) {
+      return 'agentforce-studio';
     }
   }
 
-  if (legacyDefs.length > 0 && ngtDefs.length === 0) {
-    // we have legacy, no new
-    return 'legacy';
+  if (tcDefs.length > 0 && asDefs.length === 0) {
+    return 'testing-center';
   }
 
-  if (ngtDefs.length > 0 && legacyDefs.length === 0) {
-    // no old, all new
-    return 'ngt';
+  if (asDefs.length > 0 && tcDefs.length === 0) {
+    return 'agentforce-studio';
   }
 
   // Neither exists
   throw SfError.create({
     name: 'NoTestDefinitionsFound',
     message:
-      'No test definitions found in the org. Expected either AiEvaluationDefinition (legacy) or AiTestingDefinition (NGT) metadata.',
+      'No test definitions found in the org. Expected either AiEvaluationDefinition (Testing Center) or AiTestingDefinition (Agentforce Studio) metadata.',
   });
 }
 

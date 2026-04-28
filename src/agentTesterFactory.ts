@@ -23,7 +23,7 @@ import { detectTestRunnerFromId, determineTestRunner } from './utils';
  * Creates the appropriate tester instance without requiring the caller to know which runner to use.
  *
  * When `runId` is provided the runner type is detected instantly from the Salesforce ID prefix
- * (`3A2` = NGT, `4KB` = legacy) — no network call needed. This is the right choice when resuming
+ * (`3A2` = Agentforce Studio, `4KB` = Testing Center) — no network call needed. This is the right choice when resuming
  * status/results polling for an existing run.
  *
  * When only `testDefinitionName` is provided, the org is queried for available metadata types to
@@ -50,12 +50,12 @@ export async function createAgentTester(
     if (!runnerType) {
       throw SfError.create({
         name: 'UnrecognizedRunId',
-        message: `Cannot determine test runner from run ID '${options.runId}'. Expected a Salesforce ID starting with '3A2' (NGT) or '4KB' (legacy).`,
+        message: `Cannot determine test runner from run ID '${options.runId}'. Expected a Salesforce ID starting with '3A2' (Agentforce Studio) or '4KB' (Testing Center).`,
       });
     }
-    return runnerType === 'ngt' ? new AgentTesterNGT(connection) : new AgentTester(connection);
+    return runnerType === 'agentforce-studio' ? new AgentTesterNGT(connection) : new AgentTester(connection);
   }
 
   const runnerType = await determineTestRunner(connection, options.testDefinitionName);
-  return runnerType === 'ngt' ? new AgentTesterNGT(connection) : new AgentTester(connection);
+  return runnerType === 'agentforce-studio' ? new AgentTesterNGT(connection) : new AgentTester(connection);
 }

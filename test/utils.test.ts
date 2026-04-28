@@ -556,11 +556,11 @@ describe('useNamedUserJwt', () => {
 
 describe('detectTestRunnerFromId', () => {
   it('detects NGT from 3A2 prefix', () => {
-    expect(detectTestRunnerFromId('3A2abc123')).to.equal('ngt');
+    expect(detectTestRunnerFromId('3A2abc123')).to.equal('agentforce-studio');
   });
 
-  it('detects legacy from 4KB prefix', () => {
-    expect(detectTestRunnerFromId('4KBabc123')).to.equal('legacy');
+  it('detects testing-center from 4KB prefix', () => {
+    expect(detectTestRunnerFromId('4KBabc123')).to.equal('testing-center');
   });
 
   it('returns undefined for unrecognized prefix', () => {
@@ -593,10 +593,10 @@ describe('determineTestRunner', () => {
     });
 
     const result = await determineTestRunner(connection, 'MySuite');
-    expect(result).to.equal('ngt');
+    expect(result).to.equal('agentforce-studio');
   });
 
-  it('returns legacy when only AiEvaluationDefinition exists', async () => {
+  it('returns testing-center when only AiEvaluationDefinition exists', async () => {
     $$.SANDBOX.stub(connection.metadata, 'list').callsFake((query) => {
       if ((query as { type: string }).type === 'AiEvaluationDefinition')
         return Promise.resolve([{ fullName: 'MySuite' }] as never);
@@ -604,10 +604,10 @@ describe('determineTestRunner', () => {
     });
 
     const result = await determineTestRunner(connection, 'MySuite');
-    expect(result).to.equal('legacy');
+    expect(result).to.equal('testing-center');
   });
 
-  it('returns legacy when only AiEvaluationDefinition exists (no testDefinitionName)', async () => {
+  it('returns testing-center when only AiEvaluationDefinition exists (no testDefinitionName)', async () => {
     $$.SANDBOX.stub(connection.metadata, 'list').callsFake((query) => {
       if ((query as { type: string }).type === 'AiEvaluationDefinition')
         return Promise.resolve([{ fullName: 'SomeSuite' }] as never);
@@ -615,7 +615,7 @@ describe('determineTestRunner', () => {
     });
 
     const result = await determineTestRunner(connection);
-    expect(result).to.equal('legacy');
+    expect(result).to.equal('testing-center');
   });
 
   it('returns ngt when only AiTestingDefinition exists (no testDefinitionName)', async () => {
@@ -626,7 +626,7 @@ describe('determineTestRunner', () => {
     });
 
     const result = await determineTestRunner(connection);
-    expect(result).to.equal('ngt');
+    expect(result).to.equal('agentforce-studio');
   });
 
   it('throws AmbiguousTestDefinition when same name exists in both metadata types', async () => {
@@ -641,26 +641,26 @@ describe('determineTestRunner', () => {
     }
   });
 
-  it('prefers legacy when name only exists in legacy (both types have entries)', async () => {
+  it('prefers testing-center when name only exists in testing-center (both types have entries)', async () => {
     $$.SANDBOX.stub(connection.metadata, 'list').callsFake((query) => {
       if ((query as { type: string }).type === 'AiEvaluationDefinition')
-        return Promise.resolve([{ fullName: 'LegacySuite' }] as never);
-      return Promise.resolve([{ fullName: 'NGTSuite' }] as never);
+        return Promise.resolve([{ fullName: 'TCSuite' }] as never);
+      return Promise.resolve([{ fullName: 'ASSuite' }] as never);
     });
 
-    const result = await determineTestRunner(connection, 'LegacySuite');
-    expect(result).to.equal('legacy');
+    const result = await determineTestRunner(connection, 'TCSuite');
+    expect(result).to.equal('testing-center');
   });
 
-  it('prefers ngt when name only exists in ngt (both types have entries)', async () => {
+  it('prefers agentforce-studio when name only exists in agentforce-studio (both types have entries)', async () => {
     $$.SANDBOX.stub(connection.metadata, 'list').callsFake((query) => {
       if ((query as { type: string }).type === 'AiEvaluationDefinition')
-        return Promise.resolve([{ fullName: 'LegacySuite' }] as never);
-      return Promise.resolve([{ fullName: 'NGTSuite' }] as never);
+        return Promise.resolve([{ fullName: 'TCSuite' }] as never);
+      return Promise.resolve([{ fullName: 'ASSuite' }] as never);
     });
 
-    const result = await determineTestRunner(connection, 'NGTSuite');
-    expect(result).to.equal('ngt');
+    const result = await determineTestRunner(connection, 'ASSuite');
+    expect(result).to.equal('agentforce-studio');
   });
 
   it('throws NoTestDefinitionsFound when no metadata types exist', async () => {
