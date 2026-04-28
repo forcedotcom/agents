@@ -949,7 +949,7 @@ export async function determineTestRunner(
     if (tcNames.has(testDefinitionName) && asNames.has(testDefinitionName)) {
       throw SfError.create({
         name: 'AmbiguousTestDefinition',
-        message: `Test definition '${testDefinitionName}' exists in both AiEvaluationDefinition (Testing Center) and AiTestingDefinition (Agentforce Studio). Please remove one to resolve the ambiguity.`,
+        message: `'${testDefinitionName}' exists in both Testing Center (AiEvaluationDefinition) and Agentforce Studio (AiTestingDefinition).`,
       });
     }
 

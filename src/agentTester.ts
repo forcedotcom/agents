@@ -103,15 +103,14 @@ export class AgentTester {
               tc.testResults.some((r) => r.result === 'FAILURE')
           ).length;
 
-          await lifecycle.emit('AGENT_TEST_POLLING_EVENT', {
-            jobId,
-            status: resultsResponse.status,
-            totalTestCases,
-            failingTestCases,
-            passingTestCases,
-          });
-
           if (resultsResponse.status.toLowerCase() === 'completed') {
+            await lifecycle.emit('AGENT_TEST_POLLING_EVENT', {
+              jobId,
+              status: resultsResponse.status,
+              totalTestCases,
+              failingTestCases,
+              passingTestCases,
+            });
             return { payload: resultsResponse, completed: true };
           }
         }
