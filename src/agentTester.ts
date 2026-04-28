@@ -84,13 +84,7 @@ export class AgentTester {
    */
   public async poll(
     jobId: string,
-    {
-      timeout = Duration.minutes(5),
-    }: {
-      timeout?: Duration;
-    } = {
-      timeout: Duration.minutes(5),
-    }
+    { timeout = Duration.minutes(5) }: { timeout?: Duration } = {}
   ): Promise<AgentTestResultsResponse> {
     const frequency = env.getNumber('SF_AGENT_TEST_POLLING_FREQUENCY_MS', 1000);
     const lifecycle = Lifecycle.getInstance();
@@ -109,17 +103,6 @@ export class AgentTester {
               tc.testResults.some((r) => r.result === 'FAILURE')
           ).length;
 
-          if (resultsResponse.status.toLowerCase() === 'completed') {
-            await lifecycle.emit('AGENT_TEST_POLLING_EVENT', {
-              jobId,
-              status: resultsResponse.status,
-              totalTestCases,
-              failingTestCases,
-              passingTestCases,
-            });
-            return { payload: resultsResponse, completed: true };
-          }
-
           await lifecycle.emit('AGENT_TEST_POLLING_EVENT', {
             jobId,
             status: resultsResponse.status,
@@ -127,6 +110,10 @@ export class AgentTester {
             failingTestCases,
             passingTestCases,
           });
+
+          if (resultsResponse.status.toLowerCase() === 'completed') {
+            return { payload: resultsResponse, completed: true };
+          }
         }
 
         return { completed: false };

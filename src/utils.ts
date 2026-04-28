@@ -898,13 +898,7 @@ export type TestRunnerType = 'agentforce-studio' | 'testing-center';
 const TESTING_CENTER_PREFIX = '4KB';
 const AGENTFORCE_STUDIO_PREFIX = '3A2';
 
-/**
- * Determines the test runner type from a run ID based on its Salesforce ID prefix.
- * Testing Center run IDs start with `4KB`; Agentforce Studio run IDs start with `3A2`.
- *
- * @param runId - The test run ID returned from a start response
- * @returns 'agentforce-studio' or 'testing-center', or undefined if the prefix is unrecognized
- */
+/** Detects the test runner from a run ID's Salesforce ID prefix (`3A2` = Agentforce Studio, `4KB` = Testing Center). */
 export function detectTestRunnerFromId(runId: string): TestRunnerType | undefined {
   if (runId.startsWith(AGENTFORCE_STUDIO_PREFIX)) return 'agentforce-studio';
   if (runId.startsWith(TESTING_CENTER_PREFIX)) return 'testing-center';

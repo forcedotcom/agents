@@ -454,7 +454,7 @@ describe('useNamedUserJwt', () => {
 
     $$.SANDBOX.stub(connection, 'request').resolves({
       // eslint-disable-next-line camelcase
-      access_token: 12345,
+      access_token: 12_345,
       // eslint-disable-next-line camelcase
       token_type: 'Bearer',
     } as never);

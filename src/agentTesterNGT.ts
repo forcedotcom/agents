@@ -93,13 +93,7 @@ export class AgentTesterNGT {
    */
   public async poll(
     runId: string,
-    {
-      timeout = Duration.minutes(5),
-    }: {
-      timeout?: Duration;
-    } = {
-      timeout: Duration.minutes(5),
-    }
+    { timeout = Duration.minutes(5) }: { timeout?: Duration } = {}
   ): Promise<AgentTestNGTResultsResponse> {
     const frequency = env.getNumber('SF_AGENT_TEST_POLLING_FREQUENCY_MS', 1000);
     const lifecycle = Lifecycle.getInstance();
@@ -109,31 +103,19 @@ export class AgentTesterNGT {
         if (statusResponse.status.toLowerCase() !== 'new') {
           const resultsResponse = await this.results(runId);
           const totalTestCases = resultsResponse.testCases.length;
-          // NGT doesn't provide pass/fail counts directly, so we count based on scorer results
-          // This is a best-effort approximation
-          const passingTestCases = resultsResponse.testCases.filter((tc) =>
-            // A test case passes if all scorers have matching actual/expected values
-            tc.testScorerResults.every((scorer) => {
-              try {
-                const parsed = JSON.parse(scorer.scorerResponse) as { actualValue: string; expectedValue: string };
-                return parsed.actualValue === parsed.expectedValue;
-              } catch {
-                return false;
-              }
-            })
+          const passingTestCases = resultsResponse.testCases.filter(
+            (tc) =>
+              tc.testScorerResults.length > 0 &&
+              tc.testScorerResults.every((scorer) => {
+                try {
+                  const parsed = JSON.parse(scorer.scorerResponse) as { actualValue: string; expectedValue: string };
+                  return parsed.actualValue !== undefined && parsed.actualValue === parsed.expectedValue;
+                } catch {
+                  return false;
+                }
+              })
           ).length;
           const failingTestCases = totalTestCases - passingTestCases;
-
-          if (resultsResponse.status === 'SUCCESS') {
-            await lifecycle.emit('AGENT_TEST_POLLING_EVENT', {
-              runId,
-              status: resultsResponse.status,
-              totalTestCases,
-              failingTestCases,
-              passingTestCases,
-            });
-            return { payload: resultsResponse, completed: true };
-          }
 
           await lifecycle.emit('AGENT_TEST_POLLING_EVENT', {
             runId,
@@ -142,6 +124,10 @@ export class AgentTesterNGT {
             failingTestCases,
             passingTestCases,
           });
+
+          if (resultsResponse.status.toLowerCase() === 'success') {
+            return { payload: resultsResponse, completed: true };
+          }
         }
 
         return { completed: false };
@@ -167,25 +153,7 @@ export class AgentTesterNGT {
   }
 }
 
-/**
- * Normalizes NGT test results by decoding HTML entities in subject responses and scorer responses.
- *
- * @param results - The NGT agent test results response object to normalize
- * @returns A new AgentTestNGTResultsResponse with decoded HTML entities
- *
- * @example
- * ```
- * const results = {
- *   testCases: [{
- *     subjectResponse: "&quot;hello&quot;",
- *     testScorerResults: [{
- *       scorerResponse: "{&quot;actualValue&quot;:&quot;test&quot;}"
- *     }]
- *   }]
- * };
- * const normalized = normalizeNGTResults(results);
- * ```
- */
+/** Decodes HTML entities in test result subject responses and scorer responses. */
 export function normalizeNGTResults(results: AgentTestNGTResultsResponse): AgentTestNGTResultsResponse {
   return {
     ...results,

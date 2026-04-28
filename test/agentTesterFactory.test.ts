@@ -56,24 +56,21 @@ describe('createAgentTester', () => {
   });
 
   describe('with testDefinitionName', () => {
-    it('returns AgentTesterNGT when only NGT metadata exists', async () => {
-      $$.SANDBOX.stub(connection.metadata, 'list').callsFake((query) => {
-        if ((query as { type: string }).type === 'AiTestingDefinition')
-          return Promise.resolve([{ fullName: 'MySuite' }] as never);
-        return Promise.resolve([] as never);
-      });
+    function stubMetadataList(onlyType: 'AiTestingDefinition' | 'AiEvaluationDefinition'): void {
+      $$.SANDBOX.stub(connection.metadata, 'list').callsFake(
+        (query) =>
+          Promise.resolve((query as { type: string }).type === onlyType ? [{ fullName: 'MySuite' }] : []) as never
+      );
+    }
 
+    it('returns AgentTesterNGT when only NGT metadata exists', async () => {
+      stubMetadataList('AiTestingDefinition');
       const tester = await createAgentTester(connection, { testDefinitionName: 'MySuite' });
       expect(tester).to.be.instanceOf(AgentTesterNGT);
     });
 
     it('returns AgentTester when only AiEvalDef metadata exists', async () => {
-      $$.SANDBOX.stub(connection.metadata, 'list').callsFake((query) => {
-        if ((query as { type: string }).type === 'AiEvaluationDefinition')
-          return Promise.resolve([{ fullName: 'MySuite' }] as never);
-        return Promise.resolve([] as never);
-      });
-
+      stubMetadataList('AiEvaluationDefinition');
       const tester = await createAgentTester(connection, { testDefinitionName: 'MySuite' });
       expect(tester).to.be.instanceOf(AgentTester);
     });

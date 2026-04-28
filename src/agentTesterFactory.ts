@@ -20,26 +20,8 @@ import { AgentTesterNGT } from './agentTesterNGT';
 import { detectTestRunnerFromId, determineTestRunner } from './utils';
 
 /**
- * Creates the appropriate tester instance without requiring the caller to know which runner to use.
- *
- * When `runId` is provided the runner type is detected instantly from the Salesforce ID prefix
- * (`3A2` = Agentforce Studio, `4KB` = Testing Center) — no network call needed. This is the right choice when resuming
- * status/results polling for an existing run.
- *
- * When only `testDefinitionName` is provided, the org is queried for available metadata types to
- * determine the runner. Use this when starting a new test run.
- *
- * @example Resume polling an existing run:
- * ```typescript
- * const tester = await createAgentTester(connection, { runId: '3A2abc123' });
- * const results = await tester.results('3A2abc123');
- * ```
- *
- * @example Start a new test run:
- * ```typescript
- * const tester = await createAgentTester(connection, { testDefinitionName: 'MyTestSuite' });
- * const { runId } = await tester.start('MyTestSuite');
- * ```
+ * Creates the appropriate tester based on runId prefix (no network call) or by querying the org
+ * for available metadata types when only a testDefinitionName is provided.
  */
 export async function createAgentTester(
   connection: Connection,
