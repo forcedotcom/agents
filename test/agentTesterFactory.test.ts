@@ -77,5 +77,29 @@ describe('createAgentTester', () => {
       const tester = await createAgentTester(connection, { testDefinitionName: 'MySuite' });
       expect(tester).to.be.instanceOf(AgentTester);
     });
+
+    it('throws AmbiguousTestDefinition when definition exists in both metadata types', async () => {
+      $$.SANDBOX.stub(connection.metadata, 'list').callsFake(() => Promise.resolve([{ fullName: 'MySuite' }] as never));
+
+      try {
+        await createAgentTester(connection, { testDefinitionName: 'MySuite' });
+        expect.fail('Expected error was not thrown');
+      } catch (err) {
+        expect(err).to.be.instanceOf(SfError);
+        expect((err as SfError).name).to.equal('AmbiguousTestDefinition');
+      }
+    });
+
+    it('throws NoTestDefinitionsFound when no metadata types exist', async () => {
+      $$.SANDBOX.stub(connection.metadata, 'list').resolves([] as never);
+
+      try {
+        await createAgentTester(connection, { testDefinitionName: 'MySuite' });
+        expect.fail('Expected error was not thrown');
+      } catch (err) {
+        expect(err).to.be.instanceOf(SfError);
+        expect((err as SfError).name).to.equal('NoTestDefinitionsFound');
+      }
+    });
   });
 });

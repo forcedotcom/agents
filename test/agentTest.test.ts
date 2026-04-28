@@ -235,6 +235,56 @@ testCases:
     });
   });
 
+  describe('list', () => {
+    afterEach(() => {
+      sinon.restore();
+    });
+
+    it('combines AiEvaluationDefinition and AiTestingDefinition results', async () => {
+      sinon.stub(connection.metadata, 'list').callsFake((query) => {
+        const type = (query as { type: string }).type;
+        if (type === 'AiEvaluationDefinition') return Promise.resolve([{ fullName: 'LegacySuite' }] as never);
+        if (type === 'AiTestingDefinition') return Promise.resolve([{ fullName: 'NGTSuite' }] as never);
+        return Promise.resolve([] as never);
+      });
+
+      const result = await AgentTest.list(connection);
+      expect(result).to.have.length(2);
+      expect(result.map((r) => r.fullName)).to.include('LegacySuite');
+      expect(result.map((r) => r.fullName)).to.include('NGTSuite');
+    });
+
+    it('returns only legacy definitions when no NGT definitions exist', async () => {
+      sinon.stub(connection.metadata, 'list').callsFake((query) => {
+        if ((query as { type: string }).type === 'AiEvaluationDefinition')
+          return Promise.resolve([{ fullName: 'LegacySuite' }] as never);
+        return Promise.resolve([] as never);
+      });
+
+      const result = await AgentTest.list(connection);
+      expect(result).to.have.length(1);
+      expect(result[0].fullName).to.equal('LegacySuite');
+    });
+
+    it('returns only NGT definitions when no legacy definitions exist', async () => {
+      sinon.stub(connection.metadata, 'list').callsFake((query) => {
+        if ((query as { type: string }).type === 'AiTestingDefinition')
+          return Promise.resolve([{ fullName: 'NGTSuite' }] as never);
+        return Promise.resolve([] as never);
+      });
+
+      const result = await AgentTest.list(connection);
+      expect(result).to.have.length(1);
+      expect(result[0].fullName).to.equal('NGTSuite');
+    });
+
+    it('returns empty array when no definitions exist', async () => {
+      sinon.stub(connection.metadata, 'list').resolves([] as never);
+      const result = await AgentTest.list(connection);
+      expect(result).to.deep.equal([]);
+    });
+  });
+
   describe('getTestSpec', () => {
     let readFileStub: sinon.SinonStub;
 

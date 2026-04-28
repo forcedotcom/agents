@@ -14,18 +14,57 @@
  * limitations under the License.
  */
 import { expect } from 'chai';
+import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
+import { Connection } from '@salesforce/core';
 import { AgentTesterNGT, normalizeNGTResults } from '../src/agentTesterNGT';
 import type { AgentTestNGTResultsResponse } from '../src/types';
 
 describe('AgentTesterNGT', () => {
-  describe('class structure', () => {
-    it('should have expected methods', () => {
-      // Just verify the class has the expected structure - connection will be mocked in integration tests
-      expect(AgentTesterNGT).to.exist;
-      expect(AgentTesterNGT.prototype).to.have.property('start');
-      expect(AgentTesterNGT.prototype).to.have.property('status');
-      expect(AgentTesterNGT.prototype).to.have.property('poll');
-      expect(AgentTesterNGT.prototype).to.have.property('results');
+  const $$ = new TestContext();
+  let connection: Connection;
+
+  beforeEach(async () => {
+    $$.inProject(true);
+    const testOrg = new MockTestOrgData();
+    process.env.SF_MOCK_DIR = 'test/mocks';
+    connection = await testOrg.getConnection();
+    connection.instanceUrl = 'https://mydomain.salesforce.com';
+    $$.SANDBOXES.CONNECTION.restore();
+  });
+
+  afterEach(() => {
+    delete process.env.SF_MOCK_DIR;
+  });
+
+  describe('start', () => {
+    it('should start a test run and return a runId', async () => {
+      const tester = new AgentTesterNGT(connection);
+      const output = await tester.start('MySuite');
+      expect(output).to.be.ok;
+      expect(output.runId).to.equal('3A2SM000000003F4AQ');
+    });
+  });
+
+  describe('status', () => {
+    it('should return status of a test run', async () => {
+      const tester = new AgentTesterNGT(connection);
+      await tester.start('MySuite');
+      const output = await tester.status('3A2SM000000003F4AQ');
+      expect(output).to.be.ok;
+      expect(output.status).to.equal('NEW');
+      expect(output.startTime).to.equal('2025-01-07T12:00:00.000Z');
+    });
+  });
+
+  describe('results', () => {
+    it('should return results of a completed test run', async () => {
+      const tester = new AgentTesterNGT(connection);
+      await tester.start('MySuite');
+      const output = await tester.results('3A2SM000000003F4AQ');
+      expect(output).to.be.ok;
+      expect(output.status).to.equal('SUCCESS');
+      expect(output.testCases).to.have.length(2);
+      expect(output.testCases[0].testNumber).to.equal(1);
     });
   });
 });
