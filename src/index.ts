@@ -107,7 +107,7 @@ export {
 export { Agent, AgentCreateLifecycleStages, type AgentInstance } from './agent';
 export { AgentTester } from './agentTester';
 export { AgentTesterNGT, normalizeNGTResults } from './agentTesterNGT';
-export { createAgentTester } from './agentTesterFactory';
+export { createAgentTester, type CreateAgentTesterOptions, type CreateAgentTesterResult } from './agentTesterFactory';
 export { AgentTest, AgentTestCreateLifecycleStages } from './agentTest';
 export { ProductionAgent } from './agents/productionAgent';
 export { ScriptAgent } from './agents/scriptAgent';

@@ -18,19 +18,42 @@ import { Connection, SfError } from '@salesforce/core';
 import { AgentTester } from './agentTester';
 import { AgentTesterNGT } from './agentTesterNGT';
 import { detectTestRunnerFromId, determineTestRunner } from './utils';
+import type { TestRunnerType } from './utils';
+
+export type CreateAgentTesterOptions = {
+  /** Explicit runner type — always wins, no detection performed. */
+  explicitType?: TestRunnerType;
+  /** Existing run ID; prefix is used for instant detection without a network call. */
+  runId?: string;
+  /** Test definition name; triggers an org metadata query as last resort. */
+  testDefinitionName?: string;
+};
+
+export type CreateAgentTesterResult = {
+  runner: AgentTester | AgentTesterNGT;
+  type: TestRunnerType;
+};
 
 /**
- * Creates the appropriate tester based on runId prefix (no network call) or by querying the org
- * for available metadata types when only a testDefinitionName is provided.
+ * Creates the appropriate tester based on detection priority:
+ * 1. `explicitType` — always wins, no detection performed
+ * 2. `runId` prefix — instant detection from the Salesforce ID prefix, no network call
+ * 3. `testDefinitionName` — org metadata query, used as last resort
  */
 export async function createAgentTester(
   connection: Connection,
-  options: { runId: string } | { testDefinitionName: string }
-): Promise<AgentTester | AgentTesterNGT> {
-  const makeTester = (runnerType: string): AgentTester | AgentTesterNGT =>
-    runnerType === 'agentforce-studio' ? new AgentTesterNGT(connection) : new AgentTester(connection);
+  options: CreateAgentTesterOptions
+): Promise<CreateAgentTesterResult> {
+  const makeTester = (type: TestRunnerType): CreateAgentTesterResult => ({
+    runner: type === 'agentforce-studio' ? new AgentTesterNGT(connection) : new AgentTester(connection),
+    type,
+  });
 
-  if ('runId' in options) {
+  if (options.explicitType) {
+    return makeTester(options.explicitType);
+  }
+
+  if (options.runId) {
     const runnerType = detectTestRunnerFromId(options.runId);
     if (!runnerType) {
       throw SfError.create({

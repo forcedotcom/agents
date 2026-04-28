@@ -33,15 +33,31 @@ describe('createAgentTester', () => {
     $$.restore();
   });
 
+  describe('with explicitType', () => {
+    it('returns AgentTesterNGT for agentforce-studio without any detection', async () => {
+      const { runner, type } = await createAgentTester(connection, { explicitType: 'agentforce-studio' });
+      expect(runner).to.be.instanceOf(AgentTesterNGT);
+      expect(type).to.equal('agentforce-studio');
+    });
+
+    it('returns AgentTester for testing-center without any detection', async () => {
+      const { runner, type } = await createAgentTester(connection, { explicitType: 'testing-center' });
+      expect(runner).to.be.instanceOf(AgentTester);
+      expect(type).to.equal('testing-center');
+    });
+  });
+
   describe('with runId', () => {
     it('returns AgentTesterNGT for a 3A2 prefix run ID', async () => {
-      const tester = await createAgentTester(connection, { runId: '3A2abc123' });
-      expect(tester).to.be.instanceOf(AgentTesterNGT);
+      const { runner, type } = await createAgentTester(connection, { runId: '3A2abc123' });
+      expect(runner).to.be.instanceOf(AgentTesterNGT);
+      expect(type).to.equal('agentforce-studio');
     });
 
     it('returns AgentTester for a 4KB prefix run ID', async () => {
-      const tester = await createAgentTester(connection, { runId: '4KBabc123' });
-      expect(tester).to.be.instanceOf(AgentTester);
+      const { runner, type } = await createAgentTester(connection, { runId: '4KBabc123' });
+      expect(runner).to.be.instanceOf(AgentTester);
+      expect(type).to.equal('testing-center');
     });
 
     it('throws UnrecognizedRunId for an unknown prefix', async () => {
@@ -52,6 +68,15 @@ describe('createAgentTester', () => {
         expect(err).to.be.instanceOf(SfError);
         expect((err as SfError).name).to.equal('UnrecognizedRunId');
       }
+    });
+
+    it('explicitType takes precedence over runId', async () => {
+      const { runner, type } = await createAgentTester(connection, {
+        explicitType: 'agentforce-studio',
+        runId: '4KBabc123',
+      });
+      expect(runner).to.be.instanceOf(AgentTesterNGT);
+      expect(type).to.equal('agentforce-studio');
     });
   });
 
@@ -65,14 +90,16 @@ describe('createAgentTester', () => {
 
     it('returns AgentTesterNGT when only NGT metadata exists', async () => {
       stubMetadataList('AiTestingDefinition');
-      const tester = await createAgentTester(connection, { testDefinitionName: 'MySuite' });
-      expect(tester).to.be.instanceOf(AgentTesterNGT);
+      const { runner, type } = await createAgentTester(connection, { testDefinitionName: 'MySuite' });
+      expect(runner).to.be.instanceOf(AgentTesterNGT);
+      expect(type).to.equal('agentforce-studio');
     });
 
     it('returns AgentTester when only AiEvalDef metadata exists', async () => {
       stubMetadataList('AiEvaluationDefinition');
-      const tester = await createAgentTester(connection, { testDefinitionName: 'MySuite' });
-      expect(tester).to.be.instanceOf(AgentTester);
+      const { runner, type } = await createAgentTester(connection, { testDefinitionName: 'MySuite' });
+      expect(runner).to.be.instanceOf(AgentTester);
+      expect(type).to.equal('testing-center');
     });
 
     it('throws AmbiguousTestDefinition when definition exists in both metadata types', async () => {
