@@ -91,7 +91,10 @@ export class AgentTest {
    * List the AiEvaluationDefinitions available in the org.
    */
   public static async list(connection: Connection): Promise<AvailableDefinition[]> {
-    return connection.metadata.list({ type: 'AiEvaluationDefinition' });
+    return [
+      ...(await connection.metadata.list({ type: 'AiEvaluationDefinition' })),
+      ...(await connection.metadata.list({ type: 'AiTestingDefinition' })),
+    ];
   }
 
   /**
