@@ -555,7 +555,7 @@ describe('useNamedUserJwt', () => {
 });
 
 describe('detectTestRunnerFromId', () => {
-  it('detects NGT from 3A2 prefix', () => {
+  it('detects agentforce-studio from 3A2 prefix', () => {
     expect(detectTestRunnerFromId('3A2abc123')).to.equal('agentforce-studio');
   });
 
@@ -585,7 +585,7 @@ describe('determineTestRunner', () => {
     $$.restore();
   });
 
-  it('returns ngt when only AiTestingDefinition exists', async () => {
+  it('returns agentforce-studio when only AiTestingDefinition exists', async () => {
     $$.SANDBOX.stub(connection.metadata, 'list').callsFake((query) => {
       if ((query as { type: string }).type === 'AiTestingDefinition')
         return Promise.resolve([{ fullName: 'MySuite' }] as never);
@@ -618,7 +618,7 @@ describe('determineTestRunner', () => {
     expect(result).to.equal('testing-center');
   });
 
-  it('returns ngt when only AiTestingDefinition exists (no testDefinitionName)', async () => {
+  it('returns agentforce-studio when only AiTestingDefinition exists (no testDefinitionName)', async () => {
     $$.SANDBOX.stub(connection.metadata, 'list').callsFake((query) => {
       if ((query as { type: string }).type === 'AiTestingDefinition')
         return Promise.resolve([{ fullName: 'SomeSuite' }] as never);

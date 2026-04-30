@@ -18,7 +18,7 @@ import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection, SfError } from '@salesforce/core';
 import { createAgentTester } from '../src/agentTesterFactory';
 import { AgentTester } from '../src/agentTester';
-import { AgentTesterNGT } from '../src/agentTesterNGT';
+import { AgentforceStudioTester } from '../src/agentforceStudioTester';
 
 describe('createAgentTester', () => {
   const $$ = new TestContext();
@@ -34,9 +34,9 @@ describe('createAgentTester', () => {
   });
 
   describe('with explicitType', () => {
-    it('returns AgentTesterNGT for agentforce-studio without any detection', async () => {
+    it('returns AgentforceStudioTester for agentforce-studio without any detection', async () => {
       const { runner, type } = await createAgentTester(connection, { explicitType: 'agentforce-studio' });
-      expect(runner).to.be.instanceOf(AgentTesterNGT);
+      expect(runner).to.be.instanceOf(AgentforceStudioTester);
       expect(type).to.equal('agentforce-studio');
     });
 
@@ -48,9 +48,9 @@ describe('createAgentTester', () => {
   });
 
   describe('with runId', () => {
-    it('returns AgentTesterNGT for a 3A2 prefix run ID', async () => {
+    it('returns AgentforceStudioTester for a 3A2 prefix run ID', async () => {
       const { runner, type } = await createAgentTester(connection, { runId: '3A2abc123' });
-      expect(runner).to.be.instanceOf(AgentTesterNGT);
+      expect(runner).to.be.instanceOf(AgentforceStudioTester);
       expect(type).to.equal('agentforce-studio');
     });
 
@@ -75,7 +75,7 @@ describe('createAgentTester', () => {
         explicitType: 'agentforce-studio',
         runId: '4KBabc123',
       });
-      expect(runner).to.be.instanceOf(AgentTesterNGT);
+      expect(runner).to.be.instanceOf(AgentforceStudioTester);
       expect(type).to.equal('agentforce-studio');
     });
   });
@@ -88,10 +88,10 @@ describe('createAgentTester', () => {
       );
     }
 
-    it('returns AgentTesterNGT when only NGT metadata exists', async () => {
+    it('returns AgentforceStudioTester when only Agentforce Studio metadata exists', async () => {
       stubMetadataList('AiTestingDefinition');
       const { runner, type } = await createAgentTester(connection, { testDefinitionName: 'MySuite' });
-      expect(runner).to.be.instanceOf(AgentTesterNGT);
+      expect(runner).to.be.instanceOf(AgentforceStudioTester);
       expect(type).to.equal('agentforce-studio');
     });
 

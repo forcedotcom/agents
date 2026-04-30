@@ -925,7 +925,7 @@ export function detectTestRunnerFromId(runId: string): TestRunnerType | undefine
  * ```typescript
  * const runnerType = await determineTestRunner(connection, 'MyTestSuite');
  * if (runnerType === 'agentforce-studio') {
- *   const tester = new AgentTesterNGT(connection);
+ *   const tester = new AgentforceStudioTester(connection);
  * } else {
  *   const tester = new AgentTester(connection);
  * }

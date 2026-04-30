@@ -426,15 +426,17 @@ export type AgentTestResultsResponse = {
 export type AvailableDefinition = Omit<FileProperties, 'manageableState' | 'namespacePrefix'>;
 
 // ====================================================
-//         Agent Testing Types (NGT - Next Gen)
+//         Agent Testing Types (Agentforce Studio)
 // ====================================================
 
-export type AgentTestNGTStartResponse = {
+export type AgentforceStudioTestStartResponse = {
   runId: string;
-  status: string;
+  status: AgentforceStudioTestStatus;
 };
 
-export type AgentTestNGTStatusResponse = {
+export type AgentforceStudioTestStatus = 'CREATED' | 'IN_PROGRESS' | 'SUCCESS' | 'FAILED' | 'TERMINATED';
+
+export type AgentforceStudioTestStatusResponse = {
   status: string;
   startTime: string;
   endTime?: string;
@@ -446,15 +448,15 @@ export type TestScorerResult = {
   scorerResponse: string;
 };
 
-export type NGTTestCaseResult = {
+export type AgentforceStudioTestCaseResult = {
   subjectResponse: string;
   testNumber: number;
   testScorerResults: TestScorerResult[];
 };
 
-export type AgentTestNGTResultsResponse = {
+export type AgentforceStudioTestResultsResponse = {
   status: string;
-  testCases: NGTTestCaseResult[];
+  testCases: AgentforceStudioTestCaseResult[];
 };
 
 // yaml type representation

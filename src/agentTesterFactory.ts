@@ -16,7 +16,7 @@
 
 import { Connection, SfError } from '@salesforce/core';
 import { AgentTester } from './agentTester';
-import { AgentTesterNGT } from './agentTesterNGT';
+import { AgentforceStudioTester } from './agentforceStudioTester';
 import { detectTestRunnerFromId, determineTestRunner } from './utils';
 import type { TestRunnerType } from './utils';
 
@@ -30,7 +30,7 @@ export type CreateAgentTesterOptions = {
 };
 
 export type CreateAgentTesterResult = {
-  runner: AgentTester | AgentTesterNGT;
+  runner: AgentTester | AgentforceStudioTester;
   type: TestRunnerType;
 };
 
@@ -45,7 +45,7 @@ export async function createAgentTester(
   options: CreateAgentTesterOptions
 ): Promise<CreateAgentTesterResult> {
   const makeTester = (type: TestRunnerType): CreateAgentTesterResult => ({
-    runner: type === 'agentforce-studio' ? new AgentTesterNGT(connection) : new AgentTester(connection),
+    runner: type === 'agentforce-studio' ? new AgentforceStudioTester(connection) : new AgentTester(connection),
     type,
   });
 

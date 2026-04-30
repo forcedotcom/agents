@@ -244,17 +244,17 @@ testCases:
       sinon.stub(connection.metadata, 'list').callsFake((query) => {
         const type = (query as { type: string }).type;
         if (type === 'AiEvaluationDefinition') return Promise.resolve([{ fullName: 'Suite' }] as never);
-        if (type === 'AiTestingDefinition') return Promise.resolve([{ fullName: 'NGTSuite' }] as never);
+        if (type === 'AiTestingDefinition') return Promise.resolve([{ fullName: 'AiTestingDefinitionName' }] as never);
         return Promise.resolve([] as never);
       });
 
       const result = await AgentTest.list(connection);
       expect(result).to.have.length(2);
       expect(result.map((r) => r.fullName)).to.include('Suite');
-      expect(result.map((r) => r.fullName)).to.include('NGTSuite');
+      expect(result.map((r) => r.fullName)).to.include('AiTestingDefinitionName');
     });
 
-    it('returns only testing-center definitions when no NGT definitions exist', async () => {
+    it('returns only testing-center definitions when no Agentforce Studio definitions exist', async () => {
       sinon.stub(connection.metadata, 'list').callsFake((query) => {
         if ((query as { type: string }).type === 'AiEvaluationDefinition')
           return Promise.resolve([{ fullName: 'Suite' }] as never);
@@ -266,16 +266,16 @@ testCases:
       expect(result[0].fullName).to.equal('Suite');
     });
 
-    it('returns only NGT definitions when no testing-center definitions exist', async () => {
+    it('returns only Agentforce Studio definitions when no testing-center definitions exist', async () => {
       sinon.stub(connection.metadata, 'list').callsFake((query) => {
         if ((query as { type: string }).type === 'AiTestingDefinition')
-          return Promise.resolve([{ fullName: 'NGTSuite' }] as never);
+          return Promise.resolve([{ fullName: 'AiTestingDefinitionName' }] as never);
         return Promise.resolve([] as never);
       });
 
       const result = await AgentTest.list(connection);
       expect(result).to.have.length(1);
-      expect(result[0].fullName).to.equal('NGTSuite');
+      expect(result[0].fullName).to.equal('AiTestingDefinitionName');
     });
 
     it('returns empty array when no definitions exist', async () => {

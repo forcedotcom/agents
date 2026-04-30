@@ -65,12 +65,12 @@ export {
   type MetadataCustomEvaluation,
   type AiEvaluationDefinition,
 
-  // Agent Testing Types (NGT - Next Gen)
-  type AgentTestNGTStartResponse,
-  type AgentTestNGTStatusResponse,
-  type AgentTestNGTResultsResponse,
+  // Agentforce Studio Testing Types
+  type AgentforceStudioTestStartResponse,
+  type AgentforceStudioTestStatusResponse,
+  type AgentforceStudioTestResultsResponse,
   type TestScorerResult,
-  type NGTTestCaseResult,
+  type AgentforceStudioTestCaseResult,
 
   // Agent Trace Types
   type AgentTraceResponse,
@@ -106,7 +106,7 @@ export {
 } from './utils';
 export { Agent, AgentCreateLifecycleStages, type AgentInstance } from './agent';
 export { AgentTester } from './agentTester';
-export { AgentTesterNGT, normalizeNGTResults } from './agentTesterNGT';
+export { AgentforceStudioTester, normalizeAgentforceStudioResults } from './agentforceStudioTester';
 export { createAgentTester, type CreateAgentTesterOptions, type CreateAgentTesterResult } from './agentTesterFactory';
 export { AgentTest, AgentTestCreateLifecycleStages } from './agentTest';
 export { ProductionAgent } from './agents/productionAgent';

@@ -16,10 +16,10 @@
 import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection } from '@salesforce/core';
-import { AgentTesterNGT, normalizeNGTResults } from '../src/agentTesterNGT';
-import type { AgentTestNGTResultsResponse } from '../src/types';
+import { AgentforceStudioTester, normalizeAgentforceStudioResults } from '../src/agentforceStudioTester';
+import type { AgentforceStudioTestResultsResponse } from '../src/types';
 
-describe('AgentTesterNGT', () => {
+describe('AgentforceStudioTester', () => {
   const $$ = new TestContext();
   let connection: Connection;
 
@@ -38,7 +38,7 @@ describe('AgentTesterNGT', () => {
 
   describe('start', () => {
     it('should start a test run and return a runId', async () => {
-      const tester = new AgentTesterNGT(connection);
+      const tester = new AgentforceStudioTester(connection);
       const output = await tester.start('MySuite');
       expect(output).to.be.ok;
       expect(output.runId).to.equal('3A2SM000000003F4AQ');
@@ -47,7 +47,7 @@ describe('AgentTesterNGT', () => {
 
   describe('status', () => {
     it('should return status of a test run', async () => {
-      const tester = new AgentTesterNGT(connection);
+      const tester = new AgentforceStudioTester(connection);
       await tester.start('MySuite');
       const output = await tester.status('3A2SM000000003F4AQ');
       expect(output).to.be.ok;
@@ -58,7 +58,7 @@ describe('AgentTesterNGT', () => {
 
   describe('results', () => {
     it('should return results of a completed test run', async () => {
-      const tester = new AgentTesterNGT(connection);
+      const tester = new AgentforceStudioTester(connection);
       await tester.start('MySuite');
       const output = await tester.results('3A2SM000000003F4AQ');
       expect(output).to.be.ok;
@@ -69,9 +69,9 @@ describe('AgentTesterNGT', () => {
   });
 });
 
-describe('normalizeNGTResults', () => {
+describe('normalizeAgentforceStudioResults', () => {
   it('should decode HTML entities in subject responses and scorer responses', () => {
-    const results: AgentTestNGTResultsResponse = {
+    const results: AgentforceStudioTestResultsResponse = {
       status: 'SUCCESS',
       testCases: [
         {
@@ -94,7 +94,7 @@ describe('normalizeNGTResults', () => {
       ],
     };
 
-    const normalized = normalizeNGTResults(results);
+    const normalized = normalizeAgentforceStudioResults(results);
 
     expect(normalized.testCases[0].subjectResponse).to.include('"schema":{"type":"object"}');
     expect(normalized.testCases[0].subjectResponse).to.include('"userInput":"What\'s the weather?"');
@@ -108,7 +108,7 @@ describe('normalizeNGTResults', () => {
   });
 
   it('should handle empty or undefined values', () => {
-    const results: AgentTestNGTResultsResponse = {
+    const results: AgentforceStudioTestResultsResponse = {
       status: 'SUCCESS',
       testCases: [
         {
@@ -124,14 +124,14 @@ describe('normalizeNGTResults', () => {
       ],
     };
 
-    const normalized = normalizeNGTResults(results);
+    const normalized = normalizeAgentforceStudioResults(results);
 
     expect(normalized.testCases[0].subjectResponse).to.equal('');
     expect(normalized.testCases[0].testScorerResults[0].scorerResponse).to.equal('');
   });
 
   it('should preserve non-encoded strings', () => {
-    const results: AgentTestNGTResultsResponse = {
+    const results: AgentforceStudioTestResultsResponse = {
       status: 'SUCCESS',
       testCases: [
         {
@@ -147,7 +147,7 @@ describe('normalizeNGTResults', () => {
       ],
     };
 
-    const normalized = normalizeNGTResults(results);
+    const normalized = normalizeAgentforceStudioResults(results);
 
     expect(normalized.testCases[0].subjectResponse).to.equal('{"userInput":"Plain text with no HTML entities"}');
     expect(normalized.testCases[0].testScorerResults[0].scorerResponse).to.equal(
@@ -156,7 +156,7 @@ describe('normalizeNGTResults', () => {
   });
 
   it('should handle multiple test cases', () => {
-    const results: AgentTestNGTResultsResponse = {
+    const results: AgentforceStudioTestResultsResponse = {
       status: 'SUCCESS',
       testCases: [
         {
@@ -182,7 +182,7 @@ describe('normalizeNGTResults', () => {
       ],
     };
 
-    const normalized = normalizeNGTResults(results);
+    const normalized = normalizeAgentforceStudioResults(results);
 
     expect(normalized.testCases).to.have.length(2);
     expect(normalized.testCases[0].subjectResponse).to.equal('{"test":"one"}');
