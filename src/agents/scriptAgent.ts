@@ -100,6 +100,12 @@ export class ScriptAgent extends AgentBase {
       });
     }
     this.metaContent = fs.readFileSync(bundleMetaPath, 'utf-8');
+
+    if (options.agentJson) {
+      this.agentJson = options.agentJson;
+      this.name = options.agentJson.globalConfiguration?.label?.trim() || options.aabName;
+    }
+
     this.preview = {
       start: (mockMode?: 'Mock' | 'Live Test', apexDebugging?: boolean): Promise<AgentPreviewStartResponse> =>
         this.startPreview(mockMode, apexDebugging),
