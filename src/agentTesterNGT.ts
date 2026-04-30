@@ -67,7 +67,7 @@ export class AgentTesterNGT {
     });
 
     if (result?.runId === undefined) {
-      throw SfError.create({ name: 'Test In Progress', message: 'a test run is already in progress' });
+      throw SfError.create({ name: 'TestInProgress', message: 'a test run is already in progress' });
     }
     return result;
   }
