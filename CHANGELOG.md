@@ -1,3 +1,17 @@
+# [1.3.0](https://github.com/forcedotcom/agents/compare/1.2.0...1.3.0) (2026-04-30)
+
+
+### Bug Fixes
+
+* use optional chaining on agentJson.globalConfiguration.label ([4c89d1b](https://github.com/forcedotcom/agents/commit/4c89d1bf85c8f67f399a1847812d7cb57403e564))
+
+
+### Features
+
+* add optional agentJson to ScriptAgentOptions to skip compilation ([3eb99d9](https://github.com/forcedotcom/agents/commit/3eb99d96eba708dce9f059844b04d578d27afb1d))
+
+
+
 # [1.2.0](https://github.com/forcedotcom/agents/compare/1.1.3...1.2.0) (2026-04-27)
 
 
