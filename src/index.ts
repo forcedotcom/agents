@@ -65,6 +65,13 @@ export {
   type MetadataCustomEvaluation,
   type AiEvaluationDefinition,
 
+  // Agentforce Studio Testing Types
+  type AgentforceStudioTestStartResponse,
+  type AgentforceStudioTestStatusResponse,
+  type AgentforceStudioTestResultsResponse,
+  type TestScorerResult,
+  type AgentforceStudioTestCaseResult,
+
   // Agent Trace Types
   type AgentTraceResponse,
   type AgentTraceStep,
@@ -83,6 +90,9 @@ export {
   metric,
   findAuthoringBundle,
   readTranscriptEntries,
+  determineTestRunner,
+  detectTestRunnerFromId,
+  type TestRunnerType,
   createPreviewSessionCache,
   validatePreviewSession,
   removePreviewSessionCache,
@@ -96,6 +106,8 @@ export {
 } from './utils';
 export { Agent, AgentCreateLifecycleStages, type AgentInstance } from './agent';
 export { AgentTester } from './agentTester';
+export { AgentforceStudioTester, normalizeAgentforceStudioResults } from './agentforceStudioTester';
+export { createAgentTester, type CreateAgentTesterOptions, type CreateAgentTesterResult } from './agentTesterFactory';
 export { AgentTest, AgentTestCreateLifecycleStages } from './agentTest';
 export { ProductionAgent } from './agents/productionAgent';
 export { ScriptAgent } from './agents/scriptAgent';

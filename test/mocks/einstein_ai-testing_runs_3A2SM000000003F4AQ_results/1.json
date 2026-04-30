@@ -1,0 +1,25 @@
+{
+  "status": "SUCCESS",
+  "testCases": [
+    {
+      "subjectResponse": "{\"content\":\"The weather is sunny today.\"}",
+      "testNumber": 1,
+      "testScorerResults": [
+        {
+          "scorerName": "Response Evaluation",
+          "scorerResponse": "{\"actualValue\":\"sunny\",\"expectedValue\":\"sunny\"}"
+        }
+      ]
+    },
+    {
+      "subjectResponse": "{\"content\":\"I cannot help with that.\"}",
+      "testNumber": 2,
+      "testScorerResults": [
+        {
+          "scorerName": "Response Evaluation",
+          "scorerResponse": "{\"actualValue\":\"cannot help\",\"expectedValue\":\"should help\"}"
+        }
+      ]
+    }
+  ]
+}

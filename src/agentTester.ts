@@ -84,13 +84,7 @@ export class AgentTester {
    */
   public async poll(
     jobId: string,
-    {
-      timeout = Duration.minutes(5),
-    }: {
-      timeout?: Duration;
-    } = {
-      timeout: Duration.minutes(5),
-    }
+    { timeout = Duration.minutes(5) }: { timeout?: Duration } = {}
   ): Promise<AgentTestResultsResponse> {
     const frequency = env.getNumber('SF_AGENT_TEST_POLLING_FREQUENCY_MS', 1000);
     const lifecycle = Lifecycle.getInstance();
@@ -119,14 +113,6 @@ export class AgentTester {
             });
             return { payload: resultsResponse, completed: true };
           }
-
-          await lifecycle.emit('AGENT_TEST_POLLING_EVENT', {
-            jobId,
-            status: resultsResponse.status,
-            totalTestCases,
-            failingTestCases,
-            passingTestCases,
-          });
         }
 
         return { completed: false };
@@ -164,26 +150,7 @@ export class AgentTester {
   }
 }
 
-/**
- * Normalizes test results by decoding HTML entities in utterances and test result values.
- *
- * @param results - The agent test results response object to normalize
- * @returns A new AgentTestResultsResponse with decoded HTML entities
- *
- * @example
- * ```
- * const results = {
- *   testCases: [{
- *     inputs: { utterance: "&quot;hello&quot;" },
- *     testResults: [{
- *       actualValue: "&amp;test",
- *       expectedValue: "&lt;value&gt;"
- *     }]
- *   }]
- * };
- * const normalized = normalizeResults(results);
- * ```
- */
+/** Decodes HTML entities in test result fields (utterance, actionsSequence, actualValue, expectedValue, metricExplainability). */
 export function normalizeResults(results: AgentTestResultsResponse): AgentTestResultsResponse {
   return {
     ...results,
