@@ -89,6 +89,8 @@ export {
   getCachedPreviewSessionIds,
   getCurrentPreviewSessionId,
   listCachedPreviewSessions,
+  listSessionTraces,
+  type TraceFileInfo,
   type SessionType,
   type PreviewSessionMeta,
   type CachedPreviewSessionInfo,
