@@ -420,6 +420,38 @@ export const listSessionTraces = async (agentId: string, sessionId: string): Pro
 };
 
 /**
+ * Read a single trace file by planId. Returns null if the file does not exist or cannot be parsed.
+ */
+export const readSessionTrace = async (
+  agentId: string,
+  sessionId: string,
+  planId: string
+): Promise<PlannerResponse | null> => {
+  const historyDir = await getHistoryDir(agentId, sessionId);
+  const tracePath = path.join(historyDir, 'traces', `${planId}.json`);
+  try {
+    const raw = await readFile(tracePath, 'utf-8');
+    return JSON.parse(raw) as PlannerResponse;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Read the turn-index.json for a session. Returns null if not found.
+ */
+export const readTurnIndex = async (agentId: string, sessionId: string): Promise<TurnIndex | null> => {
+  const historyDir = await getHistoryDir(agentId, sessionId);
+  const turnIndexPath = path.join(historyDir, 'turn-index.json');
+  try {
+    const raw = await readFile(turnIndexPath, 'utf-8');
+    return JSON.parse(raw) as TurnIndex;
+  } catch {
+    return null;
+  }
+};
+
+/**
  * Write or append a session line to .sfdx/agents/<agentId>/index.md.
  * If the file does not exist, creates it with a header and the session line.
  * If it exists, appends the new session line.
