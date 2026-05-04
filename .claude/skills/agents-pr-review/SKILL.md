@@ -34,6 +34,12 @@ Run all three together:
 - Follows `type: message` format (enforced by commitizen)
 - Valid types: `feat, fix, improvement, docs, style, refactor, perf, test, build, ci, chore, revert`
 - PR will be squash-merged — the PR title becomes the commit message; flag if it doesn't follow the convention
+- Semver: new behavior must use `feat:` prefix; breaking changes require a major version bump; flag if the commit type doesn't match the impact
+
+### Work item reference
+- PR title and body must include a GUS work item number
+- In the body, the work item must be prepended with `&` and surrounded with `&` on both sides with no spaces (e.g. `&W-12345678&`)
+- Flag if the work item is missing or formatted incorrectly
 
 ### License header
 - Every new `.ts` file must include the Apache 2.0 license header
@@ -47,7 +53,11 @@ Run all three together:
 ### Code correctness
 - Correctness, regressions, edge cases
 - Error handling: errors must not be swallowed; rethrown errors must set the original as `cause`
+- Error messages must include a suggested fix or a clear reason for the failure — not just what went wrong
 - Input validation at API boundaries
+
+### Security
+- No credentials, tokens, secrets, or PII hardcoded or leaked in source, tests, or fixtures
 
 ### Messages / i18n
 - User-facing strings belong in `messages/` — not hardcoded in source
