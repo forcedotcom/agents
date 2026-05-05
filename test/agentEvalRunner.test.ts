@@ -18,11 +18,11 @@
 
 import { expect } from 'chai';
 import sinon from 'sinon';
+import type { StreamPromise } from '@jsforce/jsforce-node/lib/util/promise';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Org } from '@salesforce/core';
 import { resolveAgent, executeBatches, buildResultSummary } from '../src/agentEvalRunner';
 import type { EvalApiResponse } from '../src/evalFormatter';
-import type { StreamPromise } from '@jsforce/jsforce-node/lib/util/promise';
 
 describe('agentEvalRunner', () => {
   const $$ = new TestContext();
@@ -94,7 +94,7 @@ describe('agentEvalRunner', () => {
         // expected to throw — we only care about what was queried
       }
 
-      const soql = queryStub.firstCall.args[0] as string;
+      const soql = queryStub.firstCall.args[0];
       expect(soql).to.include("O\\'Malley_Agent");
       expect(soql).to.not.include("O'Malley_Agent");
     });
