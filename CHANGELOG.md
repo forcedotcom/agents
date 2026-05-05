@@ -1,3 +1,12 @@
+# [1.5.0](https://github.com/forcedotcom/agents/compare/1.4.0...1.5.0) (2026-05-05)
+
+
+### Features
+
+* add PR review skill for agents library ([cc63265](https://github.com/forcedotcom/agents/commit/cc6326503ef74e07ab3352e6ae3c01745496191b))
+
+
+
 # [1.4.0](https://github.com/forcedotcom/agents/compare/1.3.0...1.4.0) (2026-04-30)
 
 
