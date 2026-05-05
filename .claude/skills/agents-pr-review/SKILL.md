@@ -38,7 +38,7 @@ Run all three together:
 
 ### Work item reference
 - PR title and body must include a GUS work item number
-- In the body, the work item must be prepended with `&` and surrounded with `&` on both sides with no spaces (e.g. `&W-12345678&`)
+- In the body, the work item must be prepended with `@` and surrounded with `@` on both sides with no spaces (e.g. `@W-12345678@`)
 - Flag if the work item is missing or formatted incorrectly
 
 ### License header
