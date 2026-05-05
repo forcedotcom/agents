@@ -16,14 +16,14 @@
 
 export type ResultFormat = 'human' | 'json' | 'junit' | 'tap';
 
-type EvalOutput = {
+export type EvalOutput = {
   type?: string;
   id?: string;
   session_id?: string;
   response?: unknown;
 };
 
-type EvalResult = {
+export type EvalResult = {
   id?: string;
   score?: number | null;
   is_pass?: boolean | null;
@@ -32,12 +32,12 @@ type EvalResult = {
   error_message?: string;
 };
 
-type TestError = {
+export type TestError = {
   id?: string;
   error_message?: string;
 };
 
-type TestResult = {
+export type TestResult = {
   id?: string;
   outputs?: EvalOutput[];
   evaluation_results?: EvalResult[];

@@ -228,8 +228,8 @@ export function normalizeMcpShorthand(steps: EvalStep[]): EvalStep[] {
     // Auto-generate id if missing
     if (!normalized.id || normalized.id === '') {
       normalized.id = `eval_${evalCounter}`;
+      evalCounter++;
     }
-    evalCounter++;
 
     return normalized as EvalStep;
   });

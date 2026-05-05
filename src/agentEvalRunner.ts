@@ -18,7 +18,7 @@
 
 import { Org } from '@salesforce/core';
 import type { EvalPayload } from './evalNormalizer.js';
-import type { EvalApiResponse } from './evalFormatter.js';
+import type { EvalApiResponse, EvalResult, EvalOutput, TestError } from './evalFormatter.js';
 
 type ApiHeaders = {
   orgId: string;
@@ -27,7 +27,7 @@ type ApiHeaders = {
 };
 
 export type AgentEvalRunResult = {
-  tests: Array<{ id: string; status: string; evaluations: unknown[]; outputs: unknown[] }>;
+  tests: Array<{ id: string; status: string; evaluations: EvalResult[]; outputs: EvalOutput[] }>;
   summary: { passed: number; failed: number; scored: number; errors: number };
 };
 
@@ -71,7 +71,9 @@ export async function resolveAgent(org: Org, apiName: string): Promise<{ agentId
     `SELECT Id FROM BotDefinition WHERE DeveloperName = '${escapedApiName}'`
   );
   if (!botResult.records.length) {
-    throw new Error(`Agent '${apiName}' not found`);
+    throw new Error(
+      `Agent '${apiName}' not found. Verify the DeveloperName exists in BotDefinition in the target org.`
+    );
   }
   const agentId = botResult.records[0].Id;
 
@@ -79,7 +81,9 @@ export async function resolveAgent(org: Org, apiName: string): Promise<{ agentId
     `SELECT Id FROM BotVersion WHERE BotDefinitionId = '${agentId}' ORDER BY VersionNumber DESC LIMIT 1`
   );
   if (!versionResult.records.length) {
-    throw new Error(`No version found for agent '${apiName}'`);
+    throw new Error(
+      `No published version found for agent '${apiName}'. Ensure the agent has been saved and versioned in the target org.`
+    );
   }
   const versionId = versionResult.records[0].Id;
 
@@ -112,13 +116,12 @@ export function buildResultSummary(mergedResponse: EvalApiResponse): {
   testSummaries: AgentEvalRunResult['tests'];
 } {
   const summary = { passed: 0, failed: 0, scored: 0, errors: 0 };
-  const testSummaries: Array<{ id: string; status: string; evaluations: unknown[]; outputs: unknown[] }> = [];
+  const testSummaries: AgentEvalRunResult['tests'] = [];
 
   for (const testResult of mergedResponse.results ?? []) {
-    const tr = testResult as Record<string, unknown>;
-    const testId = (tr.id as string) ?? 'unknown';
-    const evalResults = (tr.evaluation_results as Array<Record<string, unknown>>) ?? [];
-    const testErrors = (tr.errors as unknown[]) ?? [];
+    const testId = testResult.id ?? 'unknown';
+    const evalResults: EvalResult[] = testResult.evaluation_results ?? [];
+    const testErrors: TestError[] = testResult.errors ?? [];
 
     const passed = evalResults.filter((e) => e.is_pass === true).length;
     const failed = evalResults.filter((e) => e.is_pass === false).length;
@@ -129,11 +132,12 @@ export function buildResultSummary(mergedResponse: EvalApiResponse): {
     summary.scored += scored;
     summary.errors += testErrors.length;
 
+    const outputs: EvalOutput[] = testResult.outputs ?? [];
     testSummaries.push({
       id: testId,
       status: failed > 0 || testErrors.length > 0 ? 'failed' : 'passed',
       evaluations: evalResults,
-      outputs: (tr.outputs as unknown[]) ?? [],
+      outputs,
     });
   }
 

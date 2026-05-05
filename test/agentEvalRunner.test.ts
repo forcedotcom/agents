@@ -22,6 +22,7 @@ import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Org } from '@salesforce/core';
 import { resolveAgent, executeBatches, buildResultSummary } from '../src/agentEvalRunner';
 import type { EvalApiResponse } from '../src/evalFormatter';
+import type { StreamPromise } from '@jsforce/jsforce-node/lib/util/promise';
 
 describe('agentEvalRunner', () => {
   const $$ = new TestContext();
@@ -76,7 +77,7 @@ describe('agentEvalRunner', () => {
         await resolveAgent(org, 'My_Agent');
         expect.fail('should have thrown');
       } catch (err: unknown) {
-        expect((err as Error).message).to.include("No version found for agent 'My_Agent'");
+        expect((err as Error).message).to.include("No published version found for agent 'My_Agent'");
       }
     });
 
@@ -186,10 +187,10 @@ describe('agentEvalRunner', () => {
       const callCapture: unknown[] = [];
       const stub = $$.SANDBOX.stub(org.getConnection(), 'request');
       stub.withArgs(sinon.match(/userinfo/)).resolves({ user_id: 'user-001' });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       stub.withArgs(sinon.match({ url: sinon.match('einstein/evaluation') })).callsFake((req: unknown) => {
         callCapture.push(req);
-        return Promise.resolve({ results: [] }) as any; // eslint-disable-line @typescript-eslint/no-unsafe-return
+        // Promise.resolve satisfies the runtime contract; the StreamPromise static methods are unused here
+        return Promise.resolve({ results: [] }) as unknown as StreamPromise<{ results: never[] }>;
       });
 
       await executeBatches(org, [[{ id: 'test-1', steps: [] }]]);

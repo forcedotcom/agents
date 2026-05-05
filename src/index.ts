@@ -134,7 +134,15 @@ export {
   type EvalTest,
   type EvalStep,
 } from './evalNormalizer';
-export { formatResults, type EvalApiResponse, type ResultFormat } from './evalFormatter';
+export {
+  formatResults,
+  type EvalApiResponse,
+  type EvalOutput,
+  type EvalResult,
+  type TestError,
+  type TestResult,
+  type ResultFormat,
+} from './evalFormatter';
 export {
   isYamlTestSpec,
   parseTestSpec,
