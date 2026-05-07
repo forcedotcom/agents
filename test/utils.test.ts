@@ -31,7 +31,14 @@ import {
   getCachedPreviewSessionIds,
   getCurrentPreviewSessionId,
   listCachedPreviewSessions,
+  listSessionTraces,
+  readSessionTrace,
+  readTurnIndex,
+  writeTraceToHistory,
+  getHistoryDir,
+  type TurnIndex,
 } from '../src/utils';
+import type { PlannerResponse } from '../src/types';
 
 describe('requestWithEndpointFallback', () => {
   const $$ = new TestContext();
@@ -251,7 +258,8 @@ describe('useNamedUserJwt', () => {
     });
 
     // Stub the nameduser endpoint request with valid JWT token
-    const validJwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
+    const validJwtToken =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
     $$.SANDBOX.stub(connection, 'request').resolves({
       // eslint-disable-next-line camelcase
       access_token: validJwtToken,
@@ -277,7 +285,8 @@ describe('useNamedUserJwt', () => {
     });
 
     // Stub the nameduser endpoint request with valid JWT token
-    const validJwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
+    const validJwtToken =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
     $$.SANDBOX.stub(connection, 'request').resolves({
       // eslint-disable-next-line camelcase
       access_token: validJwtToken,
@@ -319,7 +328,8 @@ describe('useNamedUserJwt', () => {
     });
 
     // Stub the nameduser endpoint request with valid JWT token
-    const validJwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
+    const validJwtToken =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
     $$.SANDBOX.stub(connection, 'request').resolves({
       // eslint-disable-next-line camelcase
       access_token: validJwtToken,
@@ -341,7 +351,8 @@ describe('useNamedUserJwt', () => {
     });
 
     // Valid JWT token with three parts (header.payload.signature)
-    const validJwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
+    const validJwtToken =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
     $$.SANDBOX.stub(connection, 'request').resolves({
       // eslint-disable-next-line camelcase
       access_token: validJwtToken,
@@ -487,7 +498,9 @@ describe('useNamedUserJwt', () => {
     } catch (error) {
       expect(error).to.be.instanceOf(SfError);
       expect((error as SfError).name).to.equal('ApiAccessError');
-      expect((error as SfError).message).to.equal('Error obtaining API token: access token does not have valid JWT format.');
+      expect((error as SfError).message).to.equal(
+        'Error obtaining API token: access token does not have valid JWT format.'
+      );
       expect((error as SfError).actions).to.exist;
       expect((error as SfError).actions).to.have.lengthOf(4);
     }
@@ -515,7 +528,9 @@ describe('useNamedUserJwt', () => {
     } catch (error) {
       expect(error).to.be.instanceOf(SfError);
       expect((error as SfError).name).to.equal('ApiAccessError');
-      expect((error as SfError).message).to.equal('Error obtaining API token: access token does not have valid JWT format.');
+      expect((error as SfError).message).to.equal(
+        'Error obtaining API token: access token does not have valid JWT format.'
+      );
       expect((error as SfError).actions).to.exist;
       expect((error as SfError).actions).to.have.lengthOf(4);
     }
@@ -552,7 +567,10 @@ function makeMockProject(getPath: () => string): SfProject {
   return { getPath } as SfProject;
 }
 
-function makeMockAgent(projectDir: string, agentId: string): {
+function makeMockAgent(
+  projectDir: string,
+  agentId: string
+): {
   setSessionId: (id: string) => void;
   getAgentIdForStorage: () => string;
   getHistoryDir: () => Promise<string>;
@@ -809,5 +827,158 @@ describe('Preview Session Store', () => {
       const id = await getCurrentPreviewSessionId(project, agent);
       expect(id).to.be.undefined;
     });
+  });
+});
+
+// ====================================================
+//        listSessionTraces / readSessionTrace / readTurnIndex
+// ====================================================
+
+const sampleTrace: PlannerResponse = {
+  type: 'PlanSuccessResponse',
+  planId: 'plan-1',
+  sessionId: 'sess-1',
+  intent: 'test intent',
+  topic: 'test topic',
+  plan: [],
+};
+
+const sampleTurnIndex: TurnIndex = {
+  version: '1',
+  sessionId: 'sess-1',
+  agentId: 'agent-1',
+  created: new Date().toISOString(),
+  turns: [],
+};
+
+describe('listSessionTraces', () => {
+  let projectPath: string;
+
+  beforeEach(() => {
+    projectPath = mkdtempSync(join(tmpdir(), 'list-traces-'));
+  });
+
+  afterEach(() => {
+    rmSync(projectPath, { recursive: true, force: true });
+  });
+
+  it('returns empty array when traces directory does not exist', async () => {
+    // Stub resolveProjectLocalSfdx to use our temp dir
+    process.chdir(projectPath);
+    const result = await listSessionTraces('agent-1', 'sess-1');
+    expect(result).to.deep.equal([]);
+  });
+
+  it('returns one entry per trace file', async () => {
+    process.chdir(projectPath);
+    const historyDir = await getHistoryDir('agent-1', 'sess-1');
+    await writeTraceToHistory('plan-1', sampleTrace, historyDir);
+    await writeTraceToHistory('plan-2', sampleTrace, historyDir);
+
+    const result = await listSessionTraces('agent-1', 'sess-1');
+    expect(result).to.have.lengthOf(2);
+    const planIds = result.map((r) => r.planId).sort();
+    expect(planIds).to.deep.equal(['plan-1', 'plan-2']);
+  });
+
+  it('each entry has planId, path, size, and mtime', async () => {
+    process.chdir(projectPath);
+    const historyDir = await getHistoryDir('agent-1', 'sess-1');
+    await writeTraceToHistory('plan-1', sampleTrace, historyDir);
+
+    const result = await listSessionTraces('agent-1', 'sess-1');
+    expect(result).to.have.lengthOf(1);
+    expect(result[0].planId).to.equal('plan-1');
+    expect(result[0].path).to.be.a('string').and.include('plan-1.json');
+    expect(result[0].size).to.be.greaterThan(0);
+    expect(result[0].mtime).to.be.instanceOf(Date);
+  });
+
+  it('ignores non-json files in traces directory', async () => {
+    process.chdir(projectPath);
+    const historyDir = await getHistoryDir('agent-1', 'sess-1');
+    await writeTraceToHistory('plan-1', sampleTrace, historyDir);
+    const { writeFile: wf } = await import('node:fs/promises');
+    await wf(join(historyDir, 'traces', 'README.txt'), 'ignore me', 'utf-8');
+
+    const result = await listSessionTraces('agent-1', 'sess-1');
+    expect(result).to.have.lengthOf(1);
+    expect(result[0].planId).to.equal('plan-1');
+  });
+});
+
+describe('readSessionTrace', () => {
+  let projectPath: string;
+
+  beforeEach(() => {
+    projectPath = mkdtempSync(join(tmpdir(), 'read-trace-'));
+  });
+
+  afterEach(() => {
+    rmSync(projectPath, { recursive: true, force: true });
+  });
+
+  it('returns null when trace file does not exist', async () => {
+    process.chdir(projectPath);
+    const result = await readSessionTrace('agent-1', 'sess-1', 'missing-plan');
+    expect(result).to.be.null;
+  });
+
+  it('returns parsed PlannerResponse for an existing trace', async () => {
+    process.chdir(projectPath);
+    const historyDir = await getHistoryDir('agent-1', 'sess-1');
+    await writeTraceToHistory('plan-1', sampleTrace, historyDir);
+
+    const result = await readSessionTrace('agent-1', 'sess-1', 'plan-1');
+    expect(result).to.deep.equal(sampleTrace);
+  });
+
+  it('returns null when trace file contains invalid JSON', async () => {
+    process.chdir(projectPath);
+    const historyDir = await getHistoryDir('agent-1', 'sess-1');
+    const { mkdir: mkd, writeFile: wf } = await import('node:fs/promises');
+    await mkd(join(historyDir, 'traces'), { recursive: true });
+    await wf(join(historyDir, 'traces', 'bad-plan.json'), 'not json', 'utf-8');
+
+    const result = await readSessionTrace('agent-1', 'sess-1', 'bad-plan');
+    expect(result).to.be.null;
+  });
+});
+
+describe('readTurnIndex', () => {
+  let projectPath: string;
+
+  beforeEach(() => {
+    projectPath = mkdtempSync(join(tmpdir(), 'read-turn-index-'));
+  });
+
+  afterEach(() => {
+    rmSync(projectPath, { recursive: true, force: true });
+  });
+
+  it('returns null when turn-index.json does not exist', async () => {
+    process.chdir(projectPath);
+    const result = await readTurnIndex('agent-1', 'sess-1');
+    expect(result).to.be.null;
+  });
+
+  it('returns parsed TurnIndex when file exists', async () => {
+    process.chdir(projectPath);
+    const historyDir = await getHistoryDir('agent-1', 'sess-1');
+    const { writeFile: wf } = await import('node:fs/promises');
+    await wf(join(historyDir, 'turn-index.json'), JSON.stringify(sampleTurnIndex), 'utf-8');
+
+    const result = await readTurnIndex('agent-1', 'sess-1');
+    expect(result).to.deep.equal(sampleTurnIndex);
+  });
+
+  it('returns null when turn-index.json contains invalid JSON', async () => {
+    process.chdir(projectPath);
+    const historyDir = await getHistoryDir('agent-1', 'sess-1');
+    const { writeFile: wf } = await import('node:fs/promises');
+    await wf(join(historyDir, 'turn-index.json'), 'not json', 'utf-8');
+
+    const result = await readTurnIndex('agent-1', 'sess-1');
+    expect(result).to.be.null;
   });
 });
