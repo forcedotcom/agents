@@ -1,3 +1,12 @@
+## [1.5.1](https://github.com/forcedotcom/agents/compare/1.5.0...1.5.1) (2026-05-07)
+
+
+### Bug Fixes
+
+* poll on all terminal states for AgentforceStudioTester @W-22143479@ @W-22143478@ ([#277](https://github.com/forcedotcom/agents/issues/277)) ([2ba8d03](https://github.com/forcedotcom/agents/commit/2ba8d03e3b9cac24a9d27e709cf4cd07d694a475))
+
+
+
 # [1.5.0](https://github.com/forcedotcom/agents/compare/1.4.0...1.5.0) (2026-05-05)
 
 
