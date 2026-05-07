@@ -16,6 +16,7 @@
 
 /* eslint-disable camelcase */
 
+import { SfError } from '@salesforce/core';
 import { parse as parseYaml } from 'yaml';
 import type { TestSpec, TestCase } from './types.js';
 import type { EvalPayload, EvalTest, EvalStep } from './evalNormalizer.js';
@@ -69,17 +70,17 @@ export function isYamlTestSpec(content: string): boolean {
 export function parseTestSpec(content: string): TestSpec {
   const parsed: unknown = parseYaml(content);
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('Invalid TestSpec: expected a YAML object');
+    throw new SfError('Invalid TestSpec: expected a YAML object');
   }
   const obj = parsed as Record<string, unknown>;
   if (!Array.isArray(obj.testCases)) {
-    throw new Error('Invalid TestSpec: missing testCases array');
+    throw new SfError('Invalid TestSpec: missing testCases array');
   }
   if (typeof obj.subjectName !== 'string') {
-    throw new Error('Invalid TestSpec: missing subjectName');
+    throw new SfError('Invalid TestSpec: missing subjectName');
   }
   if (typeof obj.name !== 'string') {
-    throw new Error('Invalid TestSpec: missing name');
+    throw new SfError('Invalid TestSpec: missing name');
   }
   return parsed as TestSpec;
 }
@@ -112,7 +113,7 @@ export function translateTestCase(testCase: TestCase, index: number, specName?: 
     const names = testCase.contextVariables.map((cv) => cv.name);
     const duplicates = names.filter((name, idx) => names.indexOf(name) !== idx);
     if (duplicates.length > 0) {
-      throw new Error(
+      throw new SfError(
         `Duplicate contextVariable names found in test case ${index}: ${[...new Set(duplicates)].join(
           ', '
         )}. Each contextVariable name must be unique.`

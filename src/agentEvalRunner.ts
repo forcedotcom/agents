@@ -16,7 +16,7 @@
 
 /* eslint-disable camelcase */
 
-import { Org } from '@salesforce/core';
+import { Org, SfError } from '@salesforce/core';
 import type { EvalPayload } from './evalNormalizer.js';
 import type { EvalApiResponse, EvalResult, EvalOutput, TestError } from './evalFormatter.js';
 
@@ -64,14 +64,13 @@ async function callEvalApi(org: Org, payload: EvalPayload, headers: ApiHeaders):
 export async function resolveAgent(org: Org, apiName: string): Promise<{ agentId: string; versionId: string }> {
   const conn = org.getConnection();
 
-  // Escape single quotes to prevent SOQL injection
-  const escapedApiName = apiName.replace(/'/g, "\\'");
+  const escapedApiName = apiName.replace(/'/g, "''");
 
   const botResult = await conn.query<{ Id: string }>(
     `SELECT Id FROM BotDefinition WHERE DeveloperName = '${escapedApiName}'`
   );
   if (!botResult.records.length) {
-    throw new Error(
+    throw new SfError(
       `Agent '${apiName}' not found. Verify the DeveloperName exists in BotDefinition in the target org.`
     );
   }
@@ -81,7 +80,7 @@ export async function resolveAgent(org: Org, apiName: string): Promise<{ agentId
     `SELECT Id FROM BotVersion WHERE BotDefinitionId = '${agentId}' ORDER BY VersionNumber DESC LIMIT 1`
   );
   if (!versionResult.records.length) {
-    throw new Error(
+    throw new SfError(
       `No published version found for agent '${apiName}'. Ensure the agent has been saved and versioned in the target org.`
     );
   }
