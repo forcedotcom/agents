@@ -95,7 +95,7 @@ describe('agentEvalRunner', () => {
       }
 
       const soql = queryStub.firstCall.args[0];
-      expect(soql).to.include("O\\'Malley_Agent");
+      expect(soql).to.include("O''Malley_Agent");
       expect(soql).to.not.include("O'Malley_Agent");
     });
   });
