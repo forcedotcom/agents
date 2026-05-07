@@ -17,7 +17,7 @@ import { existsSync, readdirSync, statSync } from 'node:fs';
 import { appendFile, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { Connection, Logger, SfError, SfProject } from '@salesforce/core';
-import { NamedUserJwtResponse, type PlannerResponse, PreviewMetadata } from './types';
+import { AvailableDefinition, NamedUserJwtResponse, type PlannerResponse, PreviewMetadata } from './types';
 
 export const metric = ['completeness', 'coherence', 'conciseness', 'output_latency_milliseconds'] as const;
 
@@ -952,6 +952,95 @@ export const readTranscriptEntries = async (agentId: string, sessionId: string):
     return [];
   }
 };
+
+// ====================================================
+//         Agent Test Runner Detection
+// ====================================================
+
+export type TestRunnerType = 'agentforce-studio' | 'testing-center';
+
+const TESTING_CENTER_PREFIX = '4KB';
+const AGENTFORCE_STUDIO_PREFIX = '3A2';
+
+/** Detects the test runner from a run ID's Salesforce ID prefix (`3A2` = Agentforce Studio, `4KB` = Testing Center). */
+export function detectTestRunnerFromId(runId: string): TestRunnerType | undefined {
+  if (runId.startsWith(AGENTFORCE_STUDIO_PREFIX)) return 'agentforce-studio';
+  if (runId.startsWith(TESTING_CENTER_PREFIX)) return 'testing-center';
+  return undefined;
+}
+
+/**
+ * Determines which test runner to use based on available metadata types in the org.
+ *
+ * This function checks for the presence of:
+ * - `AiEvaluationDefinition` (Testing Center)
+ * - `AiTestingDefinition` (Agentforce Studio)
+ *
+ * If a test definition with the same name exists in both metadata types, an error is thrown
+ * to prevent ambiguity.
+ *
+ * @param connection - The Salesforce connection
+ * @param testDefinitionName - Optional test definition name to check for conflicts
+ * @returns 'agentforce-studio' if only Agentforce Studio metadata exists, 'testing-center' if only Testing Center metadata exists
+ * @throws {SfError} if both metadata types exist with the same test definition name
+ * @throws {SfError} if neither metadata type exists
+ *
+ * @example
+ * ```typescript
+ * const runnerType = await determineTestRunner(connection, 'MyTestSuite');
+ * if (runnerType === 'agentforce-studio') {
+ *   const tester = new AgentforceStudioTester(connection);
+ * } else {
+ *   const tester = new AgentTester(connection);
+ * }
+ * ```
+ */
+export async function determineTestRunner(
+  connection: Connection,
+  testDefinitionName?: string
+): Promise<TestRunnerType> {
+  // Query both metadata types in parallel
+  const [tcDefs, asDefs] = await Promise.all([
+    connection.metadata.list({ type: 'AiEvaluationDefinition' }).catch(() => [] as AvailableDefinition[]),
+    connection.metadata.list({ type: 'AiTestingDefinition' }).catch(() => [] as AvailableDefinition[]),
+  ]);
+
+  // If a specific test name is provided, check for conflicts
+  if (testDefinitionName && tcDefs.length > 0 && asDefs.length > 0) {
+    const tcNames = new Set(tcDefs.map((def) => def.fullName));
+    const asNames = new Set(asDefs.map((def) => def.fullName));
+
+    if (tcNames.has(testDefinitionName) && asNames.has(testDefinitionName)) {
+      throw SfError.create({
+        name: 'AmbiguousTestDefinition',
+        message: `'${testDefinitionName}' exists in both Testing Center (AiEvaluationDefinition) and Agentforce Studio (AiTestingDefinition).`,
+      });
+    }
+
+    if (tcNames.has(testDefinitionName)) {
+      return 'testing-center';
+    }
+
+    if (asNames.has(testDefinitionName)) {
+      return 'agentforce-studio';
+    }
+  }
+
+  if (tcDefs.length > 0 && asDefs.length === 0) {
+    return 'testing-center';
+  }
+
+  if (asDefs.length > 0 && tcDefs.length === 0) {
+    return 'agentforce-studio';
+  }
+
+  // Neither exists
+  throw SfError.create({
+    name: 'NoTestDefinitionsFound',
+    message:
+      'No test definitions found in the org. Expected either AiEvaluationDefinition (Testing Center) or AiTestingDefinition (Agentforce Studio) metadata.',
+  });
+}
 
 // ====================================================
 //               Preview Session Store

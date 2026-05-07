@@ -1,3 +1,44 @@
+## [1.5.1](https://github.com/forcedotcom/agents/compare/1.5.0...1.5.1) (2026-05-07)
+
+
+### Bug Fixes
+
+* poll on all terminal states for AgentforceStudioTester @W-22143479@ @W-22143478@ ([#277](https://github.com/forcedotcom/agents/issues/277)) ([2ba8d03](https://github.com/forcedotcom/agents/commit/2ba8d03e3b9cac24a9d27e709cf4cd07d694a475))
+
+
+
+# [1.5.0](https://github.com/forcedotcom/agents/compare/1.4.0...1.5.0) (2026-05-05)
+
+
+### Features
+
+* add PR review skill for agents library ([cc63265](https://github.com/forcedotcom/agents/commit/cc6326503ef74e07ab3352e6ae3c01745496191b))
+
+
+
+# [1.4.0](https://github.com/forcedotcom/agents/compare/1.3.0...1.4.0) (2026-04-30)
+
+
+### Features
+
+* update for NGT commands, first pass ([0942fba](https://github.com/forcedotcom/agents/commit/0942fba907ba832c0788d6c7f65937481dcd2ce6))
+
+
+
+# [1.3.0](https://github.com/forcedotcom/agents/compare/1.2.0...1.3.0) (2026-04-30)
+
+
+### Bug Fixes
+
+* use optional chaining on agentJson.globalConfiguration.label ([4c89d1b](https://github.com/forcedotcom/agents/commit/4c89d1bf85c8f67f399a1847812d7cb57403e564))
+
+
+### Features
+
+* add optional agentJson to ScriptAgentOptions to skip compilation ([3eb99d9](https://github.com/forcedotcom/agents/commit/3eb99d96eba708dce9f059844b04d578d27afb1d))
+
+
+
 # [1.2.0](https://github.com/forcedotcom/agents/compare/1.1.3...1.2.0) (2026-04-27)
 
 

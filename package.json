@@ -1,7 +1,7 @@
 {
   "name": "@salesforce/agents",
   "description": "Client side APIs for working with Salesforce agents",
-  "version": "1.2.0",
+  "version": "1.5.1",
   "license": "Apache-2.0",
   "author": "Salesforce",
   "main": "lib/index",
@@ -11,22 +11,22 @@
     "url": "https://github.com/forcedotcom/agents.git"
   },
   "dependencies": {
-    "@salesforce/core": "^8.28.3",
+    "@salesforce/core": "^8.29.0",
     "@salesforce/kit": "^3.2.6",
-    "@salesforce/source-deploy-retrieve": "^12.32.7",
+    "@salesforce/source-deploy-retrieve": "^12.35.1",
     "@salesforce/types": "^1.7.1",
-    "fast-xml-parser": "^5.6.0",
+    "fast-xml-parser": "^5.7.2",
     "nock": "^13.5.6",
-    "yaml": "^2.8.3"
+    "yaml": "^2.8.4"
   },
   "devDependencies": {
-    "@salesforce/cli-plugins-testkit": "^5.3.50",
+    "@salesforce/cli-plugins-testkit": "^5.3.55",
     "@salesforce/dev-scripts": "^11.0.4",
     "esbuild": "^0.28.0",
     "ts-morph": "^24.0.0",
     "ts-node": "^10.9.2",
     "ts-patch": "^3.3.0",
-    "typedoc": "^0.28.18",
+    "typedoc": "^0.28.19",
     "typescript": "^5.9.3"
   },
   "engines": {

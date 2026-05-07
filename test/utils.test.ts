@@ -24,6 +24,8 @@ import { Connection, SfError, SfProject } from '@salesforce/core';
 import {
   requestWithEndpointFallback,
   useNamedUserJwt,
+  detectTestRunnerFromId,
+  determineTestRunner,
   type RequestInfo,
   createPreviewSessionCache,
   validatePreviewSession,
@@ -459,7 +461,7 @@ describe('useNamedUserJwt', () => {
 
     $$.SANDBOX.stub(connection, 'request').resolves({
       // eslint-disable-next-line camelcase
-      access_token: 12345,
+      access_token: 12_345,
       // eslint-disable-next-line camelcase
       token_type: 'Bearer',
     } as never);
@@ -555,6 +557,128 @@ describe('useNamedUserJwt', () => {
       expect((error as SfError).name).to.equal('ApiAccessError');
       expect((error as SfError).message).to.equal('Error obtaining API token');
       expect((error as SfError).cause).to.equal(networkError);
+    }
+  });
+});
+
+describe('detectTestRunnerFromId', () => {
+  it('detects agentforce-studio from 3A2 prefix', () => {
+    expect(detectTestRunnerFromId('3A2abc123')).to.equal('agentforce-studio');
+  });
+
+  it('detects testing-center from 4KB prefix', () => {
+    expect(detectTestRunnerFromId('4KBabc123')).to.equal('testing-center');
+  });
+
+  it('returns undefined for unrecognized prefix', () => {
+    expect(detectTestRunnerFromId('0HOunknown')).to.be.undefined;
+  });
+
+  it('returns undefined for empty string', () => {
+    expect(detectTestRunnerFromId('')).to.be.undefined;
+  });
+});
+
+describe('determineTestRunner', () => {
+  const $$ = new TestContext();
+  let connection: Connection;
+
+  beforeEach(async () => {
+    const testOrg = new MockTestOrgData();
+    connection = await testOrg.getConnection();
+  });
+
+  afterEach(() => {
+    $$.restore();
+  });
+
+  it('returns agentforce-studio when only AiTestingDefinition exists', async () => {
+    $$.SANDBOX.stub(connection.metadata, 'list').callsFake((query) => {
+      if ((query as { type: string }).type === 'AiTestingDefinition')
+        return Promise.resolve([{ fullName: 'MySuite' }] as never);
+      return Promise.resolve([] as never);
+    });
+
+    const result = await determineTestRunner(connection, 'MySuite');
+    expect(result).to.equal('agentforce-studio');
+  });
+
+  it('returns testing-center when only AiEvaluationDefinition exists', async () => {
+    $$.SANDBOX.stub(connection.metadata, 'list').callsFake((query) => {
+      if ((query as { type: string }).type === 'AiEvaluationDefinition')
+        return Promise.resolve([{ fullName: 'MySuite' }] as never);
+      return Promise.resolve([] as never);
+    });
+
+    const result = await determineTestRunner(connection, 'MySuite');
+    expect(result).to.equal('testing-center');
+  });
+
+  it('returns testing-center when only AiEvaluationDefinition exists (no testDefinitionName)', async () => {
+    $$.SANDBOX.stub(connection.metadata, 'list').callsFake((query) => {
+      if ((query as { type: string }).type === 'AiEvaluationDefinition')
+        return Promise.resolve([{ fullName: 'SomeSuite' }] as never);
+      return Promise.resolve([] as never);
+    });
+
+    const result = await determineTestRunner(connection);
+    expect(result).to.equal('testing-center');
+  });
+
+  it('returns agentforce-studio when only AiTestingDefinition exists (no testDefinitionName)', async () => {
+    $$.SANDBOX.stub(connection.metadata, 'list').callsFake((query) => {
+      if ((query as { type: string }).type === 'AiTestingDefinition')
+        return Promise.resolve([{ fullName: 'SomeSuite' }] as never);
+      return Promise.resolve([] as never);
+    });
+
+    const result = await determineTestRunner(connection);
+    expect(result).to.equal('agentforce-studio');
+  });
+
+  it('throws AmbiguousTestDefinition when same name exists in both metadata types', async () => {
+    $$.SANDBOX.stub(connection.metadata, 'list').callsFake(() => Promise.resolve([{ fullName: 'MySuite' }] as never));
+
+    try {
+      await determineTestRunner(connection, 'MySuite');
+      expect.fail('Expected error was not thrown');
+    } catch (err) {
+      expect(err).to.be.instanceOf(SfError);
+      expect((err as SfError).name).to.equal('AmbiguousTestDefinition');
+    }
+  });
+
+  it('prefers testing-center when name only exists in testing-center (both types have entries)', async () => {
+    $$.SANDBOX.stub(connection.metadata, 'list').callsFake((query) => {
+      if ((query as { type: string }).type === 'AiEvaluationDefinition')
+        return Promise.resolve([{ fullName: 'TCSuite' }] as never);
+      return Promise.resolve([{ fullName: 'ASSuite' }] as never);
+    });
+
+    const result = await determineTestRunner(connection, 'TCSuite');
+    expect(result).to.equal('testing-center');
+  });
+
+  it('prefers agentforce-studio when name only exists in agentforce-studio (both types have entries)', async () => {
+    $$.SANDBOX.stub(connection.metadata, 'list').callsFake((query) => {
+      if ((query as { type: string }).type === 'AiEvaluationDefinition')
+        return Promise.resolve([{ fullName: 'TCSuite' }] as never);
+      return Promise.resolve([{ fullName: 'ASSuite' }] as never);
+    });
+
+    const result = await determineTestRunner(connection, 'ASSuite');
+    expect(result).to.equal('agentforce-studio');
+  });
+
+  it('throws NoTestDefinitionsFound when no metadata types exist', async () => {
+    $$.SANDBOX.stub(connection.metadata, 'list').resolves([] as never);
+
+    try {
+      await determineTestRunner(connection);
+      expect.fail('Expected error was not thrown');
+    } catch (err) {
+      expect(err).to.be.instanceOf(SfError);
+      expect((err as SfError).name).to.equal('NoTestDefinitionsFound');
     }
   });
 });

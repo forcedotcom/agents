@@ -79,6 +79,8 @@ export type ScriptAgentOptions = {
   project: SfProject;
   // name of the AAB, e.g. 'myBundle' - the project will be searched to find the AAB directory
   aabName: string;
+  // pre-compiled AgentJSON; when provided, skips the compile step during preview
+  agentJson?: AgentJson;
 };
 export type ProductionAgentOptions = {
   connection: Connection;
@@ -424,6 +426,40 @@ export type AgentTestResultsResponse = {
 };
 
 export type AvailableDefinition = Omit<FileProperties, 'manageableState' | 'namespacePrefix'>;
+
+// ====================================================
+//         Agent Testing Types (Agentforce Studio)
+// ====================================================
+
+export type AgentforceStudioTestStartResponse = {
+  runId: string;
+  status: AgentforceStudioTestStatus;
+};
+
+export type AgentforceStudioTestStatus = 'CREATED' | 'IN_PROGRESS' | 'SUCCESS' | 'FAILED' | 'TERMINATED';
+
+export type AgentforceStudioTestStatusResponse = {
+  status: string;
+  startTime: string;
+  endTime?: string;
+  errorMessage?: string;
+};
+
+export type TestScorerResult = {
+  scorerName: string;
+  scorerResponse: string;
+};
+
+export type AgentforceStudioTestCaseResult = {
+  subjectResponse: string;
+  testNumber: number;
+  testScorerResults: TestScorerResult[];
+};
+
+export type AgentforceStudioTestResultsResponse = {
+  status: string;
+  testCases: AgentforceStudioTestCaseResult[];
+};
 
 // yaml type representation
 export type TestCase = {
