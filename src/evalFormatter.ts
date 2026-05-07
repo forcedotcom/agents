@@ -16,11 +16,23 @@
 
 export type ResultFormat = 'human' | 'json' | 'junit' | 'tap';
 
+type SendMessageResponse = string | { messages: Array<{ message: string }> };
+
+type GetStateResponse = {
+  planner_response?: {
+    lastExecution?: {
+      topic?: string;
+      latency?: number;
+      invokedActions?: string[];
+    };
+  };
+};
+
 export type EvalOutput = {
   type?: string;
   id?: string;
   session_id?: string;
-  response?: unknown;
+  response?: SendMessageResponse | GetStateResponse;
 };
 
 export type EvalResult = {
@@ -76,27 +88,26 @@ function formatOutputLines(outputs: EvalOutput[]): string[] {
       const sessionId = output.session_id ?? 'N/A';
       lines.push(`- **Create Session**: ${sessionId}`);
     } else if (stepType === 'agent.send_message') {
-      let agentMsg = output.response;
-      if (agentMsg !== null && typeof agentMsg === 'object' && !Array.isArray(agentMsg)) {
-        const msgObj = agentMsg as Record<string, unknown>;
-        const msgs = msgObj.messages as Array<Record<string, unknown>> | undefined;
-        agentMsg = msgs?.[0]?.message ?? String(agentMsg);
+      const resp = output.response;
+      let msgStr: string;
+      if (typeof resp === 'string') {
+        msgStr = resp;
+      } else if (resp !== null && typeof resp === 'object' && 'messages' in resp) {
+        msgStr = (resp as { messages: Array<{ message: string }> }).messages?.[0]?.message ?? '';
+      } else {
+        msgStr = String(resp ?? '');
       }
-      const msgStr = String(agentMsg ?? '');
       const displayMsg = msgStr.length > 200 ? msgStr.substring(0, 200) + '...' : msgStr;
       lines.push(`- **Agent Response** (${stepId}): ${displayMsg}`);
     } else if (stepType === 'agent.get_state') {
-      const respData = output.response;
-      if (respData !== null && typeof respData === 'object') {
-        const resp = respData as Record<string, unknown>;
-        const planner = resp.planner_response as Record<string, unknown> | undefined;
-        const lastExec = planner?.lastExecution as Record<string, unknown> | undefined;
-        const topic = lastExec?.topic ?? 'N/A';
-        const latency = lastExec?.latency ?? 'N/A';
-        lines.push(`- **Topic Selected**: ${String(topic)}`);
-        lines.push(`- **Response Latency**: ${String(latency)}ms`);
+      const resp = output.response;
+      if (resp !== null && typeof resp === 'object' && 'planner_response' in resp) {
+        const stateResp = resp as GetStateResponse;
+        const lastExec = stateResp.planner_response?.lastExecution;
+        lines.push(`- **Topic Selected**: ${lastExec?.topic ?? 'N/A'}`);
+        lines.push(`- **Response Latency**: ${lastExec?.latency ?? 'N/A'}ms`);
       } else {
-        lines.push(`- **State**: ${String(respData).substring(0, 200)}`);
+        lines.push(`- **State**: ${String(resp).substring(0, 200)}`);
       }
     }
   }

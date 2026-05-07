@@ -19,7 +19,7 @@
 import { Org, SfError } from '@salesforce/core';
 import { requestWithEndpointFallback } from './utils';
 import type { EvalPayload } from './evalNormalizer.js';
-import type { EvalApiResponse, EvalResult, EvalOutput, TestError } from './evalFormatter.js';
+import type { EvalApiResponse, EvalResult, EvalOutput, TestError, TestResult } from './evalFormatter.js';
 
 type ApiHeaders = {
   orgId: string;
@@ -43,10 +43,10 @@ async function getApiHeaders(org: Org): Promise<ApiHeaders> {
   };
 }
 
-async function callEvalApi(org: Org, payload: EvalPayload, headers: ApiHeaders): Promise<{ results?: unknown[] }> {
+async function callEvalApi(org: Org, payload: EvalPayload, headers: ApiHeaders): Promise<EvalApiResponse> {
   const conn = org.getConnection();
 
-  return requestWithEndpointFallback<{ results?: unknown[] }>(
+  return requestWithEndpointFallback<EvalApiResponse>(
     conn,
     {
       url: 'https://api.salesforce.com/einstein/evaluation/v1/tests',
@@ -98,7 +98,7 @@ export async function executeBatches(
   org: Org,
   batches: Array<EvalPayload['tests']>,
   log?: (msg: string) => void
-): Promise<unknown[]> {
+): Promise<TestResult[]> {
   const headers = await getApiHeaders(org);
 
   if (batches.length > 1) {
