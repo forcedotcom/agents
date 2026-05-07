@@ -1,3 +1,17 @@
+## [1.5.2](https://github.com/forcedotcom/agents/compare/1.5.1...1.5.2) (2026-05-07)
+
+
+### Bug Fixes
+
+* correct import order and unnecessary type assertion in test ([c8f899b](https://github.com/forcedotcom/agents/commit/c8f899bdbb357f906c58c8e6295d7cc23905a44b))
+* remove unnecessary type assertion flagged by eslint ([a52cb03](https://github.com/forcedotcom/agents/commit/a52cb036dc4e5b1b83d46228559ed0c68831c6a1))
+* type EvalOutput.response concretely and remove unknown[] from public API ([bda659d](https://github.com/forcedotcom/agents/commit/bda659d9befe6698f92950130e57d689385ce3f5))
+* update SOQL escape test to expect '' instead of \' ([007394d](https://github.com/forcedotcom/agents/commit/007394dfd5b7f6db76e2b3251b0e6b83fa981261))
+* use correct SOQL escaping and SfError for all thrown errors ([4feee54](https://github.com/forcedotcom/agents/commit/4feee549b43ddfc29035b32bc6948583ed1e5164))
+* use requestWithEndpointFallback for eval API to support sandbox/scratch orgs ([f871a07](https://github.com/forcedotcom/agents/commit/f871a0779f14c9954500d7032099fa1616ff4816))
+
+
+
 ## [1.5.1](https://github.com/forcedotcom/agents/compare/1.5.0...1.5.1) (2026-05-07)
 
 
