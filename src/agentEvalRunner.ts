@@ -17,6 +17,7 @@
 /* eslint-disable camelcase */
 
 import { Org, SfError } from '@salesforce/core';
+import { requestWithEndpointFallback } from './utils';
 import type { EvalPayload } from './evalNormalizer.js';
 import type { EvalApiResponse, EvalResult, EvalOutput, TestError } from './evalFormatter.js';
 
@@ -45,20 +46,24 @@ async function getApiHeaders(org: Org): Promise<ApiHeaders> {
 async function callEvalApi(org: Org, payload: EvalPayload, headers: ApiHeaders): Promise<{ results?: unknown[] }> {
   const conn = org.getConnection();
 
-  return conn.request<{ results?: unknown[] }>({
-    url: 'https://api.salesforce.com/einstein/evaluation/v1/tests',
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-sfdc-core-tenant-id': `core/prod/${headers.orgId}`,
-      'x-org-id': headers.orgId,
-      'x-sfdc-core-instance-url': headers.instanceUrl,
-      'x-sfdc-user-id': headers.userId,
-      'x-client-feature-id': 'AIPlatformEvaluation',
-      'x-sfdc-app-context': 'EinsteinGPT',
+  return requestWithEndpointFallback<{ results?: unknown[] }>(
+    conn,
+    {
+      url: 'https://api.salesforce.com/einstein/evaluation/v1/tests',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-sfdc-core-tenant-id': `core/prod/${headers.orgId}`,
+        'x-org-id': headers.orgId,
+        'x-sfdc-core-instance-url': headers.instanceUrl,
+        'x-sfdc-user-id': headers.userId,
+        'x-client-feature-id': 'AIPlatformEvaluation',
+        'x-sfdc-app-context': 'EinsteinGPT',
+      },
+      body: JSON.stringify(payload),
     },
-    body: JSON.stringify(payload),
-  });
+    { retry: { maxRetries: 3 } }
+  );
 }
 
 export async function resolveAgent(org: Org, apiName: string): Promise<{ agentId: string; versionId: string }> {
