@@ -120,3 +120,38 @@ export {
   type ReplacementConfig,
   type ReplacementResult,
 } from './stringReplacements';
+export {
+  normalizePayload,
+  normalizeMcpShorthand,
+  autoCorrectFields,
+  normalizeCamelCase,
+  normalizeEvaluatorFields,
+  convertShorthandRefs,
+  injectDefaults,
+  stripUnrecognizedFields,
+  splitIntoBatches,
+  type EvalPayload,
+  type EvalTest,
+  type EvalStep,
+} from './evalNormalizer';
+export {
+  formatResults,
+  type EvalApiResponse,
+  type EvalOutput,
+  type EvalResult,
+  type TestError,
+  type TestResult,
+  type ResultFormat,
+} from './evalFormatter';
+export {
+  isYamlTestSpec,
+  parseTestSpec,
+  translateTestSpec,
+  translateTestCase,
+} from './yamlSpecTranslator';
+export {
+  resolveAgent,
+  executeBatches,
+  buildResultSummary,
+  type AgentEvalRunResult,
+} from './agentEvalRunner';
