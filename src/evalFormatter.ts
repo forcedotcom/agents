@@ -102,8 +102,8 @@ function formatOutputLines(outputs: EvalOutput[]): string[] {
     } else if (stepType === 'agent.get_state') {
       const resp = output.response;
       if (resp !== null && typeof resp === 'object' && 'planner_response' in resp) {
-        const stateResp = resp as GetStateResponse;
-        const lastExec = stateResp.planner_response?.lastExecution;
+        const { planner_response: plannerResp } = resp as { planner_response?: GetStateResponse['planner_response'] };
+        const lastExec = plannerResp?.lastExecution;
         lines.push(`- **Topic Selected**: ${lastExec?.topic ?? 'N/A'}`);
         lines.push(`- **Response Latency**: ${lastExec?.latency ?? 'N/A'}ms`);
       } else {
