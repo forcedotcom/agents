@@ -516,8 +516,8 @@ describe('Agents', () => {
       // Bootstrap endpoint for compile - return valid JWT format token
       requestStub
         .withArgs(sinon.match({ url: `${connection.instanceUrl}/agentforce/bootstrap/nameduser` }))
-        // eslint-disable-next-line camelcase
         .resolves({
+          // eslint-disable-next-line camelcase
           access_token:
             'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoidGVzdCJ9.4Adcj0vVzk6B5R-9X8kBR1R0N0FhT3ZSY0J5Z1Z4Y2c',
         });
@@ -618,8 +618,8 @@ describe('Agents', () => {
       const requestStub = $$.SANDBOX.stub(connection, 'request');
       requestStub
         .withArgs(sinon.match({ url: `${connection.instanceUrl}/agentforce/bootstrap/nameduser` }))
-        // eslint-disable-next-line camelcase
         .resolves({
+          // eslint-disable-next-line camelcase
           access_token:
             'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoidGVzdCJ9.4Adcj0vVzk6B5R-9X8kBR1R0N0FhT3ZSY0J5Z1Z4Y2c',
         });
