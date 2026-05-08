@@ -18,11 +18,12 @@ import * as path from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { XMLBuilder, XMLParser } from 'fast-xml-parser';
-import { AuthInfo, Connection, Logger, Messages, SfError, SfProject } from '@salesforce/core';
+import { Logger, Messages, SfError, SfProject } from '@salesforce/core';
 import { ComponentSet, ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { MaybeMock } from '../maybe-mock';
 import { type AgentJson, type PublishAgent, type PublishAgentJsonResponse } from '../types';
 import { findAuthoringBundle } from '../utils';
+import { ConnectionManager } from '../connectionManager';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agentPublisher');
@@ -40,20 +41,13 @@ const getLogger = (): Logger => {
  */
 export class ScriptAgentPublisher {
   private readonly maybeMock: MaybeMock;
-  // this is the namedJWT connection, not to be used for deploy/retrieve
-  private readonly connection: Connection;
+  private readonly connectionManager: ConnectionManager;
   private project: SfProject;
   private readonly agentJson: AgentJson;
   private readonly developerName: string;
   private readonly bundleMetaPath: string;
   private bundleDir: string;
   private readonly skipRetrieve: boolean;
-  /**
-   * Original connection username, stored to create fresh connections for metadata operations.
-   * This ensures metadata operations (retrieve/deploy) use a standard connection that hasn't
-   * been upgraded with JWT, which is required for SOAP API operations.
-   */
-  private readonly originalUsername: string;
   private readonly API_URL: string;
   private readonly API_HEADERS = {
     'x-client-name': 'afdx',
@@ -63,23 +57,21 @@ export class ScriptAgentPublisher {
   /**
    * Creates a new AgentPublisher instance
    *
-   * @param connection The connection to the Salesforce org
+   * @param connectionManager The ConnectionManager for making SFAP and org requests
    * @param project The Salesforce project
    * @param agentJson
    * @param skipMetadataRetrieve Whether to skip retrieving the agent metadata from the org
    */
   public constructor(
-    connection: Connection,
+    connectionManager: ConnectionManager,
     project: SfProject,
     agentJson: AgentJson,
     skipMetadataRetrieve: boolean = false
   ) {
-    this.maybeMock = new MaybeMock(connection);
-    this.connection = connection;
+    this.connectionManager = connectionManager;
+    this.maybeMock = new MaybeMock(connectionManager.getJwtConnection());
     this.project = project;
     this.agentJson = agentJson;
-    // Store the original username to create fresh connections for metadata operations
-    this.originalUsername = connection.getUsername()!;
     this.skipRetrieve = skipMetadataRetrieve;
     this.API_URL = 'https://api.salesforce.com/einstein/ai-agent/v1.1/authoring/agents';
 
@@ -101,29 +93,15 @@ export class ScriptAgentPublisher {
     const body = {
       agentDefinition: this.agentJson,
       instanceConfig: {
-        endpoint: this.connection.instanceUrl,
+        endpoint: this.connectionManager.getStandardConnection().instanceUrl,
       },
     };
 
-    // Use JWT token only for the publish API call, then restore connection
-    // before metadata operations that may use SOAP API
-    let response: PublishAgentJsonResponse;
-    try {
-      const botId = await this.getPublishedBotId(this.developerName);
-      // if we've found a botId in the org, then this agent has already been published before => ai-agent/v1.1/authoring/agents/<id>/versions
-      // if we didn't find an Id in the org, then we're publishing for the first time         => ai-agent/v1.1/authoring/agents
-      const url = botId ? `${this.API_URL}/${botId}/versions` : this.API_URL;
-      response = await this.maybeMock.request<PublishAgentJsonResponse>('POST', url, body, this.API_HEADERS);
-    } finally {
-      // Restore the original connection for subsequent metadata operations.
-      // Use refresh token if available.
-      delete this.connection.accessToken;
-
-      const authFields = this.connection.getAuthInfoFields();
-      if (authFields.refreshToken) {
-        await this.connection.refreshAuth();
-      }
-    }
+    const botId = await this.getPublishedBotId(this.developerName);
+    // if we've found a botId in the org, then this agent has already been published before => ai-agent/v1.1/authoring/agents/<id>/versions
+    // if we didn't find an Id in the org, then we're publishing for the first time         => ai-agent/v1.1/authoring/agents
+    const url = botId ? `${this.API_URL}/${botId}/versions` : this.API_URL;
+    const response = await this.maybeMock.request<PublishAgentJsonResponse>('POST', url, body, this.API_HEADERS);
 
     if (response.botId && response.botVersionId) {
       // we've published the AgentJson, now we need to:
@@ -144,21 +122,8 @@ export class ScriptAgentPublisher {
       });
     }
   }
-  /**
-   * Creates a fresh standard connection for metadata operations (retrieve/deploy).
-   * This ensures metadata operations use a connection that hasn't been upgraded with JWT,
-   * which is required for SOAP API operations.
-   *
-   * @returns A fresh Connection instance with standard authentication
-   */
-  private async createStandardConnection(): Promise<Connection> {
-    const authInfo = await AuthInfo.create({
-      username: this.originalUsername,
-    });
-    return Connection.create({
-      authInfo,
-    });
-  }
+
+
   /**
    * Validates and extracts the developer name from the agent configuration,
    * and locates the corresponding authoring bundle directory and metadata file.
@@ -201,7 +166,7 @@ export class ScriptAgentPublisher {
    * @param botVersionName The bot version name
    */
   private async retrieveAgentMetadata(botVersionName: string): Promise<void> {
-    const standardConnection = await this.createStandardConnection();
+    const standardConnection = this.connectionManager.getStandardConnection();
 
     const defaultPackagePath = path.resolve(this.project.getDefaultPackage().path);
 
@@ -220,7 +185,7 @@ export class ScriptAgentPublisher {
         directoryPaths: [defaultPackagePath],
       },
       org: {
-        username: this.originalUsername,
+        username: standardConnection.getUsername()!,
         exclude: [],
       },
     });
@@ -269,7 +234,7 @@ export class ScriptAgentPublisher {
       suppressEmptyNode: false,
     });
     await writeFile(this.bundleMetaPath, xmlBuilder.build(authoringBundle));
-    const standardConnection = await this.createStandardConnection();
+    const standardConnection = this.connectionManager.getStandardConnection();
 
     // 2. attempt to deploy the authoring bundle to the org
     const deploy = await ComponentSet.fromSource(this.bundleDir).deploy({
@@ -303,7 +268,9 @@ export class ScriptAgentPublisher {
    */
   private async getPublishedBotId(agentApiName: string): Promise<string | undefined> {
     try {
-      const queryResult = await this.connection.singleRecordQuery<{ Id: string }>(
+      // Use standard connection for SOQL query to avoid JWT token clobbering
+      const standardConn = this.connectionManager.getStandardConnection();
+      const queryResult = await standardConn.singleRecordQuery<{ Id: string }>(
         `SELECT Id FROM BotDefinition WHERE DeveloperName='${agentApiName}'`
       );
       getLogger().debug(`Agent with developer name ${agentApiName} and id ${queryResult.Id} is already published.`);
@@ -322,7 +289,9 @@ export class ScriptAgentPublisher {
    */
   private async getVersionDeveloperName(botVersionId: string): Promise<string> {
     try {
-      const queryResult = await this.connection.singleRecordQuery<{ DeveloperName: string }>(
+      // Use standard connection for SOQL query to avoid JWT token clobbering
+      const standardConn = this.connectionManager.getStandardConnection();
+      const queryResult = await standardConn.singleRecordQuery<{ DeveloperName: string }>(
         `SELECT DeveloperName FROM BotVersion WHERE Id='${botVersionId}'`
       );
       getLogger().debug(`Bot version with id ${botVersionId} is ${queryResult.DeveloperName}.`);

@@ -15,9 +15,10 @@
  */
 import { readFile, readdir, cp, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { Connection, SfError } from '@salesforce/core';
+import { SfError } from '@salesforce/core';
 import { AgentPreviewInterface, type AgentPreviewSendResponse, type PlannerResponse, PreviewMetadata } from '../types';
 import { getHistoryDir, SessionHistoryBuffer, TranscriptEntry } from '../utils';
+import { ConnectionManager } from '../connectionManager';
 
 /**
  * Abstract base class for agent preview functionality.
@@ -36,12 +37,7 @@ export abstract class AgentBase {
   protected planIds = new Set<string>();
   public abstract preview: AgentPreviewInterface;
 
-  protected constructor(protected readonly connection: Connection) {}
-
-  public async restoreConnection(): Promise<void> {
-    delete this.connection.accessToken;
-    await this.connection.refreshAuth();
-  }
+  protected constructor(protected readonly connectionManager: ConnectionManager) {}
 
   public setSessionId(sessionId: string): void {
     this.sessionId = sessionId;

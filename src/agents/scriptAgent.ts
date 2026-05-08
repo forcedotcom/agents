@@ -64,7 +64,15 @@ export class ScriptAgent extends AgentBase {
   private readonly metaContent: string;
   private readonly agentFilePath: string;
   public constructor(private options: ScriptAgentOptions) {
-    super(options.connection);
+    // ConnectionManager should be provided by Agent.init(), but fallback to creating one if needed
+    const connectionManager = options.connectionManager;
+    if (!connectionManager) {
+      throw SfError.create({
+        name: 'MissingConnectionManager',
+        message: 'ConnectionManager is required. Use Agent.init() to create ScriptAgent instances.',
+      });
+    }
+    super(connectionManager);
     this.options = options;
     this.apiBase = 'https://api.salesforce.com/einstein/ai-agent';
 
@@ -169,7 +177,7 @@ export class ScriptAgent extends AgentBase {
   }
 
   public async getTrace(planId: string): Promise<PlannerResponse> {
-    return requestWithEndpointFallback<PlannerResponse>(this.connection, {
+    return requestWithEndpointFallback<PlannerResponse>(this.connectionManager.getJwtConnection(), {
       method: 'GET',
       url: `${this.apiBase}/v1.1/preview/sessions/${this.sessionId!}/plans/${planId}`,
       headers: {
@@ -205,7 +213,7 @@ export class ScriptAgent extends AgentBase {
 
     try {
       const response = await requestWithEndpointFallback<CompileAgentScriptResponse>(
-        this.connection,
+        this.connectionManager.getJwtConnection(),
         {
           method: 'POST',
           url,
@@ -271,7 +279,7 @@ export class ScriptAgent extends AgentBase {
     }
 
     const publisher = new ScriptAgentPublisher(
-      this.connection,
+      this.connectionManager,
       this.options.project,
       this.agentJson!,
       skipMetadataRetrieve
@@ -395,14 +403,17 @@ export class ScriptAgent extends AgentBase {
         this.historyBuffer
       );
 
-      const response = await requestWithEndpointFallback<AgentPreviewSendResponse>(this.connection, {
-        method: 'POST',
-        url,
-        body: JSON.stringify(body),
-        headers: {
-          'x-client-name': 'afdx',
-        },
-      });
+      const response = await requestWithEndpointFallback<AgentPreviewSendResponse>(
+        this.connectionManager.getJwtConnection(),
+        {
+          method: 'POST',
+          url,
+          body: JSON.stringify(body),
+          headers: {
+            'x-client-name': 'afdx',
+          },
+        }
+      );
 
       const planId = response.messages.at(0)!.planId;
       this.planIds.add(planId);
@@ -432,7 +443,9 @@ export class ScriptAgent extends AgentBase {
       await this.historyBuffer.flush();
 
       if (this.apexDebugging && this.canApexDebug()) {
-        const apexLog = await getDebugLog(this.connection, start, Date.now());
+        // Use standard connection for tooling API query to avoid JWT token clobbering
+        const standardConn = this.connectionManager.getStandardConnection();
+        const apexLog = await getDebugLog(standardConn, start, Date.now());
         if (apexLog) {
           response.apexDebugLog = apexLog;
         }
@@ -443,6 +456,7 @@ export class ScriptAgent extends AgentBase {
       throw SfError.wrap(err);
     }
   }
+
 
   private setMockMode(mockMode: 'Mock' | 'Live Test'): void {
     this.mockMode = mockMode;
@@ -470,9 +484,11 @@ export class ScriptAgent extends AgentBase {
     }
 
     // send bypassUser=false when the compiledAgent.globalConfiguration.defaultAgentUser is INVALID
+    // Use standard connection for SOQL query to avoid JWT token clobbering
+    const standardConn = this.connectionManager.getStandardConnection();
     let bypassUser =
       (
-        await this.connection.query(
+        await standardConn.query<{ Id: string }>(
           `SELECT Id FROM USER WHERE username='${this.agentJson.globalConfiguration.defaultAgentUser}'`
         )
       ).totalSize === 1;
@@ -507,9 +523,9 @@ export class ScriptAgent extends AgentBase {
       void Lifecycle.getInstance().emit('agents:simulation-starting', {});
 
       let response: AgentPreviewStartResponse;
-      try {
+        try {
         response = await requestWithEndpointFallback<AgentPreviewStartResponse>(
-          this.connection,
+          this.connectionManager.getJwtConnection(),
           {
             method: 'POST',
             url: `${this.apiBase}/v1.1/preview/sessions`,

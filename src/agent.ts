@@ -18,7 +18,6 @@ import { inspect } from 'node:util';
 import * as path from 'node:path';
 import { readdir, stat } from 'node:fs/promises';
 import {
-  AuthInfo,
   Connection,
   generateApiName,
   Lifecycle,
@@ -43,9 +42,10 @@ import {
   ScriptAgentOptions,
 } from './types';
 import { MaybeMock } from './maybe-mock';
-import { decodeHtmlEntities, findLocalAgents, useNamedUserJwt } from './utils';
+import { decodeHtmlEntities, findLocalAgents } from './utils';
 import { ScriptAgent } from './agents/scriptAgent';
 import { ProductionAgent } from './agents/productionAgent';
+import { ConnectionManager } from './connectionManager';
 
 /** Instance type returned from Agent.init(); has setSessionId, getHistoryDir, preview, etc. */
 export type AgentInstance = ScriptAgent | ProductionAgent;
@@ -108,24 +108,16 @@ export class Agent {
   public static async init(
     options: ProductionAgentOptions | ScriptAgentOptions
   ): Promise<ScriptAgent | ProductionAgent> {
-    const username = options.connection.getUsername();
-
-    // Create a fresh connection instance for agent operations
-    // This ensures we don't modify the original connection passed in
-    // The original connection remains unchanged and can be used for other operations, mid agent-operation
-    const authInfo = await AuthInfo.create({ username });
-    const isolatedConnection = await Connection.create({ authInfo });
-
-    // Upgrade the isolated connection with JWT
-    const jwtConnection = await useNamedUserJwt(isolatedConnection);
+    // Create ConnectionManager which handles JWT and standard connections
+    const connectionManager = await ConnectionManager.create(options.connection);
 
     // Type guard: check if it's ScriptAgentOptions by looking for 'aabName'
     if ('aabName' in options) {
       // TypeScript now knows this is ScriptAgentOptions
-      return new ScriptAgent({ ...options, connection: jwtConnection });
+      return new ScriptAgent({ ...options, connectionManager });
     } else {
       // TypeScript now knows this is ProductionAgentOptions
-      const agent = new ProductionAgent({ ...options, connection: jwtConnection });
+      const agent = new ProductionAgent({ ...options, connectionManager });
       await agent.getBotMetadata();
       return agent;
     }

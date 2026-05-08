@@ -18,6 +18,7 @@ import { Connection, Logger, SfProject } from '@salesforce/core';
 import { FileProperties } from '@salesforce/source-deploy-retrieve';
 import { type ApexLog } from '@salesforce/types/tooling';
 import { metric } from './utils';
+import { ConnectionManager } from './connectionManager';
 
 // ====================================================
 //     Compilation API exit codes
@@ -62,7 +63,7 @@ export type PreviewMetadata = {
 };
 
 export type BaseAgentConfig = {
-  connection: Connection;
+  connectionManager: ConnectionManager;
   logger?: Logger;
 };
 
@@ -81,11 +82,15 @@ export type ScriptAgentOptions = {
   aabName: string;
   // pre-compiled AgentJSON; when provided, skips the compile step during preview
   agentJson?: AgentJson;
+  // Internal use only - ConnectionManager created by Agent.init()
+  connectionManager?: ConnectionManager;
 };
 export type ProductionAgentOptions = {
   connection: Connection;
   project: SfProject;
   apiNameOrId: string;
+  // Internal use only - ConnectionManager created by Agent.init()
+  connectionManager?: ConnectionManager;
 };
 
 /**
