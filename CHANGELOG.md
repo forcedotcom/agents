@@ -1,3 +1,18 @@
+# [1.6.0](https://github.com/forcedotcom/agents/compare/1.5.2...1.6.0) (2026-05-08)
+
+
+### Bug Fixes
+
+* **test:** avoid process.chdir in trace util tests to prevent Windows EBUSY ([801eb20](https://github.com/forcedotcom/agents/commit/801eb202377bc3482f5ff7993a8771a79e0fb263))
+
+
+### Features
+
+* add listSessionTraces utility ([78a29c4](https://github.com/forcedotcom/agents/commit/78a29c4ed5d2d359d77d0d06b3ba3be8dcf00fcb))
+* add readSessionTrace and readTurnIndex utilities ([4402b50](https://github.com/forcedotcom/agents/commit/4402b50912f910ba8254720cc2c314df9ddb6d05))
+
+
+
 ## [1.5.2](https://github.com/forcedotcom/agents/compare/1.5.1...1.5.2) (2026-05-07)
 
 
