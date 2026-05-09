@@ -1,3 +1,12 @@
+## [1.6.2](https://github.com/forcedotcom/agents/compare/1.6.1...1.6.2) (2026-05-09)
+
+
+### Bug Fixes
+
+* **deps:** bump fast-uri from 3.1.1 to 3.1.2 ([de46dfc](https://github.com/forcedotcom/agents/commit/de46dfc7241d0a094a68a5fb9f1330290fa66385))
+
+
+
 ## [1.6.1](https://github.com/forcedotcom/agents/compare/1.6.0...1.6.1) (2026-05-09)
 
 
