@@ -238,7 +238,11 @@ export class Agent {
     config: AgentCreateConfig
   ): Promise<AgentCreateResponse> {
     const url = '/connect/ai-assist/create-agent';
-    const maybeMock = new MaybeMock(connection);
+
+    // Create ConnectionManager to get JWT connection for SFAP API calls
+    const connectionManager = await ConnectionManager.create(connection);
+    const jwtConnection = connectionManager.getJwtConnection();
+    const maybeMock = new MaybeMock(jwtConnection);
 
     // When previewing agent creation just return the response.
     if (!config.saveAgent) {
@@ -264,6 +268,7 @@ export class Agent {
     if (response.isSuccess) {
       await Lifecycle.getInstance().emit(AgentCreateLifecycleStages.Retrieving, {});
       const defaultPackagePath = project.getDefaultPackage().path ?? 'force-app';
+      const standardConnection = connectionManager.getStandardConnection();
       try {
         const cs = await ComponentSetBuilder.build({
           metadata: {
@@ -271,12 +276,12 @@ export class Agent {
             directoryPaths: [defaultPackagePath],
           },
           org: {
-            username: connection.getUsername() as string,
+            username: standardConnection.getUsername() as string,
             exclude: [],
           },
         });
         const retrieve = await cs.retrieve({
-          usernameOrConnection: connection,
+          usernameOrConnection: standardConnection,
           merge: true,
           format: 'source',
           output: path.resolve(project.getPath(), defaultPackagePath),
@@ -316,7 +321,10 @@ export class Agent {
    * @returns the agent job spec
    */
   public static async createSpec(connection: Connection, config: AgentJobSpecCreateConfig): Promise<AgentJobSpec> {
-    const maybeMock = new MaybeMock(connection);
+    // Create ConnectionManager to get JWT connection for SFAP API calls
+    const connectionManager = await ConnectionManager.create(connection);
+    const jwtConnection = connectionManager.getJwtConnection();
+    const maybeMock = new MaybeMock(jwtConnection);
     verifyAgentSpecConfig(config);
 
     const url = '/connect/ai-assist/draft-agent-topics';

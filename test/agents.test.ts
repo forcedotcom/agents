@@ -57,6 +57,9 @@ describe('Agents', () => {
     // restore the connection sandbox so that it doesn't override the builtin mocking (MaybeMock)
     $$.SANDBOXES.CONNECTION.restore();
     connectionManager = createMockConnectionManager(connection);
+
+    // Stub ConnectionManager.create to return the mock connectionManager
+    $$.SANDBOX.stub(ConnectionManager, 'create').resolves(connectionManager);
   });
 
   afterEach(() => {
