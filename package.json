@@ -25,9 +25,9 @@
     "esbuild": "^0.28.0",
     "ts-morph": "^28.0.0",
     "ts-node": "^10.9.2",
-    "ts-patch": "^4.0.1",
+    "ts-patch": "^3.3.0",
     "typedoc": "^0.28.19",
-    "typescript": "^6.0.3"
+    "typescript": "^5.9.3"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -139,8 +139,7 @@
     "test:only": {
       "command": "nyc mocha \"test/**/*.test.ts\"",
       "env": {
-        "FORCE_COLOR": "2",
-        "TS_NODE_PROJECT": "test/tsconfig.json"
+        "FORCE_COLOR": "2"
       },
       "files": [
         "test/**/*.ts",
