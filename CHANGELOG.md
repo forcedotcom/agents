@@ -1,3 +1,77 @@
+## [1.6.4](https://github.com/forcedotcom/agents/compare/1.6.3...1.6.4) (2026-05-10)
+
+
+### Bug Fixes
+
+* **deps:** bump @salesforce/source-deploy-retrieve ([d17fbe3](https://github.com/forcedotcom/agents/commit/d17fbe3f2fd4e04021b811bfd84fd03026ebf299))
+
+
+
+## [1.6.3](https://github.com/forcedotcom/agents/compare/1.6.2...1.6.3) (2026-05-10)
+
+
+### Bug Fixes
+
+* **deps:** bump fast-xml-parser from 5.7.2 to 5.7.3 ([5c27849](https://github.com/forcedotcom/agents/commit/5c27849e1850189ad4979cf02682f753d596c0b7))
+
+
+
+## [1.6.2](https://github.com/forcedotcom/agents/compare/1.6.1...1.6.2) (2026-05-09)
+
+
+### Bug Fixes
+
+* **deps:** bump fast-uri from 3.1.1 to 3.1.2 ([de46dfc](https://github.com/forcedotcom/agents/commit/de46dfc7241d0a094a68a5fb9f1330290fa66385))
+
+
+
+## [1.6.1](https://github.com/forcedotcom/agents/compare/1.6.0...1.6.1) (2026-05-09)
+
+
+### Bug Fixes
+
+* **deps:** bump @salesforce/core from 8.29.0 to 8.29.1 ([748ddd3](https://github.com/forcedotcom/agents/commit/748ddd3accd256a2444dad862a534da6bf85ab3b))
+
+
+
+# [1.6.0](https://github.com/forcedotcom/agents/compare/1.5.2...1.6.0) (2026-05-08)
+
+
+### Bug Fixes
+
+* **test:** avoid process.chdir in trace util tests to prevent Windows EBUSY ([801eb20](https://github.com/forcedotcom/agents/commit/801eb202377bc3482f5ff7993a8771a79e0fb263))
+
+
+### Features
+
+* add listSessionTraces utility ([78a29c4](https://github.com/forcedotcom/agents/commit/78a29c4ed5d2d359d77d0d06b3ba3be8dcf00fcb))
+* add readSessionTrace and readTurnIndex utilities ([4402b50](https://github.com/forcedotcom/agents/commit/4402b50912f910ba8254720cc2c314df9ddb6d05))
+
+
+
+## [1.5.2](https://github.com/forcedotcom/agents/compare/1.5.1...1.5.2) (2026-05-07)
+
+
+### Bug Fixes
+
+* correct import order and unnecessary type assertion in test ([c8f899b](https://github.com/forcedotcom/agents/commit/c8f899bdbb357f906c58c8e6295d7cc23905a44b))
+* remove unnecessary type assertion flagged by eslint ([a52cb03](https://github.com/forcedotcom/agents/commit/a52cb036dc4e5b1b83d46228559ed0c68831c6a1))
+* type EvalOutput.response concretely and remove unknown[] from public API ([bda659d](https://github.com/forcedotcom/agents/commit/bda659d9befe6698f92950130e57d689385ce3f5))
+* update SOQL escape test to expect '' instead of \' ([007394d](https://github.com/forcedotcom/agents/commit/007394dfd5b7f6db76e2b3251b0e6b83fa981261))
+* use correct SOQL escaping and SfError for all thrown errors ([4feee54](https://github.com/forcedotcom/agents/commit/4feee549b43ddfc29035b32bc6948583ed1e5164))
+* use requestWithEndpointFallback for eval API to support sandbox/scratch orgs ([f871a07](https://github.com/forcedotcom/agents/commit/f871a0779f14c9954500d7032099fa1616ff4816))
+
+
+
+## [1.5.1](https://github.com/forcedotcom/agents/compare/1.5.0...1.5.1) (2026-05-07)
+
+
+### Bug Fixes
+
+* poll on all terminal states for AgentforceStudioTester @W-22143479@ @W-22143478@ ([#277](https://github.com/forcedotcom/agents/issues/277)) ([2ba8d03](https://github.com/forcedotcom/agents/commit/2ba8d03e3b9cac24a9d27e709cf4cd07d694a475))
+
+
+
 # [1.5.0](https://github.com/forcedotcom/agents/compare/1.4.0...1.5.0) (2026-05-05)
 
 

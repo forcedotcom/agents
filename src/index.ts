@@ -75,10 +75,13 @@ export {
   // Agent Trace Types
   type AgentTraceResponse,
   type AgentTraceStep,
+  type PlannerResponse,
+  type PlanStep,
   type UserInputStep,
   type LLMExecutionStep,
   type UpdateTopicStep,
   type EventStep,
+  type FunctionStep,
   type ReasoningStep,
   type PlannerResponseStep,
 
@@ -99,6 +102,12 @@ export {
   getCachedPreviewSessionIds,
   getCurrentPreviewSessionId,
   listCachedPreviewSessions,
+  listSessionTraces,
+  readSessionTrace,
+  readTurnIndex,
+  type TraceFileInfo,
+  type TurnIndex,
+  type TurnIndexEntry,
   type SessionType,
   type PreviewSessionMeta,
   type CachedPreviewSessionInfo,
@@ -120,3 +129,38 @@ export {
   type ReplacementConfig,
   type ReplacementResult,
 } from './stringReplacements';
+export {
+  normalizePayload,
+  normalizeMcpShorthand,
+  autoCorrectFields,
+  normalizeCamelCase,
+  normalizeEvaluatorFields,
+  convertShorthandRefs,
+  injectDefaults,
+  stripUnrecognizedFields,
+  splitIntoBatches,
+  type EvalPayload,
+  type EvalTest,
+  type EvalStep,
+} from './evalNormalizer';
+export {
+  formatResults,
+  type EvalApiResponse,
+  type EvalOutput,
+  type EvalResult,
+  type TestError,
+  type TestResult,
+  type ResultFormat,
+} from './evalFormatter';
+export {
+  isYamlTestSpec,
+  parseTestSpec,
+  translateTestSpec,
+  translateTestCase,
+} from './yamlSpecTranslator';
+export {
+  resolveAgent,
+  executeBatches,
+  buildResultSummary,
+  type AgentEvalRunResult,
+} from './agentEvalRunner';

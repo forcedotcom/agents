@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 import { existsSync, readdirSync, statSync } from 'node:fs';
-import { mkdir, appendFile, readFile, rename, writeFile, readdir, stat, unlink } from 'node:fs/promises';
+import { appendFile, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { Connection, Logger, SfError, SfProject } from '@salesforce/core';
 import { AvailableDefinition, NamedUserJwtResponse, type PlannerResponse, PreviewMetadata } from './types';
@@ -385,6 +385,70 @@ export const writeTraceToHistory = async (
   await mkdir(tracesDir, { recursive: true });
   const tracePath = path.join(tracesDir, `${planId}.json`);
   await writeFile(tracePath, JSON.stringify(trace ?? {}, null, 2), 'utf-8');
+};
+
+export type TraceFileInfo = {
+  planId: string;
+  path: string;
+  size: number;
+  mtime: Date;
+};
+
+/**
+ * List trace files for a given agent session.
+ *
+ * Returns one entry per .json file in the session's traces/ directory.
+ * File path is absolute. Returns an empty array if the traces directory does not exist.
+ */
+export const listSessionTraces = async (agentId: string, sessionId: string): Promise<TraceFileInfo[]> => {
+  const historyDir = await getHistoryDir(agentId, sessionId);
+  const tracesDir = path.join(historyDir, 'traces');
+  try {
+    const files = await readdir(tracesDir);
+    return await Promise.all(
+      files
+        .filter((f) => f.endsWith('.json'))
+        .map(async (f) => {
+          const filePath = path.join(tracesDir, f);
+          const s = await stat(filePath);
+          return { planId: path.basename(f, '.json'), path: filePath, size: s.size, mtime: s.mtime };
+        })
+    );
+  } catch {
+    return [];
+  }
+};
+
+/**
+ * Read a single trace file by planId. Returns null if the file does not exist or cannot be parsed.
+ */
+export const readSessionTrace = async (
+  agentId: string,
+  sessionId: string,
+  planId: string
+): Promise<PlannerResponse | null> => {
+  const historyDir = await getHistoryDir(agentId, sessionId);
+  const tracePath = path.join(historyDir, 'traces', `${planId}.json`);
+  try {
+    const raw = await readFile(tracePath, 'utf-8');
+    return JSON.parse(raw) as PlannerResponse;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Read the turn-index.json for a session. Returns null if not found.
+ */
+export const readTurnIndex = async (agentId: string, sessionId: string): Promise<TurnIndex | null> => {
+  const historyDir = await getHistoryDir(agentId, sessionId);
+  const turnIndexPath = path.join(historyDir, 'turn-index.json');
+  try {
+    const raw = await readFile(turnIndexPath, 'utf-8');
+    return JSON.parse(raw) as TurnIndex;
+  } catch {
+    return null;
+  }
 };
 
 /**

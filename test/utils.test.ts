@@ -33,7 +33,14 @@ import {
   getCachedPreviewSessionIds,
   getCurrentPreviewSessionId,
   listCachedPreviewSessions,
+  listSessionTraces,
+  readSessionTrace,
+  readTurnIndex,
+  writeTraceToHistory,
+  getHistoryDir,
+  type TurnIndex,
 } from '../src/utils';
+import type { PlannerResponse } from '../src/types';
 
 describe('requestWithEndpointFallback', () => {
   const $$ = new TestContext();
@@ -1117,4 +1124,148 @@ describe('JWT Token Protection', () => {
       expect(connection.accessToken).to.equal('jwt.valid.token');
     });
   });
+// ====================================================
+//        listSessionTraces / readSessionTrace / readTurnIndex
+// ====================================================
+
+const sampleTrace: PlannerResponse = {
+  type: 'PlanSuccessResponse',
+  planId: 'plan-1',
+  sessionId: 'sess-1',
+  intent: 'test intent',
+  topic: 'test topic',
+  plan: [],
+};
+
+const sampleTurnIndex: TurnIndex = {
+  version: '1',
+  sessionId: 'sess-1',
+  agentId: 'agent-1',
+  created: new Date().toISOString(),
+  turns: [],
+};
+
+// Shared setup for the three trace-utility suites.
+// Stubs SfProject.resolve so getHistoryDir routes into a temp directory
+// without ever calling process.chdir (which holds a directory handle on
+// Windows and causes EBUSY when afterEach tries to rmSync it).
+function makeTraceTestContext(): { projectPath: () => string } {
+  const $$ = new TestContext();
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'trace-test-'));
+    $$.SANDBOX.stub(SfProject, 'resolve').resolves({ getPath: () => tempDir } as SfProject);
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  return { projectPath: () => tempDir };
+}
+
+describe('listSessionTraces', () => {
+  const ctx = makeTraceTestContext();
+
+  it('returns empty array when traces directory does not exist', async () => {
+    const result = await listSessionTraces('agent-1', 'sess-1');
+    expect(result).to.deep.equal([]);
+  });
+
+  it('returns one entry per trace file', async () => {
+    const historyDir = await getHistoryDir('agent-1', 'sess-1');
+    await writeTraceToHistory('plan-1', sampleTrace, historyDir);
+    await writeTraceToHistory('plan-2', sampleTrace, historyDir);
+
+    const result = await listSessionTraces('agent-1', 'sess-1');
+    expect(result).to.have.lengthOf(2);
+    const planIds = result.map((r) => r.planId).sort();
+    expect(planIds).to.deep.equal(['plan-1', 'plan-2']);
+  });
+
+  it('each entry has planId, path, size, and mtime', async () => {
+    const historyDir = await getHistoryDir('agent-1', 'sess-1');
+    await writeTraceToHistory('plan-1', sampleTrace, historyDir);
+
+    const result = await listSessionTraces('agent-1', 'sess-1');
+    expect(result).to.have.lengthOf(1);
+    expect(result[0].planId).to.equal('plan-1');
+    expect(result[0].path).to.be.a('string').and.include('plan-1.json');
+    expect(result[0].size).to.be.greaterThan(0);
+    expect(result[0].mtime).to.be.instanceOf(Date);
+  });
+
+  it('ignores non-json files in traces directory', async () => {
+    const historyDir = await getHistoryDir('agent-1', 'sess-1');
+    await writeTraceToHistory('plan-1', sampleTrace, historyDir);
+    const { writeFile: wf } = await import('node:fs/promises');
+    await wf(join(historyDir, 'traces', 'README.txt'), 'ignore me', 'utf-8');
+
+    const result = await listSessionTraces('agent-1', 'sess-1');
+    expect(result).to.have.lengthOf(1);
+    expect(result[0].planId).to.equal('plan-1');
+  });
+
+  // ctx is referenced to keep the linter happy; the fixture is set up by
+  // makeTraceTestContext's beforeEach/afterEach above.
+  after(() => void ctx);
+});
+
+describe('readSessionTrace', () => {
+  const ctx = makeTraceTestContext();
+
+  it('returns null when trace file does not exist', async () => {
+    const result = await readSessionTrace('agent-1', 'sess-1', 'missing-plan');
+    expect(result).to.be.null;
+  });
+
+  it('returns parsed PlannerResponse for an existing trace', async () => {
+    const historyDir = await getHistoryDir('agent-1', 'sess-1');
+    await writeTraceToHistory('plan-1', sampleTrace, historyDir);
+
+    const result = await readSessionTrace('agent-1', 'sess-1', 'plan-1');
+    expect(result).to.deep.equal(sampleTrace);
+  });
+
+  it('returns null when trace file contains invalid JSON', async () => {
+    const historyDir = await getHistoryDir('agent-1', 'sess-1');
+    const { mkdir: mkd, writeFile: wf } = await import('node:fs/promises');
+    await mkd(join(historyDir, 'traces'), { recursive: true });
+    await wf(join(historyDir, 'traces', 'bad-plan.json'), 'not json', 'utf-8');
+
+    const result = await readSessionTrace('agent-1', 'sess-1', 'bad-plan');
+    expect(result).to.be.null;
+  });
+
+  after(() => void ctx);
+});
+
+describe('readTurnIndex', () => {
+  const ctx = makeTraceTestContext();
+
+  it('returns null when turn-index.json does not exist', async () => {
+    const result = await readTurnIndex('agent-1', 'sess-1');
+    expect(result).to.be.null;
+  });
+
+  it('returns parsed TurnIndex when file exists', async () => {
+    const historyDir = await getHistoryDir('agent-1', 'sess-1');
+    const { writeFile: wf } = await import('node:fs/promises');
+    await wf(join(historyDir, 'turn-index.json'), JSON.stringify(sampleTurnIndex), 'utf-8');
+
+    const result = await readTurnIndex('agent-1', 'sess-1');
+    expect(result).to.deep.equal(sampleTurnIndex);
+  });
+
+  it('returns null when turn-index.json contains invalid JSON', async () => {
+    const historyDir = await getHistoryDir('agent-1', 'sess-1');
+    const { writeFile: wf } = await import('node:fs/promises');
+    await wf(join(historyDir, 'turn-index.json'), 'not json', 'utf-8');
+
+    const result = await readTurnIndex('agent-1', 'sess-1');
+    expect(result).to.be.null;
+  });
+
+  after(() => void ctx);
 });

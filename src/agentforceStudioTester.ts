@@ -20,6 +20,7 @@ import { MaybeMock } from './maybe-mock';
 import { decodeHtmlEntities } from './utils';
 import {
   type AgentforceStudioTestStartResponse,
+  type AgentforceStudioTestStatus,
   type AgentforceStudioTestStatusResponse,
   type AgentforceStudioTestResultsResponse,
 } from './types.js';
@@ -129,7 +130,8 @@ export class AgentforceStudioTester {
             passingTestCases,
           });
 
-          if (resultsResponse.status.toLowerCase() === 'success') {
+          const terminalStatuses: AgentforceStudioTestStatus[] = ['SUCCESS', 'FAILED', 'TERMINATED'];
+          if (terminalStatuses.includes(resultsResponse.status as AgentforceStudioTestStatus)) {
             return { payload: resultsResponse, completed: true };
           }
         }
