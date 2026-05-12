@@ -255,4 +255,15 @@ export class ConnectionManager {
   public inspectJwt(): JwtValidationResult {
     return ConnectionManager.validateJwt(this.jwtConnection.accessToken ?? undefined);
   }
+
+  /**
+   * Refreshes the standard connection by clearing the access token and requesting a new one.
+   * This is useful after agent operations to ensure subsequent org operations work correctly.
+   *
+   * @throws {SfError} If the refresh fails
+   */
+  public async refreshStandardConnection(): Promise<void> {
+    delete this.standardConnection.accessToken;
+    await this.standardConnection.refreshAuth();
+  }
 }

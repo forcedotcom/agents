@@ -39,6 +39,14 @@ export abstract class AgentBase {
 
   protected constructor(protected readonly connectionManager: ConnectionManager) {}
 
+  /**
+   * Restore the connection by refreshing the standard (non-JWT) connection.
+   *
+   */
+  public async restoreConnection(): Promise<void> {
+    await this.connectionManager.refreshStandardConnection();
+  }
+
   public setSessionId(sessionId: string): void {
     this.sessionId = sessionId;
   }
