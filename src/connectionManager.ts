@@ -97,7 +97,7 @@ export class ConnectionManager {
     logger.debug('Standard connection created');
 
     // Create and validate JWT connection for SFAP
-    const jwtConn = await this.createAndValidateJwtConnection(connection, logger);
+    const jwtConn = await this.createAndValidateJwtConnection(username, logger);
     logger.debug('JWT connection created and validated');
 
     return new ConnectionManager(jwtConn, standardConn);
@@ -114,12 +114,10 @@ export class ConnectionManager {
   /**
    * Creates and validates a JWT connection for SFAP operations.
    */
-  private static async createAndValidateJwtConnection(
-    connection: Connection,
-    logger: Logger
-  ): Promise<Connection> {
-    // Upgrade to JWT (useNamedUserJwt creates a new connection internally)
-    const upgraded = await useNamedUserJwt(connection);
+  private static async createAndValidateJwtConnection(username: string, logger: Logger): Promise<Connection> {
+    // Upgrade a fresh connection to JWT so caller-provided connections remain untouched.
+    const isolatedConnection = await this.createStandardConnection(username);
+    const upgraded = await useNamedUserJwt(isolatedConnection);
     logger.debug('Connection upgraded to JWT');
 
     // Validate JWT immediately after creation
