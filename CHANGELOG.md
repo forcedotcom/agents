@@ -1,3 +1,13 @@
+## [1.6.5](https://github.com/forcedotcom/agents/compare/1.6.4...1.6.5) (2026-05-13)
+
+
+### Bug Fixes
+
+* **deps:** bump major dependency versions ([200187d](https://github.com/forcedotcom/agents/commit/200187da1ed8407d2f4763a37496e68778e5589b))
+* revert typescript and ts-patch to v5/v3 ([f98ffcb](https://github.com/forcedotcom/agents/commit/f98ffcb4df9623fc18156fa130747845ae2a2060))
+
+
+
 ## [1.6.4](https://github.com/forcedotcom/agents/compare/1.6.3...1.6.4) (2026-05-10)
 
 
