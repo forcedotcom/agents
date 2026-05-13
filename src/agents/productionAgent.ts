@@ -41,7 +41,6 @@ import {
   SessionHistoryBuffer,
 } from '../utils';
 import { createTraceFlag, findTraceFlag, getDebugLog } from '../apexUtils';
-import { ConnectionManager } from '../connectionManager';
 import { AgentBase } from './agentBase';
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agents');
@@ -53,8 +52,8 @@ export class ProductionAgent extends AgentBase {
   private apiName: string | undefined;
   private readonly apiBase: string;
 
-  public constructor(private options: ProductionAgentOptions, connectionManager?: ConnectionManager) {
-    super(options.connection, connectionManager);
+  public constructor(private options: ProductionAgentOptions) {
+    super(options.connection);
     this.apiBase = 'https://api.salesforce.com/einstein/ai-agent/v1';
     if (!options.apiNameOrId) {
       throw messages.createError('missingAgentNameOrId');
@@ -83,7 +82,8 @@ export class ProductionAgent extends AgentBase {
         'Id, IsDeleted, DeveloperName, MasterLabel, CreatedDate, CreatedById, LastModifiedDate, LastModifiedById, SystemModstamp, BotUserId, Description, Type, AgentType, AgentTemplate';
       const botVersionFields =
         'Id, Status, IsDeleted, BotDefinitionId, DeveloperName, CreatedDate, CreatedById, LastModifiedDate, LastModifiedById, SystemModstamp, VersionNumber, CopilotPrimaryLanguage, ToneType, CopilotSecondaryLanguages';
-      this.botMetadata = await this.connection.singleRecordQuery<BotMetadata>(
+      const standardConn = await this.getStandardConnection();
+      this.botMetadata = await standardConn.singleRecordQuery<BotMetadata>(
         `SELECT ${botDefinitionFields}, (SELECT ${botVersionFields} FROM BotVersions WHERE IsDeleted = false ORDER BY VersionNumber) FROM BotDefinition WHERE ${whereClause} LIMIT 1`
       );
       this.id = this.botMetadata.Id;
@@ -209,9 +209,10 @@ export class ProductionAgent extends AgentBase {
   protected async handleApexDebuggingSetup(): Promise<void> {
     const botMetadata = await this.getBotMetadata();
     if (botMetadata.BotUserId) {
-      const traceFlag = await findTraceFlag(this.connection, botMetadata.BotUserId);
+      const standardConn = await this.getStandardConnection();
+      const traceFlag = await findTraceFlag(standardConn, botMetadata.BotUserId);
       if (!traceFlag) {
-        await createTraceFlag(this.connection, botMetadata.BotUserId);
+        await createTraceFlag(standardConn, botMetadata.BotUserId);
       }
     }
   }
@@ -265,7 +266,7 @@ export class ProductionAgent extends AgentBase {
       };
       await logTurnToHistory(userEntry, ++this.turnCounter, this.historyDir, this.historyBuffer);
 
-      const response = await requestWithEndpointFallback<AgentPreviewSendResponse>(this.getJwtConnection(), {
+      const response = await requestWithEndpointFallback<AgentPreviewSendResponse>(await this.getJwtConnection(), {
         method: 'POST',
         url,
         body: JSON.stringify(body),
@@ -297,7 +298,7 @@ export class ProductionAgent extends AgentBase {
       await this.historyBuffer.flush();
 
       if (this.apexDebugging && this.canApexDebug()) {
-        const apexLog = await getDebugLog(this.connection, start, Date.now());
+        const apexLog = await getDebugLog(await this.getStandardConnection(), start, Date.now());
         if (apexLog) {
           response.apexDebugLog = apexLog;
         }
@@ -323,7 +324,7 @@ export class ProductionAgent extends AgentBase {
     }
 
     const url = `/connect/bot-versions/${botVersionMetadata.Id}/activation`;
-    const maybeMock = new MaybeMock(this.getJwtConnection());
+    const maybeMock = new MaybeMock(await this.getJwtConnection());
     const response = await maybeMock.request<BotActivationResponse>('POST', url, { status: desiredState });
     if (response.success) {
       const versionToUpdate = this.botMetadata!.BotVersions.records.find(
@@ -361,7 +362,7 @@ export class ProductionAgent extends AgentBase {
     };
 
     try {
-      const response = await requestWithEndpointFallback<AgentPreviewStartResponse>(this.getJwtConnection(), {
+      const response = await requestWithEndpointFallback<AgentPreviewStartResponse>(await this.getJwtConnection(), {
         method: 'POST',
         url,
         body: JSON.stringify(body),
@@ -423,7 +424,7 @@ export class ProductionAgent extends AgentBase {
     const url = `${this.apiBase}/sessions/${this.sessionId}`;
     try {
       // https://developer.salesforce.com/docs/einstein/genai/guide/agent-api-examples.html#end-session
-      const response = await requestWithEndpointFallback<AgentPreviewEndResponse>(this.getJwtConnection(), {
+      const response = await requestWithEndpointFallback<AgentPreviewEndResponse>(await this.getJwtConnection(), {
         method: 'DELETE',
         url,
         headers: {

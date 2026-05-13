@@ -49,7 +49,6 @@ import {
 import { getDebugLog } from '../apexUtils';
 import { generateAgentScript } from '../templates/agentScriptTemplate';
 import { applyStringReplacementsToAgent } from '../stringReplacements';
-import { ConnectionManager } from '../connectionManager';
 import { ScriptAgentPublisher } from './scriptAgentPublisher';
 import { AgentBase } from './agentBase';
 
@@ -64,9 +63,8 @@ export class ScriptAgent extends AgentBase {
   private readonly aabDirectory: string;
   private readonly metaContent: string;
   private readonly agentFilePath: string;
-  public constructor(private options: ScriptAgentOptions, connectionManager?: ConnectionManager) {
-    super(options.connection, connectionManager);
-    this.options = options;
+  public constructor(private options: ScriptAgentOptions) {
+    super(options.connection);
     this.apiBase = 'https://api.salesforce.com/einstein/ai-agent';
 
     // Find the AAB directory using the project
@@ -170,7 +168,7 @@ export class ScriptAgent extends AgentBase {
   }
 
   public async getTrace(planId: string): Promise<PlannerResponse> {
-    return requestWithEndpointFallback<PlannerResponse>(this.getJwtConnection(), {
+    return requestWithEndpointFallback<PlannerResponse>(await this.getJwtConnection(), {
       method: 'GET',
       url: `${this.apiBase}/v1.1/preview/sessions/${this.sessionId!}/plans/${planId}`,
       headers: {
@@ -206,7 +204,7 @@ export class ScriptAgent extends AgentBase {
 
     try {
       const response = await requestWithEndpointFallback<CompileAgentScriptResponse>(
-        this.getJwtConnection(),
+        await this.getJwtConnection(),
         {
           method: 'POST',
           url,
@@ -275,8 +273,7 @@ export class ScriptAgent extends AgentBase {
       this.options.connection,
       this.options.project,
       this.agentJson!,
-      skipMetadataRetrieve,
-      this.connectionManager
+      skipMetadataRetrieve
     );
     return publisher.publishAgentJson();
   }
@@ -397,7 +394,7 @@ export class ScriptAgent extends AgentBase {
         this.historyBuffer
       );
 
-      const response = await requestWithEndpointFallback<AgentPreviewSendResponse>(this.getJwtConnection(), {
+      const response = await requestWithEndpointFallback<AgentPreviewSendResponse>(await this.getJwtConnection(), {
         method: 'POST',
         url,
         body: JSON.stringify(body),
@@ -434,7 +431,7 @@ export class ScriptAgent extends AgentBase {
       await this.historyBuffer.flush();
 
       if (this.apexDebugging && this.canApexDebug()) {
-        const apexLog = await getDebugLog(this.connection, start, Date.now());
+        const apexLog = await getDebugLog(await this.getStandardConnection(), start, Date.now());
         if (apexLog) {
           response.apexDebugLog = apexLog;
         }
@@ -472,9 +469,10 @@ export class ScriptAgent extends AgentBase {
     }
 
     // send bypassUser=false when the compiledAgent.globalConfiguration.defaultAgentUser is INVALID
+    const standardConn = await this.getStandardConnection();
     let bypassUser =
       (
-        await this.connection.query<{ Id: string }>(
+        await standardConn.query<{ Id: string }>(
           `SELECT Id FROM USER WHERE username='${this.agentJson.globalConfiguration.defaultAgentUser}'`
         )
       ).totalSize === 1;
@@ -511,7 +509,7 @@ export class ScriptAgent extends AgentBase {
       let response: AgentPreviewStartResponse;
       try {
         response = await requestWithEndpointFallback<AgentPreviewStartResponse>(
-          this.getJwtConnection(),
+          await this.getJwtConnection(),
           {
             method: 'POST',
             url: `${this.apiBase}/v1.1/preview/sessions`,

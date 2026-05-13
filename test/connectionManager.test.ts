@@ -17,7 +17,7 @@
 import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { AuthInfo, Connection, SfError } from '@salesforce/core';
-import { ConnectionManager } from '../src/connectionManager';
+import { ConnectionManager, managerFor, setManagerForTesting } from '../src/connectionManager';
 import * as utils from '../src/utils';
 
 // Build a minimally valid JWT (header.payload.signature) for tests.
@@ -203,6 +203,76 @@ describe('ConnectionManager', () => {
       expect(refreshAuthStub.calledOnce).to.be.true;
       expect(jwtRefreshStub.called).to.be.false;
       expect(standardConn.accessToken).to.be.undefined;
+    });
+  });
+
+  describe('managerFor', () => {
+    it('returns the same manager for repeat calls with the same Connection', async () => {
+      const fake = {} as ConnectionManager;
+      setManagerForTesting(callerConnection, fake);
+
+      const a = await managerFor(callerConnection);
+      const b = await managerFor(callerConnection);
+
+      expect(a).to.equal(fake);
+      expect(b).to.equal(fake);
+    });
+
+    it('returns distinct managers for different Connection objects', async () => {
+      const otherConn = await testOrg.getConnection();
+      const m1 = {} as ConnectionManager;
+      const m2 = {} as ConnectionManager;
+      setManagerForTesting(callerConnection, m1);
+      setManagerForTesting(otherConn, m2);
+
+      expect(await managerFor(callerConnection)).to.equal(m1);
+      expect(await managerFor(otherConn)).to.equal(m2);
+    });
+
+    it('deduplicates concurrent first-time callers to a single bootstrap', async () => {
+      const otherConn = await testOrg.getConnection();
+      // No seeded manager — let the real ConnectionManager.create run, but stub its
+      // dependencies so we can count bootstraps.
+      const stub = $$.SANDBOX.stub(utils, 'useNamedUserJwt').callsFake(async (conn: Connection) => {
+        conn.accessToken = makeJwt(validPayload);
+        return conn;
+      });
+      const seedConn = await testOrg.getConnection();
+      $$.SANDBOX.stub(AuthInfo, 'create').resolves({} as AuthInfo);
+      $$.SANDBOX.stub(Connection, 'create').resolves(seedConn);
+
+      const [a, b] = await Promise.all([managerFor(otherConn), managerFor(otherConn)]);
+
+      expect(a).to.equal(b);
+      expect(stub.callCount).to.equal(1);
+    });
+
+    it('evicts the cache entry when bootstrap fails so a retry can succeed', async () => {
+      const otherConn = await testOrg.getConnection();
+      $$.SANDBOX.stub(otherConn, 'getUsername')
+        .onFirstCall()
+        .returns(undefined)
+        .onSecondCall()
+        .returns('u@example.com');
+      $$.SANDBOX.stub(utils, 'useNamedUserJwt').callsFake(async (conn: Connection) => {
+        conn.accessToken = makeJwt(validPayload);
+        return conn;
+      });
+      const seedConn = await testOrg.getConnection();
+      $$.SANDBOX.stub(AuthInfo, 'create').resolves({} as AuthInfo);
+      $$.SANDBOX.stub(Connection, 'create').resolves(seedConn);
+
+      // First call fails with MissingUsername.
+      try {
+        await managerFor(otherConn);
+        expect.fail('expected first managerFor call to throw');
+      } catch (err) {
+        expect((err as SfError).name).to.equal('MissingUsername');
+      }
+
+      // Second call should retry and succeed because the failed entry was evicted.
+      const manager = await managerFor(otherConn);
+      expect(manager).to.be.instanceOf(ConnectionManager);
     });
   });
 });
