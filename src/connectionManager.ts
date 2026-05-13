@@ -20,7 +20,7 @@ import { useNamedUserJwt } from './utils';
 /**
  * Result of JWT validation
  */
-export interface JwtValidationResult {
+export type JwtValidationResult = {
   isValid: boolean;
   hasRequiredFields: boolean;
   missingFields: string[];
@@ -31,7 +31,7 @@ export interface JwtValidationResult {
   issuer?: string;
   appId?: string;
   scopes?: string[];
-}
+};
 
 /**
  * Manages JWT and standard connections for agent operations.
@@ -70,14 +70,14 @@ export class ConnectionManager {
   /**
    * Creates a new ConnectionManager instance.
    *
-   * This method:
-   * 1. Creates a standard org connection
-   * 2. Creates and validates a JWT connection for SFAP
-   * 3. Installs a guard to prevent JWT corruption
+   * Builds two separate Connection objects derived from the username on the supplied
+   * connection: a standard connection for org-instance operations (SOQL, tooling,
+   * metadata) and a JWT-upgraded connection for SFAP API calls. The supplied
+   * connection is read-only — it is never mutated.
    *
-   * @param connection - The base connection to use
+   * @param connection - The connection whose username is used to derive the new connections
    * @returns A new ConnectionManager instance
-   * @throws {SfError} If JWT creation or validation fails
+   * @throws {SfError} If JWT creation or validation fails, or if the connection has no username
    */
   public static async create(connection: Connection): Promise<ConnectionManager> {
     const logger = Logger.childFromRoot('ConnectionManager');
@@ -92,53 +92,59 @@ export class ConnectionManager {
 
     logger.debug(`Creating ConnectionManager for user: ${username}`);
 
-    // Create standard connection for org operations
-    const standardConn = await this.createStandardConnection(username);
-    logger.debug('Standard connection created');
+    // Build two fresh, independent connections — one for org operations, one for SFAP JWT.
+    // Building from username (not from the caller's connection object) guarantees the
+    // caller's connection is not mutated by the JWT upgrade.
+    const standardConn = await this.createConnectionFromUsername(username);
+    const jwtSeed = await this.createConnectionFromUsername(username);
+    logger.debug('Standard and JWT seed connections created');
 
-    // Create and validate JWT connection for SFAP
-    const jwtConn = await this.createAndValidateJwtConnection(connection, logger);
+    const jwtConn = await this.createAndValidateJwtConnection(jwtSeed, logger);
     logger.debug('JWT connection created and validated');
 
     return new ConnectionManager(jwtConn, standardConn);
   }
 
   /**
-   * Creates a fresh standard connection for org-instance operations.
+   * Creates a fresh Connection from a username. Used for both the standard and JWT
+   * connections so the caller's original Connection object is never mutated.
    */
-  private static async createStandardConnection(username: string): Promise<Connection> {
+  private static async createConnectionFromUsername(username: string): Promise<Connection> {
     const authInfo = await AuthInfo.create({ username });
     return Connection.create({ authInfo });
   }
 
   /**
-   * Creates and validates a JWT connection for SFAP operations.
+   * Upgrades a connection to a JWT connection for SFAP operations and validates the result.
+   * The connection passed in is mutated (its accessToken is replaced with the JWT) — callers
+   * must pass a fresh, isolated Connection rather than a connection they care about.
    */
-  private static async createAndValidateJwtConnection(
-    connection: Connection,
-    logger: Logger
-  ): Promise<Connection> {
-    // Upgrade to JWT (useNamedUserJwt creates a new connection internally)
+  private static async createAndValidateJwtConnection(connection: Connection, logger: Logger): Promise<Connection> {
     const upgraded = await useNamedUserJwt(connection);
     logger.debug('Connection upgraded to JWT');
 
-    // Validate JWT immediately after creation
     const validation = this.validateJwt(upgraded.accessToken ?? undefined);
 
     if (!validation.isValid) {
       logger.error('JWT validation failed:', validation);
+      const actions = ['Ensure your Connected App has the correct scopes: chatbot_api, sfap_api, web'];
+      if (validation.missingFields.length > 0) {
+        actions.push(`JWT missing required fields: ${validation.missingFields.join(', ')}`);
+      }
+      if (validation.isExpired) {
+        actions.push('JWT is expired - ensure system time is correct');
+      }
       throw SfError.create({
         name: 'InvalidJwtToken',
         message: 'Failed to create valid JWT for SFAP access',
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        data: { validation: JSON.parse(JSON.stringify(validation)) },
-        actions: [
-          'Ensure your Connected App has the correct scopes: chatbot_api, sfap_api, web',
-          validation.missingFields.length > 0
-            ? `JWT missing required fields: ${validation.missingFields.join(', ')}`
-            : '',
-          validation.isExpired ? 'JWT is expired - ensure system time is correct' : '',
-        ].filter(Boolean),
+        data: {
+          validation: {
+            ...validation,
+            expiresAt: validation.expiresAt?.toISOString(),
+            issuedAt: validation.issuedAt?.toISOString(),
+          },
+        },
+        actions,
       });
     }
 

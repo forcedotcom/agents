@@ -151,7 +151,7 @@ describe('Agents', () => {
       });
       requestStub.withArgs(sinon.match.has('url', sinon.match(/authoring\/scripts/))).rejects(err404);
 
-      const agent = new ScriptAgent({ connection, connectionManager, project: sfProject!, aabName: 'myAgent' });
+      const agent = new ScriptAgent({ connection, project: sfProject!, aabName: 'myAgent' }, connectionManager);
       try {
         await agent.compile();
         expect.fail('Expected compile() to throw');
@@ -170,7 +170,7 @@ describe('Agents', () => {
       });
       requestStub.withArgs(sinon.match.has('url', sinon.match(/authoring\/scripts/))).rejects(err500);
 
-      const agent = new ScriptAgent({ connection, connectionManager, project: sfProject!, aabName: 'myAgent' });
+      const agent = new ScriptAgent({ connection, project: sfProject!, aabName: 'myAgent' }, connectionManager);
       try {
         await agent.compile();
         expect.fail('Expected compile() to throw');
@@ -264,7 +264,7 @@ describe('Agents', () => {
         entityId: 'test-entity-id',
       } as never);
 
-      const agent = new ScriptAgent({ connection, connectionManager, project: sfProject!, aabName: 'myAgent' });
+      const agent = new ScriptAgent({ connection, project: sfProject!, aabName: 'myAgent' }, connectionManager);
       // Replacements are applied during publish flow
       await agent.publish();
 
@@ -365,7 +365,7 @@ describe('Agents', () => {
         dslVersion: '0.0.3.rc29',
       });
 
-      const agent = new ScriptAgent({ connection, connectionManager, project: sfProject!, aabName: 'myAgent' });
+      const agent = new ScriptAgent({ connection, project: sfProject!, aabName: 'myAgent' }, connectionManager);
       // compile() never applies replacements (only publish does)
       const compileResult = await agent.compile();
 
@@ -517,13 +517,11 @@ describe('Agents', () => {
         dslVersion: '0.0.3.rc29',
       });
       // Bootstrap endpoint for compile - return valid JWT format token
-      requestStub
-        .withArgs(sinon.match({ url: `${connection.instanceUrl}/agentforce/bootstrap/nameduser` }))
-        .resolves({
-          // eslint-disable-next-line camelcase
-          access_token:
-            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoidGVzdCJ9.4Adcj0vVzk6B5R-9X8kBR1R0N0FhT3ZSY0J5Z1Z4Y2c',
-        });
+      requestStub.withArgs(sinon.match({ url: `${connection.instanceUrl}/agentforce/bootstrap/nameduser` })).resolves({
+        // eslint-disable-next-line camelcase
+        access_token:
+          'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoidGVzdCJ9.4Adcj0vVzk6B5R-9X8kBR1R0N0FhT3ZSY0J5Z1Z4Y2c',
+      });
       // Publish endpoint should return error response
       requestStub.withArgs(sinon.match({ url: sinon.match(/ai-agent\/v1\.1\/authoring\/agents/) })).resolves({
         isSuccess: false,
@@ -619,13 +617,11 @@ describe('Agents', () => {
       // 1. Return valid JWT for nameduser endpoint
       // 2. Reject for all other requests with internal error
       const requestStub = $$.SANDBOX.stub(connection, 'request');
-      requestStub
-        .withArgs(sinon.match({ url: `${connection.instanceUrl}/agentforce/bootstrap/nameduser` }))
-        .resolves({
-          // eslint-disable-next-line camelcase
-          access_token:
-            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoidGVzdCJ9.4Adcj0vVzk6B5R-9X8kBR1R0N0FhT3ZSY0J5Z1Z4Y2c',
-        });
+      requestStub.withArgs(sinon.match({ url: `${connection.instanceUrl}/agentforce/bootstrap/nameduser` })).resolves({
+        // eslint-disable-next-line camelcase
+        access_token:
+          'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoidGVzdCJ9.4Adcj0vVzk6B5R-9X8kBR1R0N0FhT3ZSY0J5Z1Z4Y2c',
+      });
       requestStub.rejects(internalError);
 
       $$.SANDBOX.stub(connection, 'query')
