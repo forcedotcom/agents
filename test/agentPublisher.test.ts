@@ -23,12 +23,14 @@ import { ComponentSetBuilder, ComponentSet, MetadataApiRetrieve } from '@salesfo
 import { type AgentJson } from '../src';
 import * as utils from '../src/utils';
 import { ScriptAgentPublisher } from '../src/agents/scriptAgentPublisher';
+import { ConnectionManager, setManagerForTesting } from '../src/connectionManager';
 import { testAgentJson } from './testData';
 
 describe('AgentPublisher', () => {
   const $$ = new TestContext();
   let testOrg: MockTestOrgData;
   let connection: Connection;
+  let connectionManager: ConnectionManager;
   let sfProject: SfProject;
   let agentJson: AgentJson;
 
@@ -40,6 +42,22 @@ describe('AgentPublisher', () => {
       bundleFilePath,
       '<?xml version="1.0" encoding="UTF-8"?>\n<AiAuthoringBundle xmlns="http://soap.sforce.com/2006/04/metadata">\n</AiAuthoringBundle>'
     );
+  }
+
+  function createMockConnectionManager(conn: Connection): ConnectionManager {
+    // Cast to unknown first to avoid type errors with private properties
+    return {
+      jwtConnection: conn,
+      standardConnection: conn,
+      getJwtConnection: () => conn,
+      getStandardConnection: () => conn,
+      inspectJwt: () => ({
+        isValid: true,
+        hasRequiredFields: true,
+        missingFields: [],
+        isExpired: false,
+      }),
+    } as unknown as ConnectionManager;
   }
 
   function createValidateDeveloperNameStub(
@@ -64,6 +82,12 @@ describe('AgentPublisher', () => {
     // restore the connection sandbox so that it doesn't override the builtin mocking (MaybeMock)
     $$.SANDBOXES.CONNECTION.restore();
 
+    // Create mock ConnectionManager and seed the per-Connection cache so production
+    // code paths that call managerFor(connection) get the mock instead of doing a real
+    // JWT bootstrap.
+    connectionManager = createMockConnectionManager(connection);
+    setManagerForTesting(connection, connectionManager);
+
     sfProject = SfProject.getInstance();
     // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
     $$.SANDBOX.stub(sfProject, 'getDefaultPackage').returns({ path: 'force-app' } as any);
@@ -86,7 +110,7 @@ describe('AgentPublisher', () => {
     it('should validate developer name and bundle directory during construction', async () => {
       await createTestBundleStructure();
 
-      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
       expect(publisher['developerName']).to.equal('test_agent');
       expect(publisher['bundleMetaPath']).to.include('test_agent.bundle-meta.xml');
     });
@@ -100,7 +124,7 @@ describe('AgentPublisher', () => {
         },
       };
 
-      expect(() => new ScriptAgentPublisher(connection, sfProject, agentJsonNoBundle)).to.throw(SfError);
+      expect(() => new ScriptAgentPublisher(connection, sfProject, agentJsonNoBundle, false)).to.throw(SfError);
     });
   });
 
@@ -120,7 +144,7 @@ describe('AgentPublisher', () => {
         .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
         .resolves({ DeveloperName: 'v1' });
 
-      publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
+      publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
 
       // Mock useNamedUserJwt to return the connection without making HTTP calls
       $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
@@ -182,7 +206,7 @@ describe('AgentPublisher', () => {
         .resolves({ DeveloperName: 'v1' });
 
       // Note: constructor called WITHOUT the 4th arg (defaults to false)
-      publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
+      publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
 
       // Mock useNamedUserJwt to return the connection without making HTTP calls
       $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
@@ -205,7 +229,7 @@ describe('AgentPublisher', () => {
     it('should publish new version of an existing agent when there is a bot in the org for the given developer name', async () => {
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishNewAgentVersion-Success');
 
-      publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
+      publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
 
       // Mock useNamedUserJwt to return the connection without making HTTP calls
       $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
@@ -236,7 +260,7 @@ describe('AgentPublisher', () => {
     it('should handle API errors during publishing', async () => {
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishAgentJson-Error');
 
-      publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
+      publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
 
       // Mock useNamedUserJwt to return the connection without making HTTP calls
       $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
@@ -253,7 +277,7 @@ describe('AgentPublisher', () => {
       }
     });
 
-    it('should call refreshAuth in finally block when connection has a refresh token', async () => {
+    it('should not mutate the caller-supplied connection during publish', async () => {
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishNewAgent-Success');
       $$.SANDBOX.stub(connection, 'singleRecordQuery')
         .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
@@ -261,15 +285,10 @@ describe('AgentPublisher', () => {
         .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
         .resolves({ DeveloperName: 'v1' });
 
-      publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
-
-      $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
-
-      // Stub getAuthInfoFields to return a refresh token
-      $$.SANDBOX.stub(connection, 'getAuthInfoFields').returns({
-        refreshToken: 'some-refresh-token',
-      });
+      const originalAccessToken = connection.accessToken;
       const refreshStub = $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
+
+      publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       $$.SANDBOX.stub(publisher as any, 'retrieveAgentMetadata').resolves();
@@ -278,34 +297,9 @@ describe('AgentPublisher', () => {
 
       await publisher.publishAgentJson();
 
-      expect(refreshStub.calledOnce).to.be.true;
-    });
-
-    it('should skip refreshAuth in finally block when connection has no refresh token (ECA auth)', async () => {
-      process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishNewAgent-Success');
-      $$.SANDBOX.stub(connection, 'singleRecordQuery')
-        .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
-        .throws(new Error('No records found'))
-        .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
-        .resolves({ DeveloperName: 'v1' });
-
-      publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
-
-      $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
-
-      // Stub getAuthInfoFields to return NO refresh token (ECA auth)
-      $$.SANDBOX.stub(connection, 'getAuthInfoFields').returns({});
-      const refreshStub = $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      $$.SANDBOX.stub(publisher as any, 'retrieveAgentMetadata').resolves();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      $$.SANDBOX.stub(publisher as any, 'deployAuthoringBundle').resolves();
-
-      await publisher.publishAgentJson();
-
-      // refreshAuth should NOT be called when there's no refresh token
+      // The caller's connection should be untouched: no refresh, no token swap.
       expect(refreshStub.called).to.be.false;
+      expect(connection.accessToken).to.equal(originalAccessToken);
     });
   });
 
@@ -314,7 +308,7 @@ describe('AgentPublisher', () => {
       // Create minimal publisher instance by mocking validateDeveloperName
       const validateStub = createValidateDeveloperNameStub();
 
-      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
 
       const expectedBotId = '0Xx1234567890ABC';
       $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves({ Id: expectedBotId });
@@ -332,7 +326,7 @@ describe('AgentPublisher', () => {
       // Create minimal publisher instance by mocking validateDeveloperName
       const validateStub = createValidateDeveloperNameStub();
 
-      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
 
       $$.SANDBOX.stub(connection, 'singleRecordQuery').throws(new Error('No records found'));
 
@@ -351,7 +345,7 @@ describe('AgentPublisher', () => {
       // Create minimal publisher instance by mocking validateDeveloperName
       const validateStub = createValidateDeveloperNameStub();
 
-      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
 
       const expectedVersionName = 'v1';
       $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves({ DeveloperName: expectedVersionName });
@@ -369,7 +363,7 @@ describe('AgentPublisher', () => {
       // Create minimal publisher instance by mocking validateDeveloperName
       const validateStub = createValidateDeveloperNameStub();
 
-      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
 
       $$.SANDBOX.stub(connection, 'singleRecordQuery').throws(new Error('No records found'));
 
@@ -398,7 +392,7 @@ describe('AgentPublisher', () => {
         '/nonexistent/path/test_agent.bundle-meta.xml'
       );
 
-      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
 
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
       const deployAuthoringBundle = (publisher as any).deployAuthoringBundle.bind(publisher);
@@ -422,12 +416,9 @@ describe('AgentPublisher', () => {
       const bundleMetaPath = join(bundleDir, `${developerName}.bundle-meta.xml`);
 
       const validateStub = createValidateDeveloperNameStub(developerName, bundleDir, bundleMetaPath);
-      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
 
-      // Force a deterministic standard connection for the deploy path
-      const standardConnection = { id: 'standard-connection' } as unknown as Connection;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      $$.SANDBOX.stub(publisher as any, 'createStandardConnection').resolves(standardConnection);
+      // The standard connection is already set up in connectionManager via createMockConnectionManager
 
       // Mock ComponentSet.fromSource(...).deploy(...).pollStatus()
       const pollStatusStub = $$.SANDBOX.stub().resolves({ response: { success: true } } as never);
@@ -449,7 +440,7 @@ describe('AgentPublisher', () => {
       expect(fromSourceStub.calledOnce).to.be.true;
       expect(fromSourceStub.firstCall.args[0]).to.equal(bundleDir);
       expect(deployStub.calledOnce).to.be.true;
-      expect(deployStub.firstCall.args[0]).to.deep.equal({ usernameOrConnection: standardConnection });
+      expect(deployStub.firstCall.args[0]).to.deep.equal({ usernameOrConnection: connection });
 
       // Ensure the target was removed from the local file after deploy
       const finalContent = await readFile(bundleMetaPath, 'utf-8');
@@ -480,7 +471,7 @@ describe('AgentPublisher', () => {
       $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
       const buildStub = $$.SANDBOX.stub(ComponentSetBuilder, 'build').resolves(compSet);
 
-      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
 
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
       const retrieveAgentMetadata = (publisher as any).retrieveAgentMetadata.bind(publisher);
@@ -514,7 +505,7 @@ describe('AgentPublisher', () => {
       $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
       $$.SANDBOX.stub(ComponentSetBuilder, 'build').resolves(compSet);
 
-      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
 
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
       const retrieveAgentMetadata = (publisher as any).retrieveAgentMetadata.bind(publisher);
@@ -617,7 +608,7 @@ describe('AgentPublisher', () => {
       };
 
       const validateStub = createValidateDeveloperNameStub();
-      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJsonWithNodes);
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJsonWithNodes, false);
 
       // Setup successful metadata retrieval mock
       const compSet = new ComponentSet();
@@ -694,7 +685,7 @@ describe('AgentPublisher', () => {
       };
 
       const validateStub = createValidateDeveloperNameStub();
-      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJsonWithNodesNoTools);
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJsonWithNodesNoTools, false);
 
       // Setup successful metadata retrieval mock
       const compSet = new ComponentSet();
@@ -742,7 +733,7 @@ describe('AgentPublisher', () => {
     it('should not include GenAiPlugin and GenAiFunction entries when nodes array is empty', async () => {
       // Use the default agentJson which has empty nodes array
       const validateStub = createValidateDeveloperNameStub();
-      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson);
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
 
       // Setup successful metadata retrieval mock
       const compSet = new ComponentSet();

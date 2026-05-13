@@ -18,6 +18,7 @@ import { join } from 'node:path';
 import { Connection, SfError } from '@salesforce/core';
 import { AgentPreviewInterface, type AgentPreviewSendResponse, type PlannerResponse, PreviewMetadata } from '../types';
 import { getHistoryDir, SessionHistoryBuffer, TranscriptEntry } from '../utils';
+import { managerFor } from '../connectionManager';
 
 /**
  * Abstract base class for agent preview functionality.
@@ -28,6 +29,13 @@ export abstract class AgentBase {
    * The display name of the agent (user-friendly name, not API name)
    */
   public name: string | undefined;
+  /**
+   * The Connection passed in by the caller. Used as the lookup key into the ConnectionManager
+   * cache (see managerFor()) — never used directly for SFAP or org API calls. Subclasses go
+   * through getJwtConnection() / getStandardConnection() so that JWT and standard connections
+   * remain isolated.
+   */
+  protected readonly connection: Connection;
   protected sessionId: string | undefined;
   protected historyDir: string | undefined;
   protected historyBuffer: SessionHistoryBuffer | undefined;
@@ -36,11 +44,20 @@ export abstract class AgentBase {
   protected planIds = new Set<string>();
   public abstract preview: AgentPreviewInterface;
 
-  protected constructor(protected readonly connection: Connection) {}
+  protected constructor(connection: Connection) {
+    this.connection = connection;
+  }
 
+  /**
+   * Refreshes the access token on the standard connection.
+   *
+   * Retained for backward compatibility. The caller's original Connection is never mutated
+   * by agent operations, so this only refreshes the internal standard connection owned by
+   * the ConnectionManager.
+   */
   public async restoreConnection(): Promise<void> {
-    delete this.connection.accessToken;
-    await this.connection.refreshAuth();
+    const manager = await managerFor(this.connection);
+    await manager.refreshStandardConnection();
   }
 
   public setSessionId(sessionId: string): void {
@@ -74,6 +91,26 @@ export abstract class AgentBase {
     if (history.metadata?.planIds) {
       history.metadata.planIds.forEach((planId) => this.planIds.add(planId));
     }
+  }
+
+  /**
+   * Returns the connection to use for SFAP API calls (api.salesforce.com/einstein/ai-agent).
+   * Always the JWT-upgraded connection from the ConnectionManager — never the caller's
+   * original Connection.
+   */
+  protected async getJwtConnection(): Promise<Connection> {
+    const manager = await managerFor(this.connection);
+    return manager.getJwtConnection();
+  }
+
+  /**
+   * Returns the standard org connection for SOQL queries, tooling API, and metadata
+   * operations. Always the manager's isolated standard connection — never the caller's
+   * original Connection — to keep JWT and org auth fully separate.
+   */
+  protected async getStandardConnection(): Promise<Connection> {
+    const manager = await managerFor(this.connection);
+    return manager.getStandardConnection();
   }
 
   /**

@@ -17,16 +17,7 @@
 import { inspect } from 'node:util';
 import * as path from 'node:path';
 import { readdir, stat } from 'node:fs/promises';
-import {
-  AuthInfo,
-  Connection,
-  generateApiName,
-  Lifecycle,
-  Logger,
-  Messages,
-  SfError,
-  SfProject,
-} from '@salesforce/core';
+import { Connection, generateApiName, Lifecycle, Logger, Messages, SfError, SfProject } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { Duration } from '@salesforce/kit';
 import {
@@ -43,9 +34,10 @@ import {
   ScriptAgentOptions,
 } from './types';
 import { MaybeMock } from './maybe-mock';
-import { decodeHtmlEntities, findLocalAgents, useNamedUserJwt } from './utils';
+import { decodeHtmlEntities, findLocalAgents } from './utils';
 import { ScriptAgent } from './agents/scriptAgent';
 import { ProductionAgent } from './agents/productionAgent';
+import { managerFor } from './connectionManager';
 
 /** Instance type returned from Agent.init(); has setSessionId, getHistoryDir, preview, etc. */
 export type AgentInstance = ScriptAgent | ProductionAgent;
@@ -108,24 +100,16 @@ export class Agent {
   public static async init(
     options: ProductionAgentOptions | ScriptAgentOptions
   ): Promise<ScriptAgent | ProductionAgent> {
-    const username = options.connection.getUsername();
-
-    // Create a fresh connection instance for agent operations
-    // This ensures we don't modify the original connection passed in
-    // The original connection remains unchanged and can be used for other operations, mid agent-operation
-    const authInfo = await AuthInfo.create({ username });
-    const isolatedConnection = await Connection.create({ authInfo });
-
-    // Upgrade the isolated connection with JWT
-    const jwtConnection = await useNamedUserJwt(isolatedConnection);
+    // Pre-warm the per-Connection ConnectionManager cache so the JWT bootstrap and
+    // standard-connection setup happen here instead of on the first SFAP/SOQL call.
+    // Subsequent managerFor(options.connection) lookups inside the agent are cache hits.
+    await managerFor(options.connection);
 
     // Type guard: check if it's ScriptAgentOptions by looking for 'aabName'
     if ('aabName' in options) {
-      // TypeScript now knows this is ScriptAgentOptions
-      return new ScriptAgent({ ...options, connection: jwtConnection });
+      return new ScriptAgent(options);
     } else {
-      // TypeScript now knows this is ProductionAgentOptions
-      const agent = new ProductionAgent({ ...options, connection: jwtConnection });
+      const agent = new ProductionAgent(options);
       await agent.getBotMetadata();
       return agent;
     }
@@ -246,7 +230,9 @@ export class Agent {
     config: AgentCreateConfig
   ): Promise<AgentCreateResponse> {
     const url = '/connect/ai-assist/create-agent';
-    const maybeMock = new MaybeMock(connection);
+
+    const connectionManager = await managerFor(connection);
+    const maybeMock = new MaybeMock(connectionManager.getJwtConnection());
 
     // When previewing agent creation just return the response.
     if (!config.saveAgent) {
@@ -272,6 +258,7 @@ export class Agent {
     if (response.isSuccess) {
       await Lifecycle.getInstance().emit(AgentCreateLifecycleStages.Retrieving, {});
       const defaultPackagePath = project.getDefaultPackage().path ?? 'force-app';
+      const standardConnection = connectionManager.getStandardConnection();
       try {
         const cs = await ComponentSetBuilder.build({
           metadata: {
@@ -279,12 +266,12 @@ export class Agent {
             directoryPaths: [defaultPackagePath],
           },
           org: {
-            username: connection.getUsername() as string,
+            username: standardConnection.getUsername() as string,
             exclude: [],
           },
         });
         const retrieve = await cs.retrieve({
-          usernameOrConnection: connection,
+          usernameOrConnection: standardConnection,
           merge: true,
           format: 'source',
           output: path.resolve(project.getPath(), defaultPackagePath),
@@ -324,7 +311,8 @@ export class Agent {
    * @returns the agent job spec
    */
   public static async createSpec(connection: Connection, config: AgentJobSpecCreateConfig): Promise<AgentJobSpec> {
-    const maybeMock = new MaybeMock(connection);
+    const connectionManager = await managerFor(connection);
+    const maybeMock = new MaybeMock(connectionManager.getJwtConnection());
     verifyAgentSpecConfig(config);
 
     const url = '/connect/ai-assist/draft-agent-topics';

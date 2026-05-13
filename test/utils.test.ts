@@ -39,6 +39,7 @@ import {
   writeTraceToHistory,
   getHistoryDir,
   type TurnIndex,
+  type TraceFileInfo,
 } from '../src/utils';
 import type { PlannerResponse } from '../src/types';
 
@@ -954,6 +955,118 @@ describe('Preview Session Store', () => {
   });
 });
 
+describe('JWT Token Protection', () => {
+  const $$ = new TestContext();
+  let testOrg: MockTestOrgData;
+  let connection: Connection;
+
+  beforeEach(async () => {
+    testOrg = new MockTestOrgData();
+    connection = await testOrg.getConnection();
+    connection.instanceUrl = 'https://test.my.salesforce.com';
+    $$.SANDBOXES.CONNECTION.restore();
+  });
+
+  describe('useNamedUserJwt', () => {
+    it('should upgrade connection with JWT token', async () => {
+      $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
+        accessToken: 'original-token',
+        instanceUrl: connection.instanceUrl,
+      });
+
+      const requestStub = $$.SANDBOX.stub(connection, 'request').resolves({
+        // eslint-disable-next-line camelcase
+        access_token: 'jwt.token.here',
+      });
+
+      const upgradedConn = await useNamedUserJwt(connection);
+
+      expect(upgradedConn.accessToken).to.equal('jwt.token.here');
+      expect(requestStub.calledOnce).to.be.true;
+    });
+
+    it('should throw error if JWT response is missing access_token', async () => {
+      $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
+        accessToken: 'original-token',
+        instanceUrl: connection.instanceUrl,
+      });
+
+      $$.SANDBOX.stub(connection, 'request').resolves({
+        // Missing access_token
+      });
+
+      try {
+        await useNamedUserJwt(connection);
+        expect.fail('Expected useNamedUserJwt to throw an error');
+      } catch (error) {
+        expect(error).to.be.instanceOf(SfError);
+        expect((error as SfError).name).to.equal('ApiAccessError');
+        expect((error as SfError).message).to.include('access token');
+      }
+    });
+
+    it('should throw error if JWT response has invalid token format', async () => {
+      $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
+        accessToken: 'original-token',
+        instanceUrl: connection.instanceUrl,
+      });
+
+      $$.SANDBOX.stub(connection, 'request').resolves({
+        // eslint-disable-next-line camelcase
+        access_token: 'invalid-token-format', // Not a JWT (should have 3 parts separated by dots)
+      });
+
+      try {
+        await useNamedUserJwt(connection);
+        expect.fail('Expected useNamedUserJwt to throw an error');
+      } catch (error) {
+        expect(error).to.be.instanceOf(SfError);
+        expect((error as SfError).name).to.equal('ApiAccessError');
+        expect((error as SfError).message).to.include('JWT format');
+      }
+    });
+
+    it('should refresh connection before upgrading if refresh token exists', async () => {
+      const refreshStub = $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
+      $$.SANDBOX.stub(connection, 'getAuthInfoFields').returns({
+        refreshToken: 'some-refresh-token',
+      });
+      $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
+        accessToken: 'refreshed-token',
+        instanceUrl: connection.instanceUrl,
+      });
+
+      $$.SANDBOX.stub(connection, 'request').resolves({
+        // eslint-disable-next-line camelcase
+        access_token: 'jwt.token.here',
+      });
+
+      await useNamedUserJwt(connection);
+
+      expect(refreshStub.calledOnce).to.be.true;
+    });
+
+    it('should not refresh connection if no refresh token exists', async () => {
+      const refreshStub = $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
+      $$.SANDBOX.stub(connection, 'getAuthInfoFields').returns({
+        // No refreshToken
+      });
+      $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
+        accessToken: 'original-token',
+        instanceUrl: connection.instanceUrl,
+      });
+
+      $$.SANDBOX.stub(connection, 'request').resolves({
+        // eslint-disable-next-line camelcase
+        access_token: 'jwt.token.here',
+      });
+
+      await useNamedUserJwt(connection);
+
+      expect(refreshStub.called).to.be.false;
+    });
+  });
+});
 // ====================================================
 //        listSessionTraces / readSessionTrace / readTurnIndex
 // ====================================================
@@ -999,7 +1112,7 @@ describe('listSessionTraces', () => {
   const ctx = makeTraceTestContext();
 
   it('returns empty array when traces directory does not exist', async () => {
-    const result = await listSessionTraces('agent-1', 'sess-1');
+    const result: TraceFileInfo[] = await listSessionTraces('agent-1', 'sess-1');
     expect(result).to.deep.equal([]);
   });
 
@@ -1008,7 +1121,7 @@ describe('listSessionTraces', () => {
     await writeTraceToHistory('plan-1', sampleTrace, historyDir);
     await writeTraceToHistory('plan-2', sampleTrace, historyDir);
 
-    const result = await listSessionTraces('agent-1', 'sess-1');
+    const result: TraceFileInfo[] = await listSessionTraces('agent-1', 'sess-1');
     expect(result).to.have.lengthOf(2);
     const planIds = result.map((r) => r.planId).sort();
     expect(planIds).to.deep.equal(['plan-1', 'plan-2']);
@@ -1018,7 +1131,7 @@ describe('listSessionTraces', () => {
     const historyDir = await getHistoryDir('agent-1', 'sess-1');
     await writeTraceToHistory('plan-1', sampleTrace, historyDir);
 
-    const result = await listSessionTraces('agent-1', 'sess-1');
+    const result: TraceFileInfo[] = await listSessionTraces('agent-1', 'sess-1');
     expect(result).to.have.lengthOf(1);
     expect(result[0].planId).to.equal('plan-1');
     expect(result[0].path).to.be.a('string').and.include('plan-1.json');
@@ -1032,7 +1145,7 @@ describe('listSessionTraces', () => {
     const { writeFile: wf } = await import('node:fs/promises');
     await wf(join(historyDir, 'traces', 'README.txt'), 'ignore me', 'utf-8');
 
-    const result = await listSessionTraces('agent-1', 'sess-1');
+    const result: TraceFileInfo[] = await listSessionTraces('agent-1', 'sess-1');
     expect(result).to.have.lengthOf(1);
     expect(result[0].planId).to.equal('plan-1');
   });
@@ -1046,7 +1159,7 @@ describe('readSessionTrace', () => {
   const ctx = makeTraceTestContext();
 
   it('returns null when trace file does not exist', async () => {
-    const result = await readSessionTrace('agent-1', 'sess-1', 'missing-plan');
+    const result: PlannerResponse | null = await readSessionTrace('agent-1', 'sess-1', 'missing-plan');
     expect(result).to.be.null;
   });
 
@@ -1054,7 +1167,7 @@ describe('readSessionTrace', () => {
     const historyDir = await getHistoryDir('agent-1', 'sess-1');
     await writeTraceToHistory('plan-1', sampleTrace, historyDir);
 
-    const result = await readSessionTrace('agent-1', 'sess-1', 'plan-1');
+    const result: PlannerResponse | null = await readSessionTrace('agent-1', 'sess-1', 'plan-1');
     expect(result).to.deep.equal(sampleTrace);
   });
 
@@ -1064,7 +1177,7 @@ describe('readSessionTrace', () => {
     await mkd(join(historyDir, 'traces'), { recursive: true });
     await wf(join(historyDir, 'traces', 'bad-plan.json'), 'not json', 'utf-8');
 
-    const result = await readSessionTrace('agent-1', 'sess-1', 'bad-plan');
+    const result: PlannerResponse | null = await readSessionTrace('agent-1', 'sess-1', 'bad-plan');
     expect(result).to.be.null;
   });
 
@@ -1075,7 +1188,7 @@ describe('readTurnIndex', () => {
   const ctx = makeTraceTestContext();
 
   it('returns null when turn-index.json does not exist', async () => {
-    const result = await readTurnIndex('agent-1', 'sess-1');
+    const result: TurnIndex | null = await readTurnIndex('agent-1', 'sess-1');
     expect(result).to.be.null;
   });
 
@@ -1084,7 +1197,7 @@ describe('readTurnIndex', () => {
     const { writeFile: wf } = await import('node:fs/promises');
     await wf(join(historyDir, 'turn-index.json'), JSON.stringify(sampleTurnIndex), 'utf-8');
 
-    const result = await readTurnIndex('agent-1', 'sess-1');
+    const result: TurnIndex | null = await readTurnIndex('agent-1', 'sess-1');
     expect(result).to.deep.equal(sampleTurnIndex);
   });
 
@@ -1093,7 +1206,7 @@ describe('readTurnIndex', () => {
     const { writeFile: wf } = await import('node:fs/promises');
     await wf(join(historyDir, 'turn-index.json'), 'not json', 'utf-8');
 
-    const result = await readTurnIndex('agent-1', 'sess-1');
+    const result: TurnIndex | null = await readTurnIndex('agent-1', 'sess-1');
     expect(result).to.be.null;
   });
 

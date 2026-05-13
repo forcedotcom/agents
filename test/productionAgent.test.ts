@@ -17,15 +17,32 @@ import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection, Messages, SfError, SfProject } from '@salesforce/core';
 import { ProductionAgent } from '../src/agents/productionAgent';
+import { ConnectionManager, setManagerForTesting } from '../src/connectionManager';
 import type { BotMetadata } from '../src/types';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agents');
 
+function createMockConnectionManager(conn: Connection): ConnectionManager {
+  return {
+    jwtConnection: conn,
+    standardConnection: conn,
+    getJwtConnection: () => conn,
+    getStandardConnection: () => conn,
+    inspectJwt: () => ({
+      isValid: true,
+      hasRequiredFields: true,
+      missingFields: [],
+      isExpired: false,
+    }),
+  } as unknown as ConnectionManager;
+}
+
 describe('ProductionAgent', () => {
   const $$ = new TestContext();
   let testOrg: MockTestOrgData;
   let connection: Connection;
+  let connectionManager: ConnectionManager;
   let sfProject: SfProject;
 
   beforeEach(async () => {
@@ -36,6 +53,9 @@ describe('ProductionAgent', () => {
     connection.instanceUrl = 'https://mydomain.salesforce.com';
     // restore the connection sandbox so that it doesn't override the builtin mocking (MaybeMock)
     $$.SANDBOXES.CONNECTION.restore();
+
+    connectionManager = createMockConnectionManager(connection);
+    setManagerForTesting(connection, connectionManager);
 
     sfProject = SfProject.getInstance();
     // @ts-expect-error Not the full package def
