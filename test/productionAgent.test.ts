@@ -17,7 +17,7 @@ import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection, Messages, SfError, SfProject } from '@salesforce/core';
 import { ProductionAgent } from '../src/agents/productionAgent';
-import { ConnectionManager } from '../src/connectionManager';
+import { ConnectionManager, setManagerForTesting } from '../src/connectionManager';
 import type { BotMetadata } from '../src/types';
 
 Messages.importMessagesDirectory(__dirname);
@@ -55,6 +55,7 @@ describe('ProductionAgent', () => {
     $$.SANDBOXES.CONNECTION.restore();
 
     connectionManager = createMockConnectionManager(connection);
+    setManagerForTesting(connection, connectionManager);
 
     sfProject = SfProject.getInstance();
     // @ts-expect-error Not the full package def
@@ -123,10 +124,7 @@ describe('ProductionAgent', () => {
 
       $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves(mockBotMetadata);
 
-      const agent = new ProductionAgent(
-        { connection, project: sfProject, apiNameOrId: 'TestAgent' },
-        connectionManager
-      );
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: 'TestAgent' });
       const version = await agent.getBotVersionMetadata();
 
       expect(version.VersionNumber).to.equal(2);
@@ -190,10 +188,7 @@ describe('ProductionAgent', () => {
 
       $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves(mockBotMetadata);
 
-      const agent = new ProductionAgent(
-        { connection, project: sfProject, apiNameOrId: 'TestAgent' },
-        connectionManager
-      );
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: 'TestAgent' });
       const version = await agent.getBotVersionMetadata(1);
 
       expect(version.VersionNumber).to.equal(1);
@@ -241,10 +236,7 @@ describe('ProductionAgent', () => {
 
       $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves(mockBotMetadata);
 
-      const agent = new ProductionAgent(
-        { connection, project: sfProject, apiNameOrId: 'TestAgent' },
-        connectionManager
-      );
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: 'TestAgent' });
 
       try {
         await agent.getBotVersionMetadata(99);
@@ -278,10 +270,7 @@ describe('ProductionAgent', () => {
 
       $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves(mockBotMetadata);
 
-      const agent = new ProductionAgent(
-        { connection, project: sfProject, apiNameOrId: 'TestAgent' },
-        connectionManager
-      );
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: 'TestAgent' });
 
       try {
         await agent.getBotVersionMetadata();
@@ -315,10 +304,7 @@ describe('ProductionAgent', () => {
 
       $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves(mockBotMetadata);
 
-      const agent = new ProductionAgent(
-        { connection, project: sfProject, apiNameOrId: 'TestAgent' },
-        connectionManager
-      );
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: 'TestAgent' });
 
       try {
         await agent.getBotVersionMetadata(1);
@@ -387,10 +373,7 @@ describe('ProductionAgent', () => {
 
       $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves(mockBotMetadata);
 
-      const agent = new ProductionAgent(
-        { connection, project: sfProject, apiNameOrId: 'TestAgent' },
-        connectionManager
-      );
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: 'TestAgent' });
       const version = await agent.activate(1);
 
       expect(version.VersionNumber).to.equal(1);
@@ -453,10 +436,7 @@ describe('ProductionAgent', () => {
 
       $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves(mockBotMetadata);
 
-      const agent = new ProductionAgent(
-        { connection, project: sfProject, apiNameOrId: 'TestAgent' },
-        connectionManager
-      );
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: 'TestAgent' });
       const version = await agent.activate();
 
       expect(version.VersionNumber).to.equal(2);
@@ -503,10 +483,7 @@ describe('ProductionAgent', () => {
 
       $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves(mockBotMetadata);
 
-      const agent = new ProductionAgent(
-        { connection, project: sfProject, apiNameOrId: 'TestAgent' },
-        connectionManager
-      );
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: 'TestAgent' });
       const version = await agent.activate(1);
 
       expect(version.Status).to.equal('Active');
@@ -553,10 +530,7 @@ describe('ProductionAgent', () => {
 
       $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves(mockBotMetadata);
 
-      const agent = new ProductionAgent(
-        { connection, project: sfProject, apiNameOrId: 'TestAgent' },
-        connectionManager
-      );
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: 'TestAgent' });
 
       try {
         await agent.activate(1);
@@ -607,10 +581,7 @@ describe('ProductionAgent', () => {
 
       $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves(mockBotMetadata);
 
-      const agent = new ProductionAgent(
-        { connection, project: sfProject, apiNameOrId: 'TestAgent' },
-        connectionManager
-      );
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: 'TestAgent' });
 
       try {
         await agent.activate(99);
@@ -644,10 +615,7 @@ describe('ProductionAgent', () => {
 
       $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves(mockBotMetadata);
 
-      const agent = new ProductionAgent(
-        { connection, project: sfProject, apiNameOrId: 'TestAgent' },
-        connectionManager
-      );
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: 'TestAgent' });
 
       try {
         await agent.activate();
@@ -716,10 +684,7 @@ describe('ProductionAgent', () => {
 
       $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves(mockBotMetadata);
 
-      const agent = new ProductionAgent(
-        { connection, project: sfProject, apiNameOrId: 'TestAgent' },
-        connectionManager
-      );
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: 'TestAgent' });
       const version = await agent.getLatestBotVersionMetadata();
 
       expect(version.VersionNumber).to.equal(2);
@@ -750,10 +715,7 @@ describe('ProductionAgent', () => {
 
       $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves(mockBotMetadata);
 
-      const agent = new ProductionAgent(
-        { connection, project: sfProject, apiNameOrId: 'TestAgent' },
-        connectionManager
-      );
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: 'TestAgent' });
 
       try {
         await agent.getLatestBotVersionMetadata();

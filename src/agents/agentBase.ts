@@ -18,7 +18,7 @@ import { join } from 'node:path';
 import { Connection, SfError } from '@salesforce/core';
 import { AgentPreviewInterface, type AgentPreviewSendResponse, type PlannerResponse, PreviewMetadata } from '../types';
 import { getHistoryDir, SessionHistoryBuffer, TranscriptEntry } from '../utils';
-import { ConnectionManager } from '../connectionManager';
+import { managerFor } from '../connectionManager';
 
 /**
  * Abstract base class for agent preview functionality.
@@ -30,19 +30,12 @@ export abstract class AgentBase {
    */
   public name: string | undefined;
   /**
-   * The standard org connection used for SOQL queries, tooling API calls, and metadata
-   * operations. This is distinct from the JWT-upgraded connection used for SFAP API
-   * calls (held internally by the connection manager).
+   * The Connection passed in by the caller. Used as the lookup key into the ConnectionManager
+   * cache (see managerFor()) — never used directly for SFAP or org API calls. Subclasses go
+   * through getJwtConnection() / getStandardConnection() so that JWT and standard connections
+   * remain isolated.
    */
   protected readonly connection: Connection;
-  /**
-   * Holds isolated JWT and standard connections. When a ConnectionManager is supplied
-   * by Agent.init() / Agent.create() / Agent.createSpec(), the agent gets fully
-   * isolated connections (the caller's connection is not mutated). When undefined
-   * (consumers instantiating an agent directly), the supplied connection is used as
-   * both the JWT and standard connection — preserving the pre-isolation behavior.
-   */
-  protected readonly connectionManager: ConnectionManager | undefined;
   protected sessionId: string | undefined;
   protected historyDir: string | undefined;
   protected historyBuffer: SessionHistoryBuffer | undefined;
@@ -51,25 +44,20 @@ export abstract class AgentBase {
   protected planIds = new Set<string>();
   public abstract preview: AgentPreviewInterface;
 
-  protected constructor(connection: Connection, connectionManager?: ConnectionManager) {
-    this.connectionManager = connectionManager;
-    this.connection = connectionManager ? connectionManager.getStandardConnection() : connection;
+  protected constructor(connection: Connection) {
+    this.connection = connection;
   }
 
   /**
    * Refreshes the access token on the standard connection.
    *
-   * Retained for backward compatibility. With the connection manager in place the
-   * caller's original Connection object is no longer mutated by agent operations,
-   * so this method only refreshes the internal standard connection.
+   * Retained for backward compatibility. The caller's original Connection is never mutated
+   * by agent operations, so this only refreshes the internal standard connection owned by
+   * the ConnectionManager.
    */
   public async restoreConnection(): Promise<void> {
-    if (this.connectionManager) {
-      await this.connectionManager.refreshStandardConnection();
-      return;
-    }
-    delete this.connection.accessToken;
-    await this.connection.refreshAuth();
+    const manager = await managerFor(this.connection);
+    await manager.refreshStandardConnection();
   }
 
   public setSessionId(sessionId: string): void {
@@ -107,11 +95,22 @@ export abstract class AgentBase {
 
   /**
    * Returns the connection to use for SFAP API calls (api.salesforce.com/einstein/ai-agent).
-   * When a ConnectionManager is in use this is the JWT-upgraded connection; otherwise it
-   * is the connection supplied at construction time.
+   * Always the JWT-upgraded connection from the ConnectionManager — never the caller's
+   * original Connection.
    */
-  protected getJwtConnection(): Connection {
-    return this.connectionManager ? this.connectionManager.getJwtConnection() : this.connection;
+  protected async getJwtConnection(): Promise<Connection> {
+    const manager = await managerFor(this.connection);
+    return manager.getJwtConnection();
+  }
+
+  /**
+   * Returns the standard org connection for SOQL queries, tooling API, and metadata
+   * operations. Always the manager's isolated standard connection — never the caller's
+   * original Connection — to keep JWT and org auth fully separate.
+   */
+  protected async getStandardConnection(): Promise<Connection> {
+    const manager = await managerFor(this.connection);
+    return manager.getStandardConnection();
   }
 
   /**

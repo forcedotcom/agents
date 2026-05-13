@@ -25,7 +25,7 @@ import type { AgentCreateConfig, DraftAgentTopics, ExtendedAgentJobSpec } from '
 import { AgentSource, COMPILATION_API_EXIT_CODES } from '../src/types';
 import { ScriptAgent } from '../src';
 import { ScriptAgentPublisher } from '../src/agents/scriptAgentPublisher';
-import { ConnectionManager } from '../src/connectionManager';
+import { ConnectionManager, setManagerForTesting } from '../src/connectionManager';
 
 function createMockConnectionManager(conn: Connection): ConnectionManager {
   return {
@@ -57,9 +57,7 @@ describe('Agents', () => {
     // restore the connection sandbox so that it doesn't override the builtin mocking (MaybeMock)
     $$.SANDBOXES.CONNECTION.restore();
     connectionManager = createMockConnectionManager(connection);
-
-    // Stub ConnectionManager.create to return the mock connectionManager
-    $$.SANDBOX.stub(ConnectionManager, 'create').resolves(connectionManager);
+    setManagerForTesting(connection, connectionManager);
   });
 
   afterEach(() => {
@@ -151,7 +149,7 @@ describe('Agents', () => {
       });
       requestStub.withArgs(sinon.match.has('url', sinon.match(/authoring\/scripts/))).rejects(err404);
 
-      const agent = new ScriptAgent({ connection, project: sfProject!, aabName: 'myAgent' }, connectionManager);
+      const agent = new ScriptAgent({ connection, project: sfProject!, aabName: 'myAgent' });
       try {
         await agent.compile();
         expect.fail('Expected compile() to throw');
@@ -170,7 +168,7 @@ describe('Agents', () => {
       });
       requestStub.withArgs(sinon.match.has('url', sinon.match(/authoring\/scripts/))).rejects(err500);
 
-      const agent = new ScriptAgent({ connection, project: sfProject!, aabName: 'myAgent' }, connectionManager);
+      const agent = new ScriptAgent({ connection, project: sfProject!, aabName: 'myAgent' });
       try {
         await agent.compile();
         expect.fail('Expected compile() to throw');
@@ -264,7 +262,7 @@ describe('Agents', () => {
         entityId: 'test-entity-id',
       } as never);
 
-      const agent = new ScriptAgent({ connection, project: sfProject!, aabName: 'myAgent' }, connectionManager);
+      const agent = new ScriptAgent({ connection, project: sfProject!, aabName: 'myAgent' });
       // Replacements are applied during publish flow
       await agent.publish();
 
@@ -365,7 +363,7 @@ describe('Agents', () => {
         dslVersion: '0.0.3.rc29',
       });
 
-      const agent = new ScriptAgent({ connection, project: sfProject!, aabName: 'myAgent' }, connectionManager);
+      const agent = new ScriptAgent({ connection, project: sfProject!, aabName: 'myAgent' });
       // compile() never applies replacements (only publish does)
       const compileResult = await agent.compile();
 

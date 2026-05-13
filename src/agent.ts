@@ -37,7 +37,7 @@ import { MaybeMock } from './maybe-mock';
 import { decodeHtmlEntities, findLocalAgents } from './utils';
 import { ScriptAgent } from './agents/scriptAgent';
 import { ProductionAgent } from './agents/productionAgent';
-import { ConnectionManager } from './connectionManager';
+import { managerFor } from './connectionManager';
 
 /** Instance type returned from Agent.init(); has setSessionId, getHistoryDir, preview, etc. */
 export type AgentInstance = ScriptAgent | ProductionAgent;
@@ -100,15 +100,16 @@ export class Agent {
   public static async init(
     options: ProductionAgentOptions | ScriptAgentOptions
   ): Promise<ScriptAgent | ProductionAgent> {
-    // ConnectionManager isolates JWT (for SFAP) and standard (for org) connections so
-    // the caller's connection is never mutated by JWT upgrades or auto-refresh.
-    const connectionManager = await ConnectionManager.create(options.connection);
+    // Pre-warm the per-Connection ConnectionManager cache so the JWT bootstrap and
+    // standard-connection setup happen here instead of on the first SFAP/SOQL call.
+    // Subsequent managerFor(options.connection) lookups inside the agent are cache hits.
+    await managerFor(options.connection);
 
     // Type guard: check if it's ScriptAgentOptions by looking for 'aabName'
     if ('aabName' in options) {
-      return new ScriptAgent(options, connectionManager);
+      return new ScriptAgent(options);
     } else {
-      const agent = new ProductionAgent(options, connectionManager);
+      const agent = new ProductionAgent(options);
       await agent.getBotMetadata();
       return agent;
     }
@@ -230,10 +231,8 @@ export class Agent {
   ): Promise<AgentCreateResponse> {
     const url = '/connect/ai-assist/create-agent';
 
-    // Create ConnectionManager to get JWT connection for SFAP API calls
-    const connectionManager = await ConnectionManager.create(connection);
-    const jwtConnection = connectionManager.getJwtConnection();
-    const maybeMock = new MaybeMock(jwtConnection);
+    const connectionManager = await managerFor(connection);
+    const maybeMock = new MaybeMock(connectionManager.getJwtConnection());
 
     // When previewing agent creation just return the response.
     if (!config.saveAgent) {
@@ -312,10 +311,8 @@ export class Agent {
    * @returns the agent job spec
    */
   public static async createSpec(connection: Connection, config: AgentJobSpecCreateConfig): Promise<AgentJobSpec> {
-    // Create ConnectionManager to get JWT connection for SFAP API calls
-    const connectionManager = await ConnectionManager.create(connection);
-    const jwtConnection = connectionManager.getJwtConnection();
-    const maybeMock = new MaybeMock(jwtConnection);
+    const connectionManager = await managerFor(connection);
+    const maybeMock = new MaybeMock(connectionManager.getJwtConnection());
     verifyAgentSpecConfig(config);
 
     const url = '/connect/ai-assist/draft-agent-topics';

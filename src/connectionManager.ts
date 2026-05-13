@@ -273,3 +273,48 @@ export class ConnectionManager {
     await this.standardConnection.refreshAuth();
   }
 }
+
+// Per-Connection cache of ConnectionManager instances. Keyed by Connection object identity
+// so callers never have to pass a manager around — any code that holds the caller's
+// Connection can resolve its associated manager via managerFor(connection).
+//
+// Caching the *promise* (not the resolved manager) deduplicates concurrent first-time
+// callers to a single JWT bootstrap. Using a WeakMap means entries are reclaimed when
+// the caller drops the Connection, so long-running processes (extensions, language
+// servers) don't accumulate stale managers.
+const managerCache = new WeakMap<Connection, Promise<ConnectionManager>>();
+
+/**
+ * Returns the ConnectionManager associated with the supplied Connection, creating one on
+ * the first call. Subsequent calls with the same Connection return the cached manager.
+ *
+ * Different Connection objects — even for the same username — get distinct managers,
+ * which is the desired behavior: the caller's connection identity is the unit of trust.
+ *
+ * @param connection The caller-supplied Connection used as the cache key
+ * @returns A promise resolving to the manager for this connection
+ */
+export const managerFor = async (connection: Connection): Promise<ConnectionManager> => {
+  let entry = managerCache.get(connection);
+  if (!entry) {
+    entry = ConnectionManager.create(connection).catch((err) => {
+      // Evict the failed bootstrap so a subsequent call can retry rather than re-throwing
+      // the cached error indefinitely.
+      managerCache.delete(connection);
+      throw err;
+    });
+    managerCache.set(connection, entry);
+  }
+  return entry;
+};
+
+/**
+ * Test-only helper: pre-populate the cache so tests can substitute a fake manager
+ * without exercising the real JWT bootstrap. Callers in production code should use
+ * managerFor() instead.
+ *
+ * @internal
+ */
+export const setManagerForTesting = (connection: Connection, manager: ConnectionManager): void => {
+  managerCache.set(connection, Promise.resolve(manager));
+};
