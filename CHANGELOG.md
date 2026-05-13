@@ -1,3 +1,14 @@
+## [1.6.6](https://github.com/forcedotcom/agents/compare/1.6.5...1.6.6) (2026-05-13)
+
+
+### Bug Fixes
+
+* add connectionManager ([c02dc42](https://github.com/forcedotcom/agents/commit/c02dc42ddc7f0d044c1cfaf2c0578bad79bf4acc))
+* use connectionManager on agent created method ([7db1648](https://github.com/forcedotcom/agents/commit/7db16483e5a1f555cf7e6693f0f72c1288bc16b3))
+* use new connection to get JWT token ([9787475](https://github.com/forcedotcom/agents/commit/9787475773f252a7b6717daa92b42096d4787092))
+
+
+
 ## [1.6.5](https://github.com/forcedotcom/agents/compare/1.6.4...1.6.5) (2026-05-13)
 
 
