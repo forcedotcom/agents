@@ -15,86 +15,194 @@
  */
 
 import { expect } from 'chai';
-import { AuthInfo, Connection } from '@salesforce/core';
-import { TestContext } from '@salesforce/core/testSetup';
-import sinon from 'sinon';
-import * as utils from '../src/utils';
+import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
+import { AuthInfo, Connection, SfError } from '@salesforce/core';
 import { ConnectionManager } from '../src/connectionManager';
+import * as utils from '../src/utils';
 
-const buildJwt = (payload: Record<string, unknown>): string => {
-  const encode = (value: Record<string, unknown>): string => Buffer.from(JSON.stringify(value)).toString('base64url');
-  return `${encode({ alg: 'none', typ: 'JWT' })}.${encode(payload)}.signature`;
+// Build a minimally valid JWT (header.payload.signature) for tests.
+function makeJwt(payload: Record<string, unknown>): string {
+  const b64 = (obj: unknown): string => Buffer.from(JSON.stringify(obj)).toString('base64').replace(/=+$/, '');
+  return `${b64({ alg: 'RS256', typ: 'JWT' })}.${b64(payload)}.signature`;
+}
+
+const validPayload = {
+  sub: 'user@example.com',
+  iss: 'https://login.salesforce.com',
+  // eslint-disable-next-line camelcase
+  sfdc_app_id: 'app-123',
+  scope: 'chatbot_api sfap_api web',
+  exp: Math.floor(Date.now() / 1000) + 3600,
+  iat: Math.floor(Date.now() / 1000),
 };
 
 describe('ConnectionManager', () => {
   const $$ = new TestContext();
+  let testOrg: MockTestOrgData;
+  let callerConnection: Connection;
 
-  afterEach(() => {
-    sinon.restore();
+  beforeEach(async () => {
+    testOrg = new MockTestOrgData();
+    callerConnection = await testOrg.getConnection();
+    callerConnection.instanceUrl = 'https://test.my.salesforce.com';
+    callerConnection.accessToken = 'caller-original-token';
+    $$.SANDBOXES.CONNECTION.restore();
   });
 
-  it('create should isolate JWT upgrade and keep caller connection untouched', async () => {
-    const callerConnection = {
-      accessToken: 'caller-standard-token',
-      getUsername: () => 'test@example.com',
-    } as unknown as Connection;
+  describe('create', () => {
+    it('throws when the supplied connection has no username', async () => {
+      $$.SANDBOX.stub(callerConnection, 'getUsername').returns(undefined);
 
-    const standardConnection = { accessToken: 'standard-token' } as Connection;
-    const jwtCandidateConnection = { accessToken: 'jwt-candidate-token' } as Connection;
-    const jwtToken = buildJwt({
-      sub: '005xx0000012345',
-      iss: 'https://login.salesforce.com',
-      exp: Math.floor(Date.now() / 1000) + 60 * 10,
+      try {
+        await ConnectionManager.create(callerConnection);
+        expect.fail('expected create to throw');
+      } catch (err) {
+        expect(err).to.be.instanceOf(SfError);
+        expect((err as SfError).name).to.equal('MissingUsername');
+      }
     });
 
-    $$.SANDBOX.stub(AuthInfo, 'create').resolves({} as AuthInfo);
-    $$.SANDBOX.stub(Connection, 'create').onFirstCall().resolves(standardConnection).onSecondCall().resolves(jwtCandidateConnection);
+    it('does not mutate the caller-supplied connection', async () => {
+      // Stub useNamedUserJwt so it operates only on the seed Connection that ConnectionManager creates.
+      $$.SANDBOX.stub(utils, 'useNamedUserJwt').callsFake(async (conn: Connection) => {
+        conn.accessToken = makeJwt(validPayload);
+        return conn;
+      });
+      // Stub AuthInfo.create / Connection.create so the manager can build fresh connections from the username.
+      const seedConn = await testOrg.getConnection();
+      seedConn.accessToken = 'seed-token';
+      $$.SANDBOX.stub(AuthInfo, 'create').resolves({} as AuthInfo);
+      $$.SANDBOX.stub(Connection, 'create').resolves(seedConn);
 
-    const useNamedUserJwtStub = $$.SANDBOX.stub(utils, 'useNamedUserJwt').callsFake(async (connection) => {
-      connection.accessToken = jwtToken;
-      return connection;
+      await ConnectionManager.create(callerConnection);
+
+      expect(callerConnection.accessToken).to.equal('caller-original-token');
     });
 
-    const manager = await ConnectionManager.create(callerConnection);
+    it('returns a manager whose JWT and standard connections are distinct objects', async () => {
+      $$.SANDBOX.stub(utils, 'useNamedUserJwt').callsFake(async (conn: Connection) => {
+        conn.accessToken = makeJwt(validPayload);
+        return conn;
+      });
+      const standardConn = await testOrg.getConnection();
+      const jwtConn = await testOrg.getConnection();
+      $$.SANDBOX.stub(AuthInfo, 'create').resolves({} as AuthInfo);
+      const createStub = $$.SANDBOX.stub(Connection, 'create');
+      createStub.onFirstCall().resolves(standardConn);
+      createStub.onSecondCall().resolves(jwtConn);
 
-    expect(useNamedUserJwtStub.calledOnceWithExactly(jwtCandidateConnection)).to.equal(true);
-    expect(manager.getStandardConnection()).to.equal(standardConnection);
-    expect(manager.getJwtConnection()).to.equal(jwtCandidateConnection);
-    expect(manager.getJwtConnection()).to.not.equal(manager.getStandardConnection());
-    expect(callerConnection.accessToken).to.equal('caller-standard-token');
+      const manager = await ConnectionManager.create(callerConnection);
+
+      expect(manager.getStandardConnection()).to.equal(standardConn);
+      expect(manager.getJwtConnection()).to.equal(jwtConn);
+      expect(manager.getStandardConnection()).to.not.equal(manager.getJwtConnection());
+      expect(manager.getJwtConnection().accessToken).to.equal(makeJwt(validPayload));
+    });
+
+    it('throws InvalidJwtToken when the upgraded token is malformed', async () => {
+      $$.SANDBOX.stub(utils, 'useNamedUserJwt').callsFake(async (conn: Connection) => {
+        conn.accessToken = 'not-a-jwt';
+        return conn;
+      });
+      const seedConn = await testOrg.getConnection();
+      $$.SANDBOX.stub(AuthInfo, 'create').resolves({} as AuthInfo);
+      $$.SANDBOX.stub(Connection, 'create').resolves(seedConn);
+
+      try {
+        await ConnectionManager.create(callerConnection);
+        expect.fail('expected create to throw');
+      } catch (err) {
+        expect(err).to.be.instanceOf(SfError);
+        expect((err as SfError).name).to.equal('InvalidJwtToken');
+      }
+    });
+
+    it('throws InvalidJwtToken when the upgraded token is expired', async () => {
+      const expiredPayload = { ...validPayload, exp: Math.floor(Date.now() / 1000) - 60 };
+      $$.SANDBOX.stub(utils, 'useNamedUserJwt').callsFake(async (conn: Connection) => {
+        conn.accessToken = makeJwt(expiredPayload);
+        return conn;
+      });
+      const seedConn = await testOrg.getConnection();
+      $$.SANDBOX.stub(AuthInfo, 'create').resolves({} as AuthInfo);
+      $$.SANDBOX.stub(Connection, 'create').resolves(seedConn);
+
+      try {
+        await ConnectionManager.create(callerConnection);
+        expect.fail('expected create to throw');
+      } catch (err) {
+        expect(err).to.be.instanceOf(SfError);
+        expect((err as SfError).name).to.equal('InvalidJwtToken');
+        const actions = (err as SfError).actions ?? [];
+        expect(actions.some((a) => a.includes('expired'))).to.be.true;
+      }
+    });
   });
 
-  it('create should build both standard and jwt connections from the same username', async () => {
-    const callerConnection = {
-      getUsername: () => 'another@example.com',
-    } as unknown as Connection;
+  describe('inspectJwt', () => {
+    it('reports a valid JWT with parsed claims', async () => {
+      $$.SANDBOX.stub(utils, 'useNamedUserJwt').callsFake(async (conn: Connection) => {
+        conn.accessToken = makeJwt(validPayload);
+        return conn;
+      });
+      const seedConn = await testOrg.getConnection();
+      $$.SANDBOX.stub(AuthInfo, 'create').resolves({} as AuthInfo);
+      $$.SANDBOX.stub(Connection, 'create').resolves(seedConn);
 
-    const standardConnection = { accessToken: 'std' } as Connection;
-    const jwtCandidateConnection = { accessToken: 'candidate' } as Connection;
-    const jwtToken = buildJwt({
-      sub: '005xx0000099999',
-      iss: 'https://login.salesforce.com',
-      exp: Math.floor(Date.now() / 1000) + 60 * 10,
+      const manager = await ConnectionManager.create(callerConnection);
+      const result = manager.inspectJwt();
+
+      expect(result.isValid).to.be.true;
+      expect(result.hasRequiredFields).to.be.true;
+      expect(result.isExpired).to.be.false;
+      expect(result.subject).to.equal(validPayload.sub);
+      expect(result.issuer).to.equal(validPayload.iss);
+      expect(result.appId).to.equal(validPayload.sfdc_app_id);
+      expect(result.scopes).to.deep.equal(['chatbot_api', 'sfap_api', 'web']);
     });
 
-    const authInfoCreateStub = $$.SANDBOX.stub(AuthInfo, 'create').resolves({} as AuthInfo);
-    const connectionCreateStub = $$.SANDBOX
-      .stub(Connection, 'create')
-      .onFirstCall()
-      .resolves(standardConnection)
-      .onSecondCall()
-      .resolves(jwtCandidateConnection);
+    it('reports an invalid result when the connection has no access token', async () => {
+      $$.SANDBOX.stub(utils, 'useNamedUserJwt').callsFake(async (conn: Connection) => {
+        conn.accessToken = makeJwt(validPayload);
+        return conn;
+      });
+      const seedConn = await testOrg.getConnection();
+      $$.SANDBOX.stub(AuthInfo, 'create').resolves({} as AuthInfo);
+      $$.SANDBOX.stub(Connection, 'create').resolves(seedConn);
 
-    $$.SANDBOX.stub(utils, 'useNamedUserJwt').callsFake(async (connection) => {
-      connection.accessToken = jwtToken;
-      return connection;
+      const manager = await ConnectionManager.create(callerConnection);
+      // Simulate a token getting cleared somehow.
+      manager.getJwtConnection().accessToken = undefined;
+      const result = manager.inspectJwt();
+
+      expect(result.isValid).to.be.false;
+      expect(result.missingFields).to.include('token');
     });
+  });
 
-    await ConnectionManager.create(callerConnection);
+  describe('refreshStandardConnection', () => {
+    it('clears and refreshes only the standard connection', async () => {
+      $$.SANDBOX.stub(utils, 'useNamedUserJwt').callsFake(async (conn: Connection) => {
+        conn.accessToken = makeJwt(validPayload);
+        return conn;
+      });
+      const standardConn = await testOrg.getConnection();
+      standardConn.accessToken = 'standard-token';
+      const jwtConn = await testOrg.getConnection();
+      $$.SANDBOX.stub(AuthInfo, 'create').resolves({} as AuthInfo);
+      const createStub = $$.SANDBOX.stub(Connection, 'create');
+      createStub.onFirstCall().resolves(standardConn);
+      createStub.onSecondCall().resolves(jwtConn);
 
-    expect(authInfoCreateStub.calledTwice).to.equal(true);
-    expect(connectionCreateStub.calledTwice).to.equal(true);
-    expect(authInfoCreateStub.firstCall.args[0]).to.deep.equal({ username: 'another@example.com' });
-    expect(authInfoCreateStub.secondCall.args[0]).to.deep.equal({ username: 'another@example.com' });
+      const refreshAuthStub = $$.SANDBOX.stub(standardConn, 'refreshAuth').resolves();
+      const jwtRefreshStub = $$.SANDBOX.stub(jwtConn, 'refreshAuth').resolves();
+
+      const manager = await ConnectionManager.create(callerConnection);
+      await manager.refreshStandardConnection();
+
+      expect(refreshAuthStub.calledOnce).to.be.true;
+      expect(jwtRefreshStub.called).to.be.false;
+      expect(standardConn.accessToken).to.be.undefined;
+    });
   });
 });

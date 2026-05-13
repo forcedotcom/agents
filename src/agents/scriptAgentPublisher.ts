@@ -18,7 +18,7 @@ import * as path from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { XMLBuilder, XMLParser } from 'fast-xml-parser';
-import { Logger, Messages, SfError, SfProject } from '@salesforce/core';
+import { Connection, Logger, Messages, SfError, SfProject } from '@salesforce/core';
 import { ComponentSet, ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { MaybeMock } from '../maybe-mock';
 import { type AgentJson, type PublishAgent, type PublishAgentJsonResponse } from '../types';
@@ -41,7 +41,7 @@ const getLogger = (): Logger => {
  */
 export class ScriptAgentPublisher {
   private readonly maybeMock: MaybeMock;
-  private readonly connectionManager: ConnectionManager;
+  private readonly standardConnection: Connection;
   private project: SfProject;
   private readonly agentJson: AgentJson;
   private readonly developerName: string;
@@ -55,21 +55,27 @@ export class ScriptAgentPublisher {
   };
 
   /**
-   * Creates a new AgentPublisher instance
+   * Creates a new AgentPublisher instance.
    *
-   * @param connectionManager The ConnectionManager for making SFAP and org requests
+   * @param connection The standard org Connection used for SOQL queries, metadata retrieve,
+   * and deploy. When a ConnectionManager is supplied, its standard connection is used
+   * instead so the caller's Connection is not mutated.
    * @param project The Salesforce project
-   * @param agentJson
+   * @param agentJson The compiled AgentJson to publish
    * @param skipMetadataRetrieve Whether to skip retrieving the agent metadata from the org
+   * @param connectionManager Optional ConnectionManager that provides isolated JWT and standard
+   * connections. When omitted, `connection` is used for both SFAP and org calls.
    */
   public constructor(
-    connectionManager: ConnectionManager,
+    connection: Connection,
     project: SfProject,
     agentJson: AgentJson,
-    skipMetadataRetrieve: boolean = false
+    skipMetadataRetrieve: boolean = false,
+    connectionManager?: ConnectionManager
   ) {
-    this.connectionManager = connectionManager;
-    this.maybeMock = new MaybeMock(connectionManager.getJwtConnection());
+    this.standardConnection = connectionManager ? connectionManager.getStandardConnection() : connection;
+    const jwtConnection = connectionManager ? connectionManager.getJwtConnection() : connection;
+    this.maybeMock = new MaybeMock(jwtConnection);
     this.project = project;
     this.agentJson = agentJson;
     this.skipRetrieve = skipMetadataRetrieve;
@@ -93,7 +99,7 @@ export class ScriptAgentPublisher {
     const body = {
       agentDefinition: this.agentJson,
       instanceConfig: {
-        endpoint: this.connectionManager.getStandardConnection().instanceUrl,
+        endpoint: this.standardConnection.instanceUrl,
       },
     };
 
@@ -122,7 +128,6 @@ export class ScriptAgentPublisher {
       });
     }
   }
-
 
   /**
    * Validates and extracts the developer name from the agent configuration,
@@ -166,8 +171,6 @@ export class ScriptAgentPublisher {
    * @param botVersionName The bot version name
    */
   private async retrieveAgentMetadata(botVersionName: string): Promise<void> {
-    const standardConnection = this.connectionManager.getStandardConnection();
-
     const defaultPackagePath = path.resolve(this.project.getDefaultPackage().path);
 
     const genAiPluginAndFunctions = this.agentJson.agentVersion.nodes.flatMap((n) => [
@@ -185,12 +188,12 @@ export class ScriptAgentPublisher {
         directoryPaths: [defaultPackagePath],
       },
       org: {
-        username: standardConnection.getUsername()!,
+        username: this.standardConnection.getUsername()!,
         exclude: [],
       },
     });
     const retrieve = await cs.retrieve({
-      usernameOrConnection: standardConnection,
+      usernameOrConnection: this.standardConnection,
       merge: true,
       format: 'source',
       output: path.resolve(this.project.getPath(), defaultPackagePath),
@@ -234,11 +237,10 @@ export class ScriptAgentPublisher {
       suppressEmptyNode: false,
     });
     await writeFile(this.bundleMetaPath, xmlBuilder.build(authoringBundle));
-    const standardConnection = this.connectionManager.getStandardConnection();
 
     // 2. attempt to deploy the authoring bundle to the org
     const deploy = await ComponentSet.fromSource(this.bundleDir).deploy({
-      usernameOrConnection: standardConnection,
+      usernameOrConnection: this.standardConnection,
     });
     const deployResult = await deploy.pollStatus();
 
@@ -268,9 +270,7 @@ export class ScriptAgentPublisher {
    */
   private async getPublishedBotId(agentApiName: string): Promise<string | undefined> {
     try {
-      // Use standard connection for SOQL query to avoid JWT token clobbering
-      const standardConn = this.connectionManager.getStandardConnection();
-      const queryResult = await standardConn.singleRecordQuery<{ Id: string }>(
+      const queryResult = await this.standardConnection.singleRecordQuery<{ Id: string }>(
         `SELECT Id FROM BotDefinition WHERE DeveloperName='${agentApiName}'`
       );
       getLogger().debug(`Agent with developer name ${agentApiName} and id ${queryResult.Id} is already published.`);
@@ -289,9 +289,7 @@ export class ScriptAgentPublisher {
    */
   private async getVersionDeveloperName(botVersionId: string): Promise<string> {
     try {
-      // Use standard connection for SOQL query to avoid JWT token clobbering
-      const standardConn = this.connectionManager.getStandardConnection();
-      const queryResult = await standardConn.singleRecordQuery<{ DeveloperName: string }>(
+      const queryResult = await this.standardConnection.singleRecordQuery<{ DeveloperName: string }>(
         `SELECT DeveloperName FROM BotVersion WHERE Id='${botVersionId}'`
       );
       getLogger().debug(`Bot version with id ${botVersionId} is ${queryResult.DeveloperName}.`);

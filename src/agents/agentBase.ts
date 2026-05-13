@@ -15,7 +15,7 @@
  */
 import { readFile, readdir, cp, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { SfError } from '@salesforce/core';
+import { Connection, SfError } from '@salesforce/core';
 import { AgentPreviewInterface, type AgentPreviewSendResponse, type PlannerResponse, PreviewMetadata } from '../types';
 import { getHistoryDir, SessionHistoryBuffer, TranscriptEntry } from '../utils';
 import { ConnectionManager } from '../connectionManager';
@@ -29,6 +29,20 @@ export abstract class AgentBase {
    * The display name of the agent (user-friendly name, not API name)
    */
   public name: string | undefined;
+  /**
+   * The standard org connection used for SOQL queries, tooling API calls, and metadata
+   * operations. This is distinct from the JWT-upgraded connection used for SFAP API
+   * calls (held internally by the connection manager).
+   */
+  protected readonly connection: Connection;
+  /**
+   * Holds isolated JWT and standard connections. When a ConnectionManager is supplied
+   * by Agent.init() / Agent.create() / Agent.createSpec(), the agent gets fully
+   * isolated connections (the caller's connection is not mutated). When undefined
+   * (consumers instantiating an agent directly), the supplied connection is used as
+   * both the JWT and standard connection — preserving the pre-isolation behavior.
+   */
+  protected readonly connectionManager: ConnectionManager | undefined;
   protected sessionId: string | undefined;
   protected historyDir: string | undefined;
   protected historyBuffer: SessionHistoryBuffer | undefined;
@@ -37,14 +51,25 @@ export abstract class AgentBase {
   protected planIds = new Set<string>();
   public abstract preview: AgentPreviewInterface;
 
-  protected constructor(protected readonly connectionManager: ConnectionManager) {}
+  protected constructor(connection: Connection, connectionManager?: ConnectionManager) {
+    this.connectionManager = connectionManager;
+    this.connection = connectionManager ? connectionManager.getStandardConnection() : connection;
+  }
 
   /**
-   * Restore the connection by refreshing the standard (non-JWT) connection.
+   * Refreshes the access token on the standard connection.
    *
+   * Retained for backward compatibility. With the connection manager in place the
+   * caller's original Connection object is no longer mutated by agent operations,
+   * so this method only refreshes the internal standard connection.
    */
   public async restoreConnection(): Promise<void> {
-    await this.connectionManager.refreshStandardConnection();
+    if (this.connectionManager) {
+      await this.connectionManager.refreshStandardConnection();
+      return;
+    }
+    delete this.connection.accessToken;
+    await this.connection.refreshAuth();
   }
 
   public setSessionId(sessionId: string): void {
@@ -78,6 +103,15 @@ export abstract class AgentBase {
     if (history.metadata?.planIds) {
       history.metadata.planIds.forEach((planId) => this.planIds.add(planId));
     }
+  }
+
+  /**
+   * Returns the connection to use for SFAP API calls (api.salesforce.com/einstein/ai-agent).
+   * When a ConnectionManager is in use this is the JWT-upgraded connection; otherwise it
+   * is the connection supplied at construction time.
+   */
+  protected getJwtConnection(): Connection {
+    return this.connectionManager ? this.connectionManager.getJwtConnection() : this.connection;
   }
 
   /**

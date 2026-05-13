@@ -49,6 +49,7 @@ import {
 import { getDebugLog } from '../apexUtils';
 import { generateAgentScript } from '../templates/agentScriptTemplate';
 import { applyStringReplacementsToAgent } from '../stringReplacements';
+import { ConnectionManager } from '../connectionManager';
 import { ScriptAgentPublisher } from './scriptAgentPublisher';
 import { AgentBase } from './agentBase';
 
@@ -63,16 +64,8 @@ export class ScriptAgent extends AgentBase {
   private readonly aabDirectory: string;
   private readonly metaContent: string;
   private readonly agentFilePath: string;
-  public constructor(private options: ScriptAgentOptions) {
-    // ConnectionManager should be provided by Agent.init(), but fallback to creating one if needed
-    const connectionManager = options.connectionManager;
-    if (!connectionManager) {
-      throw SfError.create({
-        name: 'MissingConnectionManager',
-        message: 'ConnectionManager is required. Use Agent.init() to create ScriptAgent instances.',
-      });
-    }
-    super(connectionManager);
+  public constructor(private options: ScriptAgentOptions, connectionManager?: ConnectionManager) {
+    super(options.connection, connectionManager);
     this.options = options;
     this.apiBase = 'https://api.salesforce.com/einstein/ai-agent';
 
@@ -177,7 +170,7 @@ export class ScriptAgent extends AgentBase {
   }
 
   public async getTrace(planId: string): Promise<PlannerResponse> {
-    return requestWithEndpointFallback<PlannerResponse>(this.connectionManager.getJwtConnection(), {
+    return requestWithEndpointFallback<PlannerResponse>(this.getJwtConnection(), {
       method: 'GET',
       url: `${this.apiBase}/v1.1/preview/sessions/${this.sessionId!}/plans/${planId}`,
       headers: {
@@ -213,7 +206,7 @@ export class ScriptAgent extends AgentBase {
 
     try {
       const response = await requestWithEndpointFallback<CompileAgentScriptResponse>(
-        this.connectionManager.getJwtConnection(),
+        this.getJwtConnection(),
         {
           method: 'POST',
           url,
@@ -279,10 +272,11 @@ export class ScriptAgent extends AgentBase {
     }
 
     const publisher = new ScriptAgentPublisher(
-      this.connectionManager,
+      this.options.connection,
       this.options.project,
       this.agentJson!,
-      skipMetadataRetrieve
+      skipMetadataRetrieve,
+      this.connectionManager
     );
     return publisher.publishAgentJson();
   }
@@ -403,17 +397,14 @@ export class ScriptAgent extends AgentBase {
         this.historyBuffer
       );
 
-      const response = await requestWithEndpointFallback<AgentPreviewSendResponse>(
-        this.connectionManager.getJwtConnection(),
-        {
-          method: 'POST',
-          url,
-          body: JSON.stringify(body),
-          headers: {
-            'x-client-name': 'afdx',
-          },
-        }
-      );
+      const response = await requestWithEndpointFallback<AgentPreviewSendResponse>(this.getJwtConnection(), {
+        method: 'POST',
+        url,
+        body: JSON.stringify(body),
+        headers: {
+          'x-client-name': 'afdx',
+        },
+      });
 
       const planId = response.messages.at(0)!.planId;
       this.planIds.add(planId);
@@ -443,9 +434,7 @@ export class ScriptAgent extends AgentBase {
       await this.historyBuffer.flush();
 
       if (this.apexDebugging && this.canApexDebug()) {
-        // Use standard connection for tooling API query to avoid JWT token clobbering
-        const standardConn = this.connectionManager.getStandardConnection();
-        const apexLog = await getDebugLog(standardConn, start, Date.now());
+        const apexLog = await getDebugLog(this.connection, start, Date.now());
         if (apexLog) {
           response.apexDebugLog = apexLog;
         }
@@ -456,7 +445,6 @@ export class ScriptAgent extends AgentBase {
       throw SfError.wrap(err);
     }
   }
-
 
   private setMockMode(mockMode: 'Mock' | 'Live Test'): void {
     this.mockMode = mockMode;
@@ -484,11 +472,9 @@ export class ScriptAgent extends AgentBase {
     }
 
     // send bypassUser=false when the compiledAgent.globalConfiguration.defaultAgentUser is INVALID
-    // Use standard connection for SOQL query to avoid JWT token clobbering
-    const standardConn = this.connectionManager.getStandardConnection();
     let bypassUser =
       (
-        await standardConn.query<{ Id: string }>(
+        await this.connection.query<{ Id: string }>(
           `SELECT Id FROM USER WHERE username='${this.agentJson.globalConfiguration.defaultAgentUser}'`
         )
       ).totalSize === 1;
@@ -523,9 +509,9 @@ export class ScriptAgent extends AgentBase {
       void Lifecycle.getInstance().emit('agents:simulation-starting', {});
 
       let response: AgentPreviewStartResponse;
-        try {
+      try {
         response = await requestWithEndpointFallback<AgentPreviewStartResponse>(
-          this.connectionManager.getJwtConnection(),
+          this.getJwtConnection(),
           {
             method: 'POST',
             url: `${this.apiBase}/v1.1/preview/sessions`,

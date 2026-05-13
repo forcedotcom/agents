@@ -41,6 +41,7 @@ import {
   SessionHistoryBuffer,
 } from '../utils';
 import { createTraceFlag, findTraceFlag, getDebugLog } from '../apexUtils';
+import { ConnectionManager } from '../connectionManager';
 import { AgentBase } from './agentBase';
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agents');
@@ -52,16 +53,8 @@ export class ProductionAgent extends AgentBase {
   private apiName: string | undefined;
   private readonly apiBase: string;
 
-  public constructor(options: ProductionAgentOptions) {
-    // ConnectionManager should be provided by Agent.init(), but fallback to creating one if needed
-    const connectionManager = options.connectionManager;
-    if (!connectionManager) {
-      throw SfError.create({
-        name: 'MissingConnectionManager',
-        message: 'ConnectionManager is required. Use Agent.init() to create ProductionAgent instances.',
-      });
-    }
-    super(connectionManager);
+  public constructor(private options: ProductionAgentOptions, connectionManager?: ConnectionManager) {
+    super(options.connection, connectionManager);
     this.apiBase = 'https://api.salesforce.com/einstein/ai-agent/v1';
     if (!options.apiNameOrId) {
       throw messages.createError('missingAgentNameOrId');
@@ -90,8 +83,7 @@ export class ProductionAgent extends AgentBase {
         'Id, IsDeleted, DeveloperName, MasterLabel, CreatedDate, CreatedById, LastModifiedDate, LastModifiedById, SystemModstamp, BotUserId, Description, Type, AgentType, AgentTemplate';
       const botVersionFields =
         'Id, Status, IsDeleted, BotDefinitionId, DeveloperName, CreatedDate, CreatedById, LastModifiedDate, LastModifiedById, SystemModstamp, VersionNumber, CopilotPrimaryLanguage, ToneType, CopilotSecondaryLanguages';
-      const standardConn = this.connectionManager.getStandardConnection();
-      this.botMetadata = await standardConn.singleRecordQuery<BotMetadata>(
+      this.botMetadata = await this.connection.singleRecordQuery<BotMetadata>(
         `SELECT ${botDefinitionFields}, (SELECT ${botVersionFields} FROM BotVersions WHERE IsDeleted = false ORDER BY VersionNumber) FROM BotDefinition WHERE ${whereClause} LIMIT 1`
       );
       this.id = this.botMetadata.Id;
@@ -217,10 +209,9 @@ export class ProductionAgent extends AgentBase {
   protected async handleApexDebuggingSetup(): Promise<void> {
     const botMetadata = await this.getBotMetadata();
     if (botMetadata.BotUserId) {
-      const standardConn = this.connectionManager.getStandardConnection();
-      const traceFlag = await findTraceFlag(standardConn, botMetadata.BotUserId);
+      const traceFlag = await findTraceFlag(this.connection, botMetadata.BotUserId);
       if (!traceFlag) {
-        await createTraceFlag(standardConn, botMetadata.BotUserId);
+        await createTraceFlag(this.connection, botMetadata.BotUserId);
       }
     }
   }
@@ -274,17 +265,14 @@ export class ProductionAgent extends AgentBase {
       };
       await logTurnToHistory(userEntry, ++this.turnCounter, this.historyDir, this.historyBuffer);
 
-      const response = await requestWithEndpointFallback<AgentPreviewSendResponse>(
-        this.connectionManager.getJwtConnection(),
-        {
-          method: 'POST',
-          url,
-          body: JSON.stringify(body),
-          headers: {
-            'x-client-name': 'afdx',
-          },
-        }
-      );
+      const response = await requestWithEndpointFallback<AgentPreviewSendResponse>(this.getJwtConnection(), {
+        method: 'POST',
+        url,
+        body: JSON.stringify(body),
+        headers: {
+          'x-client-name': 'afdx',
+        },
+      });
 
       const planId = response.messages.at(0)!.planId;
       this.planIds.add(planId);
@@ -309,8 +297,7 @@ export class ProductionAgent extends AgentBase {
       await this.historyBuffer.flush();
 
       if (this.apexDebugging && this.canApexDebug()) {
-        const standardConn = this.connectionManager.getStandardConnection();
-        const apexLog = await getDebugLog(standardConn, start, Date.now());
+        const apexLog = await getDebugLog(this.connection, start, Date.now());
         if (apexLog) {
           response.apexDebugLog = apexLog;
         }
@@ -336,7 +323,7 @@ export class ProductionAgent extends AgentBase {
     }
 
     const url = `/connect/bot-versions/${botVersionMetadata.Id}/activation`;
-    const maybeMock = new MaybeMock(this.connectionManager.getJwtConnection());
+    const maybeMock = new MaybeMock(this.getJwtConnection());
     const response = await maybeMock.request<BotActivationResponse>('POST', url, { status: desiredState });
     if (response.success) {
       const versionToUpdate = this.botMetadata!.BotVersions.records.find(
@@ -365,7 +352,7 @@ export class ProductionAgent extends AgentBase {
     const body = {
       externalSessionKey: randomUUID(),
       instanceConfig: {
-        endpoint: this.connectionManager.getStandardConnection().instanceUrl,
+        endpoint: this.options.connection.instanceUrl,
       },
       streamingCapabilities: {
         chunkTypes: ['Text'],
@@ -374,17 +361,14 @@ export class ProductionAgent extends AgentBase {
     };
 
     try {
-      const response = await requestWithEndpointFallback<AgentPreviewStartResponse>(
-        this.connectionManager.getJwtConnection(),
-        {
-          method: 'POST',
-          url,
-          body: JSON.stringify(body),
-          headers: {
-            'x-client-name': 'afdx',
-          },
-        }
-      );
+      const response = await requestWithEndpointFallback<AgentPreviewStartResponse>(this.getJwtConnection(), {
+        method: 'POST',
+        url,
+        body: JSON.stringify(body),
+        headers: {
+          'x-client-name': 'afdx',
+        },
+      });
       this.sessionId = response.sessionId;
 
       const agentId = this.id!;
@@ -439,16 +423,13 @@ export class ProductionAgent extends AgentBase {
     const url = `${this.apiBase}/sessions/${this.sessionId}`;
     try {
       // https://developer.salesforce.com/docs/einstein/genai/guide/agent-api-examples.html#end-session
-      const response = await requestWithEndpointFallback<AgentPreviewEndResponse>(
-        this.connectionManager.getJwtConnection(),
-        {
-          method: 'DELETE',
-          url,
-          headers: {
-            'x-session-end-reason': reason,
-          },
-        }
-      );
+      const response = await requestWithEndpointFallback<AgentPreviewEndResponse>(this.getJwtConnection(), {
+        method: 'DELETE',
+        url,
+        headers: {
+          'x-session-end-reason': reason,
+        },
+      });
 
       // Write end entry and flush buffer
       if (this.historyDir && this.historyBuffer) {

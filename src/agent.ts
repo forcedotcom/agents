@@ -17,15 +17,7 @@
 import { inspect } from 'node:util';
 import * as path from 'node:path';
 import { readdir, stat } from 'node:fs/promises';
-import {
-  Connection,
-  generateApiName,
-  Lifecycle,
-  Logger,
-  Messages,
-  SfError,
-  SfProject,
-} from '@salesforce/core';
+import { Connection, generateApiName, Lifecycle, Logger, Messages, SfError, SfProject } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { Duration } from '@salesforce/kit';
 import {
@@ -108,16 +100,15 @@ export class Agent {
   public static async init(
     options: ProductionAgentOptions | ScriptAgentOptions
   ): Promise<ScriptAgent | ProductionAgent> {
-    // Create ConnectionManager which handles JWT and standard connections
+    // ConnectionManager isolates JWT (for SFAP) and standard (for org) connections so
+    // the caller's connection is never mutated by JWT upgrades or auto-refresh.
     const connectionManager = await ConnectionManager.create(options.connection);
 
     // Type guard: check if it's ScriptAgentOptions by looking for 'aabName'
     if ('aabName' in options) {
-      // TypeScript now knows this is ScriptAgentOptions
-      return new ScriptAgent({ ...options, connectionManager });
+      return new ScriptAgent(options, connectionManager);
     } else {
-      // TypeScript now knows this is ProductionAgentOptions
-      const agent = new ProductionAgent({ ...options, connectionManager });
+      const agent = new ProductionAgent(options, connectionManager);
       await agent.getBotMetadata();
       return agent;
     }
