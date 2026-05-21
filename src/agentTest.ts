@@ -25,10 +25,18 @@ import {
   AvailableDefinition,
   AgentTestConfig,
   AiEvaluationDefinition,
+  AiTestCase,
+  AiTestCaseScorer,
+  AiTestingDefinition,
+  AiConversationTurnXml,
   TestSpec,
   MetadataExpectation,
+  NgtTestSpec,
+  NgtTestCase,
+  NgtTestCaseInput,
 } from './types.js';
-import { metric, sanitizeFilename } from './utils';
+import { isNgtScorerName, NgtScorerCatalog, NgtScorerName } from './ngtScorerCatalog';
+import { metric, sanitizeFilename, TestRunnerType } from './utils';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agentTest');
@@ -99,40 +107,66 @@ export class AgentTest {
   }
 
   /**
-   * Creates and deploys an AiEvaluationDefinition from a specification file.
+   * Creates and deploys a test definition from a specification file.
+   *
+   * Two metadata types are supported, selected via `options.testRunner`:
+   * `'testing-center'` (default) — legacy `AiEvaluationDefinition`. Filename `<apiName>.aiEvaluationDefinition-meta.xml`.
+   * `'agentforce-studio'` — new `AiTestingDefinition` (NGT). Filename `<apiName>.aiTestingDefinition-meta.xml`. 
+   *    Requires Metadata API v66.0 or later on the target org; the server gates this and the lib does not preflight.
    *
    * @param connection - Connection to the org where the agent test will be created.
-   * @param apiName - The API name of the AiEvaluationDefinition to create
-   * @param specFilePath - The path to the specification file to create the definition from
-   * @param options - Configuration options for creating the definition
-   * @param options.outputDir - The directory where the AiEvaluationDefinition file will be written
-   * @param options.preview - If true, writes the AiEvaluationDefinition file to <api-name>-preview-<timestamp>.xml in the current working directory and does not deploy it
+   * @param apiName - The API name of the test definition to create.
+   * @param specFilePath - The path to the YAML specification file.
+   * @param options - Configuration options for creating the definition.
+   * @param options.outputDir - The directory where the metadata file will be written.
+   * @param options.preview - If true, writes the metadata file to `<apiName>-preview-<timestamp>.xml` in the current working directory and does not deploy.
+   * @param options.testRunner - Which test runner to author for. Defaults to `'testing-center'`.
    *
    * @returns Promise containing:
-   * - path: The filesystem path to the created AiEvaluationDefinition file
-   * - contents: The AiEvaluationDefinition contents as a string
-   * - deployResult: The deployment result (if not in preview mode)
+   * - path: The filesystem path to the created metadata file.
+   * - contents: The metadata XML as a string.
+   * - deployResult: The deployment result (if not in preview mode).
    *
-   * @throws {SfError} When deployment fails
+   * @throws {SfError} When validation or deployment fails.
    */
   public static async create(
     connection: Connection,
     apiName: string,
     specFilePath: string,
-    options: { outputDir: string; preview?: boolean }
+    options: { outputDir: string; preview?: boolean; testRunner?: TestRunnerType }
   ): Promise<{ path: string; contents: string; deployResult?: DeployResult }> {
-    const agentTestSpec = parse(await readFile(specFilePath, 'utf-8')) as TestSpec;
     const lifecycle = Lifecycle.getInstance();
-    await lifecycle.emit(AgentTestCreateLifecycleStages.CreatingLocalMetadata, {});
     const preview = options.preview ?? false;
-    // outputDir is overridden if preview is true
+    const testRunner: TestRunnerType = options.testRunner ?? 'testing-center';
     const outputDir = preview ? process.cwd() : options.outputDir;
-    const filename = preview
-      ? `${apiName}-preview-${new Date().toISOString()}.xml`
-      : `${apiName}.aiEvaluationDefinition-meta.xml`;
-    const definitionPath = join(outputDir, sanitizeFilename(filename));
 
-    const xml = buildMetadataXml(convertToMetadata(agentTestSpec));
+    const rawSpec = await readFile(specFilePath, 'utf-8');
+
+    let xml: string;
+    let definitionPath: string;
+
+    if (testRunner === 'agentforce-studio') {
+      const ngtSpec = parse(rawSpec) as NgtTestSpec;
+      const isMultiAgent = await fetchIsMultiAgent(connection, ngtSpec.subjectName);
+      validateNgtSpec(ngtSpec, { isMultiAgent });
+      await lifecycle.emit(AgentTestCreateLifecycleStages.CreatingLocalMetadata, {});
+
+      const filename = preview
+        ? `${apiName}-preview-${new Date().toISOString()}.xml`
+        : `${apiName}.aiTestingDefinition-meta.xml`;
+      definitionPath = join(outputDir, sanitizeFilename(filename));
+      xml = buildTestingMetadataXml(convertToTestingMetadata(ngtSpec));
+    } else {
+      const agentTestSpec = parse(rawSpec) as TestSpec;
+      await lifecycle.emit(AgentTestCreateLifecycleStages.CreatingLocalMetadata, {});
+
+      const filename = preview
+        ? `${apiName}-preview-${new Date().toISOString()}.xml`
+        : `${apiName}.aiEvaluationDefinition-meta.xml`;
+      definitionPath = join(outputDir, sanitizeFilename(filename));
+      xml = buildMetadataXml(convertToMetadata(agentTestSpec));
+    }
+
     await mkdir(outputDir, { recursive: true });
     await writeFile(definitionPath, xml);
 
@@ -435,5 +469,164 @@ const buildMetadataXml = (data: AiEvaluationDefinition): string => {
 
   const xml = builder.build(aiEvalXml);
 
+  return `<?xml version="1.0" encoding="UTF-8"?>\n${xml}`;
+};
+
+/**
+ * Validate an NGT test spec before conversion.
+ *
+ * Throws on the first failure encountered so authors get one clear actionable
+ * error at a time. Emits a Lifecycle warning (does not throw) for unknown
+ * scorer names — Core's MD validator catches those at deploy time.
+ */
+export const validateNgtSpec = (spec: NgtTestSpec, ctx: { isMultiAgent: boolean }): void => {
+  if (!spec.testCases || spec.testCases.length === 0) {
+    throw ngtError('ngtMissingTestCases');
+  }
+
+  spec.testCases.forEach((testCase, tcIdx) => {
+    if (!testCase.inputs || testCase.inputs.length === 0) {
+      throw ngtError('ngtTestCaseMissingInputs', [tcIdx + 1]);
+    }
+    if (!testCase.scorers || testCase.scorers.length === 0) {
+      throw ngtError('ngtTestCaseMissingScorers', [tcIdx + 1]);
+    }
+
+    testCase.scorers.forEach((scorer) => {
+      if (!isNgtScorerName(scorer.name)) {
+        const unknownName = String(scorer.name);
+        void Lifecycle.getInstance().emitWarning(
+          `Unknown NGT scorer name '${unknownName}'. The deploy will be validated by the server.`
+        );
+        return;
+      }
+      const entry = NgtScorerCatalog[scorer.name];
+      if (entry.needsExpected && (scorer.expected === undefined || scorer.expected === '')) {
+        throw ngtError('ngtScorerMissingExpected', [scorer.name, tcIdx + 1]);
+      }
+    });
+
+    const hasTaskResolution = testCase.scorers.some((s) => s.name === 'task_resolution');
+    if (hasTaskResolution) {
+      const anyHistory = testCase.inputs.some(
+        (input) => Array.isArray(input.conversationHistory) && input.conversationHistory.length > 0
+      );
+      if (!anyHistory) {
+        throw ngtError('ngtTaskResolutionRequiresConversationHistory', [tcIdx + 1]);
+      }
+    }
+
+    if (ctx.isMultiAgent) {
+      const hasHandoff = testCase.scorers.some(
+        (s) => s.name === 'agent_handoff_match' && s.expected !== undefined && s.expected !== ''
+      );
+      if (!hasHandoff) {
+        throw ngtError('ngtMultiAgentMissingHandoff', [tcIdx + 1]);
+      }
+    }
+
+    testCase.inputs.forEach((input, inputIdx) => {
+      const turns = input.conversationHistory;
+      if (!turns || turns.length === 0) return;
+      const withIndex = turns.filter((t) => t.index !== undefined).length;
+      if (withIndex !== 0 && withIndex !== turns.length) {
+        throw ngtError('ngtConversationHistoryIndexAllOrNothing', [tcIdx + 1, inputIdx + 1]);
+      }
+    });
+  });
+};
+
+const ngtError = (key: string, tokens: Array<string | number> = []): SfError => {
+  const message = messages.getMessage(key, tokens);
+  return new SfError(message, key);
+};
+
+/** Reads `BotDefinition.IsMultiAgent` for the named subject. Conservative default `false` on read failure. */
+const fetchIsMultiAgent = async (connection: Connection, subjectName: string): Promise<boolean> => {
+  try {
+    // @ts-expect-error jsForce types don't model BotDefinition
+    const data = (await connection.metadata.read('BotDefinition', subjectName)) as { IsMultiAgent?: boolean } | undefined;
+    return Boolean(data?.IsMultiAgent);
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Convert a validated `NgtTestSpec` to the `AiTestingDefinition` shape ready for XML serialization.
+ *
+ * Multi-input fan-out: when a test case has N inputs, emit N `<testCase>` elements sharing the
+ * same scorer set. The `<number>` field increments globally across the whole document.
+ *
+ * Must be called after `validateNgtSpec`.
+ */
+export const convertToTestingMetadata = (spec: NgtTestSpec): AiTestingDefinition => {
+  const testCases: AiTestCase[] = [];
+  let counter = 1;
+  for (const tc of spec.testCases) {
+    const sharedScorers = tc.scorers.map(toScorerXml);
+    for (const input of tc.inputs) {
+      testCases.push({
+        number: counter++,
+        inputs: toInputsXml(input),
+        scorer: sharedScorers,
+      });
+    }
+  }
+  return {
+    ...(spec.description && { description: spec.description }),
+    name: spec.name,
+    subjectName: spec.subjectName,
+    subjectType: spec.subjectType,
+    ...(spec.subjectVersion && { subjectVersion: spec.subjectVersion }),
+    testCase: testCases,
+  };
+};
+
+const toScorerXml = (scorer: NgtTestCase['scorers'][number]): AiTestCaseScorer => {
+  const name = scorer.name as NgtScorerName;
+  // Quality scorers (needsExpected:false) and unknown names omit expectedValue.
+  const known = isNgtScorerName(name) ? NgtScorerCatalog[name] : undefined;
+  const includeExpected = scorer.expected !== undefined && (known?.needsExpected ?? true);
+  return includeExpected ? { name, expectedValue: scorer.expected as string } : { name };
+};
+
+const toInputsXml = (input: NgtTestCaseInput): AiTestCase['inputs'] => {
+  const inputs: { utterance: string; contextVariable?: Array<{ variableName: string; variableValue: string }>; conversationHistory?: AiConversationTurnXml[] } = {
+    utterance: input.utterance,
+  };
+  if (input.contextVariables && input.contextVariables.length > 0) {
+    inputs.contextVariable = input.contextVariables.map((cv) => ({
+      variableName: cv.name,
+      variableValue: cv.value,
+    }));
+  }
+  if (input.conversationHistory && input.conversationHistory.length > 0) {
+    inputs.conversationHistory = input.conversationHistory.map((turn, i) =>
+      turn.role === 'agent'
+        ? { role: turn.role, message: turn.message, topic: turn.topic, index: turn.index ?? i }
+        : { role: turn.role, message: turn.message, index: turn.index ?? i }
+    );
+  }
+  return inputs;
+};
+
+/** Serialize an `AiTestingDefinition` to source-format XML. Mirrors `buildMetadataXml`. */
+export const buildTestingMetadataXml = (data: AiTestingDefinition): string => {
+  const wrapped = {
+    AiTestingDefinition: {
+      $xmlns: 'http://soap.sforce.com/2006/04/metadata',
+      ...data,
+    },
+  };
+
+  const builder = new XMLBuilder({
+    format: true,
+    attributeNamePrefix: '$',
+    indentBy: '    ',
+    ignoreAttributes: false,
+  });
+
+  const xml = builder.build(wrapped);
   return `<?xml version="1.0" encoding="UTF-8"?>\n${xml}`;
 };

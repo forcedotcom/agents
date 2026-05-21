@@ -18,6 +18,7 @@ import { Connection, Logger, SfProject } from '@salesforce/core';
 import { FileProperties } from '@salesforce/source-deploy-retrieve';
 import { type ApexLog } from '@salesforce/types/tooling';
 import { metric } from './utils';
+import type { NgtScorerName } from './ngtScorerCatalog';
 
 // ====================================================
 //     Compilation API exit codes
@@ -500,12 +501,12 @@ export type MetadataMetric = { name: string };
 export type MetadataExpectation = {
   // topic/action/outcome matching
   name:
-    | 'topic_sequence_match'
-    | 'topic_assertion'
-    | 'action_sequence_match'
-    | 'actions_assertion'
-    | 'bot_response_rating'
-    | 'output_validation';
+  | 'topic_sequence_match'
+  | 'topic_assertion'
+  | 'action_sequence_match'
+  | 'actions_assertion'
+  | 'bot_response_rating'
+  | 'output_validation';
   expectedValue: string;
 };
 
@@ -538,6 +539,80 @@ export type AiEvaluationDefinition = {
       utterance: string;
     };
   }>;
+};
+
+// ====================================================
+//    NGT Agent Testing Types (Agentforce Studio)
+// ====================================================
+
+// Authoring (YAML) types for NGT specs.
+
+export type NgtContextVar = {
+  name: string;
+  value: string;
+};
+
+export type NgtConversationTurn =
+  | { role: 'user'; message: string; index?: number }
+  | { role: 'agent'; message: string; topic: string; index?: number };
+
+export type NgtTestCaseInput = {
+  utterance: string;
+  contextVariables?: NgtContextVar[];
+  conversationHistory?: NgtConversationTurn[];
+};
+
+export type NgtTestCaseScorer = {
+  name: NgtScorerName;
+  expected?: string;
+};
+
+export type NgtTestCase = {
+  inputs: NgtTestCaseInput[];
+  scorers: NgtTestCaseScorer[];
+};
+
+export type NgtTestSpec = {
+  name: string;
+  description?: string;
+  subjectType: 'AGENT';
+  subjectName: string;
+  subjectVersion?: string;
+  testCases: NgtTestCase[];
+};
+
+// Metadata (XML) types for AiTestingDefinition.
+
+export type AiConversationTurnXml =
+  | { role: 'user'; message: string; index: number }
+  | { role: 'agent'; message: string; topic: string; index: number };
+
+export type AiTestCaseInputXml = {
+  utterance: string;
+  contextVariable?: Array<{ variableName: string; variableValue: string }>;
+  conversationHistory?: AiConversationTurnXml[];
+};
+
+export type AiTestCaseScorer = {
+  name: NgtScorerName;
+  expectedValue?: string;
+  // 'Custom' reserved for the future, converter never emits it for v1.
+  scorerType?: 'OOTB' | 'Custom';
+};
+
+export type AiTestCase = {
+  number: number;
+  inputs: AiTestCaseInputXml;
+  scorer: AiTestCaseScorer[];
+};
+
+export type AiTestingDefinition = {
+  description?: string;
+  name: string;
+  subjectName: string;
+  subjectType: 'AGENT';
+  subjectVersion?: string;
+  testCase: AiTestCase[];
 };
 
 // ====================================================
