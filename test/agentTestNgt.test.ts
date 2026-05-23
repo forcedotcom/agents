@@ -31,9 +31,9 @@ import type { NgtTestSpec } from '../src/types';
 
 /**
  * Normalize a serialized XML string for comparison:
- *   - normalize line endings to \n
- *   - trim trailing whitespace per line
- *   - drop a final trailing newline
+ * - normalize line endings to \n
+ * - trim trailing whitespace per line
+ * - drop a final trailing newline
  *
  * The XMLBuilder may emit empty self-closing differences depending on options;
  * if the developer's serializer differs in those edge details, the test should
@@ -394,7 +394,7 @@ describe('AgentTest NGT (Agentforce Studio) create surface', () => {
       expect(xml).to.not.include("['Get_Order_Status']");
     });
 
-    it("action_sequence_match with the python-list-string passes through verbatim to <expectedValue>", () => {
+    it('action_sequence_match with the python-list-string passes through verbatim to <expectedValue>', () => {
       // Per plan: NgtTestCaseScorer.expected?: string — the user passes the python-list-string
       // (single-quoted, comma-joined, no spaces) verbatim, matching spec doc §7's wire format.
       const spec: NgtTestSpec = {
@@ -504,14 +504,18 @@ testCases:
       sinon.restore();
     });
 
-    it('preview: true writes <apiName>.aiTestingDefinition-meta.xml without invoking deploy', async () => {
+    it('preview: true writes <apiName>-preview-<timestamp>.xml without invoking deploy', async () => {
       const result = await AgentTest.create(connection, 'MyTest', 'spec.yaml', {
         outputDir: 'tmp',
         preview: true,
         testRunner: 'agentforce-studio',
       } as never); // cast: option type is added in src by the developer.
 
-      expect(result.path).to.match(/MyTest\.aiTestingDefinition-meta\.xml$/);
+      // Preview parity with the legacy path (src/agentTest.ts:131-132): timestamped
+      // filename so previewing in the project root doesn't clobber a real
+      // `<apiName>.aiTestingDefinition-meta.xml` checked in alongside source.
+      expect(result.path).to.match(/MyTest-preview-.+\.xml$/);
+      expect(result.path).to.not.include('aiTestingDefinition');
       expect(componentSetBuildStub.called, 'ComponentSetBuilder.build must NOT be called when preview=true').to.be
         .false;
       expect(writeFileStub.calledOnce).to.be.true;
@@ -559,10 +563,14 @@ testCases:
       expect(mkdirStub.calledOnce).to.be.true;
     });
 
-    // Regression guard: omitting testRunner → legacy behavior, byte-for-byte.
-    // The existing legacy `describe('create', ...)` already covers most of this;
-    // this single concise test pins the filename suffix.
-    it('regression: omitting testRunner writes <apiName>.aiEvaluationDefinition-meta.xml (legacy path unchanged)', async () => {
+    // Regression guard: omitting testRunner must route through the legacy path,
+    // not the NGT path. With preview:true, legacy emits the timestamped preview
+    // filename (`<apiName>-preview-<ISO>.xml`) per src/agentTest.ts:131-132 and
+    // the existing tests at test/agentTest.test.ts:847,888.
+    // The load-bearing assertion is "no aiTestingDefinition in the path" — that's
+    // what proves we didn't accidentally branch into the NGT path. The filename
+    // shape check just documents the legacy preview convention.
+    it('regression: omitting testRunner stays on the legacy path (no NGT routing)', async () => {
       readFileStub.restore();
       const legacyYaml = `name: Legacy
 description: Legacy
@@ -581,8 +589,8 @@ testCases:
         outputDir: 'tmp',
         preview: true,
       });
-      expect(path).to.match(/LegacyTest\.aiEvaluationDefinition-meta\.xml$/);
       expect(path).to.not.include('aiTestingDefinition');
+      expect(path).to.match(/LegacyTest-preview-.+\.xml$/);
     });
   });
 

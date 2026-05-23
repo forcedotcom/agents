@@ -111,8 +111,8 @@ export class AgentTest {
    *
    * Two metadata types are supported, selected via `options.testRunner`:
    * `'testing-center'` (default) — legacy `AiEvaluationDefinition`. Filename `<apiName>.aiEvaluationDefinition-meta.xml`.
-   * `'agentforce-studio'` — new `AiTestingDefinition` (NGT). Filename `<apiName>.aiTestingDefinition-meta.xml`. 
-   *    Requires Metadata API v66.0 or later on the target org; the server gates this and the lib does not preflight.
+   * `'agentforce-studio'` — new `AiTestingDefinition` (NGT). Filename `<apiName>.aiTestingDefinition-meta.xml`.
+   * Requires Metadata API v66.0 or later on the target org; the server gates this and the lib does not preflight.
    *
    * @param connection - Connection to the org where the agent test will be created.
    * @param apiName - The API name of the test definition to create.
