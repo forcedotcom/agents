@@ -18,7 +18,7 @@
  * Known scorer names for the NGT (Agentforce Studio) test runner — used for IDE
  * autocomplete and the per-scorer metadata in {@link NgtScorerCatalog}.
  *
- * The `(string & {})` branch keeps this open: arbitrary names from a future Core
+ * The `(string & NonNullable<unknown>)` branch keeps this open: arbitrary names from a future Core
  * release pass type-checks. Validation is non-strict on purpose — `validateNgtSpec`
  * emits a lifecycle warning for unknown names, and Core's MD validator
  * (`AITestingOOTBEvaluations.resolveByKeyOrName`) is the authoritative runtime gate.
@@ -34,8 +34,7 @@
  */
 export type NgtScorerName =
   | KnownNgtScorerName
-  // eslint-disable-next-line @typescript-eslint/ban-types
-  | (string & {});
+  | (string & NonNullable<unknown>);
 
 /** The closed set used for catalog lookups and autocomplete. */
 export type KnownNgtScorerName =
