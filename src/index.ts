@@ -65,6 +65,19 @@ export {
   type MetadataCustomEvaluation,
   type AiEvaluationDefinition,
 
+  // NGT (Agentforce Studio) Authoring + Metadata Types
+  type NgtTestSpec,
+  type NgtTestCase,
+  type NgtTestCaseInput,
+  type NgtTestCaseScorer,
+  type NgtContextVar,
+  type NgtConversationTurn,
+  type AiTestingDefinition,
+  type AiTestCase,
+  type AiTestCaseInputXml,
+  type AiTestCaseScorer,
+  type AiConversationTurnXml,
+
   // Agentforce Studio Testing Types
   type AgentforceStudioTestStartResponse,
   type AgentforceStudioTestStatusResponse,
@@ -117,6 +130,14 @@ export { Agent, AgentCreateLifecycleStages, type AgentInstance } from './agent';
 export { AgentTester } from './agentTester';
 export { AgentforceStudioTester, normalizeAgentforceStudioResults } from './agentforceStudioTester';
 export { createAgentTester, type CreateAgentTesterOptions, type CreateAgentTesterResult } from './agentTesterFactory';
+export {
+  type NgtScorerName,
+  type KnownNgtScorerName,
+  type NgtScorerGrade,
+  type NgtScorerEntry,
+  NgtScorerCatalog,
+  isNgtScorerName,
+} from './ngtScorerCatalog';
 export { AgentTest, AgentTestCreateLifecycleStages } from './agentTest';
 export { ProductionAgent } from './agents/productionAgent';
 export { ScriptAgent } from './agents/scriptAgent';
