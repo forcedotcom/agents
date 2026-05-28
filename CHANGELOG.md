@@ -1,3 +1,12 @@
+# [1.7.0](https://github.com/forcedotcom/agents/compare/1.6.11...1.7.0) (2026-05-28)
+
+
+### Features
+
+* add NGT (Agentforce Studio) create surface @W-22513615@ ([#290](https://github.com/forcedotcom/agents/issues/290)) ([01b80eb](https://github.com/forcedotcom/agents/commit/01b80ebb143db4426bc24d81b4c6ae8d87510d13))
+
+
+
 ## [1.6.11](https://github.com/forcedotcom/agents/compare/1.6.10...1.6.11) (2026-05-24)
 
 
