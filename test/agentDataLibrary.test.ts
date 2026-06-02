@@ -16,6 +16,8 @@
 
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unused-vars */
 
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection } from '@salesforce/core';
@@ -385,7 +387,7 @@ describe('AgentDataLibrary', () => {
 
   describe('upload', () => {
     let fetchStub: sinon.SinonStub;
-    const testFilePath = '/tmp/adl-upload-test.txt';
+    const testFilePath = join(tmpdir(), 'adl-upload-test.txt');
 
     beforeEach(async () => {
       const { writeFileSync } = await import('node:fs');
@@ -536,7 +538,7 @@ describe('AgentDataLibrary', () => {
 
   describe('addFile', () => {
     let fetchStub: sinon.SinonStub;
-    const testFilePath = '/tmp/adl-add-test.txt';
+    const testFilePath = join(tmpdir(), 'adl-add-test.txt');
 
     beforeEach(async () => {
       const { writeFileSync } = await import('node:fs');
