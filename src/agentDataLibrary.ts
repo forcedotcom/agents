@@ -256,6 +256,11 @@ export class AgentDataLibrary {
   }
 
   private static async uploadToS3(uploadEntry: FileUploadUrlEntry, filePath: string): Promise<void> {
+    const maxFileSize = 100 * 1024 * 1024; // 100 MB — SearchIndex limit for chunking/vectorization
+    const fileSize = statSync(filePath).size;
+    if (fileSize > maxFileSize) {
+      throw new SfError(`File size (${fileSize} bytes) exceeds maximum of ${maxFileSize} bytes.`, 'FileTooLarge');
+    }
     const fileBuffer = readFileSync(filePath);
     const response = await fetch(uploadEntry.uploadUrl, {
       method: 'PUT',
