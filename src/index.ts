@@ -185,3 +185,17 @@ export {
   buildResultSummary,
   type AgentEvalRunResult,
 } from './agentEvalRunner';
+export { AgentDataLibrary } from './agentDataLibrary';
+export {
+  type DataLibrarySummary,
+  type DataLibraryDetail,
+  type IndexingStatusResponse,
+  type CreateLibraryInput,
+  type UpdateLibraryInput,
+  type UploadResult,
+  type FileAddResult,
+  type GroundingFileRef,
+  type GroundingSource,
+  type StageDetail,
+  type SourceType,
+} from './dataLibraryTypes';
