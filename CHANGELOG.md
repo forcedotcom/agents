@@ -1,3 +1,18 @@
+# [1.8.0](https://github.com/forcedotcom/agents/compare/1.7.1...1.8.0) (2026-06-02)
+
+
+### Bug Fixes
+
+* add 100MB file size guard for S3 upload (prevents OOM on large files) ([e78b721](https://github.com/forcedotcom/agents/commit/e78b721d9c3507ee81de09bbefcd1450e2c37a3e))
+* use os.tmpdir() for test file paths (Windows CI compatibility) ([6c8da62](https://github.com/forcedotcom/agents/commit/6c8da626d4002c4e81668cba62462dc580958cf4))
+
+
+### Features
+
+* add AgentDataLibrary for ADL Connect API operations @W-22787736@ ([88dc2eb](https://github.com/forcedotcom/agents/commit/88dc2eb07affcd9db99570f6ee9ef16865f80bf3))
+
+
+
 ## [1.7.1](https://github.com/forcedotcom/agents/compare/1.7.0...1.7.1) (2026-05-30)
 
 
