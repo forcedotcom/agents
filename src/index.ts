@@ -47,6 +47,8 @@ export {
   type AgentPreviewMessageLinks,
   type AgentPreviewMessage,
   type AgentPreviewError,
+  type AgentPreviewStartOptions,
+  type ContextVariable,
   AgentSource,
   type ScriptAgentType,
   type ProductionAgentType,
@@ -173,18 +175,8 @@ export {
   type TestResult,
   type ResultFormat,
 } from './evalFormatter';
-export {
-  isYamlTestSpec,
-  parseTestSpec,
-  translateTestSpec,
-  translateTestCase,
-} from './yamlSpecTranslator';
-export {
-  resolveAgent,
-  executeBatches,
-  buildResultSummary,
-  type AgentEvalRunResult,
-} from './agentEvalRunner';
+export { isYamlTestSpec, parseTestSpec, translateTestSpec, translateTestCase } from './yamlSpecTranslator';
+export { resolveAgent, executeBatches, buildResultSummary, type AgentEvalRunResult } from './agentEvalRunner';
 export { AgentDataLibrary } from './agentDataLibrary';
 export {
   type DataLibrarySummary,

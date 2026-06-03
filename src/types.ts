@@ -49,6 +49,16 @@ export type AgentPreviewInterface = {
   setApexDebugging: (apexDebugging: boolean) => void;
 };
 
+export type ContextVariable = {
+  name: string;
+  type: 'Object' | 'Json' | 'Boolean' | 'Date' | 'DateTime' | 'Money' | 'Number' | 'Text' | 'Ref' | 'List';
+  value: string;
+};
+
+export type AgentPreviewStartOptions = {
+  contextVariables?: ContextVariable[];
+};
+
 /**
  * Session metadata type
  */
@@ -501,12 +511,12 @@ export type MetadataMetric = { name: string };
 export type MetadataExpectation = {
   // topic/action/outcome matching
   name:
-  | 'topic_sequence_match'
-  | 'topic_assertion'
-  | 'action_sequence_match'
-  | 'actions_assertion'
-  | 'bot_response_rating'
-  | 'output_validation';
+    | 'topic_sequence_match'
+    | 'topic_assertion'
+    | 'action_sequence_match'
+    | 'actions_assertion'
+    | 'bot_response_rating'
+    | 'output_validation';
   expectedValue: string;
 };
 

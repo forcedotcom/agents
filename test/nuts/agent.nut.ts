@@ -419,6 +419,32 @@ describe('agent NUTs', () => {
         });
       });
 
+      it('should reflect supplied contextVariables in the live preview session trace', async () => {
+        const agent = await Agent.init({ connection, project, aabName: bundleApiName });
+        agent.preview.setMockMode('Live Test');
+
+        const overrideValue = '0MwXX0000000000000';
+        await agent.preview.start({
+          contextVariables: [{ name: '$Context.RoutableId', type: 'Text', value: overrideValue }],
+        });
+
+        // Send a message so the planner emits at least one trace
+        await agent.preview.send('hello');
+
+        const traces = await agent.preview.getAllTraces();
+        expect(traces).to.be.an('array');
+        expect(traces.length).to.be.greaterThan(0, 'expected at least one trace from the planner');
+
+        // Walk every step of every trace looking for the override echoed back as session state.
+        // Shape varies by step type, so we stringify and substring-match.
+        const allStepsJson = traces
+          .flatMap((t) => (t as { steps?: unknown[] })?.steps ?? [])
+          .map((s) => JSON.stringify(s))
+          .join('\n');
+
+        expect(allStepsJson).to.contain(overrideValue, 'expected override value to appear in at least one trace step');
+      });
+
       it('should end the preview session', async () => {
         const agent = await Agent.init({ connection, project, aabName: bundleApiName });
         const previewSession = await agent.preview.start();
