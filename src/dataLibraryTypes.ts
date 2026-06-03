@@ -111,5 +111,6 @@ export type UploadResult = {
 export type FileAddResult = {
   success: boolean;
   fileName: string;
+  fileNames: string[];
   libraryId: string;
 };

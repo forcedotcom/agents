@@ -183,6 +183,10 @@ export class AgentDataLibrary {
     const url = baseUrl(connection, libraryId);
     const paths = Array.isArray(filePaths) ? filePaths : [filePaths];
 
+    if (paths.length === 0) {
+      throw new SfError('At least one file is required.', 'NoFilesProvided');
+    }
+
     await AgentDataLibrary.checkUploadReadiness(connection, url);
 
     const fileNames = paths.map((p) => ({ fileName: basename(p) }));
@@ -220,8 +224,12 @@ export class AgentDataLibrary {
     const url = baseUrl(connection, libraryId);
     const paths = Array.isArray(filePaths) ? filePaths : [filePaths];
 
-    const fileNames = paths.map((p) => ({ fileName: basename(p) }));
-    const uploadEntries = await AgentDataLibrary.getUploadUrls(connection, url, fileNames);
+    if (paths.length === 0) {
+      throw new SfError('At least one file is required.', 'NoFilesProvided');
+    }
+
+    const fileInfos = paths.map((p) => ({ fileName: basename(p) }));
+    const uploadEntries = await AgentDataLibrary.getUploadUrls(connection, url, fileInfos);
 
     for (let i = 0; i < paths.length; i++) {
       // eslint-disable-next-line no-await-in-loop
@@ -240,8 +248,9 @@ export class AgentDataLibrary {
     });
 
     await Lifecycle.getInstance().emitTelemetry({ eventName: 'agent_adl_file_add_success' });
-    const fileName = paths.map((p) => basename(p)).join(', ');
-    return { success: true, fileName, libraryId };
+    const fileNames = paths.map((p) => basename(p));
+    const fileName = fileNames.join(', ');
+    return { success: true, fileName, fileNames, libraryId };
   }
 
   // ── Private helpers ───────────────────────────────────────
