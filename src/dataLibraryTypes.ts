@@ -97,6 +97,7 @@ export type UpdateLibraryInput = {
       contentFields?: string[];
       isRestrictToPublicArticle?: boolean;
     };
+    retrieverId?: string;
   };
 };
 

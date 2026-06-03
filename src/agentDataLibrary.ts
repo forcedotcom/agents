@@ -41,11 +41,18 @@ function baseUrl(connection: Connection, libraryId?: string): string {
 }
 
 export class AgentDataLibrary {
-  public static async list(connection: Connection): Promise<{ libraries: DataLibrarySummary[] }> {
+  public static async list(
+    connection: Connection,
+    options?: { sourceType?: string }
+  ): Promise<{ libraries: DataLibrarySummary[] }> {
     try {
+      let url = baseUrl(connection);
+      if (options?.sourceType) {
+        url += `?sourceType=${options.sourceType.toUpperCase()}`;
+      }
       return await connection.request<{ libraries: DataLibrarySummary[] }>({
         method: 'GET',
-        url: baseUrl(connection),
+        url,
       });
     } catch (error) {
       const wrapped = SfError.wrap(error);
@@ -170,20 +177,27 @@ export class AgentDataLibrary {
   public static async upload(
     connection: Connection,
     libraryId: string,
-    filePath: string,
+    filePaths: string | string[],
     options?: { waitMinutes?: number }
   ): Promise<UploadResult> {
     const url = baseUrl(connection, libraryId);
-    const fileName = basename(filePath);
+    const paths = Array.isArray(filePaths) ? filePaths : [filePaths];
 
     await AgentDataLibrary.checkUploadReadiness(connection, url);
 
-    const uploadEntry = await AgentDataLibrary.getUploadUrl(connection, url, fileName);
+    const fileNames = paths.map((p) => ({ fileName: basename(p) }));
+    const uploadEntries = await AgentDataLibrary.getUploadUrls(connection, url, fileNames);
 
-    await AgentDataLibrary.uploadToS3(uploadEntry, filePath);
+    for (let i = 0; i < paths.length; i++) {
+      // eslint-disable-next-line no-await-in-loop
+      await AgentDataLibrary.uploadToS3(uploadEntries[i], paths[i]);
+    }
 
-    const fileSize = statSync(filePath).size;
-    await AgentDataLibrary.triggerIndexing(connection, url, uploadEntry.filePath, fileSize);
+    const uploadedFiles = uploadEntries.map((entry, i) => ({
+      filePath: entry.filePath,
+      fileSize: statSync(paths[i]).size,
+    }));
+    await AgentDataLibrary.triggerIndexing(connection, url, uploadedFiles);
 
     if (options?.waitMinutes) {
       const detail = await AgentDataLibrary.pollForReadiness(connection, url, libraryId, options.waitMinutes);
@@ -201,23 +215,32 @@ export class AgentDataLibrary {
   public static async addFile(
     connection: Connection,
     libraryId: string,
-    filePath: string
+    filePaths: string | string[]
   ): Promise<FileAddResult> {
     const url = baseUrl(connection, libraryId);
-    const fileName = basename(filePath);
+    const paths = Array.isArray(filePaths) ? filePaths : [filePaths];
 
-    const uploadEntry = await AgentDataLibrary.getUploadUrl(connection, url, fileName);
-    await AgentDataLibrary.uploadToS3(uploadEntry, filePath);
+    const fileNames = paths.map((p) => ({ fileName: basename(p) }));
+    const uploadEntries = await AgentDataLibrary.getUploadUrls(connection, url, fileNames);
 
-    const fileSize = statSync(filePath).size;
+    for (let i = 0; i < paths.length; i++) {
+      // eslint-disable-next-line no-await-in-loop
+      await AgentDataLibrary.uploadToS3(uploadEntries[i], paths[i]);
+    }
+
+    const uploadedFiles = uploadEntries.map((entry, i) => ({
+      filePath: entry.filePath,
+      fileSize: statSync(paths[i]).size,
+    }));
     await connection.request({
       method: 'POST',
       url: `${url}/files`,
-      body: JSON.stringify({ uploadedFiles: [{ filePath: uploadEntry.filePath, fileSize }] }),
+      body: JSON.stringify({ uploadedFiles }),
       headers: { 'Content-Type': 'application/json' },
     });
 
     await Lifecycle.getInstance().emitTelemetry({ eventName: 'agent_adl_file_add_success' });
+    const fileName = paths.map((p) => basename(p)).join(', ');
     return { success: true, fileName, libraryId };
   }
 
@@ -245,14 +268,18 @@ export class AgentDataLibrary {
     }
   }
 
-  private static async getUploadUrl(connection: Connection, url: string, fileName: string): Promise<FileUploadUrlEntry> {
+  private static async getUploadUrls(
+    connection: Connection,
+    url: string,
+    files: Array<{ fileName: string }>
+  ): Promise<FileUploadUrlEntry[]> {
     const response = await connection.request<FileUploadUrlsResponse>({
       method: 'POST',
       url: `${url}/file-upload-urls`,
-      body: JSON.stringify({ files: [{ fileName }] }),
+      body: JSON.stringify({ files }),
       headers: { 'Content-Type': 'application/json' },
     });
-    return response.uploadUrls[0];
+    return response.uploadUrls;
   }
 
   private static async uploadToS3(uploadEntry: FileUploadUrlEntry, filePath: string): Promise<void> {
@@ -277,13 +304,12 @@ export class AgentDataLibrary {
   private static async triggerIndexing(
     connection: Connection,
     url: string,
-    s3FilePath: string,
-    fileSize: number
+    uploadedFiles: Array<{ filePath: string; fileSize: number }>
   ): Promise<IndexingResponse> {
     return connection.request<IndexingResponse>({
       method: 'POST',
       url: `${url}/indexing`,
-      body: JSON.stringify({ uploadedFiles: [{ filePath: s3FilePath, fileSize }] }),
+      body: JSON.stringify({ uploadedFiles }),
       headers: { 'Content-Type': 'application/json' },
     });
   }

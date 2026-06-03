@@ -98,16 +98,16 @@ describe('AgentDataLibrary NUTs — SFDRIVE', function () {
     expect(result.indexingStatus).to.have.property('stageDetails');
   });
 
-  it('should upload a file and wait for READY', async function () {
+  it('should upload multiple files and wait for READY', async function () {
     this.timeout(10 * 60 * 1000);
 
-    const result = await AgentDataLibrary.upload(connection, libraryId, testFile, { waitMinutes: 10 });
+    const result = await AgentDataLibrary.upload(connection, libraryId, [testFile, testFile2], { waitMinutes: 10 });
 
     expect(result.libraryId).to.equal(libraryId);
     expect(result.status).to.equal('READY');
     expect(result.retrieverId).to.be.a('string');
     expect(result.ragFeatureConfigId).to.equal(`ARFPC_${libraryId}`);
-    console.log(`Upload complete — retrieverId: ${result.retrieverId}`);
+    console.log(`Multi-file upload complete — retrieverId: ${result.retrieverId}`);
   });
 
   it('should update library metadata', async () => {
@@ -125,13 +125,36 @@ describe('AgentDataLibrary NUTs — SFDRIVE', function () {
     const result = await AgentDataLibrary.addFile(connection, libraryId, testFile2);
 
     expect(result.success).to.be.true;
-    expect(result.fileName).to.equal('adl-agents-nut-test2.txt');
+    expect(result.fileName).to.include('adl-agents-nut-test2.txt');
+  });
+
+  it('should add multiple files in batch (day-1)', async function () {
+    this.timeout(3 * 60 * 1000);
+
+    const file3 = join(tmpdir(), 'adl-agents-nut-test3.txt');
+    const file4 = join(tmpdir(), 'adl-agents-nut-test4.txt');
+    writeFileSync(file3, 'Third test file for multi-file add.');
+    writeFileSync(file4, 'Fourth test file for multi-file add.');
+
+    const result = await AgentDataLibrary.addFile(connection, libraryId, [file3, file4]);
+
+    expect(result.success).to.be.true;
+    expect(result.fileName).to.include('adl-agents-nut-test3.txt');
+    expect(result.fileName).to.include('adl-agents-nut-test4.txt');
   });
 
   it('should list files in the library', async () => {
     const files = await AgentDataLibrary.listFiles(connection, libraryId);
-    expect(files.length).to.be.greaterThan(0);
+    expect(files.length).to.be.greaterThan(2);
     console.log(`Files: ${files.map((f) => f.fileName).join(', ')}`);
+  });
+
+  it('should list libraries with sourceType filter', async () => {
+    const result = await AgentDataLibrary.list(connection, { sourceType: 'SFDRIVE' });
+    expect(result.libraries.length).to.be.greaterThan(0);
+    for (const lib of result.libraries) {
+      expect(lib.sourceType).to.equal('SFDRIVE');
+    }
   });
 });
 
@@ -263,6 +286,17 @@ describe('AgentDataLibrary NUTs — RETRIEVER', function () {
     });
 
     expect(result.masterLabel).to.equal('NUT_Ret_Updated');
+  });
+
+  it('should swap retrieverId via update', async () => {
+    const result = await AgentDataLibrary.update(connection, libraryId, {
+      groundingSource: {
+        sourceType: 'RETRIEVER',
+        retrieverId,
+      },
+    });
+
+    expect(result.retrieverId).to.equal(retrieverId);
   });
 
   it('should delete Retriever library', async () => {
