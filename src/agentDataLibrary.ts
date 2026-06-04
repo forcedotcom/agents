@@ -192,10 +192,9 @@ export class AgentDataLibrary {
     const fileNames = paths.map((p) => ({ fileName: basename(p) }));
     const uploadEntries = await AgentDataLibrary.getUploadUrls(connection, url, fileNames);
 
-    for (let i = 0; i < paths.length; i++) {
-      // eslint-disable-next-line no-await-in-loop
-      await AgentDataLibrary.uploadToS3(uploadEntries[i], paths[i]);
-    }
+    await Promise.all(
+      paths.map((path, i) => AgentDataLibrary.uploadToS3(uploadEntries[i], path))
+    );
 
     const uploadedFiles = uploadEntries.map((entry, i) => ({
       filePath: entry.filePath,
@@ -231,10 +230,9 @@ export class AgentDataLibrary {
     const fileInfos = paths.map((p) => ({ fileName: basename(p) }));
     const uploadEntries = await AgentDataLibrary.getUploadUrls(connection, url, fileInfos);
 
-    for (let i = 0; i < paths.length; i++) {
-      // eslint-disable-next-line no-await-in-loop
-      await AgentDataLibrary.uploadToS3(uploadEntries[i], paths[i]);
-    }
+    await Promise.all(
+      paths.map((path, i) => AgentDataLibrary.uploadToS3(uploadEntries[i], path))
+    );
 
     const uploadedFiles = uploadEntries.map((entry, i) => ({
       filePath: entry.filePath,
