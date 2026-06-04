@@ -1,3 +1,14 @@
+## [1.8.1](https://github.com/forcedotcom/agents/compare/1.8.0...1.8.1) (2026-06-04)
+
+
+### Bug Fixes
+
+* empty array guard, fileNames type ([55344ad](https://github.com/forcedotcom/agents/commit/55344ad1e703682193330d27365cce42c8274af3))
+* multi-file support, list filter, retriever swap @W-22816781@ ([5cbde10](https://github.com/forcedotcom/agents/commit/5cbde10769f34c3f45fca59a6b32230a5bcaddfb))
+* upload files in parallel with Promise.all ([0b20b38](https://github.com/forcedotcom/agents/commit/0b20b38b8a7d8e9b0afb5cfcdab56c508c7a496e))
+
+
+
 # [1.8.0](https://github.com/forcedotcom/agents/compare/1.7.1...1.8.0) (2026-06-02)
 
 
