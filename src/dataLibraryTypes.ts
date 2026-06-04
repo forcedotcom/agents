@@ -97,6 +97,7 @@ export type UpdateLibraryInput = {
       contentFields?: string[];
       isRestrictToPublicArticle?: boolean;
     };
+    retrieverId?: string;
   };
 };
 
@@ -110,5 +111,6 @@ export type UploadResult = {
 export type FileAddResult = {
   success: boolean;
   fileName: string;
+  fileNames: string[];
   libraryId: string;
 };

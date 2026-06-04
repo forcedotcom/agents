@@ -62,6 +62,22 @@ describe('AgentDataLibrary', () => {
       expect(requests[0].url).to.include('/einstein/data-libraries');
     });
 
+    it('should pass sourceType filter as query param', async () => {
+      mockRequest({ libraries: [] });
+
+      await AgentDataLibrary.list(connection, { sourceType: 'SFDRIVE' });
+
+      expect(requests[0].url).to.include('?sourceType=SFDRIVE');
+    });
+
+    it('should not include query param when no filter', async () => {
+      mockRequest({ libraries: [] });
+
+      await AgentDataLibrary.list(connection);
+
+      expect(requests[0].url).to.not.include('?');
+    });
+
     it('should throw on API error', async () => {
       $$.fakeConnectionRequest = () => Promise.reject(new Error('Network error'));
 
@@ -511,6 +527,46 @@ describe('AgentDataLibrary', () => {
       }
     });
 
+    it('should upload multiple files in batch', async () => {
+      const { writeFileSync } = await import('node:fs');
+      const file2 = join(tmpdir(), 'adl-upload-test2.txt');
+      writeFileSync(file2, 'second file');
+
+      $$.fakeConnectionRequest = (req: any) => {
+        requests.push(req);
+        if (req.url?.includes('/upload-readiness')) {
+          return Promise.resolve({ ready: true });
+        }
+        if (req.url?.includes('/file-upload-urls')) {
+          return Promise.resolve({
+            uploadUrls: [
+              { uploadUrl: 'https://s3.example.com/upload1', filePath: '$adl$/1JD000001/test1.txt', headers: {} },
+              { uploadUrl: 'https://s3.example.com/upload2', filePath: '$adl$/1JD000001/test2.txt', headers: {} },
+            ],
+          });
+        }
+        if (req.url?.includes('/indexing')) {
+          return Promise.resolve({ status: 'IN_PROGRESS', filesAccepted: 2 });
+        }
+        return Promise.resolve({});
+      };
+
+      const result = await AgentDataLibrary.upload(connection, '1JD000001', [testFilePath, file2]);
+
+      expect(result.status).to.equal('IN_PROGRESS');
+      expect(fetchStub.calledTwice).to.be.true;
+      expect(fetchStub.firstCall.args[0]).to.equal('https://s3.example.com/upload1');
+      expect(fetchStub.secondCall.args[0]).to.equal('https://s3.example.com/upload2');
+
+      const urlsReq = requests.find((r) => r.url?.includes('/file-upload-urls'));
+      const urlsBody = JSON.parse(urlsReq!.body!);
+      expect(urlsBody.files).to.have.lengthOf(2);
+
+      const indexingReq = requests.find((r) => r.url?.includes('/indexing'));
+      const indexBody = JSON.parse(indexingReq!.body!);
+      expect(indexBody.uploadedFiles).to.have.lengthOf(2);
+    });
+
     it('should throw on S3 upload failure', async () => {
       fetchStub.resolves(new Response('Forbidden', { status: 403 }));
       $$.fakeConnectionRequest = (req: any) => {
@@ -574,6 +630,37 @@ describe('AgentDataLibrary', () => {
       expect(filesReq).to.exist;
       const filesBody = JSON.parse(filesReq!.body!);
       expect(filesBody.uploadedFiles[0].filePath).to.equal('$adl$/1JD000001/new.txt');
+    });
+
+    it('should add multiple files in batch', async () => {
+      const { writeFileSync } = await import('node:fs');
+      const file2 = join(tmpdir(), 'adl-add-test2.txt');
+      writeFileSync(file2, 'second add file');
+
+      $$.fakeConnectionRequest = (req: any) => {
+        requests.push(req);
+        if (req.url?.includes('/file-upload-urls')) {
+          return Promise.resolve({
+            uploadUrls: [
+              { uploadUrl: 'https://s3.example.com/add1', filePath: '$adl$/1JD000001/file1.txt', headers: {} },
+              { uploadUrl: 'https://s3.example.com/add2', filePath: '$adl$/1JD000001/file2.txt', headers: {} },
+            ],
+          });
+        }
+        if (req.url?.includes('/files')) {
+          return Promise.resolve({ filesAccepted: 2 });
+        }
+        return Promise.resolve({});
+      };
+
+      const result = await AgentDataLibrary.addFile(connection, '1JD000001', [testFilePath, file2]);
+
+      expect(result.success).to.be.true;
+      expect(fetchStub.calledTwice).to.be.true;
+
+      const filesReq = requests.find((r) => r.url?.includes('/files') && r.method === 'POST');
+      const filesBody = JSON.parse(filesReq!.body!);
+      expect(filesBody.uploadedFiles).to.have.lengthOf(2);
     });
 
     it('should throw on S3 failure during add', async () => {
