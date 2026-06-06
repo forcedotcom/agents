@@ -51,7 +51,7 @@ export type AgentPreviewInterface = {
 
 export type ContextVariable = {
   name: string;
-  type: 'Object' | 'Json' | 'Boolean' | 'Date' | 'DateTime' | 'Money' | 'Number' | 'Text' | 'Ref' | 'List';
+  type: 'Object' | 'Boolean' | 'DateTime' | 'Money' | 'Number' | 'Text' | 'Ref' | 'List';
   value: string;
 };
 
