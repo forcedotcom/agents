@@ -199,3 +199,25 @@ export {
   type StageDetail,
   type SourceType,
 } from './dataLibraryTypes';
+export { ApiCatalog } from './apiCatalog';
+export {
+  type McpServerType,
+  type McpAuthType,
+  type McpAssetKind,
+  type McpConnectionStatus,
+  type McpServerStatusFilter,
+  type McpServerAuthorizationOutput,
+  type McpServerAuthorizationInput,
+  type McpServerOutput,
+  type McpServerCollection,
+  type McpServerCreateInput,
+  type McpServerUpdateInput,
+  type McpFetchedAsset,
+  type McpServerCreateOutput,
+  type McpServerFetchOutput,
+  type McpServerAssetOutput,
+  type McpServerAssetCollection,
+  type McpServerAssetReplaceItem,
+  type McpServerAssetReplaceInput,
+  type ListMcpServersOptions,
+} from './apiCatalogTypes';
