@@ -616,6 +616,47 @@ export type AiTestingDefinition = {
 };
 
 // ====================================================
+//          Custom Scorer Spec (YAML) Types
+// ====================================================
+export type ScorerEngineType = 'PromptTemplate' | 'Expression';
+export type ScorerInputScope = 'Session' | 'Interaction' | 'Moment';
+export type ScorerDataType = 'Number' | 'Text';
+export type ScorerOutcomeType = 'Pass' | 'Fail' | 'NotApplicable';
+export type ScorerOutputEnumValue = {
+  value: string;
+  outcomeType: ScorerOutcomeType;
+  isFallback: boolean;
+};
+export type ScorerValueSpecification = {
+  min: number;
+  max: number;
+  step?: number;
+  threshold?: number;
+};
+
+export type ScorerSpec = {
+  name: string;
+  description?: string;
+  inputScope: ScorerInputScope;
+  dataType: ScorerDataType;
+  version: {
+    versionNumber: number;
+    status: 'Draft' | 'Available' | 'Archived';
+    label: string;
+    description?: string;
+    agentApiName: string;
+    isActive: boolean;
+    engine: {
+      engineType: ScorerEngineType;
+      engineRef?: string;
+      engineValue?: string;
+    };
+    outputEnumValues: ScorerOutputEnumValue[];
+    valueSpecification?: ScorerValueSpecification;
+  };
+};
+
+// ====================================================
 //               Agent Preview Types
 // ====================================================
 export type ApiStatus = {
