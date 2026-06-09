@@ -138,7 +138,15 @@ export {
   NgtScorerCatalog,
   isNgtScorerName,
 } from './ngtScorerCatalog';
-export { AgentTest, AgentTestCreateLifecycleStages } from './agentTest';
+export {
+  AgentTest,
+  AgentTestCreateLifecycleStages,
+  validateNgtSpec,
+  convertToTestingMetadata,
+  convertToNgtSpec,
+  buildTestingMetadataXml,
+  parseNgtMetadataXml,
+} from './agentTest';
 export { ProductionAgent } from './agents/productionAgent';
 export { ScriptAgent } from './agents/scriptAgent';
 export { AgentBase } from './agents/agentBase';

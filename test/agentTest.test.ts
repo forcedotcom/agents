@@ -729,7 +729,7 @@ testCases:
 
       readFileStub.resolves(xml);
 
-      const result = await agentTest.getTestSpec();
+      const result = (await agentTest.getTestSpec()) as TestSpec;
 
       expect(result.testCases).to.have.length(2);
       expect(result.testCases[0].expectedActions).to.deep.equal(['GetWeather']);
@@ -757,7 +757,7 @@ testCases:
 
       readFileStub.resolves(xml);
 
-      const result = await agentTest.getTestSpec();
+      const result = (await agentTest.getTestSpec()) as TestSpec;
 
       expect(result.testCases[0].expectedActions).to.deep.equal([]);
     });
@@ -799,7 +799,7 @@ testCases:
 
       readFileStub.resolves(xml);
 
-      const result = await agentTest.getTestSpec();
+      const result = (await agentTest.getTestSpec()) as TestSpec;
 
       expect(result.testCases[0].conversationHistory).to.deep.equal([
         {

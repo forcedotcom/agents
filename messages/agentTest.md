@@ -41,3 +41,23 @@ NGT conversationHistory on test case %s, input %s mixes turns with and without `
 # ngtLooksLikeLegacySpec
 
 This YAML looks like a legacy AiEvaluationDefinition spec (uses top-level `utterance:` / `expectedTopic:` / `customEvaluations:`). Use `--test-runner testing-center` for legacy authoring, or hand-edit the deployed XML for `<scorer scorerType="Custom">` blocks on NGT.
+
+# ngtMalformedMetadataXml
+
+Failed to parse AiTestingDefinition metadata XML: %s
+
+# ngtWrongMetadataRoot
+
+AiTestingDefinition metadata XML must have a top-level <%s> element.
+
+# ngtUnknownScorerNoExpected
+
+Unknown NGT scorer name '%s' has no <expectedValue> in the metadata. Cannot infer whether the scorer requires an expected value — add an <expectedValue> or use a known scorer.
+
+# ambiguousTestDefinition
+
+Both an AiEvaluationDefinition and an AiTestingDefinition exist for '%s' in the org. Disambiguate by passing a local metadata file path, or delete one of the metadata records.
+
+# ngtSpecCannotProduceLegacyMetadata
+
+This AgentTest holds an NGT (`NgtTestSpec`) spec but `getMetadata()` returns the legacy `AiEvaluationDefinition` shape. Use `convertToTestingMetadata` + `buildTestingMetadataXml` to serialize an NGT spec to its `AiTestingDefinition` XML.

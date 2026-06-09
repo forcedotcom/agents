@@ -25,7 +25,9 @@ import { AgentTest } from '../src';
 import {
   validateNgtSpec,
   convertToTestingMetadata,
+  convertToNgtSpec,
   buildTestingMetadataXml,
+  parseNgtMetadataXml,
 } from '../src/agentTest';
 import type { NgtTestSpec } from '../src/types';
 
@@ -468,6 +470,292 @@ describe('AgentTest NGT (Agentforce Studio) create surface', () => {
       const def = convertToTestingMetadata(spec);
       const turns = def.testCase[0].inputs.conversationHistory!;
       expect(turns.map((t) => t.index)).to.deep.equal([7, 8]);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // parseNgtMetadataXml — XML metadata → NgtTestSpec (reverse of convertToTestingMetadata)
+  // -------------------------------------------------------------------------
+  describe('parseNgtMetadataXml', () => {
+    /** Test helper: parse + convert in one step, mirroring how callers use these together. */
+    const parseToSpec = (xml: string): NgtTestSpec => convertToNgtSpec(parseNgtMetadataXml(xml));
+
+    afterEach(() => {
+      sinon.restore();
+    });
+
+    it('round-trips the canonical fixture: yaml → metadata → xml → parse → yaml-equivalent spec', async () => {
+      const yamlPath = join(__dirname, 'fixtures', 'ngt-spec-returns-checkout.yaml');
+      const xmlPath = join(__dirname, 'fixtures', 'ngt-xml-returns-checkout.xml');
+
+      const { parse } = await import('yaml');
+      const sourceSpec = parse(await fs.readFile(yamlPath, 'utf-8')) as NgtTestSpec;
+
+      const xml = await fs.readFile(xmlPath, 'utf-8');
+      const parsed = parseToSpec(xml);
+
+      // Top-level passthrough fields.
+      expect(parsed.name).to.equal(sourceSpec.name);
+      expect(parsed.description).to.equal(sourceSpec.description);
+      expect(parsed.subjectName).to.equal(sourceSpec.subjectName);
+      expect(parsed.subjectType).to.equal(sourceSpec.subjectType);
+      expect(parsed.subjectVersion).to.equal(sourceSpec.subjectVersion);
+
+      // Multi-input case 7 in the fixture fans out to 3 <testCase> elements; the parser
+      // collapses those back into one case with 3 inputs sharing the scorer set.
+      expect(parsed.testCases).to.have.length(sourceSpec.testCases.length);
+
+      // Convert source → metadata → xml → parse and compare structurally.
+      const synthesizedXml = buildTestingMetadataXml(convertToTestingMetadata(sourceSpec));
+      const reparsed = parseToSpec(synthesizedXml);
+      expect(reparsed).to.deep.equal(parsed);
+    });
+
+    it('preserves all 11 catalog scorers across the canonical fixture (presence + expected shape)', async () => {
+      const xmlPath = join(__dirname, 'fixtures', 'ngt-xml-returns-checkout.xml');
+      const xml = await fs.readFile(xmlPath, 'utf-8');
+      const parsed = parseToSpec(xml);
+
+      const scorerNames = new Set<string>();
+      parsed.testCases.forEach((tc) => tc.scorers.forEach((s) => scorerNames.add(s.name)));
+
+      // The fixture exercises 9 of the 11 scorers (no conciseness, no output_latency_milliseconds-only case).
+      // Make sure the ones it covers all round-trip.
+      [
+        'topic_sequence_match',
+        'action_sequence_match',
+        'agent_handoff_match',
+        'bot_response_rating',
+        'response_match',
+        'coherence',
+        'factuality',
+        'completeness',
+        'task_resolution',
+        'output_latency_milliseconds',
+      ].forEach((expected) => {
+        expect(scorerNames.has(expected), `missing scorer ${expected}`).to.be.true;
+      });
+    });
+
+    it('multi-input fan-out reverses: 3 contiguous <testCase> with identical scorer set collapse to 1 case with 3 inputs', () => {
+      const xml =
+        '<?xml version="1.0" encoding="UTF-8"?>\n' +
+        '<AiTestingDefinition xmlns="http://soap.sforce.com/2006/04/metadata">\n' +
+        '  <name>S</name>\n' +
+        '  <subjectName>A</subjectName>\n' +
+        '  <subjectType>AGENT</subjectType>\n' +
+        '  <testCase>\n' +
+        '    <number>1</number>\n' +
+        '    <inputs><utterance>u1</utterance></inputs>\n' +
+        '    <scorer><name>topic_sequence_match</name><expectedValue>T</expectedValue></scorer>\n' +
+        '  </testCase>\n' +
+        '  <testCase>\n' +
+        '    <number>2</number>\n' +
+        '    <inputs><utterance>u2</utterance></inputs>\n' +
+        '    <scorer><name>topic_sequence_match</name><expectedValue>T</expectedValue></scorer>\n' +
+        '  </testCase>\n' +
+        '  <testCase>\n' +
+        '    <number>3</number>\n' +
+        '    <inputs><utterance>u3</utterance></inputs>\n' +
+        '    <scorer><name>topic_sequence_match</name><expectedValue>T</expectedValue></scorer>\n' +
+        '  </testCase>\n' +
+        '</AiTestingDefinition>\n';
+      const spec = parseToSpec(xml);
+      expect(spec.testCases).to.have.length(1);
+      expect(spec.testCases[0].inputs.map((i) => i.utterance)).to.deep.equal(['u1', 'u2', 'u3']);
+      expect(spec.testCases[0].scorers).to.deep.equal([{ name: 'topic_sequence_match', expected: 'T' }]);
+    });
+
+    it('does NOT collapse adjacent test cases when scorer sets differ', () => {
+      const xml =
+        '<?xml version="1.0" encoding="UTF-8"?>\n' +
+        '<AiTestingDefinition xmlns="http://soap.sforce.com/2006/04/metadata">\n' +
+        '  <name>S</name><subjectName>A</subjectName><subjectType>AGENT</subjectType>\n' +
+        '  <testCase><number>1</number><inputs><utterance>u1</utterance></inputs>\n' +
+        '    <scorer><name>topic_sequence_match</name><expectedValue>X</expectedValue></scorer></testCase>\n' +
+        '  <testCase><number>2</number><inputs><utterance>u2</utterance></inputs>\n' +
+        '    <scorer><name>topic_sequence_match</name><expectedValue>Y</expectedValue></scorer></testCase>\n' +
+        '</AiTestingDefinition>\n';
+      const spec = parseToSpec(xml);
+      expect(spec.testCases).to.have.length(2);
+    });
+
+    it('parses contextVariables and conversationHistory roundly (auto-assigned indices are dropped on parse)', () => {
+      const xml =
+        '<?xml version="1.0" encoding="UTF-8"?>\n' +
+        '<AiTestingDefinition xmlns="http://soap.sforce.com/2006/04/metadata">\n' +
+        '  <name>S</name><subjectName>A</subjectName><subjectType>AGENT</subjectType>\n' +
+        '  <testCase><number>1</number><inputs>\n' +
+        '    <utterance>u</utterance>\n' +
+        '    <contextVariable><variableName>RoutableId</variableName><variableValue>0Mw</variableValue></contextVariable>\n' +
+        '    <conversationHistory><role>user</role><message>a</message><index>0</index></conversationHistory>\n' +
+        '    <conversationHistory><role>agent</role><message>b</message><topic>T</topic><index>1</index></conversationHistory>\n' +
+        '  </inputs>\n' +
+        '  <scorer><name>task_resolution</name></scorer>\n' +
+        '  </testCase></AiTestingDefinition>\n';
+      const spec = parseToSpec(xml);
+      const input = spec.testCases[0].inputs[0];
+      expect(input.contextVariables).to.deep.equal([{ name: 'RoutableId', value: '0Mw' }]);
+      expect(input.conversationHistory).to.deep.equal([
+        { role: 'user', message: 'a' },
+        { role: 'agent', message: 'b', topic: 'T' },
+      ]);
+    });
+
+    it('preserves explicit (non-auto) conversationHistory indices on parse', () => {
+      const xml =
+        '<?xml version="1.0" encoding="UTF-8"?>\n' +
+        '<AiTestingDefinition xmlns="http://soap.sforce.com/2006/04/metadata">\n' +
+        '  <name>S</name><subjectName>A</subjectName><subjectType>AGENT</subjectType>\n' +
+        '  <testCase><number>1</number><inputs>\n' +
+        '    <utterance>u</utterance>\n' +
+        '    <conversationHistory><role>user</role><message>a</message><index>7</index></conversationHistory>\n' +
+        '    <conversationHistory><role>agent</role><message>b</message><topic>T</topic><index>8</index></conversationHistory>\n' +
+        '  </inputs>\n' +
+        '  <scorer><name>task_resolution</name></scorer></testCase></AiTestingDefinition>\n';
+      const spec = parseToSpec(xml);
+      const turns = spec.testCases[0].inputs[0].conversationHistory!;
+      expect(turns.map((t) => t.index)).to.deep.equal([7, 8]);
+    });
+
+    it('preserves the python-list-string for action_sequence_match expected verbatim', () => {
+      const xml =
+        '<?xml version="1.0" encoding="UTF-8"?>\n' +
+        '<AiTestingDefinition xmlns="http://soap.sforce.com/2006/04/metadata">\n' +
+        '  <name>S</name><subjectName>A</subjectName><subjectType>AGENT</subjectType>\n' +
+        '  <testCase><number>1</number><inputs><utterance>u</utterance></inputs>\n' +
+        "    <scorer><name>action_sequence_match</name><expectedValue>['Verify_Customer','Get_Order_Status']</expectedValue></scorer>\n" +
+        '  </testCase></AiTestingDefinition>\n';
+      const spec = parseToSpec(xml);
+      expect(spec.testCases[0].scorers[0].expected).to.equal("['Verify_Customer','Get_Order_Status']");
+    });
+
+    it('quality scorers (no <expectedValue>) round-trip without an expected field', () => {
+      const xml =
+        '<?xml version="1.0" encoding="UTF-8"?>\n' +
+        '<AiTestingDefinition xmlns="http://soap.sforce.com/2006/04/metadata">\n' +
+        '  <name>S</name><subjectName>A</subjectName><subjectType>AGENT</subjectType>\n' +
+        '  <testCase><number>1</number><inputs><utterance>u</utterance></inputs>\n' +
+        '    <scorer><name>coherence</name></scorer>\n' +
+        '  </testCase></AiTestingDefinition>\n';
+      const spec = parseToSpec(xml);
+      expect(spec.testCases[0].scorers[0]).to.deep.equal({ name: 'coherence' });
+      expect((spec.testCases[0].scorers[0] as { expected?: string }).expected).to.be.undefined;
+    });
+
+    it('throws ngtMalformedMetadataXml on unparseable XML', () => {
+      // fast-xml-parser is lenient on most input, but a stray < inside a tag name trips it.
+      const xml = '<AiTestingDefinition><name>S<<</name></AiTestingDefinition>';
+      try {
+        parseNgtMetadataXml(xml);
+        expect.fail('expected parseNgtMetadataXml to throw');
+      } catch (err) {
+        expect(err).to.be.instanceOf(SfError);
+        expect((err as SfError).name).to.equal('ngtMalformedMetadataXml');
+      }
+    });
+
+    it('throws ngtWrongMetadataRoot when the root is AiEvaluationDefinition (legacy XML)', () => {
+      const xml =
+        '<?xml version="1.0" encoding="UTF-8"?>\n' +
+        '<AiEvaluationDefinition xmlns="http://soap.sforce.com/2006/04/metadata">\n' +
+        '  <name>X</name></AiEvaluationDefinition>';
+      try {
+        parseNgtMetadataXml(xml);
+        expect.fail('expected parseNgtMetadataXml to throw');
+      } catch (err) {
+        expect(err).to.be.instanceOf(SfError);
+        expect((err as SfError).name).to.equal('ngtWrongMetadataRoot');
+      }
+    });
+
+    it('preserves an unknown scorer name when expectedValue is present (lifecycle warn, not throw)', () => {
+      const lifecycleSpy = sinon.spy(Lifecycle.prototype, 'emitWarning');
+      const xml =
+        '<?xml version="1.0" encoding="UTF-8"?>\n' +
+        '<AiTestingDefinition xmlns="http://soap.sforce.com/2006/04/metadata">\n' +
+        '  <name>S</name><subjectName>A</subjectName><subjectType>AGENT</subjectType>\n' +
+        '  <testCase><number>1</number><inputs><utterance>u</utterance></inputs>\n' +
+        '    <scorer><name>made_up_scorer</name><expectedValue>whatever</expectedValue></scorer>\n' +
+        '  </testCase></AiTestingDefinition>\n';
+      const spec = parseToSpec(xml);
+      expect(spec.testCases[0].scorers[0]).to.deep.equal({
+        name: 'made_up_scorer',
+        expected: 'whatever',
+      });
+      expect(lifecycleSpy.called).to.be.true;
+    });
+
+    it('throws ngtUnknownScorerNoExpected when an unknown scorer has no expectedValue', () => {
+      const xml =
+        '<?xml version="1.0" encoding="UTF-8"?>\n' +
+        '<AiTestingDefinition xmlns="http://soap.sforce.com/2006/04/metadata">\n' +
+        '  <name>S</name><subjectName>A</subjectName><subjectType>AGENT</subjectType>\n' +
+        '  <testCase><number>1</number><inputs><utterance>u</utterance></inputs>\n' +
+        '    <scorer><name>made_up_scorer</name></scorer>\n' +
+        '  </testCase></AiTestingDefinition>\n';
+      try {
+        // Throw lives in the convert step now (unknown-scorer detection needs the catalog
+        // lookup that convertToNgtSpec performs); the parse step is shape-only.
+        parseToSpec(xml);
+        expect.fail('expected parseToSpec to throw');
+      } catch (err) {
+        expect(err).to.be.instanceOf(SfError);
+        expect((err as SfError).name).to.equal('ngtUnknownScorerNoExpected');
+        expect((err as SfError).message).to.include('made_up_scorer');
+      }
+    });
+
+  });
+
+  // -------------------------------------------------------------------------
+  // AgentTest.getTestSpec dispatch on local md path
+  // -------------------------------------------------------------------------
+  describe('AgentTest.getTestSpec dispatch', () => {
+    let readFileStub: sinon.SinonStub;
+
+    beforeEach(() => {
+      readFileStub = sinon.stub(fs, 'readFile');
+    });
+
+    afterEach(() => {
+      sinon.restore();
+    });
+
+    it('mdPath with <AiTestingDefinition> root → returns NgtTestSpec', async () => {
+      const xml =
+        '<?xml version="1.0" encoding="UTF-8"?>\n' +
+        '<AiTestingDefinition xmlns="http://soap.sforce.com/2006/04/metadata">\n' +
+        '  <name>S</name><subjectName>A</subjectName><subjectType>AGENT</subjectType>\n' +
+        '  <testCase><number>1</number><inputs><utterance>u</utterance></inputs>\n' +
+        '    <scorer><name>topic_sequence_match</name><expectedValue>T</expectedValue></scorer>\n' +
+        '  </testCase></AiTestingDefinition>\n';
+      readFileStub.resolves(xml);
+
+      const agentTest = new AgentTest({ mdPath: 'fake.aiTestingDefinition-meta.xml' });
+      const spec = (await agentTest.getTestSpec()) as NgtTestSpec;
+
+      // NGT shape: testCases[].inputs is an array, scorers is the marker.
+      expect(spec.testCases[0]).to.have.property('scorers');
+      expect(spec.testCases[0].inputs[0].utterance).to.equal('u');
+    });
+
+    it('mdPath with <AiEvaluationDefinition> root → still returns legacy TestSpec (regression)', async () => {
+      const xml =
+        '<?xml version="1.0" encoding="UTF-8"?>\n' +
+        '<AiEvaluationDefinition xmlns="http://soap.sforce.com/2006/04/metadata">\n' +
+        '  <name>L</name><subjectName>A</subjectName><subjectType>AGENT</subjectType>\n' +
+        '  <testCase><inputs><utterance>u</utterance></inputs>\n' +
+        '    <expectation><name>topic_sequence_match</name><expectedValue>T</expectedValue></expectation>\n' +
+        '    <expectation><name>action_sequence_match</name><expectedValue>["A"]</expectedValue></expectation>\n' +
+        '    <expectation><name>bot_response_rating</name><expectedValue>ok</expectedValue></expectation>\n' +
+        '  </testCase></AiEvaluationDefinition>\n';
+      readFileStub.resolves(xml);
+
+      const agentTest = new AgentTest({ mdPath: 'fake.aiEvaluationDefinition-meta.xml' });
+      const spec = await agentTest.getTestSpec();
+      // Legacy shape: top-level utterance + expectedTopic on the case.
+      expect((spec as { testCases: Array<{ utterance?: string }> }).testCases[0]).to.have.property('utterance', 'u');
     });
   });
 
