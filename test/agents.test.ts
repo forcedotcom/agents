@@ -686,6 +686,188 @@ describe('Agents', () => {
     });
   });
 
+  describe('ScriptAgent.preview.start contextVariables', () => {
+    let sfProject: SfProject;
+    let requestStub: sinon.SinonStub;
+    const previewSessionResponse = {
+      sessionId: 'test-session-id',
+      _links: {},
+      messages: [],
+    };
+    const minimalAgentJson = {
+      schemaVersion: '1.0',
+      globalConfiguration: {
+        developerName: 'myAgent',
+        label: 'My Agent',
+        agentType: 'AgentforceServiceAgent',
+        defaultAgentUser: 'test@example.com',
+        description: '',
+        enableEnhancedEventLogs: false,
+        templateName: '',
+        defaultOutboundRouting: '',
+        contextVariables: [],
+      },
+      agentVersion: {
+        developerName: 'v1',
+        plannerType: '',
+        systemMessages: [],
+        modalityParameters: {
+          voice: {
+            inboundModel: null,
+            inboundFillerWordsDetection: null,
+            outboundVoice: null,
+            outboundModel: null,
+            outboundSpeed: null,
+            outboundStyleExaggeration: null,
+          },
+          language: {
+            defaultLocale: 'en_US',
+            additionalLocales: [],
+            allAdditionalLocales: false,
+          },
+        },
+        additionalParameters: false,
+        company: '',
+        role: '',
+        stateVariables: [],
+        initialNode: '',
+        nodes: [],
+        knowledgeDefinitions: null,
+      },
+    };
+
+    beforeEach(async () => {
+      sfProject = SfProject.getInstance();
+      // @ts-expect-error Not the full package def
+      $$.SANDBOX.stub(sfProject, 'getDefaultPackage').returns({ path: 'force-app' });
+      $$.SANDBOX.stub(sfProject, 'getPackageDirectories').returns([
+        { fullPath: 'force-app', path: 'force-app', package: '', versionNumber: '', name: 'force-app' },
+      ]);
+
+      const aabDirectory = join('force-app', 'main', 'default', 'aiAuthoringBundles', 'myAgent');
+      await fs.mkdir(aabDirectory, { recursive: true });
+      await fs.writeFile(
+        join(aabDirectory, 'myAgent.agent'),
+        'system:\n  instructions: "You are an AI Agent."\n  developer_name: "myAgent"\n  agent_label: "My Agent"'
+      );
+      await fs.writeFile(
+        join(aabDirectory, 'myAgent.bundle-meta.xml'),
+        '<?xml version="1.0" encoding="UTF-8"?>\n<AiAuthoringBundle xmlns="http://soap.sforce.com/2006/04/metadata">\n    <bundleType>AGENT</bundleType>\n    <target>v1</target>\n</AiAuthoringBundle>'
+      );
+
+      $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
+      $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
+        accessToken: 'test_access_token',
+        instanceUrl: connection.instanceUrl,
+      });
+
+      $$.SANDBOX.stub(connection, 'query')
+        .withArgs(sinon.match(/SELECT Id FROM USER WHERE username/))
+        .resolves({ done: true, records: [{ Id: '005xx0000000000xxx' }], totalSize: 1 } as never);
+
+      requestStub = $$.SANDBOX.stub(connection, 'request');
+      requestStub.withArgs(sinon.match({ url: `${connection.instanceUrl}/agentforce/bootstrap/nameduser` })).resolves({
+        // eslint-disable-next-line camelcase
+        access_token:
+          'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoidGVzdCJ9.4Adcj0vVzk6B5R-9X8kBR1R0N0FhT3ZSY0J5Z1Z4Y2c',
+      });
+      requestStub
+        .withArgs(sinon.match({ url: sinon.match(/v1\.1\/preview\/sessions/) }))
+        .resolves(previewSessionResponse);
+    });
+
+    afterEach(async () => {
+      await fs.rm(join('force-app'), { recursive: true, force: true });
+    });
+
+    const getStartRequestBody = (): Record<string, unknown> => {
+      const startCall = requestStub
+        .getCalls()
+        .find((c) => (c.args[0] as { url: string }).url.endsWith('/v1.1/preview/sessions'));
+      if (!startCall) throw new Error('preview/sessions request not captured');
+      return JSON.parse((startCall.args[0] as { body: string }).body) as Record<string, unknown>;
+    };
+
+    it('posts variables: [] when called without options (regression)', async () => {
+      const agent = new ScriptAgent({ connection, project: sfProject, aabName: 'myAgent' });
+      // @ts-expect-error private property — bypass compile
+      agent.agentJson = minimalAgentJson;
+
+      await agent.preview.start();
+
+      expect(getStartRequestBody().variables).to.deep.equal([]);
+    });
+
+    it('posts {name, type, value} entries when options provided', async () => {
+      const agent = new ScriptAgent({ connection, project: sfProject, aabName: 'myAgent' });
+      // @ts-expect-error private property
+      agent.agentJson = minimalAgentJson;
+
+      await agent.preview.start({
+        contextVariables: [{ name: '$Context.RoutableId', type: 'Text', value: '0MwXX0000000000000' }],
+      });
+
+      expect(getStartRequestBody().variables).to.deep.equal([
+        { name: '$Context.RoutableId', type: 'Text', value: '0MwXX0000000000000' },
+      ]);
+    });
+
+    it('preserves $Context. prefix names verbatim', async () => {
+      const agent = new ScriptAgent({ connection, project: sfProject, aabName: 'myAgent' });
+      // @ts-expect-error private property
+      agent.agentJson = minimalAgentJson;
+
+      await agent.preview.start({
+        contextVariables: [
+          { name: '$Context.RoutableId', type: 'Text', value: 'a' },
+          { name: '$Context.Region', type: 'Text', value: 'NZ' },
+        ],
+      });
+
+      const variables = getStartRequestBody().variables as Array<{ name: string }>;
+      expect(variables.map((v) => v.name)).to.deep.equal(['$Context.RoutableId', '$Context.Region']);
+    });
+
+    it('preserves bare names (e.g., OpenAgent) verbatim', async () => {
+      const agent = new ScriptAgent({ connection, project: sfProject, aabName: 'myAgent' });
+      // @ts-expect-error private property
+      agent.agentJson = minimalAgentJson;
+
+      await agent.preview.start({
+        contextVariables: [{ name: 'OpenAgent', type: 'Text', value: 'general_faq' }],
+      });
+
+      const variables = getStartRequestBody().variables as Array<{ name: string }>;
+      expect(variables.map((v) => v.name)).to.deep.equal(['OpenAgent']);
+    });
+
+    it('accepts single-options call shape: start({contextVariables})', async () => {
+      const agent = new ScriptAgent({ connection, project: sfProject, aabName: 'myAgent' });
+      // @ts-expect-error private property
+      agent.agentJson = minimalAgentJson;
+
+      await agent.preview.start({
+        contextVariables: [{ name: 'OpenAgent', type: 'Text', value: 'x' }],
+      });
+
+      expect((getStartRequestBody().variables as unknown[]).length).to.equal(1);
+    });
+
+    it('accepts positional + options: start("Mock", false, {contextVariables})', async () => {
+      const agent = new ScriptAgent({ connection, project: sfProject, aabName: 'myAgent' });
+      // @ts-expect-error private property
+      agent.agentJson = minimalAgentJson;
+
+      await agent.preview.start('Mock', false, {
+        contextVariables: [{ name: '$Context.A', type: 'Text', value: '1' }],
+      });
+
+      const body = getStartRequestBody();
+      expect(body.enableSimulationMode).to.equal(true);
+      expect(body.variables).to.deep.equal([{ name: '$Context.A', type: 'Text', value: '1' }]);
+    });
+  });
+
   it('create save agent', async () => {
     process.env.SF_MOCK_DIR = join('test', 'mocks', 'createAgent-Save');
     const sfProject = SfProject.getInstance();

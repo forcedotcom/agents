@@ -23,6 +23,7 @@ import {
   type AgentPreviewEndResponse,
   AgentPreviewInterface,
   type AgentPreviewSendResponse,
+  type AgentPreviewStartOptions,
   type AgentPreviewStartResponse,
   AgentScriptContent,
   type CompileAgentScriptResponse,
@@ -106,8 +107,16 @@ export class ScriptAgent extends AgentBase {
     }
 
     this.preview = {
-      start: (mockMode?: 'Mock' | 'Live Test', apexDebugging?: boolean): Promise<AgentPreviewStartResponse> =>
-        this.startPreview(mockMode, apexDebugging),
+      start: (
+        mockModeOrOptions?: 'Mock' | 'Live Test' | AgentPreviewStartOptions,
+        apexDebugging?: boolean,
+        startOptions?: AgentPreviewStartOptions
+      ): Promise<AgentPreviewStartResponse> => {
+        if (typeof mockModeOrOptions === 'object' && mockModeOrOptions !== null) {
+          return this.startPreview(undefined, undefined, mockModeOrOptions);
+        }
+        return this.startPreview(mockModeOrOptions, apexDebugging, startOptions);
+      },
       send: (message: string): Promise<AgentPreviewSendResponse> => this.sendMessage(message),
       getAllTraces: (): Promise<PlannerResponse[]> => this.getAllTracesFromDisc(),
       end: (): Promise<AgentPreviewEndResponse> => this.endSession(),
@@ -449,7 +458,8 @@ export class ScriptAgent extends AgentBase {
 
   private async startPreview(
     mockMode?: 'Mock' | 'Live Test',
-    apexDebugging?: boolean
+    apexDebugging?: boolean,
+    options?: AgentPreviewStartOptions
   ): Promise<AgentPreviewStartResponse> {
     if (!this.agentJson) {
       void Lifecycle.getInstance().emit('agents:compiling', {});
@@ -492,7 +502,7 @@ export class ScriptAgent extends AgentBase {
       instanceConfig: {
         endpoint: this.options.connection.instanceUrl,
       },
-      variables: [],
+      variables: options?.contextVariables ?? [],
       parameters: {},
       streamingCapabilities: {
         chunkTypes: ['Text', 'LightningChunk'],
