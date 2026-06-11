@@ -1,3 +1,7 @@
+## [1.8.4](https://github.com/forcedotcom/agents/compare/1.8.3...1.8.4) (2026-06-11)
+
+
+
 ## [1.8.3](https://github.com/forcedotcom/agents/compare/1.8.2...1.8.3) (2026-06-06)
 
 
