@@ -80,6 +80,15 @@ export {
   type AiTestCaseScorer,
   type AiConversationTurnXml,
 
+  // Custom Scorer Spec Types
+  type ScorerSpec,
+  type ScorerEngineType,
+  type ScorerInputScope,
+  type ScorerDataType,
+  type ScorerOutcomeType,
+  type ScorerOutputEnumValue,
+  type ScorerValueSpecification,
+
   // Agentforce Studio Testing Types
   type AgentforceStudioTestStartResponse,
   type AgentforceStudioTestStatusResponse,
@@ -141,6 +150,7 @@ export {
   isNgtScorerName,
 } from './ngtScorerCatalog';
 export { AgentTest, AgentTestCreateLifecycleStages } from './agentTest';
+export { AgentScorer } from './agentScorer';
 export { ProductionAgent } from './agents/productionAgent';
 export { ScriptAgent } from './agents/scriptAgent';
 export { AgentBase } from './agents/agentBase';
