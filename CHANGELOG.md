@@ -1,3 +1,12 @@
+# [1.9.0](https://github.com/forcedotcom/agents/compare/1.8.4...1.9.0) (2026-06-18)
+
+
+### Features
+
+* add NGT (Agentforce Studio) parse surface @W-22904106@ ([#302](https://github.com/forcedotcom/agents/issues/302)) ([af7c7cb](https://github.com/forcedotcom/agents/commit/af7c7cbba03d671bbb8e1561bf0e4a2d881b6e43))
+
+
+
 ## [1.8.4](https://github.com/forcedotcom/agents/compare/1.8.3...1.8.4) (2026-06-11)
 
 
