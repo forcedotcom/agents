@@ -362,24 +362,24 @@ export type CreateAgentScriptResponse = {
 // ====================================================
 export type AgentTestConfig = {
   /**
-   * The API name of a AiEvaluationDefinition.
+   * The API name of an AiEvaluationDefinition or AiTestingDefinition.
    */
   name?: string;
 
   /**
-   * The local file path of a AiEvaluationDefinition metadata file.
+   * The local file path of an AiEvaluationDefinition or AiTestingDefinition metadata file.
    */
   mdPath?: string;
 
   /**
-   * The local file path of an agent test spec file.
+   * The local file path of an agent test spec file (legacy YAML or NGT YAML).
    */
   specPath?: string;
 
   /**
-   * The agent test spec data.
+   * The agent test spec data (legacy `TestSpec` or NGT `NgtTestSpec`).
    */
-  specData?: TestSpec;
+  specData?: TestSpec | NgtTestSpec;
 };
 
 export type TestStatus = 'NEW' | 'IN_PROGRESS' | 'COMPLETED' | 'ERROR' | 'TERMINATED';

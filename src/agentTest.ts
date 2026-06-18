@@ -20,7 +20,7 @@ import { Connection, Lifecycle, Messages, SfError } from '@salesforce/core';
 import { Duration, ensureArray } from '@salesforce/kit';
 import { ComponentSetBuilder, DeployResult, RequestStatus } from '@salesforce/source-deploy-retrieve';
 import { parse, stringify } from 'yaml';
-import { XMLBuilder, XMLParser } from 'fast-xml-parser';
+import { XMLBuilder, XMLParser, XMLValidator } from 'fast-xml-parser';
 import {
   AvailableDefinition,
   AgentTestConfig,
@@ -34,6 +34,8 @@ import {
   NgtTestSpec,
   NgtTestCase,
   NgtTestCaseInput,
+  NgtTestCaseScorer,
+  NgtConversationTurn,
 } from './types.js';
 import { isNgtScorerName, NgtScorerCatalog, NgtScorerName } from './ngtScorerCatalog';
 import { metric, sanitizeFilename, TestRunnerType } from './utils';
@@ -71,8 +73,8 @@ export const AgentTestCreateLifecycleStages = {
  * `await agentTest.writeMetadata('path/to/metadataFile');`
  */
 export class AgentTest {
-  private specData?: TestSpec;
-  private data?: AiEvaluationDefinition;
+  private specData?: TestSpec | NgtTestSpec;
+  private data?: AiEvaluationDefinition | AiTestingDefinition;
 
   /**
    * Create an AgentTest based on one of:
@@ -210,39 +212,58 @@ export class AgentTest {
    * Returns the test spec data if already generated. Otherwise it will generate the spec by:
    *
    * 1. Read from an existing local spec file.
-   * 2. Read from an existing local AiEvaluationDefinition metadata file and convert it.
-   * 3. Use the provided org connection to read the remote AiEvaluationDefinition metadata.
+   * 2. Read from an existing local metadata file and convert it. Dispatches on root XML element:
+   * `<AiEvaluationDefinition>` → legacy `TestSpec`, `<AiTestingDefinition>` → `NgtTestSpec`.
+   * 3. Use the provided org connection to read the remote metadata. Both metadata types are queried;
+   * if both exist for the given name, throws `ambiguousTestDefinition`.
    *
-   * @param connection Org connection to use if this AgentTest only has an AiEvaluationDefinition API name.
-   * @returns Promise<TestSpec>
+   * @param connection Org connection to use if this AgentTest only has an API name.
+   * @returns Promise<TestSpec | NgtTestSpec>
    */
-  public async getTestSpec(connection?: Connection): Promise<TestSpec> {
+  public async getTestSpec(connection?: Connection): Promise<TestSpec | NgtTestSpec> {
     if (this.specData) {
       return this.specData;
     }
     if (this.data) {
-      this.specData = convertToSpec(this.data);
+      this.specData = isNgtMetadata(this.data) ? convertToNgtSpec(this.data) : convertToSpec(this.data);
       return this.specData;
     }
     if (this.config.specPath) {
-      this.specData = parse(await readFile(this.config.specPath, 'utf-8')) as TestSpec;
+      this.specData = parse(await readFile(this.config.specPath, 'utf-8')) as TestSpec | NgtTestSpec;
       return this.specData;
     }
     if (this.config.mdPath) {
-      this.data = await parseAgentTestXml(this.config.mdPath);
+      const xml = await readFile(this.config.mdPath, 'utf-8');
+      if (isNgtMetadataXml(xml)) {
+        this.data = parseNgtMetadataXml(xml);
+        this.specData = convertToNgtSpec(this.data);
+        return this.specData;
+      }
+      this.data = parseAgentTestXmlString(xml);
       this.specData = convertToSpec(this.data);
       return this.specData;
     }
     // read from the server if we have a connection and an API name only
     if (this.config.name) {
       if (connection) {
-        // @ts-expect-error jsForce types don't know about AiEvaluationDefinition yet
-        this.data = (await connection.metadata.read<AiEvaluationDefinition>(
-          'AiEvaluationDefinition',
-          this.config.name
-        )) as AiEvaluationDefinition;
-        this.specData = convertToSpec(this.data);
-        return this.specData;
+        const [evalDef, testingDef] = await Promise.all([
+          readMetadataSafe<AiEvaluationDefinition>(connection, 'AiEvaluationDefinition', this.config.name),
+          readMetadataSafe<AiTestingDefinition>(connection, 'AiTestingDefinition', this.config.name),
+        ]);
+        if (evalDef && testingDef) {
+          throw messages.createError('ambiguousTestDefinition', [this.config.name]);
+        }
+        if (testingDef) {
+          this.data = testingDef;
+          this.specData = convertToNgtSpec(testingDef);
+          return this.specData;
+        }
+        if (evalDef) {
+          this.data = evalDef;
+          this.specData = convertToSpec(this.data);
+          return this.specData;
+        }
+        throw messages.createError('missingTestSpecData');
       } else {
         throw messages.createError('missingConnection');
       }
@@ -264,15 +285,18 @@ export class AgentTest {
    */
   public async getMetadata(connection?: Connection): Promise<AiEvaluationDefinition> {
     if (this.data) {
-      return this.data;
+      return assertLegacyMetadata(this.data);
     }
     if (this.specData) {
+      if (isNgtSpec(this.specData)) {
+        throw messages.createError('ngtSpecCannotProduceLegacyMetadata');
+      }
       this.data = convertToMetadata(this.specData);
       return this.data;
     }
     if (this.config.mdPath) {
       this.data = await parseAgentTestXml(this.config.mdPath);
-      return this.data;
+      return assertLegacyMetadata(this.data);
     }
     if (this.config.specPath) {
       this.specData = parse(await readFile(this.config.specPath, 'utf-8')) as TestSpec;
@@ -303,13 +327,16 @@ export class AgentTest {
   public async writeTestSpec(outputFile: string): Promise<void> {
     const spec = await this.getTestSpec();
 
-    // by default, add the OOTB metrics to the spec, so generated MD will have it
-    spec.testCases.forEach((tc) => (tc.metrics = tc.metrics ?? Array.from(metric)));
-    // strip out undefined values and empty strings
-    const clean = Object.entries(spec).reduce<Partial<TestSpec>>((acc, [key, value]) => {
-      if (value !== undefined && value !== '') return { ...acc, [key]: value };
-      return acc;
-    }, {});
+    if (!isNgtSpec(spec)) {
+      // Legacy: by default, add the OOTB metrics to the spec, so generated MD will have it.
+      spec.testCases.forEach((tc) => (tc.metrics = tc.metrics ?? Array.from(metric)));
+    }
+
+    // strip out undefined values and empty strings at the top level
+    const clean: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(spec)) {
+      if (value !== undefined && value !== '') clean[key] = value;
+    }
 
     const yml = stringify(clean, undefined, {
       minContentWidth: 0,
@@ -330,6 +357,30 @@ export class AgentTest {
     await writeFile(outputFile, xml);
   }
 }
+
+/** Discriminate between legacy `TestSpec` and NGT `NgtTestSpec` at runtime. */
+const isNgtSpec = (spec: TestSpec | NgtTestSpec): spec is NgtTestSpec =>
+  Array.isArray(spec.testCases) &&
+  spec.testCases.length > 0 &&
+  'inputs' in spec.testCases[0] &&
+  'scorers' in spec.testCases[0];
+
+/** Discriminate between `AiEvaluationDefinition` and `AiTestingDefinition` at runtime. */
+const isNgtMetadata = (data: AiEvaluationDefinition | AiTestingDefinition): data is AiTestingDefinition => {
+  const cases = ensureArray((data as AiTestingDefinition).testCase);
+  if (cases.length === 0) return false;
+  return 'scorer' in cases[0];
+};
+
+/** Legacy-only contract for `getMetadata()`: refuse if the cached data is NGT. */
+const assertLegacyMetadata = (
+  data: AiEvaluationDefinition | AiTestingDefinition
+): AiEvaluationDefinition => {
+  if (isNgtMetadata(data)) {
+    throw messages.createError('ngtSpecCannotProduceLegacyMetadata');
+  }
+  return data;
+};
 
 // Convert AiEvaluationDefinition metadata XML content to a YAML test spec object.
 const convertToSpec = (data: AiEvaluationDefinition): TestSpec => ({
@@ -440,6 +491,10 @@ type AiEvaluationDefinitionXml = {
 };
 const parseAgentTestXml = async (mdPath: string): Promise<AiEvaluationDefinition> => {
   const xml = await readFile(mdPath, 'utf-8');
+  return parseAgentTestXmlString(xml);
+};
+
+const parseAgentTestXmlString = (xml: string): AiEvaluationDefinition => {
   const parser = new XMLParser({
     ignoreAttributes: false,
     attributeNamePrefix: '$',
@@ -450,6 +505,35 @@ const parseAgentTestXml = async (mdPath: string): Promise<AiEvaluationDefinition
   });
   const xmlContent = parser.parse(xml) as AiEvaluationDefinitionXml;
   return xmlContent.AiEvaluationDefinition;
+};
+
+/** Sniff the top-level XML element name. Skips comments and the `<?xml?>` prolog. */
+const isNgtMetadataXml = (xml: string): boolean => {
+  // strip prolog and comments before the first element
+  const trimmed = xml
+    .replace(/<\?xml[^?]*\?>/g, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .trimStart();
+  return trimmed.startsWith('<AiTestingDefinition');
+};
+
+const readMetadataSafe = async <T>(
+  connection: Connection,
+  type: 'AiEvaluationDefinition' | 'AiTestingDefinition',
+  name: string
+): Promise<T | undefined> => {
+  try {
+    // @ts-expect-error jsForce types don't model these metadata types
+    const result = (await connection.metadata.read(type, name)) as T | undefined;
+    if (!result) return undefined;
+    // jsForce returns a record with only `fullName` populated when the record doesn't exist;
+    // treat that as not-found.
+    const r = result as { fullName?: string; testCase?: unknown };
+    if (r.testCase === undefined && Object.keys(result as object).length <= 1) return undefined;
+    return result;
+  } catch {
+    return undefined;
+  }
 };
 
 const buildMetadataXml = (data: AiEvaluationDefinition): string => {
@@ -629,4 +713,157 @@ export const buildTestingMetadataXml = (data: AiTestingDefinition): string => {
 
   const xml = builder.build(wrapped);
   return `<?xml version="1.0" encoding="UTF-8"?>\n${xml}`;
+};
+
+/**
+ * Parse an `AiTestingDefinition` source-format XML string into the `AiTestingDefinition`
+ * metadata object. Mirror of {@link parseAgentTestXmlString} for the NGT runner.
+ *
+ * Throws SfError on malformed XML or on a missing/wrong root element. Use
+ * {@link convertToNgtSpec} to convert the result into an `NgtTestSpec`.
+ */
+export const parseNgtMetadataXml = (xml: string): AiTestingDefinition => {
+  // XMLParser itself is forgiving — preflight with the strict validator so we surface
+  // SfError on common authoring mistakes instead of returning a half-parsed object.
+  const valid = XMLValidator.validate(xml);
+  if (valid !== true) {
+    const msg = valid?.err ? `${valid.err.code} at line ${valid.err.line}: ${valid.err.msg}` : 'unknown XML error';
+    throw ngtError('ngtMalformedMetadataXml', [msg]);
+  }
+
+  let xmlContent: AiTestingDefinitionXml;
+  try {
+    const parser = new XMLParser({
+      ignoreAttributes: false,
+      attributeNamePrefix: '$',
+      isArray: (name) =>
+        name === 'testCase' || name === 'scorer' || name === 'contextVariable' || name === 'conversationHistory',
+      processEntities: true,
+      htmlEntities: true,
+    });
+    xmlContent = parser.parse(xml) as AiTestingDefinitionXml;
+  } catch (err) {
+    const cause = err instanceof Error ? err.message : String(err);
+    throw ngtError('ngtMalformedMetadataXml', [cause]);
+  }
+
+  if (!xmlContent?.AiTestingDefinition) {
+    throw ngtError('ngtWrongMetadataRoot', ['AiTestingDefinition']);
+  }
+
+  return xmlContent.AiTestingDefinition;
+};
+
+/**
+ * Convert an `AiTestingDefinition` (parsed XML object form) back into an `NgtTestSpec`.
+ * Inverse of {@link convertToTestingMetadata}; collapses contiguous test cases that share
+ * an identical scorer set into a single multi-input case.
+ */
+export const convertToNgtSpec = (data: AiTestingDefinition): NgtTestSpec => {
+  const flatCases = ensureArray(data.testCase).map((tc) => parseTestCaseXml(tc));
+  const collapsedCases = collapseContiguousTestCases(flatCases);
+
+  const spec: NgtTestSpec = {
+    name: String(data.name),
+    subjectType: data.subjectType,
+    subjectName: String(data.subjectName),
+    testCases: collapsedCases,
+  };
+  if (data.description !== undefined && data.description !== '') spec.description = String(data.description);
+  if (data.subjectVersion !== undefined && data.subjectVersion !== '') {
+    spec.subjectVersion = String(data.subjectVersion);
+  }
+  return spec;
+};
+
+type AiTestingDefinitionXml = {
+  AiTestingDefinition: AiTestingDefinition;
+};
+
+const parseTestCaseXml = (tc: AiTestCase): NgtTestCase => {
+  const inputs = tc.inputs ?? ({ utterance: '' } as AiTestCase['inputs']);
+  const contextVariables = ensureArray(inputs.contextVariable).map((cv) => ({
+    name: String(cv.variableName),
+    value: String(cv.variableValue),
+  }));
+  const turnsRaw = ensureArray(inputs.conversationHistory);
+  const turnsParsed = turnsRaw.map((t) => parseConversationTurnXml(t));
+  const dropAutoIndex = isAutoAssignedIndices(turnsParsed.map((t) => t.index));
+  const conversationHistory = turnsParsed.map((t) => stripIndexIfAuto(t, dropAutoIndex));
+
+  const input: NgtTestCaseInput = { utterance: String(inputs.utterance ?? '') };
+  if (contextVariables.length > 0) input.contextVariables = contextVariables;
+  if (conversationHistory.length > 0) input.conversationHistory = conversationHistory;
+
+  const scorers = ensureArray(tc.scorer).map((s) => parseScorerXml(s));
+
+  return { inputs: [input], scorers };
+};
+
+const parseConversationTurnXml = (
+  turn: AiConversationTurnXml
+): { role: 'user' | 'agent'; message: string; topic?: string; index: number } => {
+  const message = String(turn.message ?? '');
+  const index = Number(turn.index);
+  if (turn.role === 'agent') {
+    return { role: 'agent', message, topic: String(turn.topic ?? ''), index };
+  }
+  return { role: 'user', message, index };
+};
+
+const isAutoAssignedIndices = (indices: number[]): boolean => {
+  if (indices.length === 0) return false;
+  return indices.every((idx, i) => idx === i);
+};
+
+const stripIndexIfAuto = (
+  turn: { role: 'user' | 'agent'; message: string; topic?: string; index: number },
+  drop: boolean
+): NgtConversationTurn => {
+  const base = drop ? {} : { index: turn.index };
+  if (turn.role === 'agent') {
+    return { role: 'agent', message: turn.message, topic: turn.topic ?? '', ...base };
+  }
+  return { role: 'user', message: turn.message, ...base };
+};
+
+const parseScorerXml = (scorer: AiTestCaseScorer): NgtTestCaseScorer => {
+  const name = String(scorer.name);
+  const hasExpected = scorer.expectedValue !== undefined && scorer.expectedValue !== '';
+  if (!isNgtScorerName(name)) {
+    if (!hasExpected) {
+      throw ngtError('ngtUnknownScorerNoExpected', [name]);
+    }
+    void Lifecycle.getInstance().emitWarning(
+      `Unknown NGT scorer name '${name}' parsed from AiTestingDefinition metadata. The deploy will be validated by the server.`
+    );
+    return { name, expected: String(scorer.expectedValue) };
+  }
+  if (hasExpected) {
+    return { name, expected: String(scorer.expectedValue) };
+  }
+  return { name };
+};
+
+/**
+ * Collapse contiguous test cases that share an identical (ordered) scorer set
+ * into a single `NgtTestCase` with multiple `inputs[]`. Inverts the multi-input
+ * fan-out applied by `convertToTestingMetadata`.
+ */
+const collapseContiguousTestCases = (cases: NgtTestCase[]): NgtTestCase[] => {
+  const out: NgtTestCase[] = [];
+  for (const tc of cases) {
+    const prev = out[out.length - 1];
+    if (prev && scorerSetsEqual(prev.scorers, tc.scorers)) {
+      prev.inputs.push(...tc.inputs);
+    } else {
+      out.push(tc);
+    }
+  }
+  return out;
+};
+
+const scorerSetsEqual = (a: NgtTestCaseScorer[], b: NgtTestCaseScorer[]): boolean => {
+  if (a.length !== b.length) return false;
+  return a.every((s, i) => s.name === b[i].name && (s.expected ?? null) === (b[i].expected ?? null));
 };
