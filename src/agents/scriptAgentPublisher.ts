@@ -137,7 +137,9 @@ export class ScriptAgentPublisher {
    * @throws SfError if the authoring bundle directory or metadata file cannot be found
    */
   private validateDeveloperName(): { developerName: string; bundleDir: string; bundleMetaPath: string } {
-    const developerName = this.agentJson.globalConfiguration.developerName.replace(/_v\d$/, '');
+    // Strip only the platform-generated uppercase version suffix (e.g., _V1, _V2, _V10).
+    // Lowercase _v<N> should NOT be stripped as it may be part of the user's chosen API name.
+    const developerName = this.agentJson.globalConfiguration.developerName.replace(/_V\d+$/, '');
     const defaultPackagePath = path.resolve(this.project.getDefaultPackage().path);
 
     // Try to find the authoring bundle directory by recursively searching from the default package path

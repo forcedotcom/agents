@@ -107,10 +107,44 @@ describe('AgentPublisher', () => {
   });
 
   describe('constructor', () => {
-    it('should validate developer name and bundle directory during construction', async () => {
+    it('should strip uppercase version suffix (_V1) from developer name', async () => {
       await createTestBundleStructure();
 
       const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
+      expect(publisher['developerName']).to.equal('test_agent');
+      expect(publisher['bundleMetaPath']).to.include('test_agent.bundle-meta.xml');
+    });
+
+    it('should NOT strip lowercase version suffix (_v1) from developer name', async () => {
+      // Create bundle for the full name including lowercase _v1
+      await createTestBundleStructure('My_Agent_v1');
+
+      const agentJsonLowercaseV: AgentJson = {
+        ...agentJson,
+        globalConfiguration: {
+          ...agentJson.globalConfiguration,
+          developerName: 'My_Agent_v1',
+        },
+      };
+
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJsonLowercaseV, false);
+      // Lowercase _v1 should be preserved as part of the user's chosen API name
+      expect(publisher['developerName']).to.equal('My_Agent_v1');
+      expect(publisher['bundleMetaPath']).to.include('My_Agent_v1.bundle-meta.xml');
+    });
+
+    it('should strip multi-digit uppercase version suffix (_V10) from developer name', async () => {
+      await createTestBundleStructure('test_agent');
+
+      const agentJsonMultiDigit: AgentJson = {
+        ...agentJson,
+        globalConfiguration: {
+          ...agentJson.globalConfiguration,
+          developerName: 'test_agent_V10',
+        },
+      };
+
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJsonMultiDigit, false);
       expect(publisher['developerName']).to.equal('test_agent');
       expect(publisher['bundleMetaPath']).to.include('test_agent.bundle-meta.xml');
     });
