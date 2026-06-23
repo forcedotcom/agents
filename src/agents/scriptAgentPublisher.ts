@@ -130,16 +130,18 @@ export class ScriptAgentPublisher {
    * and locates the corresponding authoring bundle directory and metadata file.
    *
    * @returns An object containing:
-   * - developerName: The cleaned developer name without version suffixes
+   * - developerName: The developer name from the compiled agent JSON
    * - bundleDir: The path to the authoring bundle directory
    * - bundleMetaPath: The full path to the bundle-meta.xml file
    *
    * @throws SfError if the authoring bundle directory or metadata file cannot be found
    */
   private validateDeveloperName(): { developerName: string; bundleDir: string; bundleMetaPath: string } {
-    // Strip only the platform-generated uppercase version suffix (e.g., _V1, _V2, _V10).
-    // Lowercase _v<N> should NOT be stripped as it may be part of the user's chosen API name.
-    const developerName = this.agentJson.globalConfiguration.developerName.replace(/_V\d+$/, '');
+    // Use globalConfiguration.developerName as-is. This value comes directly from the
+    // user's .agent file (developer_name field) and is never modified by the platform.
+    // Previously, a regex was stripping _v<N> suffixes, but that incorrectly broke agents
+    // whose API names legitimately end with that pattern (e.g., Simple_Agent_v1).
+    const developerName = this.agentJson.globalConfiguration.developerName;
     const defaultPackagePath = path.resolve(this.project.getDefaultPackage().path);
 
     // Try to find the authoring bundle directory by recursively searching from the default package path

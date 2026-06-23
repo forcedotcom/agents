@@ -34,7 +34,7 @@ describe('AgentPublisher', () => {
   let sfProject: SfProject;
   let agentJson: AgentJson;
 
-  async function createTestBundleStructure(developerName = 'test_agent'): Promise<void> {
+  async function createTestBundleStructure(developerName = 'test_agent_v1'): Promise<void> {
     const bundlePath = join('force-app', 'main', 'default', 'aiAuthoringBundles', developerName);
     const bundleFilePath = join(bundlePath, `${developerName}.bundle-meta.xml`);
     await mkdir(bundlePath, { recursive: true });
@@ -61,7 +61,7 @@ describe('AgentPublisher', () => {
   }
 
   function createValidateDeveloperNameStub(
-    developerName = 'test_agent',
+    developerName = 'test_agent_v1',
     bundleDir = 'test-bundle-dir',
     bundleMetaPath = 'test-meta-path'
   ) {
@@ -107,16 +107,23 @@ describe('AgentPublisher', () => {
   });
 
   describe('constructor', () => {
-    it('should strip uppercase version suffix (_V1) from developer name', async () => {
-      await createTestBundleStructure();
+    it('should use globalConfiguration.developerName as-is without stripping', async () => {
+      await createTestBundleStructure('test_agent');
 
-      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
+      const agentJsonExact: AgentJson = {
+        ...agentJson,
+        globalConfiguration: {
+          ...agentJson.globalConfiguration,
+          developerName: 'test_agent',
+        },
+      };
+
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJsonExact, false);
       expect(publisher['developerName']).to.equal('test_agent');
       expect(publisher['bundleMetaPath']).to.include('test_agent.bundle-meta.xml');
     });
 
-    it('should NOT strip lowercase version suffix (_v1) from developer name', async () => {
-      // Create bundle for the full name including lowercase _v1
+    it('should preserve lowercase version suffix (_v1) in developer name', async () => {
       await createTestBundleStructure('My_Agent_v1');
 
       const agentJsonLowercaseV: AgentJson = {
@@ -128,25 +135,24 @@ describe('AgentPublisher', () => {
       };
 
       const publisher = new ScriptAgentPublisher(connection, sfProject, agentJsonLowercaseV, false);
-      // Lowercase _v1 should be preserved as part of the user's chosen API name
       expect(publisher['developerName']).to.equal('My_Agent_v1');
       expect(publisher['bundleMetaPath']).to.include('My_Agent_v1.bundle-meta.xml');
     });
 
-    it('should strip multi-digit uppercase version suffix (_V10) from developer name', async () => {
-      await createTestBundleStructure('test_agent');
+    it('should preserve uppercase version suffix (_V1) in developer name', async () => {
+      await createTestBundleStructure('My_Agent_V1');
 
-      const agentJsonMultiDigit: AgentJson = {
+      const agentJsonUppercaseV: AgentJson = {
         ...agentJson,
         globalConfiguration: {
           ...agentJson.globalConfiguration,
-          developerName: 'test_agent_V10',
+          developerName: 'My_Agent_V1',
         },
       };
 
-      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJsonMultiDigit, false);
-      expect(publisher['developerName']).to.equal('test_agent');
-      expect(publisher['bundleMetaPath']).to.include('test_agent.bundle-meta.xml');
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJsonUppercaseV, false);
+      expect(publisher['developerName']).to.equal('My_Agent_V1');
+      expect(publisher['bundleMetaPath']).to.include('My_Agent_V1.bundle-meta.xml');
     });
 
     it('should throw error when authoring bundle directory does not exist', () => {
@@ -173,7 +179,7 @@ describe('AgentPublisher', () => {
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishNewAgent-Success');
       // Mock connection.singleRecordQuery to return undefined (no existing bot)
       $$.SANDBOX.stub(connection, 'singleRecordQuery')
-        .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
+        .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent_v1'")
         .throws(new Error('No records found'))
         .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
         .resolves({ DeveloperName: 'v1' });
@@ -194,7 +200,7 @@ describe('AgentPublisher', () => {
 
       const result = await publisher.publishAgentJson();
 
-      expect(result).to.have.property('developerName', 'test_agent');
+      expect(result).to.have.property('developerName', 'test_agent_v1');
       expect(retrieveAgentMetadataStub.calledOnce).to.be.true;
       expect(deployAuthoringBundleStub.calledOnce).to.be.true;
     });
@@ -203,7 +209,7 @@ describe('AgentPublisher', () => {
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishNewAgent-Success');
       // Mock connection.singleRecordQuery to return undefined (no existing bot)
       $$.SANDBOX.stub(connection, 'singleRecordQuery')
-        .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
+        .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent_v1'")
         .throws(new Error('No records found'))
         .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
         .resolves({ DeveloperName: 'v1' });
@@ -226,7 +232,7 @@ describe('AgentPublisher', () => {
 
       const result = await publisher.publishAgentJson();
 
-      expect(result).to.have.property('developerName', 'test_agent');
+      expect(result).to.have.property('developerName', 'test_agent_v1');
       expect(retrieveAgentMetadataStub.notCalled).to.be.true;
     });
 
@@ -234,7 +240,7 @@ describe('AgentPublisher', () => {
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishNewAgent-Success');
       // Mock connection.singleRecordQuery to return undefined (no existing bot)
       $$.SANDBOX.stub(connection, 'singleRecordQuery')
-        .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
+        .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent_v1'")
         .throws(new Error('No records found'))
         .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
         .resolves({ DeveloperName: 'v1' });
@@ -256,7 +262,7 @@ describe('AgentPublisher', () => {
 
       const result = await publisher.publishAgentJson();
 
-      expect(result).to.have.property('developerName', 'test_agent');
+      expect(result).to.have.property('developerName', 'test_agent_v1');
       expect(retrieveAgentMetadataStub.calledOnce).to.be.true;
     });
 
@@ -273,7 +279,7 @@ describe('AgentPublisher', () => {
 
       // Mock connection.singleRecordQuery to return undefined (no existing bot)
       $$.SANDBOX.stub(connection, 'singleRecordQuery')
-        .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
+        .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent_v1'")
         .resolves({ Id: '0Xx000000000001' })
         .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
         .resolves({ DeveloperName: 'v2' });
@@ -286,7 +292,7 @@ describe('AgentPublisher', () => {
 
       const result = await publisher.publishAgentJson();
 
-      expect(result).to.have.property('developerName', 'test_agent');
+      expect(result).to.have.property('developerName', 'test_agent_v1');
       expect(retrieveAgentMetadataStub.calledOnce).to.be.true;
       expect(deployAuthoringBundleStub.calledOnce).to.be.true;
     });
@@ -314,7 +320,7 @@ describe('AgentPublisher', () => {
     it('should not mutate the caller-supplied connection during publish', async () => {
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishNewAgent-Success');
       $$.SANDBOX.stub(connection, 'singleRecordQuery')
-        .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
+        .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent_v1'")
         .throws(new Error('No records found'))
         .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
         .resolves({ DeveloperName: 'v1' });
@@ -683,8 +689,8 @@ describe('AgentPublisher', () => {
       expect(capturedMetadataEntries).to.include('GenAiFunction:Function3');
 
       // Verify that Bot and Agent entries are still included
-      expect(capturedMetadataEntries).to.include('Bot:test_agent');
-      expect(capturedMetadataEntries).to.include('Agent:test_agent_v1');
+      expect(capturedMetadataEntries).to.include('Bot:test_agent_v1');
+      expect(capturedMetadataEntries).to.include('Agent:test_agent_v1_v1');
 
       validateStub.restore();
     });
@@ -758,8 +764,8 @@ describe('AgentPublisher', () => {
       expect(genAiFunctionEntries).to.be.empty;
 
       // Verify that Bot and Agent entries are still included
-      expect(capturedMetadataEntries).to.include('Bot:test_agent');
-      expect(capturedMetadataEntries).to.include('Agent:test_agent_v1');
+      expect(capturedMetadataEntries).to.include('Bot:test_agent_v1');
+      expect(capturedMetadataEntries).to.include('Agent:test_agent_v1_v1');
 
       validateStub.restore();
     });
@@ -807,8 +813,8 @@ describe('AgentPublisher', () => {
       expect(genAiFunctionEntries).to.be.empty;
 
       // Verify that Bot and Agent entries are still included
-      expect(capturedMetadataEntries).to.include('Bot:test_agent');
-      expect(capturedMetadataEntries).to.include('Agent:test_agent_v1');
+      expect(capturedMetadataEntries).to.include('Bot:test_agent_v1');
+      expect(capturedMetadataEntries).to.include('Agent:test_agent_v1_v1');
 
       validateStub.restore();
     });

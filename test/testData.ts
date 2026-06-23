@@ -20,7 +20,7 @@ export const compileAgentScriptResponseSuccess: CompileAgentScriptResponse = {
   compiledArtifact: {
     schemaVersion: '2.0',
     globalConfiguration: {
-      developerName: 'test_agent_V1',
+      developerName: 'test_agent_v1',
       label: '',
       description: '',
       enableEnhancedEventLogs: false,
@@ -31,7 +31,7 @@ export const compileAgentScriptResponseSuccess: CompileAgentScriptResponse = {
       contextVariables: [],
     },
     agentVersion: {
-      developerName: 'test_agent_V1',
+      developerName: 'test_agent_v1',
       plannerType: 'Atlas__ConcurrentMultiAgentOrchestration',
       systemMessages: [],
       modalityParameters: {
@@ -120,7 +120,7 @@ start_agent agent_router:
 export const testAgentJson: AgentJson = {
   schemaVersion: '2.0',
   globalConfiguration: {
-    developerName: 'test_agent_V1',
+    developerName: 'test_agent_v1',
     label: 'Test Agent',
     description: 'A test agent',
     agentType: 'AgentforceServiceAgent',
@@ -131,7 +131,7 @@ export const testAgentJson: AgentJson = {
     contextVariables: [],
   },
   agentVersion: {
-    developerName: 'test_agent_V1',
+    developerName: 'test_agent_v1',
     company: 'Test Company',
     role: 'Test Role',
     plannerType: 'Atlas__ConcurrentMultiAgentOrchestration',
