@@ -130,14 +130,14 @@ export class ScriptAgentPublisher {
    * and locates the corresponding authoring bundle directory and metadata file.
    *
    * @returns An object containing:
-   * - developerName: The cleaned developer name without version suffixes
+   * - developerName: The agent's developer name
    * - bundleDir: The path to the authoring bundle directory
    * - bundleMetaPath: The full path to the bundle-meta.xml file
    *
    * @throws SfError if the authoring bundle directory or metadata file cannot be found
    */
   private validateDeveloperName(): { developerName: string; bundleDir: string; bundleMetaPath: string } {
-    const developerName = this.agentJson.globalConfiguration.developerName.replace(/_v\d$/, '');
+    const developerName = this.agentJson.globalConfiguration.developerName;
     const defaultPackagePath = path.resolve(this.project.getDefaultPackage().path);
 
     // Try to find the authoring bundle directory by recursively searching from the default package path
