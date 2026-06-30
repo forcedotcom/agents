@@ -198,6 +198,10 @@ export {
   type GroundingSource,
   type StageDetail,
   type SourceType,
+  type RetrieverDetail,
+  type RetrieverActionDetail,
+  type StageArtifact,
+  type FileListResponse,
 } from './dataLibraryTypes';
 export { ApiCatalog } from './apiCatalog';
 export {

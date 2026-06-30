@@ -16,6 +16,25 @@
 
 export type SourceType = 'SFDRIVE' | 'KNOWLEDGE' | 'RETRIEVER';
 
+export type RetrieverDetail = {
+  id: string;
+  label: string;
+  apiName?: string;
+};
+
+export type RetrieverActionDetail = {
+  id: string;
+  label: string;
+  apiName?: string;
+};
+
+export type StageArtifact = {
+  id: string;
+  label: string;
+  apiName?: string;
+  assetType: string;
+};
+
 export type DataLibrarySummary = {
   libraryId: string;
   masterLabel: string;
@@ -23,6 +42,8 @@ export type DataLibrarySummary = {
   description?: string;
   sourceType: string;
   status: string;
+  retriever?: RetrieverDetail;
+  retrieverAction?: RetrieverActionDetail;
 };
 
 export type GroundingFileRef = {
@@ -32,6 +53,7 @@ export type GroundingFileRef = {
   fileSize: number;
   createdDate?: string;
   createdBy?: string;
+  status?: string;
 };
 
 export type DataLibraryDetail = {
@@ -44,6 +66,9 @@ export type DataLibraryDetail = {
   retrieverId?: string;
   retrieverLabel?: string;
   dataSpaceScopeId?: string;
+  retriever?: RetrieverDetail;
+  retrieverAction?: RetrieverActionDetail;
+  totalFileCount?: number;
   groundingSource?: {
     [key: string]: unknown;
     groundingSourceType?: string;
@@ -57,6 +82,8 @@ export type StageDetail = {
   completedAt?: number;
   startedAt?: number;
   error?: string;
+  artifacts?: StageArtifact[];
+  errorCode?: string;
 };
 
 export type IndexingStatusResponse = {
@@ -77,6 +104,9 @@ export type GroundingSource = {
     primaryIndexField1?: string;
     primaryIndexField2?: string;
     contentFields?: string[];
+    dataCategorySelectionIds?: string[];
+    dataCategorySelectionNames?: string[];
+    isDataCategoryRuleEnabled?: boolean;
     isRestrictToPublicArticle?: boolean;
   };
 };
@@ -96,6 +126,7 @@ export type UpdateLibraryInput = {
     knowledgeConfig?: {
       contentFields?: string[];
       isRestrictToPublicArticle?: boolean;
+      isDataCategoryRuleEnabled?: boolean;
     };
     retrieverId?: string;
   };
@@ -113,4 +144,11 @@ export type FileAddResult = {
   fileName: string;
   fileNames: string[];
   libraryId: string;
+};
+
+export type FileListResponse = {
+  files: GroundingFileRef[];
+  totalSize: number;
+  currentPageUrl?: string;
+  nextPageUrl?: string;
 };

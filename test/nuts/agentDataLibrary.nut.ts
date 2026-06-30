@@ -144,9 +144,9 @@ describe('AgentDataLibrary NUTs — SFDRIVE', function () {
   });
 
   it('should list files in the library', async () => {
-    const files = await AgentDataLibrary.listFiles(connection, libraryId);
-    expect(files.length).to.be.greaterThan(2);
-    console.log(`Files: ${files.map((f) => f.fileName).join(', ')}`);
+    const response = await AgentDataLibrary.listFiles(connection, libraryId);
+    expect(response.files.length).to.be.greaterThan(2);
+    console.log(`Files: ${response.files.map((f) => f.fileName).join(', ')}`);
   });
 
   it('should list libraries with sourceType filter', async () => {
@@ -232,6 +232,111 @@ describe('AgentDataLibrary NUTs — KNOWLEDGE', function () {
   });
 });
 
+describe('AgentDataLibrary NUTs — Data Categories', function () {
+  this.timeout(5 * 60 * 1000);
+
+  let connection: Connection;
+  let libraryId: string;
+  const dataCategoryNames = process.env.DATA_CATEGORY_NAMES;
+
+  before(async function () {
+    if (!targetOrg || !dataCategoryNames) {
+      console.log('Skipping Data Category NUTs: set TARGET_ORG and DATA_CATEGORY_NAMES env vars');
+      this.skip();
+    }
+    const org = await Org.create({ aliasOrUsername: targetOrg });
+    connection = org.getConnection();
+  });
+
+  after(async () => {
+    if (libraryId && connection) {
+      try {
+        await AgentDataLibrary.delete(connection, libraryId);
+        console.log(`Cleanup: deleted data category library ${libraryId}`);
+      } catch {
+        console.log(`Cleanup: delete failed for ${libraryId}`);
+      }
+    }
+  });
+
+  it('should create KNOWLEDGE library with dataCategorySelectionNames and auto-enable rule', async () => {
+    const devName = `NUT_DC_${Date.now()}`;
+    const categories = dataCategoryNames!.split(',').map((n) => n.trim());
+
+    const result = await AgentDataLibrary.create(connection, {
+      masterLabel: devName,
+      developerName: devName,
+      groundingSource: {
+        sourceType: 'KNOWLEDGE',
+        knowledgeConfig: {
+          primaryIndexField1: 'ArticleNumber',
+          primaryIndexField2: 'Title',
+          contentFields: ['Summary'],
+          isDataCategoryRuleEnabled: true,
+          dataCategorySelectionNames: categories,
+        },
+      },
+    });
+
+    expect(result).to.have.property('libraryId');
+    libraryId = result.libraryId;
+
+    const detail = await AgentDataLibrary.get(connection, libraryId);
+    const kc = detail.groundingSource as { knowledgeConfig?: { isDataCategoryRuleEnabled?: boolean; dataCategorySelectionIds?: string[] } };
+    expect(kc.knowledgeConfig?.isDataCategoryRuleEnabled).to.be.true;
+    expect(kc.knowledgeConfig?.dataCategorySelectionIds).to.be.an('array').with.length.greaterThan(0);
+    console.log(`Created with ${kc.knowledgeConfig!.dataCategorySelectionIds!.length} resolved category IDs`);
+  });
+
+  it('should disable data category rule via update (best-effort)', async () => {
+    try {
+      const result = await AgentDataLibrary.update(connection, libraryId, {
+        groundingSource: {
+          sourceType: 'KNOWLEDGE',
+          knowledgeConfig: {
+            isDataCategoryRuleEnabled: false,
+          },
+        },
+      });
+
+      const kc = result.groundingSource as { knowledgeConfig?: { isDataCategoryRuleEnabled?: boolean } };
+      expect(kc.knowledgeConfig?.isDataCategoryRuleEnabled).to.be.false;
+      console.log('✓ Data category rule disabled via update');
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      if (error.message?.includes('provisioning operation is currently in progress')) {
+        console.log('Update skipped — library still provisioning (expected)');
+      } else {
+        throw err;
+      }
+    }
+  });
+
+  it('should re-enable data category rule via update (best-effort)', async () => {
+    try {
+      const result = await AgentDataLibrary.update(connection, libraryId, {
+        groundingSource: {
+          sourceType: 'KNOWLEDGE',
+          knowledgeConfig: {
+            isDataCategoryRuleEnabled: true,
+          },
+        },
+      });
+
+      const kc = result.groundingSource as { knowledgeConfig?: { isDataCategoryRuleEnabled?: boolean } };
+      expect(kc.knowledgeConfig?.isDataCategoryRuleEnabled).to.be.true;
+      console.log('✓ Data category rule re-enabled via update');
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      if (error.message?.includes('provisioning operation is currently in progress')) {
+        console.log('Update skipped — library still provisioning (expected)');
+      } else {
+        throw err;
+      }
+    }
+  });
+});
+
 describe('AgentDataLibrary NUTs — RETRIEVER', function () {
   this.timeout(3 * 60 * 1000);
 
@@ -302,5 +407,150 @@ describe('AgentDataLibrary NUTs — RETRIEVER', function () {
   it('should delete Retriever library', async () => {
     await AgentDataLibrary.delete(connection, libraryId);
     libraryId = '';
+  });
+});
+
+describe('AgentDataLibrary NUTs — 262.11 Features', function () {
+  this.timeout(3 * 60 * 1000);
+
+  let connection: Connection;
+  const readyLibraryId = process.env.READY_SFDRIVE_ID;
+  const knowledgeLibraryId = process.env.READY_KNOWLEDGE_ID;
+
+  before(async function () {
+    if (!targetOrg || !readyLibraryId) {
+      console.log('Skipping 262.11 NUTs: set TARGET_ORG and READY_SFDRIVE_ID env vars');
+      this.skip();
+    }
+    const org = await Org.create({ aliasOrUsername: targetOrg });
+    connection = org.getConnection();
+  });
+
+  it('should get status with includeArtifacts and return artifacts array', async () => {
+    const result = await AgentDataLibrary.status(connection, readyLibraryId!, { includeArtifacts: true });
+
+    expect(result.indexingStatus.libraryId).to.equal(readyLibraryId);
+    expect(result.indexingStatus).to.have.property('stageDetails');
+    expect(result.indexingStatus.stageDetails).to.be.an('array');
+
+    // At least one stage should have artifacts
+    const stageDetails = result.indexingStatus.stageDetails ?? [];
+    const stagesWithArtifacts = stageDetails.filter((stage) => stage.artifacts && stage.artifacts.length > 0);
+    expect(stagesWithArtifacts.length).to.be.greaterThan(0);
+
+    // Verify artifacts structure
+    const firstStageWithArtifacts = stagesWithArtifacts[0];
+    expect(firstStageWithArtifacts.artifacts).to.be.an('array');
+    console.log(`Stage "${firstStageWithArtifacts.name}" has ${firstStageWithArtifacts.artifacts?.length} artifacts`);
+  });
+
+  it('should listFiles and return FileListResponse shape', async () => {
+    const response = await AgentDataLibrary.listFiles(connection, readyLibraryId!);
+
+    expect(response).to.have.property('files');
+    expect(response).to.have.property('totalSize');
+    expect(response.files).to.be.an('array');
+    expect(response.totalSize).to.be.a('number');
+    expect(response.files.length).to.be.greaterThan(0);
+    console.log(`Library has ${response.files.length} files (totalSize: ${response.totalSize})`);
+  });
+
+  it('should listFiles with pageSize and return pagination URLs', async () => {
+    const response = await AgentDataLibrary.listFiles(connection, readyLibraryId!, { pageSize: 1 });
+
+    expect(response).to.have.property('files');
+    expect(response).to.have.property('totalSize');
+    expect(response.files).to.be.an('array');
+    expect(response.files.length).to.equal(1);
+    expect(response).to.have.property('currentPageUrl');
+
+    // Should have nextPageUrl if there are more files
+    if (response.totalSize > 1) {
+      expect(response).to.have.property('nextPageUrl');
+      expect(response.nextPageUrl).to.be.a('string');
+      console.log(`Pagination works — page 1 of ${response.totalSize} files`);
+    }
+  });
+
+  it('should listFiles with status filter', async () => {
+    const response = await AgentDataLibrary.listFiles(connection, readyLibraryId!, { status: 'INDEXED' });
+
+    expect(response).to.have.property('files');
+    expect(response.files).to.be.an('array');
+
+    // All returned files should have status INDEXED
+    for (const file of response.files) {
+      expect(file.status).to.equal('INDEXED');
+    }
+
+    console.log(`Found ${response.files.length} INDEXED files`);
+  });
+
+  it('should return files with status field', async () => {
+    const response = await AgentDataLibrary.listFiles(connection, readyLibraryId!);
+
+    expect(response.files.length).to.be.greaterThan(0);
+
+    // Every file should have a status field
+    for (const file of response.files) {
+      expect(file).to.have.property('status');
+      expect(file.status).to.be.a('string');
+    }
+
+    const statusCounts: Record<string, number> = {};
+    for (const file of response.files) {
+      const status = file.status ?? 'UNKNOWN';
+      statusCounts[status] = (statusCounts[status] || 0) + 1;
+    }
+
+    console.log(`File statuses: ${JSON.stringify(statusCounts)}`);
+  });
+
+  it('should return totalFileCount on library detail', async () => {
+    const driveResult = await AgentDataLibrary.get(connection, readyLibraryId!);
+    console.log(`SFDRIVE totalFileCount: ${driveResult.totalFileCount ?? 'not present'}`);
+
+    if (driveResult.totalFileCount !== undefined) {
+      expect(driveResult.totalFileCount).to.be.a('number');
+    }
+
+    if (knowledgeLibraryId) {
+      const knowledgeResult = await AgentDataLibrary.get(connection, knowledgeLibraryId);
+      console.log(`Knowledge totalFileCount: ${knowledgeResult.totalFileCount ?? 'not present'}`);
+      if (knowledgeResult.totalFileCount !== undefined) {
+        expect(knowledgeResult.totalFileCount).to.be.a('number');
+      }
+    }
+  });
+
+  it('should return retriever as structured object with id and label', async () => {
+    const result = await AgentDataLibrary.get(connection, readyLibraryId!);
+
+    expect(result).to.have.property('retriever');
+    expect(result.retriever).to.be.an('object');
+
+    if (result.retriever) {
+      expect(result.retriever).to.have.property('id');
+      expect(result.retriever).to.have.property('label');
+      expect(result.retriever.id).to.be.a('string');
+      expect(result.retriever.label).to.be.a('string');
+      console.log(`Retriever: ${result.retriever.label} (${result.retriever.id})`);
+    }
+  });
+
+  it('should return retrieverAction as structured object with id and label', async () => {
+    const result = await AgentDataLibrary.get(connection, readyLibraryId!);
+
+    // retrieverAction may not always be present, but if it is, verify structure
+    if (result.retrieverAction) {
+      expect(result.retrieverAction).to.be.an('object');
+      expect(result.retrieverAction).to.have.property('id');
+      expect(result.retrieverAction).to.have.property('label');
+      expect(result.retrieverAction.id).to.be.a('string');
+      expect(result.retrieverAction.label).to.be.a('string');
+      console.log(`RetrieverAction: ${result.retrieverAction.label} (${result.retrieverAction.id})`);
+    } else {
+      console.log('RetrieverAction not present (this is optional)');
+    }
   });
 });

@@ -25,10 +25,10 @@ import {
   type UpdateLibraryInput,
   type UploadResult,
   type FileAddResult,
-  type GroundingFileRef,
+  type FileListResponse,
 } from './dataLibraryTypes.js';
 
-export { type DataLibrarySummary, type DataLibraryDetail, type IndexingStatusResponse, type CreateLibraryInput, type UpdateLibraryInput, type UploadResult, type FileAddResult, type GroundingFileRef } from './dataLibraryTypes.js';
+export { type DataLibrarySummary, type DataLibraryDetail, type IndexingStatusResponse, type CreateLibraryInput, type UpdateLibraryInput, type UploadResult, type FileAddResult, type FileListResponse } from './dataLibraryTypes.js';
 
 type UploadReadinessResponse = { ready: boolean };
 type FileUploadUrlEntry = { uploadUrl: string; filePath: string; headers: Record<string, string> };
@@ -143,11 +143,19 @@ export class AgentDataLibrary {
     }
   }
 
-  public static async status(connection: Connection, libraryId: string): Promise<IndexingStatusResponse> {
+  public static async status(
+    connection: Connection,
+    libraryId: string,
+    options?: { includeArtifacts?: boolean }
+  ): Promise<IndexingStatusResponse> {
     try {
+      let url = `${baseUrl(connection, libraryId)}/status`;
+      if (options?.includeArtifacts) {
+        url += '?includeArtifacts=true';
+      }
       return await connection.request<IndexingStatusResponse>({
         method: 'GET',
-        url: `${baseUrl(connection, libraryId)}/status`,
+        url,
       });
     } catch (error) {
       const wrapped = SfError.wrap(error);
@@ -156,9 +164,42 @@ export class AgentDataLibrary {
     }
   }
 
-  public static async listFiles(connection: Connection, libraryId: string): Promise<GroundingFileRef[]> {
-    const detail = await AgentDataLibrary.get(connection, libraryId);
-    return detail.groundingSource?.groundingFileRefs ?? [];
+  public static async listFiles(
+    connection: Connection,
+    libraryId: string,
+    options?: {
+      pageSize?: number;
+      offset?: number;
+      sortBy?: string;
+      sortOrder?: string;
+      name?: string;
+      status?: string;
+    }
+  ): Promise<FileListResponse> {
+    try {
+      let url = `${baseUrl(connection, libraryId)}/files`;
+      const params = new URLSearchParams();
+      if (options?.pageSize !== undefined) params.append('pageSize', String(options.pageSize));
+      if (options?.offset !== undefined) params.append('offset', String(options.offset));
+      if (options?.sortBy) params.append('sortBy', options.sortBy);
+      if (options?.sortOrder) params.append('sortOrder', options.sortOrder);
+      if (options?.name) params.append('name', options.name);
+      if (options?.status) params.append('status', options.status);
+
+      const queryString = params.toString();
+      if (queryString) {
+        url += `?${queryString}`;
+      }
+
+      return await connection.request<FileListResponse>({
+        method: 'GET',
+        url,
+      });
+    } catch (error) {
+      const wrapped = SfError.wrap(error);
+      await Lifecycle.getInstance().emitTelemetry({ eventName: 'agent_adl_list_files_failed' });
+      throw wrapped;
+    }
   }
 
   public static async deleteFile(connection: Connection, libraryId: string, fileId: string): Promise<void> {
@@ -203,7 +244,7 @@ export class AgentDataLibrary {
     await AgentDataLibrary.triggerIndexing(connection, url, uploadedFiles);
 
     if (options?.waitMinutes) {
-      const detail = await AgentDataLibrary.pollForReadiness(connection, url, libraryId, options.waitMinutes);
+      const detail = await AgentDataLibrary.pollForReadiness(connection, url, libraryId, options.waitMinutes * 60);
       return {
         libraryId,
         retrieverId: detail.retrieverId,
@@ -321,13 +362,17 @@ export class AgentDataLibrary {
     });
   }
 
+  public static async waitForReady(connection: Connection, libraryId: string, waitSeconds: number): Promise<DataLibraryDetail> {
+    return AgentDataLibrary.pollForReadiness(connection, baseUrl(connection, libraryId), libraryId, waitSeconds);
+  }
+
   private static async pollForReadiness(
     connection: Connection,
     url: string,
     libraryId: string,
-    waitMinutes: number
+    waitSeconds: number
   ): Promise<DataLibraryDetail> {
-    const deadline = Date.now() + waitMinutes * 60_000;
+    const deadline = Date.now() + waitSeconds * 1_000;
     const pollInterval = 10_000;
 
     // eslint-disable-next-line no-await-in-loop
@@ -344,6 +389,6 @@ export class AgentDataLibrary {
       await new Promise((resolve) => setTimeout(resolve, pollInterval));
     }
 
-    throw new SfError(`Indexing did not complete within ${waitMinutes} minutes.`, 'UploadTimeout');
+    throw new SfError(`Indexing did not complete within ${waitSeconds} seconds.`, 'UploadTimeout');
   }
 }
