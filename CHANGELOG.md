@@ -1,3 +1,12 @@
+# [1.10.0](https://github.com/forcedotcom/agents/compare/1.9.0...1.10.0) (2026-06-30)
+
+
+### Features
+
+* update ADL types and methods to match 262.11 Connect API @W-23237764@ ([#312](https://github.com/forcedotcom/agents/issues/312)) ([682d6c9](https://github.com/forcedotcom/agents/commit/682d6c915c8feea9f4d530da6609ec0fdc9c3946))
+
+
+
 # [1.9.0](https://github.com/forcedotcom/agents/compare/1.8.4...1.9.0) (2026-06-18)
 
 
