@@ -1,3 +1,12 @@
+## [1.10.1](https://github.com/forcedotcom/agents/compare/1.10.0...1.10.1) (2026-06-30)
+
+
+### Bug Fixes
+
+* move waitForReady above private methods to fix member-ordering lint@W-23237764@ ([#314](https://github.com/forcedotcom/agents/issues/314)) ([840883e](https://github.com/forcedotcom/agents/commit/840883eec35a37d5296e0ad404e37d7c2b82f5dc))
+
+
+
 # [1.10.0](https://github.com/forcedotcom/agents/compare/1.9.0...1.10.0) (2026-06-30)
 
 
