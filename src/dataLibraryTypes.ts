@@ -104,8 +104,9 @@ export type GroundingSource = {
     primaryIndexField1?: string;
     primaryIndexField2?: string;
     contentFields?: string[];
-    dataCategoryIds?: string[];
-    dataCategoryNames?: string[];
+    dataCategorySelectionIds?: string[];
+    dataCategorySelectionNames?: string[];
+    isDataCategoryRuleEnabled?: boolean;
     isRestrictToPublicArticle?: boolean;
   };
 };
@@ -125,6 +126,7 @@ export type UpdateLibraryInput = {
     knowledgeConfig?: {
       contentFields?: string[];
       isRestrictToPublicArticle?: boolean;
+      isDataCategoryRuleEnabled?: boolean;
     };
     retrieverId?: string;
   };

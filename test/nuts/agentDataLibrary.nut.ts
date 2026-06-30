@@ -232,6 +232,111 @@ describe('AgentDataLibrary NUTs — KNOWLEDGE', function () {
   });
 });
 
+describe('AgentDataLibrary NUTs — Data Categories', function () {
+  this.timeout(5 * 60 * 1000);
+
+  let connection: Connection;
+  let libraryId: string;
+  const dataCategoryNames = process.env.DATA_CATEGORY_NAMES;
+
+  before(async function () {
+    if (!targetOrg || !dataCategoryNames) {
+      console.log('Skipping Data Category NUTs: set TARGET_ORG and DATA_CATEGORY_NAMES env vars');
+      this.skip();
+    }
+    const org = await Org.create({ aliasOrUsername: targetOrg });
+    connection = org.getConnection();
+  });
+
+  after(async () => {
+    if (libraryId && connection) {
+      try {
+        await AgentDataLibrary.delete(connection, libraryId);
+        console.log(`Cleanup: deleted data category library ${libraryId}`);
+      } catch {
+        console.log(`Cleanup: delete failed for ${libraryId}`);
+      }
+    }
+  });
+
+  it('should create KNOWLEDGE library with dataCategorySelectionNames and auto-enable rule', async () => {
+    const devName = `NUT_DC_${Date.now()}`;
+    const categories = dataCategoryNames!.split(',').map((n) => n.trim());
+
+    const result = await AgentDataLibrary.create(connection, {
+      masterLabel: devName,
+      developerName: devName,
+      groundingSource: {
+        sourceType: 'KNOWLEDGE',
+        knowledgeConfig: {
+          primaryIndexField1: 'ArticleNumber',
+          primaryIndexField2: 'Title',
+          contentFields: ['Summary'],
+          isDataCategoryRuleEnabled: true,
+          dataCategorySelectionNames: categories,
+        },
+      },
+    });
+
+    expect(result).to.have.property('libraryId');
+    libraryId = result.libraryId;
+
+    const detail = await AgentDataLibrary.get(connection, libraryId);
+    const kc = detail.groundingSource as { knowledgeConfig?: { isDataCategoryRuleEnabled?: boolean; dataCategorySelectionIds?: string[] } };
+    expect(kc.knowledgeConfig?.isDataCategoryRuleEnabled).to.be.true;
+    expect(kc.knowledgeConfig?.dataCategorySelectionIds).to.be.an('array').with.length.greaterThan(0);
+    console.log(`Created with ${kc.knowledgeConfig!.dataCategorySelectionIds!.length} resolved category IDs`);
+  });
+
+  it('should disable data category rule via update (best-effort)', async () => {
+    try {
+      const result = await AgentDataLibrary.update(connection, libraryId, {
+        groundingSource: {
+          sourceType: 'KNOWLEDGE',
+          knowledgeConfig: {
+            isDataCategoryRuleEnabled: false,
+          },
+        },
+      });
+
+      const kc = result.groundingSource as { knowledgeConfig?: { isDataCategoryRuleEnabled?: boolean } };
+      expect(kc.knowledgeConfig?.isDataCategoryRuleEnabled).to.be.false;
+      console.log('✓ Data category rule disabled via update');
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      if (error.message?.includes('provisioning operation is currently in progress')) {
+        console.log('Update skipped — library still provisioning (expected)');
+      } else {
+        throw err;
+      }
+    }
+  });
+
+  it('should re-enable data category rule via update (best-effort)', async () => {
+    try {
+      const result = await AgentDataLibrary.update(connection, libraryId, {
+        groundingSource: {
+          sourceType: 'KNOWLEDGE',
+          knowledgeConfig: {
+            isDataCategoryRuleEnabled: true,
+          },
+        },
+      });
+
+      const kc = result.groundingSource as { knowledgeConfig?: { isDataCategoryRuleEnabled?: boolean } };
+      expect(kc.knowledgeConfig?.isDataCategoryRuleEnabled).to.be.true;
+      console.log('✓ Data category rule re-enabled via update');
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      if (error.message?.includes('provisioning operation is currently in progress')) {
+        console.log('Update skipped — library still provisioning (expected)');
+      } else {
+        throw err;
+      }
+    }
+  });
+});
+
 describe('AgentDataLibrary NUTs — RETRIEVER', function () {
   this.timeout(3 * 60 * 1000);
 
