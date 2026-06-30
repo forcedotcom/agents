@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { mkdir, rm, writeFile, readFile } from 'node:fs/promises';
 import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
@@ -301,6 +301,50 @@ describe('AgentPublisher', () => {
       expect(refreshStub.called).to.be.false;
       expect(connection.accessToken).to.equal(originalAccessToken);
     });
+
+    it('should publish and deploy the real test_agent directory the search resolved', async () => {
+      await createTestBundleStructure('test_agent'); // real on-disk bundle dir
+
+      // Drive the publisher with a name that ends in the _<N> version convention.
+      const localAgentJson: AgentJson = {
+        ...agentJson,
+        globalConfiguration: {
+          ...agentJson.globalConfiguration,
+          developerName: 'test_agent',
+        },
+      };
+
+      process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishNewAgent-Success');
+
+      $$.SANDBOX.stub(connection, 'singleRecordQuery')
+        .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
+        .throws(new Error('No records found'))
+        .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
+        .resolves({ DeveloperName: 'developerNameDummy' });
+
+      // skipMetadataRetrieve=true so retrieveAgentMetadata is bypassed (no need to stub it).
+      publisher = new ScriptAgentPublisher(connection, sfProject, localAgentJson, true);
+
+      $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
+      $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
+
+      // Let the REAL deployAuthoringBundle run; stub only the org boundary it calls.
+      const pollStatusStub = $$.SANDBOX.stub().resolves({ response: { success: true } } as never);
+      const deployStub = $$.SANDBOX.stub().resolves({ pollStatus: pollStatusStub } as unknown);
+      const fromSourceStub = $$.SANDBOX.stub(ComponentSet, 'fromSource').returns({ deploy: deployStub } as never);
+
+      const result = await publisher.publishAgentJson();
+
+      // The real findAuthoringBundle resolved test_agent, and publish deployed THAT dir.
+      expect(fromSourceStub.calledOnce).to.be.true;
+
+      expect(fromSourceStub.firstCall.args[0]).to.equal(
+        resolve(join('force-app', 'main', 'default', 'aiAuthoringBundles', 'test_agent'))
+      );
+
+      expect(result).to.have.property('developerName', 'test_agent');
+    });
+
   });
 
   describe('getPublishedBotId', () => {
