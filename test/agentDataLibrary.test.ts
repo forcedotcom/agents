@@ -694,4 +694,71 @@ describe('AgentDataLibrary', () => {
       }
     });
   });
+
+  describe('waitForReady', () => {
+    it('should return immediately when retrieverId is present on first poll', async () => {
+      $$.fakeConnectionRequest = () =>
+        Promise.resolve({ libraryId: '1JD000001', retrieverId: '1Cx000001', status: 'READY' });
+
+      const result = await AgentDataLibrary.waitForReady(connection, '1JD000001', 30);
+
+      expect(result.retrieverId).to.equal('1Cx000001');
+      expect(result.status).to.equal('READY');
+    });
+
+    it('should poll until retrieverId appears', async () => {
+      let pollCount = 0;
+      $$.fakeConnectionRequest = () => {
+        pollCount++;
+        if (pollCount >= 3) {
+          return Promise.resolve({ libraryId: '1JD000001', retrieverId: '1Cx000002', status: 'READY' });
+        }
+        return Promise.resolve({ libraryId: '1JD000001', status: 'IN_PROGRESS' });
+      };
+
+      const result = await AgentDataLibrary.waitForReady(connection, '1JD000001', 60);
+
+      expect(result.retrieverId).to.equal('1Cx000002');
+      expect(pollCount).to.be.greaterThanOrEqual(3);
+    });
+
+    it('should throw IndexingFailed when status is FAILED', async () => {
+      $$.fakeConnectionRequest = () =>
+        Promise.resolve({ libraryId: '1JD000001', status: 'FAILED' });
+
+      try {
+        await AgentDataLibrary.waitForReady(connection, '1JD000001', 60);
+        expect.fail('should have thrown');
+      } catch (err: any) {
+        expect(err.name).to.equal('IndexingFailed');
+      }
+    });
+
+    it('should throw UploadTimeout when deadline exceeded', async () => {
+      $$.fakeConnectionRequest = () =>
+        Promise.resolve({ libraryId: '1JD000001', status: 'IN_PROGRESS' });
+
+      try {
+        // 1 second timeout — will exceed immediately after first poll + 10s interval
+        await AgentDataLibrary.waitForReady(connection, '1JD000001', 1);
+        expect.fail('should have thrown');
+      } catch (err: any) {
+        expect(err.name).to.equal('UploadTimeout');
+        expect(err.message).to.include('1 seconds');
+      }
+    });
+
+    it('should accept sub-minute wait times (e.g., 30 seconds)', async () => {
+      let pollCount = 0;
+      $$.fakeConnectionRequest = () => {
+        pollCount++;
+        return Promise.resolve({ libraryId: '1JD000001', retrieverId: '1Cx000003', status: 'READY' });
+      };
+
+      const result = await AgentDataLibrary.waitForReady(connection, '1JD000001', 30);
+
+      expect(result.retrieverId).to.equal('1Cx000003');
+      expect(pollCount).to.equal(1);
+    });
+  });
 });

@@ -244,7 +244,7 @@ export class AgentDataLibrary {
     await AgentDataLibrary.triggerIndexing(connection, url, uploadedFiles);
 
     if (options?.waitMinutes) {
-      const detail = await AgentDataLibrary.pollForReadiness(connection, url, libraryId, options.waitMinutes);
+      const detail = await AgentDataLibrary.pollForReadiness(connection, url, libraryId, options.waitMinutes * 60);
       return {
         libraryId,
         retrieverId: detail.retrieverId,
@@ -362,13 +362,17 @@ export class AgentDataLibrary {
     });
   }
 
+  public static async waitForReady(connection: Connection, libraryId: string, waitSeconds: number): Promise<DataLibraryDetail> {
+    return AgentDataLibrary.pollForReadiness(connection, baseUrl(connection, libraryId), libraryId, waitSeconds);
+  }
+
   private static async pollForReadiness(
     connection: Connection,
     url: string,
     libraryId: string,
-    waitMinutes: number
+    waitSeconds: number
   ): Promise<DataLibraryDetail> {
-    const deadline = Date.now() + waitMinutes * 60_000;
+    const deadline = Date.now() + waitSeconds * 1_000;
     const pollInterval = 10_000;
 
     // eslint-disable-next-line no-await-in-loop
@@ -385,6 +389,6 @@ export class AgentDataLibrary {
       await new Promise((resolve) => setTimeout(resolve, pollInterval));
     }
 
-    throw new SfError(`Indexing did not complete within ${waitMinutes} minutes.`, 'UploadTimeout');
+    throw new SfError(`Indexing did not complete within ${waitSeconds} seconds.`, 'UploadTimeout');
   }
 }
