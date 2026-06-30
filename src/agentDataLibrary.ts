@@ -292,6 +292,10 @@ export class AgentDataLibrary {
     return { success: true, fileName, fileNames, libraryId };
   }
 
+  public static async waitForReady(connection: Connection, libraryId: string, waitSeconds: number): Promise<DataLibraryDetail> {
+    return AgentDataLibrary.pollForReadiness(connection, baseUrl(connection, libraryId), libraryId, waitSeconds);
+  }
+
   // ── Private helpers ───────────────────────────────────────
 
   private static async checkUploadReadiness(connection: Connection, url: string): Promise<void> {
@@ -362,18 +366,14 @@ export class AgentDataLibrary {
     });
   }
 
-  public static async waitForReady(connection: Connection, libraryId: string, waitSeconds: number): Promise<DataLibraryDetail> {
-    return AgentDataLibrary.pollForReadiness(connection, baseUrl(connection, libraryId), libraryId, waitSeconds);
-  }
-
   private static async pollForReadiness(
     connection: Connection,
     url: string,
     libraryId: string,
     waitSeconds: number
   ): Promise<DataLibraryDetail> {
-    const deadline = Date.now() + waitSeconds * 1_000;
-    const pollInterval = 10_000;
+    const deadline = Date.now() + waitSeconds * 1000;
+    const pollInterval = 10000;
 
     // eslint-disable-next-line no-await-in-loop
     while (Date.now() < deadline) {
