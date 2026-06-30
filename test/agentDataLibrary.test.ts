@@ -367,26 +367,37 @@ describe('AgentDataLibrary', () => {
   });
 
   describe('listFiles', () => {
-    it('should extract groundingFileRefs from detail', async () => {
+    it('should return paginated file list from /files endpoint', async () => {
       mockRequest({
-        libraryId: '1JD000001',
-        groundingSource: {
-          groundingFileRefs: [{ fileId: '1Jc000001', fileName: 'doc.pdf', filePath: 'path/doc.pdf', fileSize: 1024 }],
-        },
+        files: [{ fileId: '1Jc000001', fileName: 'doc.pdf', filePath: 'path/doc.pdf', fileSize: 1024, status: 'INDEXED' }],
+        totalSize: 1,
+        currentPageUrl: '/einstein/data-libraries/1JD000001/files?pageSize=50&offset=0',
       });
 
-      const files = await AgentDataLibrary.listFiles(connection, '1JD000001');
+      const result = await AgentDataLibrary.listFiles(connection, '1JD000001');
 
-      expect(files).to.have.lengthOf(1);
-      expect(files[0].fileName).to.equal('doc.pdf');
+      expect(result.files).to.have.lengthOf(1);
+      expect(result.files[0].fileName).to.equal('doc.pdf');
+      expect(result.totalSize).to.equal(1);
+      expect(requests[0].url).to.include('/files');
     });
 
-    it('should return empty array when no files', async () => {
-      mockRequest({ libraryId: '1JD000001', groundingSource: {} });
+    it('should return empty files array when no files', async () => {
+      mockRequest({ files: [], totalSize: 0 });
 
-      const files = await AgentDataLibrary.listFiles(connection, '1JD000001');
+      const result = await AgentDataLibrary.listFiles(connection, '1JD000001');
 
-      expect(files).to.have.lengthOf(0);
+      expect(result.files).to.have.lengthOf(0);
+      expect(result.totalSize).to.equal(0);
+    });
+
+    it('should pass pagination options as query params', async () => {
+      mockRequest({ files: [], totalSize: 0 });
+
+      await AgentDataLibrary.listFiles(connection, '1JD000001', { pageSize: 10, status: 'INDEXED' });
+
+      expect(requests[0].url).to.include('pageSize=10');
+      expect(requests[0].url).to.include('status=INDEXED');
     });
   });
 

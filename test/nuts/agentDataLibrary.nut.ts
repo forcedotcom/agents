@@ -144,9 +144,9 @@ describe('AgentDataLibrary NUTs — SFDRIVE', function () {
   });
 
   it('should list files in the library', async () => {
-    const files = await AgentDataLibrary.listFiles(connection, libraryId);
-    expect(files.length).to.be.greaterThan(2);
-    console.log(`Files: ${files.map((f) => f.fileName).join(', ')}`);
+    const response = await AgentDataLibrary.listFiles(connection, libraryId);
+    expect(response.files.length).to.be.greaterThan(2);
+    console.log(`Files: ${response.files.map((f) => f.fileName).join(', ')}`);
   });
 
   it('should list libraries with sourceType filter', async () => {
