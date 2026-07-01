@@ -435,14 +435,13 @@ describe('agent NUTs', () => {
         expect(traces).to.be.an('array');
         expect(traces.length).to.be.greaterThan(0, 'expected at least one trace from the planner');
 
-        // Walk every step of every trace looking for the override echoed back as session state.
-        // Shape varies by step type, so we stringify and substring-match.
-        const allStepsJson = traces
-          .flatMap((t) => (t as { steps?: unknown[] })?.steps ?? [])
-          .map((s) => JSON.stringify(s))
-          .join('\n');
+        // Walk every trace (including its plan steps) looking for the override echoed back as
+        // session state. The PlannerResponse shape varies by step type and the value may live in
+        // prompt content (e.g. an LLMExecutionStep's context_variables block) or a top-level field,
+        // so we stringify the whole trace and substring-match.
+        const allTracesJson = traces.map((t) => JSON.stringify(t)).join('\n');
 
-        expect(allStepsJson).to.contain(overrideValue, 'expected override value to appear in at least one trace step');
+        expect(allTracesJson).to.contain(overrideValue, 'expected override value to appear in at least one trace');
       });
 
       it('should end the preview session', async () => {
