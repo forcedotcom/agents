@@ -225,3 +225,12 @@ export {
   type McpServerAssetReplaceInput,
   type ListMcpServersOptions,
 } from './apiCatalogTypes';
+export { AgentObserve, TagOverlapStrategy } from './agentObserve';
+export {
+  type AgentType as ObserveAgentType,
+  type SimilarSessionResult,
+  type FindSimilarSessionsOptions,
+  type DimensionWeight,
+  type SimilarityStrategy,
+  type SimilarityContext,
+} from './agentObserveTypes';
