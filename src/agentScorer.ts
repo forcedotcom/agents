@@ -125,11 +125,27 @@ export function validateScorerSpec(spec: ScorerSpec): void {
     throw new Error('API name must start with a letter, contain only alphanumerics/underscores, and be at most 35 characters.');
   }
 
+  if (spec.dataType === 'Text' && !spec.outputEnumValues?.length) {
+    throw new Error('outputEnumValues is required when dataType is \'Text\'.');
+  }
+
   if (spec.dataType === 'Text' && spec.outputEnumValues) {
     const fallbackCount = spec.outputEnumValues.filter((v) => v.isFallback).length;
     if (fallbackCount !== 1) {
       throw new Error(`Text scorers must have exactly 1 fallback value, but found ${fallbackCount}.`);
     }
+  }
+
+  if (spec.agentAssociation.samplingRate != null && (spec.agentAssociation.samplingRate < 0 || spec.agentAssociation.samplingRate > 1)) {
+    throw new Error(`samplingRate must be between 0 and 1, but got ${spec.agentAssociation.samplingRate}.`);
+  }
+
+  if (spec.dataType === 'Number' && !spec.specification) {
+    throw new Error("specification is required when dataType is 'Number'.");
+  }
+
+  if (spec.dataType === 'Number' && spec.outputEnumValues) {
+    throw new Error("outputEnumValues cannot be provided when dataType is 'Number'. Use specification instead.");
   }
 
   if (spec.dataType === 'Number' && spec.specification) {
@@ -148,6 +164,10 @@ export function validateScorerSpec(spec: ScorerSpec): void {
 
   if (spec.dataType === 'LightningType' && !spec.lightningType) {
     throw new Error("lightningType is required when dataType is 'LightningType'.");
+  }
+
+  if (spec.dataType === 'LightningType' && spec.lightningType && !SUPPORTED_LIGHTNING_TYPES.includes(spec.lightningType as SupportedLightningType)) {
+    throw new Error(`Unsupported lightningType '${spec.lightningType}'. Must be one of: ${SUPPORTED_LIGHTNING_TYPES.join(', ')}`);
   }
 }
 
@@ -218,13 +238,6 @@ export function buildScorerXml(spec: ScorerSpec): string {
 
   if (spec.dataType === 'Number' && spec.specification) {
     const numSpec = spec.specification.valueSpecification;
-    const enumValues = generateNumberEnumValues(numSpec);
-    scorerVersion.outputEnumValue = enumValues.map((v) => ({
-      isFallback: false,
-      isSystemFallback: false,
-      outcomeType: v.outcomeType,
-      value: v.value,
-    }));
     scorerVersion.specification = {
       valueSpecification: {
         min: numSpec.min,
@@ -330,6 +343,7 @@ export function buildPromptTemplateXml(apiName: string, promptContent: string, s
       templateVersions: {
         content: promptContent,
         inputs,
+        // default scaffolding; users can override by editing the prompt template after generation
         primaryModel: 'sfdc_ai__DefaultOpenAIGPT4OmniMini',
         status: 'Published',
         versionIdentifier,
@@ -369,10 +383,11 @@ export async function createScorerDefinition(
   let promptTemplatePath: string | undefined;
   let promptTemplateXml: string | undefined;
 
+  const promptDir = join(options.outputDir, 'genAiPromptTemplates');
+
   if (spec.engineType === 'PromptTemplate' && !spec.promptTemplateName) {
     const content = spec.promptContent ?? buildDefaultPromptContent(spec);
     promptTemplateXml = buildPromptTemplateXml(spec.apiName, content, spec);
-    const promptDir = join(options.outputDir, 'genAiPromptTemplates');
     const promptFileName = `${spec.apiName}.genAiPromptTemplate-meta.xml`;
     promptTemplatePath = join(promptDir, promptFileName);
   }
@@ -382,7 +397,6 @@ export async function createScorerDefinition(
     await writeFile(scorerPath, scorerXml);
 
     if (promptTemplateXml && promptTemplatePath) {
-      const promptDir = join(options.outputDir, 'genAiPromptTemplates');
       await mkdir(promptDir, { recursive: true });
       await writeFile(promptTemplatePath, promptTemplateXml);
     }
