@@ -1,3 +1,12 @@
+## [1.10.3](https://github.com/forcedotcom/agents/compare/1.10.2...1.10.3) (2026-07-13)
+
+
+### Bug Fixes
+
+* send explicit empty body on POST fetchMcpServer @W-23371674@ ([#318](https://github.com/forcedotcom/agents/issues/318)) ([9206d59](https://github.com/forcedotcom/agents/commit/9206d59479829699993aeb6d66ac7c2980aad864))
+
+
+
 ## [1.10.2](https://github.com/forcedotcom/agents/compare/1.10.1...1.10.2) (2026-07-01)
 
 
