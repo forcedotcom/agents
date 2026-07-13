@@ -98,7 +98,11 @@ export class ApiCatalog {
   /** POST /api-catalog/mcp-servers/{id}/fetch */
   public static async fetchMcpServer(connection: Connection, id: string): Promise<McpServerFetchOutput> {
     const url = `${base(connection)}/mcp-servers/${encode(id)}/fetch`;
-    return ApiCatalog.request<McpServerFetchOutput>(connection, 'POST', url, 'fetchMcpServer');
+    // Send an explicit (empty) JSON body: a bodyless POST over HTTP/2 leaves the request
+    // stream half-open (no END_STREAM), so jsforce/undici never sees response headers and
+    // the call hangs until the 300s headers timeout. Passing a body sets Content-Length and
+    // closes the stream, so the response is read immediately.
+    return ApiCatalog.request<McpServerFetchOutput>(connection, 'POST', url, 'fetchMcpServer', {});
   }
 
   /** GET /api-catalog/mcp-servers/{id}/assets */

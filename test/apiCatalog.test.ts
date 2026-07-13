@@ -120,11 +120,14 @@ describe('ApiCatalog client', () => {
   });
 
   describe('fetchMcpServer', () => {
-    it('POSTs to /mcp-servers/{id}/fetch', async () => {
+    it('POSTs to /mcp-servers/{id}/fetch with an explicit body', async () => {
       mockRequest({ assets: [] });
       await ApiCatalog.fetchMcpServer(connection, '1');
       expect(requests[0].method).to.equal('POST');
       expect(requests[0].url).to.match(/\/mcp-servers\/1\/fetch$/);
+      // A body must be sent: a bodyless POST over HTTP/2 leaves the stream half-open and the
+      // request hangs until the 300s headers timeout (jsforce/undici never sees the response).
+      expect(requests[0].body).to.equal('{}');
     });
   });
 
