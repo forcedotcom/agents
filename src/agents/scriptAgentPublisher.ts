@@ -44,6 +44,7 @@ export class ScriptAgentPublisher {
   private project: SfProject;
   private readonly agentJson: AgentJson;
   private readonly developerName: string;
+  private readonly aabName?: string;
   private readonly bundleMetaPath: string;
   private bundleDir: string;
   private readonly skipRetrieve: boolean;
@@ -61,17 +62,24 @@ export class ScriptAgentPublisher {
    * @param project The Salesforce project
    * @param agentJson The compiled AgentJson to publish
    * @param skipMetadataRetrieve Whether to skip retrieving the agent metadata from the org
+   * @param aabName The authoring bundle API name the caller asked to publish (e.g. 'myAgent_2').
+   * Used to locate the bundle directory to deploy. This can differ from the agent's developerName
+   * for versioned bundles, where the directory carries a version suffix but the script's
+   * config.developer_name (and thus agentJson.globalConfiguration.developerName) is the base name.
+   * When omitted, the bundle directory is resolved from developerName for backward compatibility.
    */
   public constructor(
     connection: Connection,
     project: SfProject,
     agentJson: AgentJson,
-    skipMetadataRetrieve: boolean = false
+    skipMetadataRetrieve: boolean = false,
+    aabName?: string
   ) {
     this.connection = connection;
     this.project = project;
     this.agentJson = agentJson;
     this.skipRetrieve = skipMetadataRetrieve;
+    this.aabName = aabName;
     this.API_URL = 'https://api.salesforce.com/einstein/ai-agent/v1.1/authoring/agents';
 
     // Validate and get developer name and bundle directory
@@ -129,8 +137,15 @@ export class ScriptAgentPublisher {
    * Validates and extracts the developer name from the agent configuration,
    * and locates the corresponding authoring bundle directory and metadata file.
    *
+   * The bundle directory is resolved from the caller-supplied aabName (the API name being
+   * published) rather than developerName, because for versioned bundles the two differ: the
+   * directory carries a version suffix (e.g. 'myAgent_2') while the agent's developerName is
+   * the base name from the script's config.developer_name (e.g. 'myAgent'). Resolving from
+   * developerName would deploy the wrong (unversioned) bundle. When aabName is not provided,
+   * the directory is resolved from developerName to preserve prior behavior.
+   *
    * @returns An object containing:
-   * - developerName: The agent's developer name
+   * - developerName: The agent's developer name (used for org queries and the deploy target)
    * - bundleDir: The path to the authoring bundle directory
    * - bundleMetaPath: The full path to the bundle-meta.xml file
    *
@@ -138,24 +153,27 @@ export class ScriptAgentPublisher {
    */
   private validateDeveloperName(): { developerName: string; bundleDir: string; bundleMetaPath: string } {
     const developerName = this.agentJson.globalConfiguration.developerName;
+    // The bundle directory (and its meta file) are named after the API name that was published,
+    // which is the version-suffixed aabName when publishing a versioned bundle.
+    const bundleName = this.aabName ?? developerName;
     const defaultPackagePath = path.resolve(this.project.getDefaultPackage().path);
 
     // Try to find the authoring bundle directory by recursively searching from the default package path
-    const bundleDir = findAuthoringBundle(defaultPackagePath, developerName);
+    const bundleDir = findAuthoringBundle(defaultPackagePath, bundleName);
 
     if (!bundleDir) {
       throw SfError.create({
         name: 'CannotFindBundle',
-        message: `Cannot find an authoring bundle in ${defaultPackagePath} that matches ${developerName}`,
+        message: `Cannot find an authoring bundle in ${defaultPackagePath} that matches ${bundleName}`,
       });
     }
 
-    const bundleMetaPath = path.join(bundleDir, `${developerName}.bundle-meta.xml`);
+    const bundleMetaPath = path.join(bundleDir, `${bundleName}.bundle-meta.xml`);
 
     if (!existsSync(bundleMetaPath)) {
       throw SfError.create({
         name: 'CannotFindBundle',
-        message: `Cannot find a bundle-meta.xml file in ${bundleDir} that matches ${this.developerName}`,
+        message: `Cannot find a bundle-meta.xml file in ${bundleDir} that matches ${bundleName}`,
       });
     }
     return { developerName, bundleDir, bundleMetaPath };

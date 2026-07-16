@@ -345,6 +345,85 @@ describe('AgentPublisher', () => {
       expect(result).to.have.property('developerName', 'test_agent');
     });
 
+    it('should deploy the versioned bundle directory (aabName), not the unversioned one (developerName)', async () => {
+      // Both an unversioned and a versioned bundle exist on disk (as in the repro: the user
+      // retrieved both). The versioned bundle is the one requested for publish.
+      await createTestBundleStructure('test_agent'); // unversioned dir (the wrong one)
+      await createTestBundleStructure('test_agent_2'); // versioned dir (the right one)
+
+      // The compiled agent's developerName is the BASE name (from config.developer_name),
+      // which matches the unversioned directory. Only aabName carries the version suffix.
+      const localAgentJson: AgentJson = {
+        ...agentJson,
+        globalConfiguration: {
+          ...agentJson.globalConfiguration,
+          developerName: 'test_agent',
+        },
+      };
+
+      process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishNewAgentVersion-Success');
+
+      // Bot already exists (publishing a new version), keyed off the BASE developerName.
+      $$.SANDBOX.stub(connection, 'singleRecordQuery')
+        .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
+        .resolves({ Id: '0Xx000000000001' })
+        .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
+        .resolves({ DeveloperName: 'v2' });
+
+      // skipMetadataRetrieve=true so retrieveAgentMetadata is bypassed. aabName='test_agent_2'.
+      publisher = new ScriptAgentPublisher(connection, sfProject, localAgentJson, true, 'test_agent_2');
+
+      $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
+      $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
+
+      // Let the REAL deployAuthoringBundle run; stub only the org boundary it calls.
+      const pollStatusStub = $$.SANDBOX.stub().resolves({ response: { success: true } } as never);
+      const deployStub = $$.SANDBOX.stub().resolves({ pollStatus: pollStatusStub } as unknown);
+      const fromSourceStub = $$.SANDBOX.stub(ComponentSet, 'fromSource').returns({ deploy: deployStub } as never);
+
+      const result = await publisher.publishAgentJson();
+
+      // The versioned directory must be the one deployed — NOT the unversioned test_agent dir.
+      expect(fromSourceStub.calledOnce).to.be.true;
+      expect(fromSourceStub.firstCall.args[0]).to.equal(
+        resolve(join('force-app', 'main', 'default', 'aiAuthoringBundles', 'test_agent_2'))
+      );
+      expect(fromSourceStub.firstCall.args[0]).to.not.equal(
+        resolve(join('force-app', 'main', 'default', 'aiAuthoringBundles', 'test_agent'))
+      );
+
+      // developerName is still the base name (used for org queries and the deploy target).
+      expect(result).to.have.property('developerName', 'test_agent');
+    });
+
+    it('resolves the bundle directory from developerName when aabName is not provided (back-compat)', async () => {
+      await createTestBundleStructure('test_agent');
+
+      process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishNewAgent-Success');
+      $$.SANDBOX.stub(connection, 'singleRecordQuery')
+        .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
+        .throws(new Error('No records found'))
+        .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
+        .resolves({ DeveloperName: 'v1' });
+
+      // No aabName passed (4-arg form): directory should resolve from developerName.
+      publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, true);
+
+      $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
+      $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
+
+      const pollStatusStub = $$.SANDBOX.stub().resolves({ response: { success: true } } as never);
+      const deployStub = $$.SANDBOX.stub().resolves({ pollStatus: pollStatusStub } as unknown);
+      const fromSourceStub = $$.SANDBOX.stub(ComponentSet, 'fromSource').returns({ deploy: deployStub } as never);
+
+      await publisher.publishAgentJson();
+
+      expect(fromSourceStub.calledOnce).to.be.true;
+      expect(fromSourceStub.firstCall.args[0]).to.equal(
+        resolve(join('force-app', 'main', 'default', 'aiAuthoringBundles', 'test_agent'))
+      );
+    });
+
   });
 
   describe('getPublishedBotId', () => {

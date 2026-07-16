@@ -282,7 +282,10 @@ export class ScriptAgent extends AgentBase {
       this.options.connection,
       this.options.project,
       this.agentJson!,
-      skipMetadataRetrieve
+      skipMetadataRetrieve,
+      // Pass the AAB API name so the publisher deploys the exact bundle the user asked to publish.
+      // For versioned bundles this differs from the agent's developerName (see validateDeveloperName).
+      this.options.aabName
     );
     return publisher.publishAgentJson();
   }
