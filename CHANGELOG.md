@@ -1,3 +1,12 @@
+# [1.11.0](https://github.com/forcedotcom/agents/compare/1.10.3...1.11.0) (2026-07-27)
+
+
+### Features
+
+* add securityWarning to McpFetchedAsset ([#322](https://github.com/forcedotcom/agents/issues/322)) ([c2e58ba](https://github.com/forcedotcom/agents/commit/c2e58bae995fd5fecb095315711dbdef97bfb04b))
+
+
+
 ## [1.10.3](https://github.com/forcedotcom/agents/compare/1.10.2...1.10.3) (2026-07-13)
 
 
