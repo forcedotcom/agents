@@ -81,6 +81,10 @@ export type McpFetchedAsset = {
   active?: boolean;
   availableAsAgentAction?: boolean;
   status?: string;
+  // Populated by the introspection endpoints that return live tool metadata:
+  // POST /mcp-servers/{id}/fetch and the auto-fetch in POST /mcp-servers (create).
+  // Absent from the stored asset-allowlist responses.
+  securityWarning?: string;
 };
 
 export type McpServerCreateOutput = {
