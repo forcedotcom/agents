@@ -1,3 +1,12 @@
+## [1.11.5](https://github.com/forcedotcom/agents/compare/1.11.4...1.11.5) (2026-07-28)
+
+
+### Bug Fixes
+
+* **deps:** bump markdown-it from 14.1.1 to 14.3.0 ([#307](https://github.com/forcedotcom/agents/issues/307)) ([ef14898](https://github.com/forcedotcom/agents/commit/ef148987052a30004aba1f8a88ba17ab9705532f))
+
+
+
 ## [1.11.4](https://github.com/forcedotcom/agents/compare/1.11.3...1.11.4) (2026-07-28)
 
 
