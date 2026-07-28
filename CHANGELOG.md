@@ -1,3 +1,12 @@
+## [1.11.3](https://github.com/forcedotcom/agents/compare/1.11.2...1.11.3) (2026-07-28)
+
+
+### Bug Fixes
+
+* **deps:** bump @salesforce/types from 1.7.3 to 1.8.0 ([#304](https://github.com/forcedotcom/agents/issues/304)) ([482ef34](https://github.com/forcedotcom/agents/commit/482ef34c275b6696251dae4afc72ff0488a0588c))
+
+
+
 ## [1.11.2](https://github.com/forcedotcom/agents/compare/1.11.1...1.11.2) (2026-07-28)
 
 
