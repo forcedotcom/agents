@@ -19,7 +19,11 @@ import { type Stats, statSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { Connection, Logger, SfError } from '@salesforce/core';
 import { env } from '@salesforce/kit';
-import nock from 'nock';
+// Type-only import: erased at compile time so `nock` (and its transitive
+// `@mswjs/interceptors`, which registers global HTTP interceptors on load) is
+// never pulled onto the runtime require graph. The value is loaded lazily via
+// dynamic import in `request()`, and only when `SF_MOCK_DIR` is set.
+import type nock from 'nock';
 import { requestWithEndpointFallback } from './utils';
 
 type HttpHeaders = {
@@ -157,6 +161,13 @@ export class MaybeMock {
   ): Promise<T> {
     if (this.mockDir) {
       this.logger.debug(`Mocking ${method} request to ${url} using ${this.mockDir}`);
+      // Load nock lazily: it is only needed when mocking is explicitly enabled,
+      // and importing it eagerly pulls @mswjs/interceptors onto the runtime
+      // require graph, which breaks consumers running behind a proxy. nock is
+      // intentionally a devDependency — this path only runs when a developer or
+      // test sets SF_MOCK_DIR, so the import is guaranteed to resolve there.
+      // eslint-disable-next-line import/no-extraneous-dependencies
+      const { default: nock } = await import('nock');
       const responses = await readResponses<T>(this.mockDir, url, this.logger);
       const baseUrl = this.connection.baseUrl();
       const scope = this.scopes.get(baseUrl) ?? nock(baseUrl);
