@@ -1,3 +1,12 @@
+## [1.11.4](https://github.com/forcedotcom/agents/compare/1.11.3...1.11.4) (2026-07-28)
+
+
+### Bug Fixes
+
+* **deps:** bump form-data from 4.0.5 to 4.0.6 ([#308](https://github.com/forcedotcom/agents/issues/308)) ([af8ec74](https://github.com/forcedotcom/agents/commit/af8ec74e8d49319be8e01aca33a126ccf419c299))
+
+
+
 ## [1.11.3](https://github.com/forcedotcom/agents/compare/1.11.2...1.11.3) (2026-07-28)
 
 
