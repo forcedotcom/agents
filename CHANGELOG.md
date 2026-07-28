@@ -1,3 +1,12 @@
+## [1.11.1](https://github.com/forcedotcom/agents/compare/1.11.0...1.11.1) (2026-07-28)
+
+
+### Bug Fixes
+
+* make nock a devDependency to prevent proxy startup crash @W-23607779 ([#324](https://github.com/forcedotcom/agents/issues/324)) ([2ca65c7](https://github.com/forcedotcom/agents/commit/2ca65c7f58be872ac4741e4867e189a18f58d96a))
+
+
+
 # [1.11.0](https://github.com/forcedotcom/agents/compare/1.10.3...1.11.0) (2026-07-27)
 
 
