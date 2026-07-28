@@ -1,3 +1,14 @@
+## [1.11.2](https://github.com/forcedotcom/agents/compare/1.11.1...1.11.2) (2026-07-28)
+
+
+### Bug Fixes
+
+* **deps:** bump @babel/core from 7.29.0 to 7.29.7 ([#311](https://github.com/forcedotcom/agents/issues/311)) ([92b2472](https://github.com/forcedotcom/agents/commit/92b2472dde70b9def7845ea90a35bf726b5c66e1))
+* **deps:** bump fast-uri from 3.1.2 to 3.1.4 ([#323](https://github.com/forcedotcom/agents/issues/323)) ([8092653](https://github.com/forcedotcom/agents/commit/8092653154f353c2ecef80b8321777822873466e))
+* **deps:** bump linkify-it from 5.0.0 to 5.0.2 ([#321](https://github.com/forcedotcom/agents/issues/321)) ([a936cda](https://github.com/forcedotcom/agents/commit/a936cdabf10cfb456c4bda579469d8f444f76089))
+
+
+
 ## [1.11.1](https://github.com/forcedotcom/agents/compare/1.11.0...1.11.1) (2026-07-28)
 
 
