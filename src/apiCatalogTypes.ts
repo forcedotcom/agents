@@ -94,6 +94,11 @@ export type McpServerCreateOutput = {
 
 export type McpServerFetchOutput = {
   assets: McpFetchedAsset[];
+  // Opaque hash of the server's current tool definitions, echoed by POST /fetch.
+  // Round-trip it into replaceMcpServerAssets (serverFingerprint) to confirm that
+  // the definitions you reviewed are still current; keeping a drifted (OUT_OF_SYNC)
+  // tool active without it is rejected with a 409 (server-side drift guard).
+  serverFingerprint?: string;
 };
 
 export type McpServerAssetOutput = {
@@ -121,6 +126,10 @@ export type McpServerAssetReplaceItem = {
 
 export type McpServerAssetReplaceInput = {
   assets: McpServerAssetReplaceItem[];
+  // Optional optimistic-concurrency token from a prior POST /fetch (serverFingerprint).
+  // When supplied, the server verifies the definitions haven't drifted since; when
+  // omitted, keeping an already-active OUT_OF_SYNC tool active is rejected with 409.
+  serverFingerprint?: string;
 };
 
 /**
