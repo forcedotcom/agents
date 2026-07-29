@@ -1,3 +1,20 @@
+# [2.0.0](https://github.com/forcedotcom/agents/compare/1.11.7...2.0.0) (2026-07-29)
+
+
+* feat!: require Node >=22, drop EOL Node versions @W-23480655@ (#326) ([53c862f](https://github.com/forcedotcom/agents/commit/53c862f5686455e64430294372a1f8a6ba503de0)), closes [#326](https://github.com/forcedotcom/agents/issues/326)
+
+
+### BREAKING CHANGES
+
+* engines.node raised to >=22.0.0, dropping support for Node 18 and 20
+
+- engines.node bumped to >=22.0.0
+- @salesforce/core bumped to ^9.0.0
+- @salesforce/kit bumped to ^4.0.0
+- @salesforce/source-deploy-retrieve bumped to ^13.0.0
+
+
+
 ## [1.11.7](https://github.com/forcedotcom/agents/compare/1.11.6...1.11.7) (2026-07-28)
 
 
