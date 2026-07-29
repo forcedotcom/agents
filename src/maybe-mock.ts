@@ -19,10 +19,8 @@ import { type Stats, statSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { Connection, Logger, SfError } from '@salesforce/core';
 import { env } from '@salesforce/kit';
-// Type-only import: erased at compile time so `nock` (and its transitive
-// `@mswjs/interceptors`, which registers global HTTP interceptors on load) is
-// never pulled onto the runtime require graph. The value is loaded lazily via
-// dynamic import in `request()`, and only when `SF_MOCK_DIR` is set.
+// Type-only import: erased at compile time. Only used for the `nock.Body`
+// constraint on the generic type parameter.
 import type nock from 'nock';
 import { requestWithEndpointFallback } from './utils';
 
@@ -131,13 +129,13 @@ async function readResponses<T extends nock.Body>(mockDir: string, url: string, 
 /**
  * A class to act as an in-between the library's request, and the orgs response
  *
- * if `SF_MOCK_DIR` is set it will read from the directory, resolving files as API responses with nock
+ * if `SF_MOCK_DIR` is set it will read from the directory, returning file contents directly as API responses
  *
  * if it is NOT set, it will hit the endpoint and use real server responses
  */
 export class MaybeMock {
   private mockDir = getMockDir();
-  private scopes = new Map<string, nock.Scope>();
+  private mockCallCounts = new Map<string, number>();
   private logger: Logger;
 
   public constructor(private connection: Connection) {
@@ -161,42 +159,14 @@ export class MaybeMock {
   ): Promise<T> {
     if (this.mockDir) {
       this.logger.debug(`Mocking ${method} request to ${url} using ${this.mockDir}`);
-      // Load nock lazily: it is only needed when mocking is explicitly enabled,
-      // and importing it eagerly pulls @mswjs/interceptors onto the runtime
-      // require graph, which breaks consumers running behind a proxy. nock is
-      // intentionally a devDependency — this path only runs when a developer or
-      // test sets SF_MOCK_DIR, so the import is guaranteed to resolve there.
-      // eslint-disable-next-line import/no-extraneous-dependencies
-      const { default: nock } = await import('nock');
       const responses = await readResponses<T>(this.mockDir, url, this.logger);
-      const baseUrl = this.connection.baseUrl();
-      const scope = this.scopes.get(baseUrl) ?? nock(baseUrl);
-      // Look up status code to determine if it's successful or not
-      // Be have to assert this is a number because AgentTester has a status that is non-numeric
-      const getCode = (response: T): number =>
-        typeof response === 'object' && 'status' in response && typeof response.status === 'number'
-          ? response.status
-          : 200;
-      // This is a hack to work with SFAP prod, dev, and test endpoints
-      url = url.replace(/https:\/\/(dev\.|test\.)?api\.salesforce\.com/, '');
-      this.scopes.set(baseUrl, scope);
-      switch (method) {
-        case 'GET':
-          for (const response of responses) {
-            scope.get(url).reply(getCode(response), response);
-          }
-          break;
-        case 'POST':
-          for (const response of responses) {
-            scope.post(url, body as nock.RequestBodyMatcher).reply(getCode(response), response);
-          }
-          break;
-        case 'DELETE':
-          for (const response of responses) {
-            scope.delete(url).reply(getCode(response), response);
-          }
-          break;
-      }
+      // Return mock responses directly — nock cannot intercept jsforce's undici-based
+      // HTTP transport, so we short-circuit here. For polling scenarios with multiple
+      // mock files, successive calls cycle through the responses in order.
+      const key = `${method}:${url}`;
+      const callIndex = this.mockCallCounts.get(key) ?? 0;
+      this.mockCallCounts.set(key, callIndex + 1);
+      return responses[Math.min(callIndex, responses.length - 1)];
     }
 
     this.logger.debug(`Making ${method} request to ${url}`);
