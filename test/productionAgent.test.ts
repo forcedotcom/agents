@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 import { expect } from 'chai';
+import sinon from 'sinon';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection, Messages, SfError, SfProject } from '@salesforce/core';
 import { ProductionAgent } from '../src/agents/productionAgent';
@@ -724,6 +725,79 @@ describe('ProductionAgent', () => {
         expect(error).to.be.instanceOf(SfError);
         expect((error as SfError).message).to.include(messages.getMessage('noVersionsFound', ['TestAgent']));
       }
+    });
+  });
+
+  describe('preview.start bypassUser', () => {
+    const buildBotMetadata = (agentType: string): BotMetadata => ({
+      Id: '0Xx123456789ABC',
+      IsDeleted: false,
+      DeveloperName: 'TestAgent',
+      MasterLabel: 'Test Agent',
+      CreatedDate: '2025-01-01T00:00:00.000+0000',
+      CreatedById: 'user123',
+      LastModifiedDate: '2025-01-02T00:00:00.000+0000',
+      LastModifiedById: 'user123',
+      SystemModstamp: '2025-01-02T00:00:00.000+0000',
+      BotUserId: 'botUser123',
+      Description: 'Test bot description',
+      Type: 'AgentForce',
+      AgentType: agentType,
+      AgentTemplate: null,
+      BotVersions: {
+        records: [
+          {
+            Id: 'version1',
+            Status: 'Active',
+            IsDeleted: false,
+            BotDefinitionId: '0Xx123456789ABC',
+            DeveloperName: 'TestAgent_v1',
+            CreatedDate: '2025-01-01T00:00:00.000+0000',
+            CreatedById: 'user123',
+            LastModifiedDate: '2025-01-01T00:00:00.000+0000',
+            LastModifiedById: 'user123',
+            SystemModstamp: '2025-01-01T00:00:00.000+0000',
+            VersionNumber: 1,
+            CopilotPrimaryLanguage: 'en_US',
+            ToneType: 'formal',
+            CopilotSecondaryLanguages: [],
+          },
+        ],
+      },
+    });
+
+    let requestStub: sinon.SinonStub;
+
+    beforeEach(() => {
+      // Capture the session-start request body without hitting the network.
+      requestStub = $$.SANDBOX.stub(connection, 'request');
+      requestStub.resolves({ sessionId: 'test-session-id', _links: {}, messages: [] } as never);
+    });
+
+    const getStartRequestBody = (): Record<string, unknown> => {
+      const startCall = requestStub
+        .getCalls()
+        .find((c) => (c.args[0] as { url: string }).url.endsWith('/sessions'));
+      if (!startCall) throw new Error('agent sessions request not captured');
+      return JSON.parse((startCall.args[0] as { body: string }).body) as Record<string, unknown>;
+    };
+
+    it('sends bypassUser: false for an employee agent', async () => {
+      $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves(buildBotMetadata('AgentforceEmployeeAgent'));
+
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: 'TestAgent' });
+      await agent.preview.start();
+
+      expect(getStartRequestBody().bypassUser).to.equal(false);
+    });
+
+    it('sends bypassUser: true for a non-employee (service) agent', async () => {
+      $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves(buildBotMetadata('EinsteinServiceAgent'));
+
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: 'TestAgent' });
+      await agent.preview.start();
+
+      expect(getStartRequestBody().bypassUser).to.equal(true);
     });
   });
 });
