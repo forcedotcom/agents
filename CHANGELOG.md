@@ -1,3 +1,12 @@
+## [2.0.1](https://github.com/forcedotcom/agents/compare/2.0.0...2.0.1) (2026-08-10)
+
+
+### Bug Fixes
+
+* send bypassUser:false for employee agents on --api-name preview @W-23734892@ ([#329](https://github.com/forcedotcom/agents/issues/329)) ([f0beace](https://github.com/forcedotcom/agents/commit/f0beace7437fdad0ad5c7244764098e1ce5b1f4d))
+
+
+
 # [2.0.0](https://github.com/forcedotcom/agents/compare/1.11.7...2.0.0) (2026-07-29)
 
 
