@@ -189,7 +189,7 @@ export class ConnectionManager {
       }
 
       // Decode payload (middle part)
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+
       const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString()) as Record<string, unknown>;
 
       // Check for expected SFAP JWT fields
@@ -219,10 +219,10 @@ export class ConnectionManager {
         subject: payload.sub as string | undefined,
         issuer: payload.iss as string | undefined,
         appId: payload.sfdc_app_id as string | undefined,
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+
         scopes: payload.scope ? (payload.scope as string).split(' ') : undefined,
       };
-    } catch (error) {
+    } catch {
       return {
         isValid: false,
         hasRequiredFields: false,

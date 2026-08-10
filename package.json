@@ -20,13 +20,14 @@
   },
   "devDependencies": {
     "@salesforce/cli-plugins-testkit": "^5.3.59",
-    "@salesforce/dev-scripts": "^13.0.0",
+    "@salesforce/dev-scripts": "^13.0.1",
     "esbuild": "^0.28.1",
+    "eslint": "^10.4.0",
+    "eslint-config-salesforce-typescript": "^6.0.0",
     "nock": "^14.0.15",
     "ts-morph": "^28.0.0",
     "ts-node": "^10.9.2",
     "ts-patch": "^3.3.0",
-    "typedoc": "^0.28.19",
     "typescript": "^5.9.3"
   },
   "engines": {
@@ -52,16 +53,17 @@
     "clean-all": "sf-clean all",
     "compile": "wireit",
     "docs": "sf-docs",
+    "fix-license": "eslint src test --fix --rule \"header/header: [2]\"",
     "format": "wireit",
     "link-check": "wireit",
     "lint": "wireit",
     "lint-fix": "yarn sf-lint --fix",
     "postcompile": "tsc -p test",
+    "prepack": "sf-prepack",
     "test": "wireit",
-    "test:nuts": "nyc mocha \"**/*.nut.ts\"  --slow 4500 --timeout 1200000 --parallel --retries 0 --jobs 10",
-    "test:only": "wireit",
     "test:bundle": "wireit",
-    "fix-license": "eslint src test --fix --rule \"header/header: [2]\""
+    "test:nuts": "nyc mocha \"**/*.nut.ts\"  --slow 4500 --timeout 1200000 --parallel --retries 0 --jobs 10",
+    "test:only": "wireit"
   },
   "publishConfig": {
     "access": "public"
@@ -86,11 +88,11 @@
       ]
     },
     "compile": {
-      "command": "tspc -p . --pretty --incremental",
+      "command": "tspc -p tsconfig.json --pretty --incremental",
       "files": [
         "src/**/*.ts",
-        "**/tsconfig.json",
-        "messages/**"
+        "tsconfig.json",
+        "messages"
       ],
       "output": [
         "lib/**",
@@ -115,6 +117,7 @@
         "src/**/*.ts",
         "test/**/*.ts",
         "messages/**",
+        "**/eslint.config.*",
         "**/.eslint*",
         "**/tsconfig.json"
       ],
@@ -130,7 +133,6 @@
     },
     "test": {
       "dependencies": [
-        "test:bundle",
         "test:only",
         "test:compile",
         "link-check"
@@ -181,7 +183,7 @@
       "output": []
     },
     "link-check": {
-      "command": "node -e \"process.exit(process.env.CI ? 0 : 1)\" || linkinator \"**/*.md\" --skip \"CHANGELOG.md|node_modules|test/|confluence.internal.salesforce.com|my.salesforce.com|npmjs.com|%s\" --markdown --retry --directory-listing --verbosity error",
+      "command": "node -e \"process.exit(process.env.CI ? 0 : 1)\" || linkinator \"**/*.md\" --skip \"CHANGELOG.md|node_modules|test/|confluence.internal.salesforce.com|my.salesforce.com|localhost|%s\" --markdown --retry --directory-listing --verbosity error",
       "files": [
         "./*.md",
         "./!(CHANGELOG).md",

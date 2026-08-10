@@ -771,13 +771,11 @@ describe('ProductionAgent', () => {
     beforeEach(() => {
       // Capture the session-start request body without hitting the network.
       requestStub = $$.SANDBOX.stub(connection, 'request');
-      requestStub.resolves({ sessionId: 'test-session-id', _links: {}, messages: [] } as never);
+      requestStub.resolves({ sessionId: 'test-session-id', _links: {}, messages: [] });
     });
 
     const getStartRequestBody = (): Record<string, unknown> => {
-      const startCall = requestStub
-        .getCalls()
-        .find((c) => (c.args[0] as { url: string }).url.endsWith('/sessions'));
+      const startCall = requestStub.getCalls().find((c) => (c.args[0] as { url: string }).url.endsWith('/sessions'));
       if (!startCall) throw new Error('agent sessions request not captured');
       return JSON.parse((startCall.args[0] as { body: string }).body) as Record<string, unknown>;
     };

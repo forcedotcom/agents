@@ -85,10 +85,9 @@ export async function applyStringReplacements(
   const normalizedFilePath = filePath.replace(/\\/g, '/');
 
   // Filter replacements using SDR's envFilter to check environment conditionals
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-  const envFilteredReplacements = replacementConfigs.filter(envFilter as (r: ReplacementConfig) => boolean);
 
-  // eslint-disable-next-line no-await-in-loop -- replacements must be applied sequentially
+  const envFilteredReplacements = replacementConfigs.filter(envFilter);
+
   for (const config of envFilteredReplacements) {
     // Normalize config paths for cross-platform matching
     // Create a normalized version of the config for matching (don't mutate original)
@@ -101,8 +100,8 @@ export async function applyStringReplacements(
     }
 
     // Use SDR's matchesFile function to check if this replacement applies to the current file
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-    const fileMatchesFn = matchesFile(normalizedFilePath) as (r: ReplacementConfig) => boolean;
+
+    const fileMatchesFn = matchesFile(normalizedFilePath);
     const fileMatches = fileMatchesFn(normalizedConfig);
 
     if (!fileMatches) {
@@ -127,7 +126,7 @@ export async function applyStringReplacements(
       }
     } else if (config.replaceWithFile) {
       // Use SDR's getContentsOfReplacementFile to read the file
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, no-await-in-loop
+      // eslint-disable-next-line no-await-in-loop
       replacementValue = await getContentsOfReplacementFile(config.replaceWithFile);
     } else {
       continue;
@@ -140,7 +139,7 @@ export async function applyStringReplacements(
     if (config.stringToReplace) {
       patternStr = config.stringToReplace;
       // Use SDR's stringToRegex to properly escape the string
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+
       regex = stringToRegex(config.stringToReplace);
     } else if (config.regexToReplace) {
       patternStr = config.regexToReplace;

@@ -386,9 +386,7 @@ export class ScriptAgent extends AgentBase {
       const agentId = this.getAgentIdForStorage();
 
       // Ensure session directory exists
-      if (!this.historyDir) {
-        this.historyDir = await getHistoryDir(agentId, this.sessionId);
-      }
+      this.historyDir ??= await getHistoryDir(agentId, this.sessionId);
 
       await logTurnToHistory(
         {

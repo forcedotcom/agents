@@ -1,6 +1,6 @@
 Apache License Version 2.0
 
-Copyright (c) 2025 Salesforce, Inc.
+Copyright (c) 2026 Salesforce, Inc.
 All rights reserved.
 
                                  Apache License
@@ -204,4 +204,3 @@ All rights reserved.
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
-

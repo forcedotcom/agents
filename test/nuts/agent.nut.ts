@@ -18,7 +18,7 @@ import { join } from 'node:path';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { expect } from 'chai';
 import { genUniqueString, TestSession } from '@salesforce/cli-plugins-testkit';
-import { Connection, Org, SfProject, User, UserFields } from '@salesforce/core';
+import { Connection, Org, SfProject, User } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { sleep } from '@salesforce/kit';
 import { Agent, ScriptAgent, type AgentJobSpec, type AgentJobSpecCreateConfig } from '../../src';
@@ -26,13 +26,11 @@ import { Agent, ScriptAgent, type AgentJobSpec, type AgentJobSpecCreateConfig } 
 /* eslint-disable no-console */
 // Helper function to wait for Einstein AI services to be ready
 async function waitForEinsteinReady(connection: Connection, maxAttempts = 30): Promise<void> {
-  // eslint-disable-next-line no-await-in-loop
   for (let i = 0; i < maxAttempts; i++) {
     try {
       // Check Agent API status using direct HTTP call
       // eslint-disable-next-line no-await-in-loop
       const statusResponse = await connection.request<{ status: 'UP' | 'DOWN' }>({
-        // eslint-disable-line no-await-in-loop
         method: 'GET',
         url: 'https://api.salesforce.com/einstein/ai-agent/v1/status',
         headers: {
@@ -43,7 +41,7 @@ async function waitForEinsteinReady(connection: Connection, maxAttempts = 30): P
       if (statusResponse.status === 'UP') {
         return;
       }
-    } catch (error) {
+    } catch {
       // do nothing
     }
     // Wait 10 seconds between checks
@@ -121,7 +119,7 @@ describe('agent NUTs', () => {
         languageLocaleKey: 'en_US',
         localeSidKey: 'en_US',
         profileId,
-      } as UserFields)) as { userId: string };
+      })) as { userId: string };
 
       await botUser.assignPermissionSets(userId, ['AgentforceServiceAgentUser']);
 

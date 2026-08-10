@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unused-vars */
 
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -127,7 +127,7 @@ describe('AgentDataLibrary', () => {
       // create goes through connection.request, indexing goes through fetch
       expect(requests).to.have.lengthOf(1);
       expect(fetchStub.calledOnce).to.be.true;
-      expect(fetchStub.firstCall.args[0] as string).to.include('/indexing');
+      expect(fetchStub.firstCall.args[0]).to.include('/indexing');
       expect((fetchStub.firstCall.args[1] as { method: string }).method).to.equal('POST');
     });
 
@@ -145,7 +145,12 @@ describe('AgentDataLibrary', () => {
     });
 
     it('should throw when retriever is not active', async () => {
-      $$.fakeConnectionRequest = () => Promise.reject(new Error('INVALID_REQUEST_STATE: The custom retriever is not active. Activate the retriever before adding it to a Data Library.'));
+      $$.fakeConnectionRequest = () =>
+        Promise.reject(
+          new Error(
+            'INVALID_REQUEST_STATE: The custom retriever is not active. Activate the retriever before adding it to a Data Library.'
+          )
+        );
 
       const input: CreateLibraryInput = {
         masterLabel: 'Ret',
@@ -205,7 +210,12 @@ describe('AgentDataLibrary', () => {
           },
         },
       };
-      mockRequest({ libraryId: '1JD000006', masterLabel: 'KB Full', developerName: 'KB_Full', sourceType: 'KNOWLEDGE' });
+      mockRequest({
+        libraryId: '1JD000006',
+        masterLabel: 'KB Full',
+        developerName: 'KB_Full',
+        sourceType: 'KNOWLEDGE',
+      });
 
       await AgentDataLibrary.create(connection, input);
 
@@ -236,7 +246,13 @@ describe('AgentDataLibrary', () => {
 
   describe('get', () => {
     it('should return library detail', async () => {
-      mockRequest({ libraryId: '1JD000001', masterLabel: 'Test', sourceType: 'SFDRIVE', status: 'READY', retrieverId: '1Cx000001' });
+      mockRequest({
+        libraryId: '1JD000001',
+        masterLabel: 'Test',
+        sourceType: 'SFDRIVE',
+        status: 'READY',
+        retrieverId: '1Cx000001',
+      });
 
       const result = await AgentDataLibrary.get(connection, '1JD000001');
 
@@ -369,7 +385,9 @@ describe('AgentDataLibrary', () => {
   describe('listFiles', () => {
     it('should return paginated file list from /files endpoint', async () => {
       mockRequest({
-        files: [{ fileId: '1Jc000001', fileName: 'doc.pdf', filePath: 'path/doc.pdf', fileSize: 1024, status: 'INDEXED' }],
+        files: [
+          { fileId: '1Jc000001', fileName: 'doc.pdf', filePath: 'path/doc.pdf', fileSize: 1024, status: 'INDEXED' },
+        ],
         totalSize: 1,
         currentPageUrl: '/einstein/data-libraries/1JD000001/files?pageSize=50&offset=0',
       });
@@ -433,7 +451,13 @@ describe('AgentDataLibrary', () => {
         }
         if (req.url?.includes('/file-upload-urls')) {
           return Promise.resolve({
-            uploadUrls: [{ uploadUrl: 'https://s3.example.com/upload', filePath: '$adl$/1JD000001/test.txt', headers: { 'Content-Type': 'text/plain' } }],
+            uploadUrls: [
+              {
+                uploadUrl: 'https://s3.example.com/upload',
+                filePath: '$adl$/1JD000001/test.txt',
+                headers: { 'Content-Type': 'text/plain' },
+              },
+            ],
           });
         }
         if (req.url?.includes('/indexing')) {
@@ -472,7 +496,9 @@ describe('AgentDataLibrary', () => {
         }
         if (req.url?.includes('/file-upload-urls')) {
           return Promise.resolve({
-            uploadUrls: [{ uploadUrl: 'https://s3.example.com/upload', filePath: '$adl$/1JD000001/test.txt', headers: {} }],
+            uploadUrls: [
+              { uploadUrl: 'https://s3.example.com/upload', filePath: '$adl$/1JD000001/test.txt', headers: {} },
+            ],
           });
         }
         if (req.url?.includes('/indexing')) {
@@ -506,7 +532,9 @@ describe('AgentDataLibrary', () => {
         }
         if (req.url?.includes('/file-upload-urls')) {
           return Promise.resolve({
-            uploadUrls: [{ uploadUrl: 'https://s3.example.com/upload', filePath: '$adl$/1JD000001/test.txt', headers: {} }],
+            uploadUrls: [
+              { uploadUrl: 'https://s3.example.com/upload', filePath: '$adl$/1JD000001/test.txt', headers: {} },
+            ],
           });
         }
         if (req.url?.includes('/indexing')) {
@@ -587,7 +615,9 @@ describe('AgentDataLibrary', () => {
         }
         if (req.url?.includes('/file-upload-urls')) {
           return Promise.resolve({
-            uploadUrls: [{ uploadUrl: 'https://s3.example.com/upload', filePath: '$adl$/1JD000001/test.txt', headers: {} }],
+            uploadUrls: [
+              { uploadUrl: 'https://s3.example.com/upload', filePath: '$adl$/1JD000001/test.txt', headers: {} },
+            ],
           });
         }
         return Promise.resolve({});
@@ -619,7 +649,13 @@ describe('AgentDataLibrary', () => {
         requests.push(req);
         if (req.url?.includes('/file-upload-urls')) {
           return Promise.resolve({
-            uploadUrls: [{ uploadUrl: 'https://s3.example.com/add', filePath: '$adl$/1JD000001/new.txt', headers: { 'Content-Type': 'text/plain' } }],
+            uploadUrls: [
+              {
+                uploadUrl: 'https://s3.example.com/add',
+                filePath: '$adl$/1JD000001/new.txt',
+                headers: { 'Content-Type': 'text/plain' },
+              },
+            ],
           });
         }
         if (req.url?.includes('/files')) {
@@ -723,8 +759,7 @@ describe('AgentDataLibrary', () => {
     });
 
     it('should throw IndexingFailed when status is FAILED', async () => {
-      $$.fakeConnectionRequest = () =>
-        Promise.resolve({ libraryId: '1JD000001', status: 'FAILED' });
+      $$.fakeConnectionRequest = () => Promise.resolve({ libraryId: '1JD000001', status: 'FAILED' });
 
       try {
         await AgentDataLibrary.waitForReady(connection, '1JD000001', 60);
@@ -735,8 +770,7 @@ describe('AgentDataLibrary', () => {
     });
 
     it('should throw UploadTimeout when deadline exceeded', async () => {
-      $$.fakeConnectionRequest = () =>
-        Promise.resolve({ libraryId: '1JD000001', status: 'IN_PROGRESS' });
+      $$.fakeConnectionRequest = () => Promise.resolve({ libraryId: '1JD000001', status: 'IN_PROGRESS' });
 
       try {
         // 1 second timeout — will exceed immediately after first poll + 10s interval

@@ -28,7 +28,16 @@ import {
   type FileListResponse,
 } from './dataLibraryTypes.js';
 
-export { type DataLibrarySummary, type DataLibraryDetail, type IndexingStatusResponse, type CreateLibraryInput, type UpdateLibraryInput, type UploadResult, type FileAddResult, type FileListResponse } from './dataLibraryTypes.js';
+export {
+  type DataLibrarySummary,
+  type DataLibraryDetail,
+  type IndexingStatusResponse,
+  type CreateLibraryInput,
+  type UpdateLibraryInput,
+  type UploadResult,
+  type FileAddResult,
+  type FileListResponse,
+} from './dataLibraryTypes.js';
 
 type UploadReadinessResponse = { ready: boolean };
 type FileUploadUrlEntry = { uploadUrl: string; filePath: string; headers: Record<string, string> };
@@ -115,7 +124,11 @@ export class AgentDataLibrary {
     }
   }
 
-  public static async update(connection: Connection, libraryId: string, input: UpdateLibraryInput): Promise<DataLibraryDetail> {
+  public static async update(
+    connection: Connection,
+    libraryId: string,
+    input: UpdateLibraryInput
+  ): Promise<DataLibraryDetail> {
     try {
       return await connection.request<DataLibraryDetail>({
         method: 'PATCH',
@@ -233,9 +246,7 @@ export class AgentDataLibrary {
     const fileNames = paths.map((p) => ({ fileName: basename(p) }));
     const uploadEntries = await AgentDataLibrary.getUploadUrls(connection, url, fileNames);
 
-    await Promise.all(
-      paths.map((path, i) => AgentDataLibrary.uploadToS3(uploadEntries[i], path))
-    );
+    await Promise.all(paths.map((path, i) => AgentDataLibrary.uploadToS3(uploadEntries[i], path)));
 
     const uploadedFiles = uploadEntries.map((entry, i) => ({
       filePath: entry.filePath,
@@ -271,9 +282,7 @@ export class AgentDataLibrary {
     const fileInfos = paths.map((p) => ({ fileName: basename(p) }));
     const uploadEntries = await AgentDataLibrary.getUploadUrls(connection, url, fileInfos);
 
-    await Promise.all(
-      paths.map((path, i) => AgentDataLibrary.uploadToS3(uploadEntries[i], path))
-    );
+    await Promise.all(paths.map((path, i) => AgentDataLibrary.uploadToS3(uploadEntries[i], path)));
 
     const uploadedFiles = uploadEntries.map((entry, i) => ({
       filePath: entry.filePath,
@@ -292,7 +301,11 @@ export class AgentDataLibrary {
     return { success: true, fileName, fileNames, libraryId };
   }
 
-  public static async waitForReady(connection: Connection, libraryId: string, waitSeconds: number): Promise<DataLibraryDetail> {
+  public static async waitForReady(
+    connection: Connection,
+    libraryId: string,
+    waitSeconds: number
+  ): Promise<DataLibraryDetail> {
     return AgentDataLibrary.pollForReadiness(connection, baseUrl(connection, libraryId), libraryId, waitSeconds);
   }
 
@@ -375,7 +388,6 @@ export class AgentDataLibrary {
     const deadline = Date.now() + waitSeconds * 1000;
     const pollInterval = 10000;
 
-    // eslint-disable-next-line no-await-in-loop
     while (Date.now() < deadline) {
       // eslint-disable-next-line no-await-in-loop
       const detail = await connection.request<DataLibraryDetail>({ method: 'GET', url });

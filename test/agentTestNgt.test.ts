@@ -42,7 +42,12 @@ import type { NgtTestSpec } from '../src/types';
  * fail loud rather than silently — that's why we don't strip blank lines.
  */
 const normalizeXml = (xml: string): string =>
-  xml.replace(/\r\n/g, '\n').split('\n').map((l) => l.replace(/\s+$/, '')).join('\n').replace(/\n+$/, '');
+  xml
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((l) => l.replace(/\s+$/, ''))
+    .join('\n')
+    .replace(/\n+$/, '');
 
 describe('AgentTest NGT (Agentforce Studio) create surface', () => {
   const $$ = new TestContext();
@@ -141,19 +146,14 @@ describe('AgentTest NGT (Agentforce Studio) create surface', () => {
 
     it('passes when a needsExpected scorer has expected', () => {
       const spec = baseSpec();
-      spec.testCases[0].scorers = [
-        { name: 'bot_response_rating', expected: 'a friendly greeting' },
-      ];
+      spec.testCases[0].scorers = [{ name: 'bot_response_rating', expected: 'a friendly greeting' }];
       expect(() => validateNgtSpec(spec, { isMultiAgent: false })).to.not.throw();
     });
 
     it('passes when a quality scorer (needsExpected:false) omits expected', () => {
       const spec = baseSpec();
       // coherence is needsExpected:false (LLM_0_100)
-      spec.testCases[0].scorers = [
-        { name: 'topic_sequence_match', expected: 'GeneralCRM' },
-        { name: 'coherence' },
-      ];
+      spec.testCases[0].scorers = [{ name: 'topic_sequence_match', expected: 'GeneralCRM' }, { name: 'coherence' }];
       expect(() => validateNgtSpec(spec, { isMultiAgent: false })).to.not.throw();
     });
 
@@ -316,14 +316,8 @@ describe('AgentTest NGT (Agentforce Studio) create surface', () => {
       expect(def.testCase.map((tc) => tc.number)).to.deep.equal([1, 2, 3]);
       // All three share the same scorer set verbatim.
       def.testCase.forEach((tc) => {
-        expect(tc.scorer.map((s) => s.name)).to.deep.equal([
-          'topic_sequence_match',
-          'action_sequence_match',
-        ]);
-        expect(tc.scorer.map((s) => s.expectedValue)).to.deep.equal([
-          'order_status',
-          'Get_Order_Status',
-        ]);
+        expect(tc.scorer.map((s) => s.name)).to.deep.equal(['topic_sequence_match', 'action_sequence_match']);
+        expect(tc.scorer.map((s) => s.expectedValue)).to.deep.equal(['order_status', 'Get_Order_Status']);
       });
       // Utterances are distributed 1-per-testCase in input order.
       expect(def.testCase.map((tc) => tc.inputs.utterance)).to.deep.equal([
@@ -406,16 +400,12 @@ describe('AgentTest NGT (Agentforce Studio) create surface', () => {
         testCases: [
           {
             inputs: [{ utterance: 'hi' }],
-            scorers: [
-              { name: 'action_sequence_match', expected: "['Verify_Customer','Get_Order_Status']" },
-            ],
+            scorers: [{ name: 'action_sequence_match', expected: "['Verify_Customer','Get_Order_Status']" }],
           },
         ],
       };
       const def = convertToTestingMetadata(spec);
-      expect(def.testCase[0].scorer[0].expectedValue).to.equal(
-        "['Verify_Customer','Get_Order_Status']"
-      );
+      expect(def.testCase[0].scorer[0].expectedValue).to.equal("['Verify_Customer','Get_Order_Status']");
       const xml = buildTestingMetadataXml(def);
       // XMLBuilder encodes ' as &apos;.
       expect(xml).to.include('[&apos;Verify_Customer&apos;,&apos;Get_Order_Status&apos;]');
@@ -705,7 +695,6 @@ describe('AgentTest NGT (Agentforce Studio) create surface', () => {
         expect((err as SfError).message).to.include('made_up_scorer');
       }
     });
-
   });
 
   // -------------------------------------------------------------------------
@@ -823,9 +812,7 @@ testCases:
     it('non-preview path queries BotDefinition.IsMultiAgent and proceeds to deploy on a single-agent subject', async () => {
       // Mock connection.metadata.read for the multi-agent gate.
       // jsforce types don't model BotDefinition; the lib uses the same pattern as for AiEvaluationDefinition.
-      const metadataReadStub = sinon
-        .stub(connection.metadata, 'read')
-        .resolves({ IsMultiAgent: false } as never);
+      const metadataReadStub = sinon.stub(connection.metadata, 'read').resolves({ IsMultiAgent: false } as never);
 
       // Stub a successful deploy.
       const mockDeploy = {
@@ -836,7 +823,7 @@ testCases:
         }),
       };
       const mockComponentSet = { deploy: sinon.stub().resolves(mockDeploy) };
-      componentSetBuildStub.resolves(mockComponentSet as never);
+      componentSetBuildStub.resolves(mockComponentSet);
 
       const result = await AgentTest.create(connection, 'MyTest', 'spec.yaml', {
         outputDir: 'tmp',
@@ -845,7 +832,7 @@ testCases:
       } as never);
 
       expect(result.path).to.match(/MyTest\.aiTestingDefinition-meta\.xml$/);
-      expect(metadataReadStub.calledWith('BotDefinition' as never, 'MyAgent' as never)).to.be.true;
+      expect(metadataReadStub.calledWith('BotDefinition' as never, 'MyAgent')).to.be.true;
       expect(componentSetBuildStub.calledOnce).to.be.true;
       expect(mockComponentSet.deploy.calledOnce).to.be.true;
       expect(mkdirStub.calledOnce).to.be.true;

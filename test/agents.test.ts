@@ -763,7 +763,7 @@ describe('Agents', () => {
 
       $$.SANDBOX.stub(connection, 'query')
         .withArgs(sinon.match(/SELECT Id FROM USER WHERE username/))
-        .resolves({ done: true, records: [{ Id: '005xx0000000000xxx' }], totalSize: 1 } as never);
+        .resolves({ done: true, records: [{ Id: '005xx0000000000xxx' }], totalSize: 1 });
 
       requestStub = $$.SANDBOX.stub(connection, 'request');
       requestStub.withArgs(sinon.match({ url: `${connection.instanceUrl}/agentforce/bootstrap/nameduser` })).resolves({

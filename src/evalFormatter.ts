@@ -77,6 +77,7 @@ export function formatResults(results: EvalApiResponse, format: ResultFormat): s
 
 // --- formatHuman helpers ---
 
+// eslint-disable-next-line complexity
 function formatOutputLines(outputs: EvalOutput[]): string[] {
   const lines: string[] = [];
 
@@ -93,21 +94,23 @@ function formatOutputLines(outputs: EvalOutput[]): string[] {
       if (typeof resp === 'string') {
         msgStr = resp;
       } else if (resp !== null && typeof resp === 'object' && 'messages' in resp) {
-        msgStr = (resp as { messages: Array<{ message: string }> }).messages?.[0]?.message ?? '';
+        msgStr = resp.messages?.[0]?.message ?? '';
       } else {
-        msgStr = String(resp ?? '');
+        msgStr = typeof resp === 'object' ? JSON.stringify(resp) : String(resp ?? '');
       }
       const displayMsg = msgStr.length > 200 ? msgStr.substring(0, 200) + '...' : msgStr;
       lines.push(`- **Agent Response** (${stepId}): ${displayMsg}`);
     } else if (stepType === 'agent.get_state') {
       const resp = output.response;
       if (resp !== null && typeof resp === 'object' && 'planner_response' in resp) {
-        const { planner_response: plannerResp } = resp as { planner_response?: GetStateResponse['planner_response'] };
+        const { planner_response: plannerResp } = resp;
         const lastExec = plannerResp?.lastExecution;
         lines.push(`- **Topic Selected**: ${lastExec?.topic ?? 'N/A'}`);
         lines.push(`- **Response Latency**: ${lastExec?.latency ?? 'N/A'}ms`);
       } else {
-        lines.push(`- **State**: ${String(resp).substring(0, 200)}`);
+        lines.push(
+          `- **State**: ${(typeof resp === 'object' ? JSON.stringify(resp) : String(resp)).substring(0, 200)}`
+        );
       }
     }
   }
@@ -153,7 +156,7 @@ function formatErrorLines(errors: TestError[]): string[] {
     lines.push('### Errors\n');
     for (const error of errors) {
       const errorId = error.id ?? 'unknown';
-      const errorMsg = error.error_message ?? String(error);
+      const errorMsg = error.error_message ?? JSON.stringify(error);
       lines.push(`- **${errorId}**: ${errorMsg}`);
     }
     lines.push('');
@@ -231,11 +234,11 @@ function formatJunit(results: EvalApiResponse): string {
         classname: 'agent-eval-labs',
         failed: isPass === false,
         errored: !!error,
-        message: error
-          ? error
-          : isPass === false
-          ? `Expected ${String(evalR.expected_value ?? '')} but got ${String(evalR.actual_value ?? '')}`
-          : '',
+        message:
+          error ??
+          (isPass === false
+            ? `Expected ${String(evalR.expected_value ?? '')} but got ${String(evalR.actual_value ?? '')}`
+            : ''),
         score: score != null ? score.toFixed(3) : 'N/A',
       });
     }
