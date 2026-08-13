@@ -129,6 +129,18 @@ describe('ApiCatalog client', () => {
       // request hangs until the 300s headers timeout (jsforce/undici never sees the response).
       expect(requests[0].body).to.equal('{}');
     });
+
+    it('returns serverFingerprint when present in the response', async () => {
+      mockRequest({ assets: [], serverFingerprint: 'abc123' });
+      const result = await ApiCatalog.fetchMcpServer(connection, '1');
+      expect(result.serverFingerprint).to.equal('abc123');
+    });
+
+    it('leaves serverFingerprint undefined when absent from the response', async () => {
+      mockRequest({ assets: [] });
+      const result = await ApiCatalog.fetchMcpServer(connection, '1');
+      expect(result.serverFingerprint).to.be.undefined;
+    });
   });
 
   describe('replaceMcpServerAssets', () => {
@@ -138,6 +150,21 @@ describe('ApiCatalog client', () => {
       expect(requests[0].method).to.equal('PUT');
       expect(requests[0].url).to.match(/\/mcp-servers\/1\/assets$/);
       expect(JSON.parse(requests[0].body as string).assets[0].name).to.equal('tool-a');
+    });
+
+    it('round-trips serverFingerprint in the request body when supplied', async () => {
+      mockRequest({ assets: [] });
+      await ApiCatalog.replaceMcpServerAssets(connection, '1', {
+        assets: [{ name: 'tool-a', active: true }],
+        serverFingerprint: 'abc123',
+      });
+      expect(JSON.parse(requests[0].body as string).serverFingerprint).to.equal('abc123');
+    });
+
+    it('omits serverFingerprint from the request body when not supplied', async () => {
+      mockRequest({ assets: [] });
+      await ApiCatalog.replaceMcpServerAssets(connection, '1', { assets: [{ name: 'tool-a', active: true }] });
+      expect(JSON.parse(requests[0].body as string)).to.not.have.property('serverFingerprint');
     });
   });
 
