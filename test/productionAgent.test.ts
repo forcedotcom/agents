@@ -19,7 +19,7 @@ import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection, Messages, SfError, SfProject } from '@salesforce/core';
 import { ProductionAgent } from '../src/agents/productionAgent';
 import { ConnectionManager, setManagerForTesting } from '../src/connectionManager';
-import type { BotMetadata } from '../src/types';
+import type { BotMetadata, ContextVariable } from '../src/types';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agents');
@@ -798,6 +798,29 @@ describe('ProductionAgent', () => {
       await agent.preview.start();
 
       expect(getStartRequestBody().bypassUser).to.equal(true);
+    });
+
+    it('sends context variables as the `variables` array when provided', async () => {
+      $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves(buildBotMetadata('EinsteinServiceAgent'));
+
+      const contextVariables: ContextVariable[] = [
+        { name: 'CustomerId', type: 'Text', value: '001xx000003DGb2' },
+        { name: 'IsVip', type: 'Boolean', value: 'true' },
+      ];
+
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: 'TestAgent' });
+      await agent.preview.start({ contextVariables });
+
+      expect(getStartRequestBody().variables).to.deep.equal(contextVariables);
+    });
+
+    it('defaults `variables` to an empty array when no context variables are provided', async () => {
+      $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves(buildBotMetadata('EinsteinServiceAgent'));
+
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: 'TestAgent' });
+      await agent.preview.start();
+
+      expect(getStartRequestBody().variables).to.deep.equal([]);
     });
   });
 });
