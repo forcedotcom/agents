@@ -19,6 +19,7 @@ import {
   type AgentPreviewEndResponse,
   AgentPreviewInterface,
   type AgentPreviewSendResponse,
+  type AgentPreviewStartOptions,
   type AgentPreviewStartResponse,
   type BotActivationResponse,
   type BotMetadata,
@@ -60,7 +61,16 @@ export class ProductionAgent extends AgentBase {
     }
 
     this.preview = {
-      start: (apexDebugging?: boolean): Promise<AgentPreviewStartResponse> => this.startPreview(apexDebugging),
+      start: (
+        apexDebuggingOrOptions?: boolean | AgentPreviewStartOptions,
+        startOptions?: AgentPreviewStartOptions
+      ): Promise<AgentPreviewStartResponse> => {
+        // The CLI passes an AgentPreviewStartOptions object as the first arg; a boolean means apexDebugging.
+        if (typeof apexDebuggingOrOptions === 'object' && apexDebuggingOrOptions !== null) {
+          return this.startPreview(undefined, apexDebuggingOrOptions);
+        }
+        return this.startPreview(apexDebuggingOrOptions, startOptions);
+      },
       send: (message: string): Promise<AgentPreviewSendResponse> => this.sendMessage(message),
       getAllTraces: (): Promise<PlannerResponse[]> => this.getAllTracesFromDisc(),
       end: (reason: EndReason): Promise<AgentPreviewEndResponse> => this.endSession(reason),
@@ -340,7 +350,10 @@ export class ProductionAgent extends AgentBase {
     return botVersionMetadata;
   }
 
-  private async startPreview(apexDebugging?: boolean): Promise<AgentPreviewStartResponse> {
+  private async startPreview(
+    apexDebugging?: boolean,
+    options?: AgentPreviewStartOptions
+  ): Promise<AgentPreviewStartResponse> {
     if (!this.id) {
       await this.getId();
     }
@@ -365,6 +378,10 @@ export class ProductionAgent extends AgentBase {
       streamingCapabilities: {
         chunkTypes: ['Text'],
       },
+      // The committed-agent endpoint (/agents/{id}/sessions) accepts the same `variables` array as the
+      // preview endpoint used by ScriptAgent. Without this, --context-variables were silently dropped
+      // when previewing by --api-name. The wire field is `variables`, not `contextVariables`.
+      variables: options?.contextVariables ?? [],
       bypassUser,
     };
 
