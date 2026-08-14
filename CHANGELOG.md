@@ -1,3 +1,12 @@
+## [2.0.2](https://github.com/forcedotcom/agents/compare/2.0.1...2.0.2) (2026-08-14)
+
+
+### Bug Fixes
+
+* send context variables when previewing a published agent via --api-name @W-23842329@ ([#335](https://github.com/forcedotcom/agents/issues/335)) ([964367b](https://github.com/forcedotcom/agents/commit/964367b6f6ec22d87e39c077bcb26a4604cb8cfa))
+
+
+
 ## [2.0.1](https://github.com/forcedotcom/agents/compare/2.0.0...2.0.1) (2026-08-10)
 
 
