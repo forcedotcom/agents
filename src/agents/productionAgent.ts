@@ -151,9 +151,21 @@ export class ProductionAgent extends AgentBase {
     return foundVersion;
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await,class-methods-use-this,@typescript-eslint/no-unused-vars
   public async getTrace(planId: string): Promise<PlannerResponse | undefined> {
-    return undefined;
+    if (!this.sessionId) {
+      return undefined;
+    }
+    // The committed (v1) Agent API has no plan/trace endpoint of its own, but the v1.1 preview plans
+    // endpoint accepts a v1 committed session's sessionId and returns its reasoning trace. This mirrors
+    // ScriptAgent.getTrace; the only difference is stripping the trailing `/v1` from this agent's apiBase.
+    const previewBase = this.apiBase.replace(/\/v1$/, '');
+    return requestWithEndpointFallback<PlannerResponse>(await this.getJwtConnection(), {
+      method: 'GET',
+      url: `${previewBase}/v1.1/preview/sessions/${this.sessionId}/plans/${planId}`,
+      headers: {
+        'x-client-name': 'afdx',
+      },
+    });
   }
 
   public getHistoryFromDisc(sessionId?: string): Promise<{
@@ -299,9 +311,11 @@ export class ProductionAgent extends AgentBase {
       const agentTurn = ++this.turnCounter;
       await logTurnToHistory(agentEntry, agentTurn, this.historyDir, this.historyBuffer);
 
-      // Fetch and write trace immediately if available
+      // Fetch and write trace immediately if available. A trace-fetch failure must not fail the
+      // message turn, so fall back to recording no trace (the prior behavior) if it can't be retrieved.
       if (planId) {
-        await recordTraceForTurn(this.historyDir, agentTurn, planId, undefined, this.historyBuffer);
+        const trace = await this.getTrace(planId).catch(() => undefined);
+        await recordTraceForTurn(this.historyDir, agentTurn, planId, trace, this.historyBuffer);
       }
 
       // Flush buffer to keep turn-index.json and metadata.json up to date

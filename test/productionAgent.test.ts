@@ -19,7 +19,7 @@ import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection, Messages, SfError, SfProject } from '@salesforce/core';
 import { ProductionAgent } from '../src/agents/productionAgent';
 import { ConnectionManager, setManagerForTesting } from '../src/connectionManager';
-import type { BotMetadata, ContextVariable } from '../src/types';
+import type { BotMetadata, ContextVariable, PlannerResponse } from '../src/types';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agents');
@@ -821,6 +821,85 @@ describe('ProductionAgent', () => {
       await agent.preview.start();
 
       expect(getStartRequestBody().variables).to.deep.equal([]);
+    });
+  });
+
+  describe('getTrace', () => {
+    const buildBotMetadata = (): BotMetadata => ({
+      Id: '0Xx123456789ABC',
+      IsDeleted: false,
+      DeveloperName: 'TestAgent',
+      MasterLabel: 'Test Agent',
+      CreatedDate: '2025-01-01T00:00:00.000+0000',
+      CreatedById: 'user123',
+      LastModifiedDate: '2025-01-02T00:00:00.000+0000',
+      LastModifiedById: 'user123',
+      SystemModstamp: '2025-01-02T00:00:00.000+0000',
+      BotUserId: 'botUser123',
+      Description: 'Test bot description',
+      Type: 'AgentForce',
+      AgentType: 'EinsteinServiceAgent',
+      AgentTemplate: null,
+      BotVersions: {
+        records: [
+          {
+            Id: 'version1',
+            Status: 'Active',
+            IsDeleted: false,
+            BotDefinitionId: '0Xx123456789ABC',
+            DeveloperName: 'TestAgent_v1',
+            CreatedDate: '2025-01-01T00:00:00.000+0000',
+            CreatedById: 'user123',
+            LastModifiedDate: '2025-01-01T00:00:00.000+0000',
+            LastModifiedById: 'user123',
+            SystemModstamp: '2025-01-01T00:00:00.000+0000',
+            VersionNumber: 1,
+            CopilotPrimaryLanguage: 'en_US',
+            ToneType: 'formal',
+            CopilotSecondaryLanguages: [],
+          },
+        ],
+      },
+    });
+
+    const trace: PlannerResponse = {
+      type: 'PlanSuccessResponse',
+      planId: 'plan-123',
+      sessionId: 'test-session-id',
+      intent: 'answer',
+      topic: 'general',
+      plan: [],
+    };
+
+    it('returns undefined when no session has been started', async () => {
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: 'TestAgent' });
+      expect(await agent.getTrace('plan-123')).to.equal(undefined);
+    });
+
+    it('GETs the v1.1 preview plans endpoint for the committed session and returns the trace', async () => {
+      $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves(buildBotMetadata());
+
+      const requestStub = $$.SANDBOX.stub(connection, 'request');
+      // Session start returns the sessionId; the getTrace call returns the reasoning trace.
+      requestStub.onFirstCall().resolves({ sessionId: 'test-session-id', _links: {}, messages: [] } as never);
+      requestStub.resolves(trace as never);
+
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: 'TestAgent' });
+      await agent.preview.start();
+
+      const result = await agent.getTrace('plan-123');
+
+      const traceCall = requestStub
+        .getCalls()
+        .find((c) => (c.args[0] as { url: string }).url.includes('/plans/'));
+      if (!traceCall) throw new Error('getTrace request not captured');
+      const { url, method } = traceCall.args[0] as { url: string; method: string };
+
+      expect(method).to.equal('GET');
+      expect(url).to.equal(
+        'https://api.salesforce.com/einstein/ai-agent/v1.1/preview/sessions/test-session-id/plans/plan-123'
+      );
+      expect(result).to.deep.equal(trace);
     });
   });
 });
