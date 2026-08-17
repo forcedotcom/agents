@@ -37,3 +37,7 @@ No active version found for agent %s.
 # noVersionsFound
 
 No versions found for agent %s.
+
+# groundingContextRequiresPromptTemplate
+
+The "groundingContext" property requires the "promptTemplateName" property. Grounding context is only used to ground a customized prompt template, so it has no effect without one.

@@ -81,6 +81,22 @@ describe('Agents', () => {
     expect(output.topics[0]).to.have.property('name', 'Guest_Experience_Enhancement');
   });
 
+  it('createSpec throws when groundingContext is provided without promptTemplateName', async () => {
+    try {
+      await Agent.createSpec(connection, {
+        agentType: 'customer',
+        role: 'answer questions about vacation_rentals',
+        companyName: 'Coral Cloud Enterprises',
+        companyDescription: 'Provide vacation rentals and activities',
+        groundingContext: 'Only recommend pet-friendly rentals.',
+      });
+      expect.fail('expected createSpec to throw when groundingContext is set without promptTemplateName');
+    } catch (err) {
+      expect(err).to.be.instanceOf(SfError);
+      expect((err as SfError).name).to.equal('GroundingContextRequiresPromptTemplateError');
+    }
+  });
+
   describe('HTML entity decoding', () => {
     it('should decode HTML entities in error messages', () => {
       const errorResponse = {
