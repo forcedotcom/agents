@@ -312,7 +312,7 @@ export class ProductionAgent extends AgentBase {
       await logTurnToHistory(agentEntry, agentTurn, this.historyDir, this.historyBuffer);
 
       // Fetch and write trace immediately if available. A trace-fetch failure must not fail the
-      // message turn, so fall back to recording no trace (the prior behavior) if it can't be retrieved.
+      // message turn, so fall back to recording no trace if it can't be retrieved.
       if (planId) {
         const trace = await this.getTrace(planId).catch(() => undefined);
         await recordTraceForTurn(this.historyDir, agentTurn, planId, trace, this.historyBuffer);
