@@ -26,6 +26,7 @@ import { AgentSource, COMPILATION_API_EXIT_CODES } from '../src/types';
 import { ScriptAgent } from '../src';
 import { ScriptAgentPublisher } from '../src/agents/scriptAgentPublisher';
 import { ConnectionManager, setManagerForTesting } from '../src/connectionManager';
+import { compileAgentScriptResponseFailure, compileAgentScriptResponseSuccess } from './testData';
 
 function createMockConnectionManager(conn: Connection): ConnectionManager {
   return {
@@ -176,6 +177,60 @@ describe('Agents', () => {
         expect(error).to.be.instanceOf(SfError);
         expect((error as SfError).exitCode).to.equal(COMPILATION_API_EXIT_CODES.SERVER_ERROR);
       }
+    });
+
+    it('does not publish a cached artifact when the latest compilation fails', async () => {
+      const successfulCompilation = compileAgentScriptResponseSuccess;
+
+      if (successfulCompilation.status !== 'success') {
+        throw new Error('Expected the successful compilation fixture');
+      }
+
+      const staleAgentJson = {
+        ...successfulCompilation.compiledArtifact,
+        globalConfiguration: {
+          ...successfulCompilation.compiledArtifact.globalConfiguration,
+          developerName: 'myAgent',
+          label: 'Previously compiled agent',
+        },
+      };
+
+      const compileRequestStub = requestStub.withArgs(sinon.match.has('url', sinon.match(/authoring\/scripts/)));
+
+      // First compilation succeeds and populates ScriptAgent.agentJson.
+      compileRequestStub.onFirstCall().resolves({
+        ...compileAgentScriptResponseSuccess,
+        compiledArtifact: staleAgentJson,
+      });
+
+      // publish() performs another compilation, which now fails.
+      compileRequestStub.onSecondCall().resolves(compileAgentScriptResponseFailure);
+
+      const publishStub = $$.SANDBOX.stub(ScriptAgentPublisher.prototype, 'publishAgentJson').resolves({
+        id: 'unexpected-id',
+        entityId: 'unexpected-entity-id',
+      } as never);
+
+      const agent = new ScriptAgent({
+        connection,
+        project: sfProject,
+        aabName: 'myAgent',
+      });
+
+      const firstCompilation = await agent.compile();
+      expect(firstCompilation.status).to.equal('success');
+
+      let caught: unknown;
+      try {
+        await agent.publish();
+      } catch (error) {
+        caught = error;
+      }
+
+      expect(compileRequestStub.callCount).to.equal(2);
+      expect(publishStub.called, 'publisher must not run after compilation failure').to.equal(false);
+      expect(caught).to.be.instanceOf(SfError);
+      expect((caught as SfError).name).to.equal('AgentCompilationError');
     });
 
     it('should apply string replacements during publish', async () => {
