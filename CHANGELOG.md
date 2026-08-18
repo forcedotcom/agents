@@ -1,3 +1,13 @@
+## [2.0.3](https://github.com/forcedotcom/agents/compare/2.0.2...2.0.3) (2026-08-18)
+
+
+### Bug Fixes
+
+* send x-attributed-client no-builder header on --api-name preview start (@W-23896240@) ([#338](https://github.com/forcedotcom/agents/issues/338)) ([3701ca9](https://github.com/forcedotcom/agents/commit/3701ca9b185aff4f534e527130379d338e6ba1c5))
+* throw when groundingContext is passed without promptTemplateName in createSpec (@W-23896239@) ([#339](https://github.com/forcedotcom/agents/issues/339)) ([bcea0e6](https://github.com/forcedotcom/agents/commit/bcea0e61e93c9d01895e16d43f3664d9316bce2d))
+
+
+
 ## [2.0.2](https://github.com/forcedotcom/agents/compare/2.0.1...2.0.2) (2026-08-14)
 
 
