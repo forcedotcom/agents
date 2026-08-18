@@ -375,7 +375,7 @@ export class AgentDataLibrary {
     const deadline = Date.now() + waitSeconds * 1000;
     const pollInterval = 10000;
 
-    // eslint-disable-next-line no-await-in-loop
+     
     while (Date.now() < deadline) {
       // eslint-disable-next-line no-await-in-loop
       const detail = await connection.request<DataLibraryDetail>({ method: 'GET', url });

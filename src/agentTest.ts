@@ -37,7 +37,7 @@ import {
   NgtTestCaseScorer,
   NgtConversationTurn,
 } from './types.js';
-import { isNgtScorerName, NgtScorerCatalog, NgtScorerName } from './ngtScorerCatalog';
+import { isNgtScorerName, NgtScorerCatalog } from './ngtScorerCatalog';
 import { metric, sanitizeFilename, TestRunnerType } from './utils';
 
 Messages.importMessagesDirectory(__dirname);
@@ -498,7 +498,7 @@ const parseAgentTestXmlString = (xml: string): AiEvaluationDefinition => {
   const parser = new XMLParser({
     ignoreAttributes: false,
     attributeNamePrefix: '$',
-    isArray: (name) =>
+    isArray: (name): boolean =>
       name === 'testCase' || name === 'expectation' || name === 'contextVariable' || name === 'conversationHistory',
     processEntities: true,
     htmlEntities: true,
@@ -529,7 +529,7 @@ const readMetadataSafe = async <T>(
     // jsForce returns a record with only `fullName` populated when the record doesn't exist;
     // treat that as not-found.
     const r = result as { fullName?: string; testCase?: unknown };
-    if (r.testCase === undefined && Object.keys(result as object).length <= 1) return undefined;
+    if (r.testCase === undefined && Object.keys(result).length <= 1) return undefined;
     return result;
   } catch {
     return undefined;
@@ -668,11 +668,11 @@ export const convertToTestingMetadata = (spec: NgtTestSpec): AiTestingDefinition
 };
 
 const toScorerXml = (scorer: NgtTestCase['scorers'][number]): AiTestCaseScorer => {
-  const name = scorer.name as NgtScorerName;
+  const name = scorer.name;
   // Quality scorers (needsExpected:false) and unknown names omit expectedValue.
   const known = isNgtScorerName(name) ? NgtScorerCatalog[name] : undefined;
   const includeExpected = scorer.expected !== undefined && (known?.needsExpected ?? true);
-  return includeExpected ? { name, expectedValue: scorer.expected as string } : { name };
+  return includeExpected ? { name, expectedValue: scorer.expected } : { name };
 };
 
 const toInputsXml = (input: NgtTestCaseInput): AiTestCase['inputs'] => {
@@ -736,7 +736,7 @@ export const parseNgtMetadataXml = (xml: string): AiTestingDefinition => {
     const parser = new XMLParser({
       ignoreAttributes: false,
       attributeNamePrefix: '$',
-      isArray: (name) =>
+      isArray: (name): boolean =>
         name === 'testCase' || name === 'scorer' || name === 'contextVariable' || name === 'conversationHistory',
       processEntities: true,
       htmlEntities: true,
@@ -781,7 +781,7 @@ type AiTestingDefinitionXml = {
 };
 
 const parseTestCaseXml = (tc: AiTestCase): NgtTestCase => {
-  const inputs = tc.inputs ?? ({ utterance: '' } as AiTestCase['inputs']);
+  const inputs = tc.inputs ?? ({ utterance: '' });
   const contextVariables = ensureArray(inputs.contextVariable).map((cv) => ({
     name: String(cv.variableName),
     value: String(cv.variableValue),

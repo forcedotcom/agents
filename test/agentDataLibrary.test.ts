@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unused-vars */
 
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -127,7 +127,7 @@ describe('AgentDataLibrary', () => {
       // create goes through connection.request, indexing goes through fetch
       expect(requests).to.have.lengthOf(1);
       expect(fetchStub.calledOnce).to.be.true;
-      expect(fetchStub.firstCall.args[0] as string).to.include('/indexing');
+      expect(fetchStub.firstCall.args[0]).to.include('/indexing');
       expect((fetchStub.firstCall.args[1] as { method: string }).method).to.equal('POST');
     });
 

@@ -110,9 +110,7 @@ export class ProductionAgent extends AgentBase {
    * @returns the latest bot version metadata
    */
   public async getLatestBotVersionMetadata(): Promise<BotVersionMetadata> {
-    if (!this.botMetadata) {
-      this.botMetadata = await this.getBotMetadata();
-    }
+    this.botMetadata ??= await this.getBotMetadata();
     const botVersions = this.botMetadata.BotVersions.records;
     if (botVersions.length === 0) {
       throw messages.createError('noVersionsFound', [this.botMetadata.DeveloperName]);
@@ -128,9 +126,7 @@ export class ProductionAgent extends AgentBase {
    * @returns {Promise<BotVersionMetadata>}
    */
   public async getBotVersionMetadata(version?: number): Promise<BotVersionMetadata> {
-    if (!this.botMetadata) {
-      this.botMetadata = await this.getBotMetadata();
-    }
+    this.botMetadata ??= await this.getBotMetadata();
     const botVersions = this.botMetadata.BotVersions.records;
 
     if (botVersions.length === 0) {
@@ -275,9 +271,7 @@ export class ProductionAgent extends AgentBase {
       const agentId = this.getAgentIdForStorage();
 
       // Ensure session directory exists
-      if (!this.historyDir) {
-        this.historyDir = await getHistoryDir(agentId, this.sessionId);
-      }
+      this.historyDir ??= await getHistoryDir(agentId, this.sessionId);
 
       const userEntry = {
         timestamp: new Date().toISOString(),

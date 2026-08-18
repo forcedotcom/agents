@@ -771,7 +771,7 @@ describe('ProductionAgent', () => {
     beforeEach(() => {
       // Capture the session-start request body without hitting the network.
       requestStub = $$.SANDBOX.stub(connection, 'request');
-      requestStub.resolves({ sessionId: 'test-session-id', _links: {}, messages: [] } as never);
+      requestStub.resolves({ sessionId: 'test-session-id', _links: {}, messages: [] });
     });
 
     const getStartRequestBody = (): Record<string, unknown> => {
@@ -900,8 +900,8 @@ describe('ProductionAgent', () => {
 
       const requestStub = $$.SANDBOX.stub(connection, 'request');
       // Session start returns the sessionId; the getTrace call returns the reasoning trace.
-      requestStub.onFirstCall().resolves({ sessionId: 'test-session-id', _links: {}, messages: [] } as never);
-      requestStub.resolves(trace as never);
+      requestStub.onFirstCall().resolves({ sessionId: 'test-session-id', _links: {}, messages: [] });
+      requestStub.resolves(trace);
 
       const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: 'TestAgent' });
       await agent.preview.start();

@@ -836,7 +836,7 @@ testCases:
         }),
       };
       const mockComponentSet = { deploy: sinon.stub().resolves(mockDeploy) };
-      componentSetBuildStub.resolves(mockComponentSet as never);
+      componentSetBuildStub.resolves(mockComponentSet);
 
       const result = await AgentTest.create(connection, 'MyTest', 'spec.yaml', {
         outputDir: 'tmp',
@@ -845,7 +845,7 @@ testCases:
       } as never);
 
       expect(result.path).to.match(/MyTest\.aiTestingDefinition-meta\.xml$/);
-      expect(metadataReadStub.calledWith('BotDefinition' as never, 'MyAgent' as never)).to.be.true;
+      expect(metadataReadStub.calledWith('BotDefinition' as never, 'MyAgent')).to.be.true;
       expect(componentSetBuildStub.calledOnce).to.be.true;
       expect(mockComponentSet.deploy.calledOnce).to.be.true;
       expect(mkdirStub.calledOnce).to.be.true;
