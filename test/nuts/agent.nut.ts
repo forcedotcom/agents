@@ -53,6 +53,14 @@ async function waitForEinsteinReady(connection: Connection, maxAttempts = 30): P
   throw new Error(`Einstein AI did not become ready within ${timeoutSeconds} seconds timeout`);
 }
 
+// Format a UTC timestamp as MM/DD/YYYY:HH:mm:ss for CI log correlation (Splunk-friendly).
+function fmtUtc(d: Date): string {
+  const p = (n: number): string => String(n).padStart(2, '0');
+  return `${p(d.getUTCMonth() + 1)}/${p(d.getUTCDate())}/${d.getUTCFullYear()}:${p(d.getUTCHours())}:${p(
+    d.getUTCMinutes()
+  )}:${p(d.getUTCSeconds())}`;
+}
+
 describe('agent NUTs', () => {
   const agentName = 'The Campus Agent Test';
   let session: TestSession;
@@ -61,6 +69,19 @@ describe('agent NUTs', () => {
   let project: SfProject;
   let agentSpec: AgentJobSpec;
   let defaultAgentUsername: string;
+  // Captured once at setup so any failure can be correlated back to the scratch org + pod in CI.
+  // Only non-sensitive identifiers are logged here (orgId, instance/pod) — never auth tokens or the devhub.
+  let orgId: string | undefined;
+  let instanceName: string | undefined;
+
+  // Emits a single structured line for CI log correlation.
+  const logNutFailure = (testName: string, error: string): void => {
+    console.log(
+      `[NUT-FAILURE] utc=${fmtUtc(new Date())} orgId=${orgId ?? 'unknown'} pod=${
+        instanceName ?? 'unknown'
+      } test="${testName}" error=${error}`
+    );
+  };
 
   before(async () => {
     session = await TestSession.create({
@@ -80,6 +101,14 @@ describe('agent NUTs', () => {
     connection = defaultOrg.getConnection();
     project = await SfProject.resolve(session.project.dir);
 
+    // Capture non-sensitive org identifiers for CI failure correlation (orgId + pod + UTC timestamp).
+    orgId = defaultOrg.getOrgId();
+    const orgInfo = await connection.singleRecordQuery<{ InstanceName: string }>(
+      'SELECT InstanceName FROM Organization'
+    );
+    instanceName = orgInfo.InstanceName;
+    console.log(`[NUT-CONTEXT] utc=${fmtUtc(new Date())} orgId=${orgId} pod=${instanceName}`);
+
     // assign the EinsteinGPTPromptTemplateManager to the scratch org admin user
     const queryResult = await connection.singleRecordQuery<{ Id: string }>(
       `SELECT Id FROM User WHERE Username='${username}'`
@@ -93,6 +122,14 @@ describe('agent NUTs', () => {
 
   after(async () => {
     await session?.clean();
+  });
+
+  // On any failing test, emit orgId + pod + UTC timestamp + error so CI logs can be correlated in Splunk.
+  afterEach(function (this: Mocha.Context) {
+    if (this.currentTest?.state === 'failed') {
+      const err = this.currentTest.err;
+      logNutFailure(this.currentTest.fullTitle(), err?.message ?? String(err));
+    }
   });
 
   describe('List and Get Bot Metadata', () => {
@@ -547,6 +584,9 @@ describe('agent NUTs', () => {
       expect(agentResponse).to.be.ok;
       if (!agentResponse.isSuccess) {
         console.dir(agentResponse, { depth: 10 });
+        // The assertion below throws a generic "expected false to equal true"; capture the actual
+        // server error here so CI logs carry orgId + pod + UTC timestamp + the returned message.
+        logNutFailure('agent NUTs > agent create > should create an agent from a spec', agentResponse.errorMessage ?? 'unknown');
       }
       expect(agentResponse.isSuccess).to.equal(true);
       expect(agentResponse.agentDefinition).to.be.ok;
