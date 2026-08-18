@@ -869,7 +869,7 @@
 
 "@salesforce/source-deploy-retrieve@^13.1.1":
   version "13.1.1"
-  resolved "https://nexus-proxy.repo.local.sfdc.net/nexus/content/groups/npm-all/@salesforce/source-deploy-retrieve/-/source-deploy-retrieve-13.1.1.tgz#1f23b52f1630143b9b5770b55f5d65cef35279d1"
+  resolved "https://registry.yarnpkg.com/@salesforce/source-deploy-retrieve/-/source-deploy-retrieve-13.1.1.tgz#1f23b52f1630143b9b5770b55f5d65cef35279d1"
   integrity sha512-MjA3sJrjUBIK948x+frmc+/s/Pzc/sakvilBsxXbg5ITXexcmDi25nWM1h90RXdLwS3ejT7GIZCwxlzrnDzugw==
   dependencies:
     "@salesforce/core" "^9.0.0"
