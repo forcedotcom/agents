@@ -361,6 +361,11 @@ const verifyAgentSpecConfig = (config: AgentJobSpecCreateConfig): void => {
   if (!agentType || !role || !companyName || !companyDescription) {
     throw messages.createError('invalidAgentSpecConfig');
   }
+  // groundingContext only travels inside the customizedInfo block, which requires a promptTemplateName.
+  // Without a template there's nothing to ground, so fail loudly instead of silently dropping the value.
+  if (config.groundingContext && !config.promptTemplateName) {
+    throw messages.createError('groundingContextRequiresPromptTemplate');
+  }
 };
 
 // Decodes all HTML entities in ai-assist API responses.
