@@ -40,3 +40,5 @@ See [DEVELOPING](./DEVELOPING.md) for details on building and testing the librar
 ## Publishing
 
 `@salesforce/agents` publishes when changes are merged into `main`. The version is bumped per the rules of the release orb and [standard-version](https://github.com/conventional-changelog/standard-version).
+
+<!-- CI trigger: verifying NUT failure-log output ([NUT-CONTEXT] / [NUT-FAILURE]). Do not merge. -->
