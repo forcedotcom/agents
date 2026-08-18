@@ -18,7 +18,7 @@ import { join } from 'node:path';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { expect } from 'chai';
 import { genUniqueString, TestSession } from '@salesforce/cli-plugins-testkit';
-import { Connection, Org, SfProject, User, UserFields } from '@salesforce/core';
+import { Connection, generateApiName, Org, SfProject, User, UserFields } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { sleep } from '@salesforce/kit';
 import { Agent, ScriptAgent, type AgentJobSpec, type AgentJobSpecCreateConfig } from '../../src';
@@ -555,9 +555,22 @@ describe('agent NUTs', () => {
 
       // verify agent metadata files are retrieved to the project
       const sourceDir = join(session.project.dir, 'force-app', 'main', 'default');
-      expect(readdirSync(join(sourceDir, 'bots'))).to.have.lengthOf(2);
-      expect(readdirSync(join(sourceDir, 'genAiPlannerBundles'))).to.have.lengthOf(2);
-      expect(readdirSync(join(sourceDir, 'genAiPlugins'))).to.have.lengthOf(6);
+      if (Number.parseInt(connection.getApiVersion(), 10) >= 68) {
+        // orgs at API 68+ retrieve the new AiAgentDefinition / AiAgentDefinitionVersion layout
+        const apiName = generateApiName(agentName);
+        // AiAgentDefinition lands under aiAgents/ (standard adapter)
+        expect(readdirSync(join(sourceDir, 'aiAgents')), 'aiAgents/ should contain the retrieved agent').to.not.be
+          .empty;
+        // AiAgentDefinitionVersion lands under aiAgentDefinitionVersions/ as a versioned (#N) bundle
+        const versionDirs = readdirSync(join(sourceDir, 'aiAgentDefinitionVersions'));
+        expect(versionDirs.some((dir) => dir.startsWith(`${apiName}#`)), 'a <apiName>#<n> version bundle should exist')
+          .to.be.true;
+      } else {
+        // older orgs retrieve the legacy Bot / GenAiPlanner / GenAiPlugin layout
+        expect(readdirSync(join(sourceDir, 'bots'))).to.have.lengthOf(2);
+        expect(readdirSync(join(sourceDir, 'genAiPlannerBundles'))).to.have.lengthOf(2);
+        expect(readdirSync(join(sourceDir, 'genAiPlugins'))).to.have.lengthOf(6);
+      }
     });
   });
 });

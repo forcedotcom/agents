@@ -141,8 +141,8 @@ describe('AgentPublisher', () => {
       $$.SANDBOX.stub(connection, 'singleRecordQuery')
         .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
         .throws(new Error('No records found'))
-        .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
-        .resolves({ DeveloperName: 'v1' });
+        .withArgs("SELECT DeveloperName, VersionNumber FROM BotVersion WHERE Id='0Bv000000000002'")
+        .resolves({ DeveloperName: 'v1', VersionNumber: 1 });
 
       publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
 
@@ -171,8 +171,8 @@ describe('AgentPublisher', () => {
       $$.SANDBOX.stub(connection, 'singleRecordQuery')
         .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
         .throws(new Error('No records found'))
-        .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
-        .resolves({ DeveloperName: 'v1' });
+        .withArgs("SELECT DeveloperName, VersionNumber FROM BotVersion WHERE Id='0Bv000000000002'")
+        .resolves({ DeveloperName: 'v1', VersionNumber: 1 });
 
       publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, true);
 
@@ -202,8 +202,8 @@ describe('AgentPublisher', () => {
       $$.SANDBOX.stub(connection, 'singleRecordQuery')
         .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
         .throws(new Error('No records found'))
-        .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
-        .resolves({ DeveloperName: 'v1' });
+        .withArgs("SELECT DeveloperName, VersionNumber FROM BotVersion WHERE Id='0Bv000000000002'")
+        .resolves({ DeveloperName: 'v1', VersionNumber: 1 });
 
       // Note: constructor called WITHOUT the 4th arg (defaults to false)
       publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
@@ -241,8 +241,8 @@ describe('AgentPublisher', () => {
       $$.SANDBOX.stub(connection, 'singleRecordQuery')
         .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
         .resolves({ Id: '0Xx000000000001' })
-        .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
-        .resolves({ DeveloperName: 'v2' });
+        .withArgs("SELECT DeveloperName, VersionNumber FROM BotVersion WHERE Id='0Bv000000000002'")
+        .resolves({ DeveloperName: 'v2', VersionNumber: 2 });
 
       // Mock the private methods
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -282,8 +282,8 @@ describe('AgentPublisher', () => {
       $$.SANDBOX.stub(connection, 'singleRecordQuery')
         .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
         .throws(new Error('No records found'))
-        .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
-        .resolves({ DeveloperName: 'v1' });
+        .withArgs("SELECT DeveloperName, VersionNumber FROM BotVersion WHERE Id='0Bv000000000002'")
+        .resolves({ DeveloperName: 'v1', VersionNumber: 1 });
 
       const originalAccessToken = connection.accessToken;
       const refreshStub = $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
@@ -319,8 +319,8 @@ describe('AgentPublisher', () => {
       $$.SANDBOX.stub(connection, 'singleRecordQuery')
         .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
         .throws(new Error('No records found'))
-        .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
-        .resolves({ DeveloperName: 'developerNameDummy' });
+        .withArgs("SELECT DeveloperName, VersionNumber FROM BotVersion WHERE Id='0Bv000000000002'")
+        .resolves({ DeveloperName: 'developerNameDummy', VersionNumber: 1 });
 
       // skipMetadataRetrieve=true so retrieveAgentMetadata is bypassed (no need to stub it).
       publisher = new ScriptAgentPublisher(connection, sfProject, localAgentJson, true);
@@ -384,22 +384,21 @@ describe('AgentPublisher', () => {
     });
   });
 
-  describe('getVersionDeveloperName', () => {
-    it('should return version developer name', async () => {
+  describe('getBotVersion', () => {
+    it('should return version developer name and numeric version', async () => {
       // Create minimal publisher instance by mocking validateDeveloperName
       const validateStub = createValidateDeveloperNameStub();
 
       const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
 
-      const expectedVersionName = 'v1';
-      $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves({ DeveloperName: expectedVersionName });
+      $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves({ DeveloperName: 'v1', VersionNumber: 1 });
 
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-      const getVersionDeveloperName = (publisher as any).getVersionDeveloperName.bind(publisher);
+      const getBotVersion = (publisher as any).getBotVersion.bind(publisher);
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
-      const result = await getVersionDeveloperName('0Bv1234567890ABC');
+      const result = await getBotVersion('0Bv1234567890ABC');
 
-      expect(result).to.equal(expectedVersionName);
+      expect(result).to.deep.equal({ developerName: 'v1', versionNumber: 1 });
       validateStub.restore();
     });
 
@@ -412,11 +411,11 @@ describe('AgentPublisher', () => {
       $$.SANDBOX.stub(connection, 'singleRecordQuery').throws(new Error('No records found'));
 
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-      const getVersionDeveloperName = (publisher as any).getVersionDeveloperName.bind(publisher);
+      const getBotVersion = (publisher as any).getBotVersion.bind(publisher);
 
       try {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-        await getVersionDeveloperName('invalid_version_id');
+        await getBotVersion('invalid_version_id');
         expect.fail('Expected error was not thrown');
       } catch (error) {
         expect(error).to.be.instanceOf(SfError);
@@ -520,7 +519,7 @@ describe('AgentPublisher', () => {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
       const retrieveAgentMetadata = (publisher as any).retrieveAgentMetadata.bind(publisher);
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      await retrieveAgentMetadata();
+      await retrieveAgentMetadata({ developerName: 'v1', versionNumber: 1 });
 
       // Verify that ComponentSetBuilder.build was called
       expect(buildStub.calledOnce).to.be.true;
@@ -556,7 +555,7 @@ describe('AgentPublisher', () => {
 
       try {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-        await retrieveAgentMetadata();
+        await retrieveAgentMetadata({ developerName: 'v1', versionNumber: 1 });
         expect.fail('Expected error was not thrown');
       } catch (error) {
         expect(error).to.be.instanceOf(SfError);
@@ -566,8 +565,67 @@ describe('AgentPublisher', () => {
       validateStub.restore();
     });
 
-    it('should include GenAiPlugin and GenAiFunction entries when present', async () => {
-      // Create agent JSON with nodes that have tools
+    it('should build the AiAgentDefinition / AiAgentDefinitionVersion manifest and spider dependencies', async () => {
+      const validateStub = createValidateDeveloperNameStub();
+      // org supports the new metadata types
+      $$.SANDBOX.stub(connection, 'getApiVersion').returns('68.0');
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
+
+      // Setup successful metadata retrieval mock
+      const compSet = new ComponentSet();
+      const mdApiRetrieve = new MetadataApiRetrieve({
+        usernameOrConnection: testOrg.getMockUserInfo().Username,
+        output: 'nowhere',
+      });
+      $$.SANDBOX.stub(mdApiRetrieve, 'pollStatus').resolves({
+        // @ts-expect-error only stubbed response
+        response: {
+          success: true,
+        },
+      });
+
+      let capturedRetrieveOptions: Parameters<ComponentSet['retrieve']>[0] | undefined;
+      $$.SANDBOX.stub(compSet, 'retrieve').callsFake((options) => {
+        capturedRetrieveOptions = options;
+        return Promise.resolve(mdApiRetrieve);
+      });
+
+      let capturedMetadataEntries: string[] = [];
+      const buildStub = $$.SANDBOX.stub(ComponentSetBuilder, 'build').callsFake(async (options) => {
+        if (options?.metadata?.metadataEntries) {
+          capturedMetadataEntries = options.metadata.metadataEntries;
+        }
+        return compSet;
+      });
+
+      // @ts-expect-error private method
+      const retrieveAgentMetadata = publisher.retrieveAgentMetadata.bind(publisher);
+      await retrieveAgentMetadata({ developerName: 'v1', versionNumber: 1 });
+
+      // Verify that ComponentSetBuilder.build was called
+      expect(buildStub.calledOnce).to.be.true;
+
+      // Verify the manifest is exactly the two new metadata types
+      expect(capturedMetadataEntries).to.deep.equal([
+        'AiAgentDefinition:test_agent',
+        'AiAgentDefinitionVersion:test_agent#1',
+      ]);
+
+      // Verify no legacy Bot / Agent / GenAi* entries are present
+      expect(capturedMetadataEntries.some((entry) => /^(Bot|Agent|GenAiPlugin|GenAiFunction):/.test(entry))).to.be
+        .false;
+
+      // Verify dependencies are spidered via rootTypesWithDependencies
+      expect(capturedRetrieveOptions?.rootTypesWithDependencies).to.deep.equal(['AiAgentDefinitionVersion']);
+
+      validateStub.restore();
+    });
+
+    it('should build the legacy Bot / GenAi / Agent manifest on orgs below the min API version', async () => {
+      // org does not support the new metadata types
+      $$.SANDBOX.stub(connection, 'getApiVersion').returns('62.0');
+
+      // agent JSON with a node + tools to exercise the GenAiPlugin / GenAiFunction assembly
       const agentJsonWithNodes: AgentJson = {
         ...agentJson,
         agentVersion: {
@@ -593,55 +651,12 @@ describe('AgentPublisher', () => {
                   inputParameters: null,
                   forced: null,
                 },
-                {
-                  type: 'action',
-                  target: '__state_update_action__',
-                  boundInputs: null,
-                  llmInputs: null,
-                  enabled: null,
-                  stateUpdates: null,
-                  name: 'Function2',
-                  description: 'Test function 2',
-                  inputParameters: null,
-                  forced: null,
-                },
               ],
               preToolCall: null,
               postToolCall: null,
               afterReasoning: null,
               developerName: 'Node1',
               label: 'Node 1',
-              onInit: null,
-              transitions: null,
-              onExit: null,
-              actionDefinitions: [],
-            },
-            {
-              type: 'reasoning',
-              reasoningType: 'standard',
-              description: 'Test node 2',
-              beforeReasoning: '',
-              instructions: '',
-              focusPrompt: '',
-              tools: [
-                {
-                  type: 'action',
-                  target: '__state_update_action__',
-                  boundInputs: null,
-                  llmInputs: null,
-                  enabled: null,
-                  stateUpdates: null,
-                  name: 'Function3',
-                  description: 'Test function 3',
-                  inputParameters: null,
-                  forced: null,
-                },
-              ],
-              preToolCall: null,
-              postToolCall: null,
-              afterReasoning: null,
-              developerName: 'Node2',
-              label: 'Node 2',
               onInit: null,
               transitions: null,
               onExit: null,
@@ -654,7 +669,6 @@ describe('AgentPublisher', () => {
       const validateStub = createValidateDeveloperNameStub();
       const publisher = new ScriptAgentPublisher(connection, sfProject, agentJsonWithNodes, false);
 
-      // Setup successful metadata retrieval mock
       const compSet = new ComponentSet();
       const mdApiRetrieve = new MetadataApiRetrieve({
         usernameOrConnection: testOrg.getMockUserInfo().Username,
@@ -666,7 +680,12 @@ describe('AgentPublisher', () => {
           success: true,
         },
       });
-      $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
+
+      let capturedRetrieveOptions: Parameters<ComponentSet['retrieve']>[0] | undefined;
+      $$.SANDBOX.stub(compSet, 'retrieve').callsFake((options) => {
+        capturedRetrieveOptions = options;
+        return Promise.resolve(mdApiRetrieve);
+      });
 
       let capturedMetadataEntries: string[] = [];
       const buildStub = $$.SANDBOX.stub(ComponentSetBuilder, 'build').callsFake(async (options) => {
@@ -678,147 +697,21 @@ describe('AgentPublisher', () => {
 
       // @ts-expect-error private method
       const retrieveAgentMetadata = publisher.retrieveAgentMetadata.bind(publisher);
-      await retrieveAgentMetadata('v1');
+      await retrieveAgentMetadata({ developerName: 'v1', versionNumber: 1 });
 
-      // Verify that ComponentSetBuilder.build was called
       expect(buildStub.calledOnce).to.be.true;
 
-      // Verify that GenAiPlugin entries are included
-      expect(capturedMetadataEntries).to.include('GenAiPlugin:Node1');
-      expect(capturedMetadataEntries).to.include('GenAiPlugin:Node2');
+      // Legacy manifest: Bot + spidered GenAi* + Agent (developerName-based version suffix)
+      expect(capturedMetadataEntries).to.deep.equal([
+        'Bot:test_agent',
+        'GenAiPlugin:Node1',
+        'GenAiFunction:Function1',
+        'Agent:test_agent_v1',
+      ]);
 
-      // Verify that GenAiFunction entries are included
-      expect(capturedMetadataEntries).to.include('GenAiFunction:Function1');
-      expect(capturedMetadataEntries).to.include('GenAiFunction:Function2');
-      expect(capturedMetadataEntries).to.include('GenAiFunction:Function3');
-
-      // Verify that Bot and Agent entries are still included
-      expect(capturedMetadataEntries).to.include('Bot:test_agent');
-      expect(capturedMetadataEntries).to.include('Agent:test_agent_v1');
-
-      validateStub.restore();
-    });
-
-    it('should not include GenAiFunction entries when nodes have no tools', async () => {
-      // Create agent JSON with nodes that have no tools
-      const agentJsonWithNodesNoTools: AgentJson = {
-        ...agentJson,
-        agentVersion: {
-          ...agentJson.agentVersion,
-          nodes: [
-            {
-              type: 'reasoning',
-              reasoningType: 'standard',
-              description: 'Test node without tools',
-              beforeReasoning: '',
-              instructions: '',
-              focusPrompt: '',
-              tools: [],
-              preToolCall: null,
-              postToolCall: null,
-              afterReasoning: null,
-              developerName: 'NodeWithoutTools',
-              label: 'Node Without Tools',
-              onInit: null,
-              transitions: null,
-              onExit: null,
-              actionDefinitions: [],
-            },
-          ],
-        },
-      };
-
-      const validateStub = createValidateDeveloperNameStub();
-      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJsonWithNodesNoTools, false);
-
-      // Setup successful metadata retrieval mock
-      const compSet = new ComponentSet();
-      const mdApiRetrieve = new MetadataApiRetrieve({
-        usernameOrConnection: testOrg.getMockUserInfo().Username,
-        output: 'nowhere',
-      });
-      $$.SANDBOX.stub(mdApiRetrieve, 'pollStatus').resolves({
-        // @ts-expect-error only stubbed response
-        response: {
-          success: true,
-        },
-      });
-      $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
-
-      let capturedMetadataEntries: string[] = [];
-      const buildStub = $$.SANDBOX.stub(ComponentSetBuilder, 'build').callsFake(async (options) => {
-        if (options?.metadata?.metadataEntries) {
-          capturedMetadataEntries = options.metadata.metadataEntries;
-        }
-        return compSet;
-      });
-
-      // @ts-expect-error private method
-      const retrieveAgentMetadata = publisher.retrieveAgentMetadata.bind(publisher);
-      await retrieveAgentMetadata('v1');
-
-      // Verify that ComponentSetBuilder.build was called
-      expect(buildStub.calledOnce).to.be.true;
-
-      // Verify that GenAiPlugin entry is included (node exists)
-      expect(capturedMetadataEntries).to.include('GenAiPlugin:NodeWithoutTools');
-
-      // Verify that NO GenAiFunction entries are included (no tools)
-      const genAiFunctionEntries = capturedMetadataEntries.filter((entry) => entry.startsWith('GenAiFunction:'));
-      expect(genAiFunctionEntries).to.be.empty;
-
-      // Verify that Bot and Agent entries are still included
-      expect(capturedMetadataEntries).to.include('Bot:test_agent');
-      expect(capturedMetadataEntries).to.include('Agent:test_agent_v1');
-
-      validateStub.restore();
-    });
-
-    it('should not include GenAiPlugin and GenAiFunction entries when nodes array is empty', async () => {
-      // Use the default agentJson which has empty nodes array
-      const validateStub = createValidateDeveloperNameStub();
-      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
-
-      // Setup successful metadata retrieval mock
-      const compSet = new ComponentSet();
-      const mdApiRetrieve = new MetadataApiRetrieve({
-        usernameOrConnection: testOrg.getMockUserInfo().Username,
-        output: 'nowhere',
-      });
-      $$.SANDBOX.stub(mdApiRetrieve, 'pollStatus').resolves({
-        // @ts-expect-error only stubbed response
-        response: {
-          success: true,
-        },
-      });
-      $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
-
-      let capturedMetadataEntries: string[] = [];
-      const buildStub = $$.SANDBOX.stub(ComponentSetBuilder, 'build').callsFake(async (options) => {
-        if (options?.metadata?.metadataEntries) {
-          capturedMetadataEntries = options.metadata.metadataEntries;
-        }
-        return compSet;
-      });
-
-      // @ts-expect-error private method
-      const retrieveAgentMetadata = publisher.retrieveAgentMetadata.bind(publisher);
-      await retrieveAgentMetadata('v1');
-
-      // Verify that ComponentSetBuilder.build was called
-      expect(buildStub.calledOnce).to.be.true;
-
-      // Verify that NO GenAiPlugin entries are included
-      const genAiPluginEntries = capturedMetadataEntries.filter((entry) => entry.startsWith('GenAiPlugin:'));
-      expect(genAiPluginEntries).to.be.empty;
-
-      // Verify that NO GenAiFunction entries are included
-      const genAiFunctionEntries = capturedMetadataEntries.filter((entry) => entry.startsWith('GenAiFunction:'));
-      expect(genAiFunctionEntries).to.be.empty;
-
-      // Verify that Bot and Agent entries are still included
-      expect(capturedMetadataEntries).to.include('Bot:test_agent');
-      expect(capturedMetadataEntries).to.include('Agent:test_agent_v1');
+      // No new metadata types and no dependency spidering on the legacy path
+      expect(capturedMetadataEntries.some((entry) => entry.startsWith('AiAgentDefinition'))).to.be.false;
+      expect(capturedRetrieveOptions?.rootTypesWithDependencies).to.be.undefined;
 
       validateStub.restore();
     });
