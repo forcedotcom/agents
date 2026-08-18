@@ -53,6 +53,31 @@ async function waitForEinsteinReady(connection: Connection, maxAttempts = 30): P
   throw new Error(`Einstein AI did not become ready within ${timeoutSeconds} seconds timeout`);
 }
 
+// Poll until the given permission set is visibly assigned to the user, so the license/permset is
+// committed and queryable before it's referenced downstream. This avoids relying on a freshly-created
+// user's entitlements being visible within the same request that consumes them.
+async function waitForPermSetAssignment(
+  connection: Connection,
+  userId: string,
+  permSetName: string,
+  maxAttempts = 12
+): Promise<void> {
+  // eslint-disable-next-line no-await-in-loop
+  for (let i = 0; i < maxAttempts; i++) {
+    // eslint-disable-next-line no-await-in-loop
+    const result = await connection.query<{ Id: string }>(
+      `SELECT Id FROM PermissionSetAssignment WHERE AssigneeId='${userId}' AND PermissionSet.Name='${permSetName}'`
+    );
+    if (result.records.length > 0) {
+      // Give the license/permset assignment a brief settle window so it is fully committed before use.
+      await sleep(30_000); // eslint-disable-line no-await-in-loop
+      return;
+    }
+    await sleep(10_000); // eslint-disable-line no-await-in-loop
+  }
+  throw new Error(`Permission set ${permSetName} was not assigned to user ${userId} within timeout`);
+}
+
 // Format a UTC timestamp as MM/DD/YYYY:HH:mm:ss for CI log correlation (Splunk-friendly).
 function fmtUtc(d: Date): string {
   const p = (n: number): string => String(n).padStart(2, '0');
@@ -526,6 +551,46 @@ describe('agent NUTs', () => {
   });
 
   describe('agent create', () => {
+    // Pre-provisioned Bot User Id passed to Agent.create via agentSettings.userId (see before() below).
+    let botUserId: string;
+
+    before(async () => {
+      // Pre-provision a Bot User up front and hand its Id to Agent.create via agentSettings.userId.
+      // The 'customer' agentType maps to core's EinsteinServiceAgent, which requires a Bot User holding
+      // the Digital Agent license + AgentforceServiceAgentUser runtime permset. When no userId is
+      // supplied, core auto-creates that user in the SAME transaction as the BotDefinition save, and the
+      // pre-save validation trigger intermittently cannot see the just-created license/permset
+      // assignment, failing with "User doesn't have access to agent." Creating and fully provisioning the
+      // user here — and letting it settle before Agent.create runs — makes core reuse an already-committed
+      // user instead of racing on a freshly-created one. This describe provisions its own bot user so it
+      // does not depend on the ordering of the 'List and Get Bot Metadata' describe.
+      const { Id: profileId } = await connection.singleRecordQuery<{ Id: string }>(
+        "SELECT Id FROM Profile WHERE Name='Einstein Agent User'"
+      );
+
+      const botUsername = genUniqueString('botUser_%s@test.org');
+      const botUser = await User.create({ org: defaultOrg });
+      // @ts-expect-error - private method. Must use this to prevent the auth flow that happens with the createUser method
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      const { userId } = (await botUser.createUserInternal({
+        username: botUsername,
+        lastName: 'AgentUser',
+        alias: 'agtCrt',
+        timeZoneSidKey: 'America/Denver',
+        email: botUsername,
+        emailEncodingKey: 'UTF-8',
+        languageLocaleKey: 'en_US',
+        localeSidKey: 'en_US',
+        profileId,
+      } as UserFields)) as { userId: string };
+      botUserId = userId;
+
+      await botUser.assignPermissionSets(userId, ['AgentforceServiceAgentUser']);
+
+      // Wait for the license/permset assignment to be committed and visible before Agent.create runs.
+      await waitForPermSetAssignment(connection, userId, 'AgentforceServiceAgentUser');
+    });
+
     it('should create an agent spec', async () => {
       const agentConfig: AgentJobSpecCreateConfig = {
         agentType: 'customer',
@@ -568,6 +633,8 @@ describe('agent NUTs', () => {
         saveAgent: true,
         agentSettings: {
           agentName,
+          // Reuse an already-provisioned Bot User so core does not auto-create (and race-validate) one.
+          userId: botUserId,
         },
         generationInfo: {
           defaultInfo: {
