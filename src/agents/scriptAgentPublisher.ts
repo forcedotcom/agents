@@ -23,7 +23,7 @@ import { Duration, env } from '@salesforce/kit';
 import { ComponentSet, ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { MaybeMock } from '../maybe-mock';
 import { type AgentJson, type PublishAgent, type PublishAgentJsonResponse } from '../types';
-import { findAuthoringBundle } from '../utils';
+import { findAuthoringBundle, supportsAiAgentDefinition } from '../utils';
 import { managerFor } from '../connectionManager';
 
 Messages.importMessagesDirectory(__dirname);
@@ -121,11 +121,11 @@ export class ScriptAgentPublisher {
       // we've published the AgentJson, now we need to:
       // 1. retrieve the new Agent metadata that's in the org
       // 2. deploy the AuthoringBundle's -meta.xml file with correct target attribute
-      const botVersionName = await this.getVersionDeveloperName(response.botVersionId);
+      const botVersion = await this.getBotVersion(response.botVersionId);
       if (!this.skipRetrieve) {
-        await this.retrieveAgentMetadata(botVersionName);
+        await this.retrieveAgentMetadata(botVersion);
       }
-      await this.deployAuthoringBundle(botVersionName);
+      await this.deployAuthoringBundle(botVersion.developerName);
 
       return { ...response, developerName: this.developerName };
     } else {
@@ -174,28 +174,40 @@ export class ScriptAgentPublisher {
   }
 
   /**
-   * Retrieve the agent metadata from the org after publishing
+   * Retrieve the agent metadata from the org after publishing.
    *
-   * @param botVersionName The bot version name
+   * On orgs that support it (API version >= 68), the agent is retrieved as the simplified
+   * `AiAgentDefinition` / `AiAgentDefinitionVersion` metadata types, with action dependencies
+   * (Flow, ApexClass, PromptTemplate, etc.) spidered via `rootTypesWithDependencies` so they
+   * do not need to be enumerated in the manifest. Older orgs fall back to the legacy
+   * `Bot` / `GenAiPlugin` / `GenAiFunction` / `Agent` manifest.
+   *
+   * @param botVersion The developerName and numeric version of the just-published agent
    */
-  private async retrieveAgentMetadata(botVersionName: string): Promise<void> {
+  private async retrieveAgentMetadata(botVersion: { developerName: string; versionNumber: number }): Promise<void> {
     const standardConn = (await managerFor(this.connection)).getStandardConnection();
     const defaultPackagePath = path.resolve(this.project.getDefaultPackage().path);
 
-    const genAiPluginAndFunctions = this.agentJson.agentVersion.nodes.flatMap((n) => [
-      `GenAiPlugin:${n.developerName}`,
-      // Some node types (e.g. `related_agent` from a `connected_subagent` block) are pure
-      // delegation stubs and compile with no `tools` array, so guard against undefined.
-      ...(n.tools ?? []).map((t) => `GenAiFunction:${t.name}`),
-    ]);
+    const useNewFormat = supportsAiAgentDefinition(standardConn);
+    const metadataEntries = useNewFormat
+      ? [
+          `AiAgentDefinition:${this.developerName}`,
+          `AiAgentDefinitionVersion:${this.developerName}#${botVersion.versionNumber}`,
+        ]
+      : [
+          `Bot:${this.developerName}`,
+          ...this.agentJson.agentVersion.nodes.flatMap((n) => [
+            `GenAiPlugin:${n.developerName}`,
+            // Some node types (e.g. `related_agent` from a `connected_subagent` block) are pure
+            // delegation stubs and compile with no `tools` array, so guard against undefined.
+            ...(n.tools ?? []).map((t) => `GenAiFunction:${t.name}`),
+          ]),
+          `Agent:${this.developerName}_${botVersion.developerName}`,
+        ];
 
     const cs = await ComponentSetBuilder.build({
       metadata: {
-        metadataEntries: [
-          `Bot:${this.developerName}`,
-          ...genAiPluginAndFunctions,
-          `Agent:${this.developerName}_${botVersionName}`,
-        ],
+        metadataEntries,
         directoryPaths: [defaultPackagePath],
       },
       org: {
@@ -208,6 +220,8 @@ export class ScriptAgentPublisher {
       merge: true,
       format: 'source',
       output: path.resolve(this.project.getPath(), defaultPackagePath),
+      // spider action dependencies for the new metadata types only
+      ...(useNewFormat ? { rootTypesWithDependencies: ['AiAgentDefinitionVersion'] } : {}),
     });
 
     const retrieveTimeout = getMetadataPollTimeout();
@@ -303,19 +317,21 @@ export class ScriptAgentPublisher {
   }
 
   /**
-   * Returns the developerName of the given bot version ID.
+   * Returns the developerName and numeric version of the given bot version ID.
    *
    * @param botVersionId The Id of the bot version
-   * @returns The developer name of the bot version
+   * @returns The developer name (e.g. `v1`) and numeric version (e.g. `1`) of the bot version
    */
-  private async getVersionDeveloperName(botVersionId: string): Promise<string> {
+  private async getBotVersion(botVersionId: string): Promise<{ developerName: string; versionNumber: number }> {
     try {
       const standardConn = (await managerFor(this.connection)).getStandardConnection();
-      const queryResult = await standardConn.singleRecordQuery<{ DeveloperName: string }>(
-        `SELECT DeveloperName FROM BotVersion WHERE Id='${botVersionId}'`
+      const queryResult = await standardConn.singleRecordQuery<{ DeveloperName: string; VersionNumber: number }>(
+        `SELECT DeveloperName, VersionNumber FROM BotVersion WHERE Id='${botVersionId}'`
       );
-      getLogger().debug(`Bot version with id ${botVersionId} is ${queryResult.DeveloperName}.`);
-      return queryResult.DeveloperName;
+      getLogger().debug(
+        `Bot version with id ${botVersionId} is ${queryResult.DeveloperName} (version ${queryResult.VersionNumber}).`
+      );
+      return { developerName: queryResult.DeveloperName, versionNumber: queryResult.VersionNumber };
     } catch {
       const err = messages.createError('findBotVersionError', [botVersionId]);
       err.actions = [messages.getMessage('authoringBundleDeploymentErrorActions')];
