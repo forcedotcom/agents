@@ -22,6 +22,33 @@ import { AvailableDefinition, NamedUserJwtResponse, type PlannerResponse, Previe
 export const metric = ['completeness', 'coherence', 'conciseness', 'output_latency_milliseconds'] as const;
 
 /**
+ * The minimum org API version that supports the `AiAgentDefinition` /
+ * `AiAgentDefinitionVersion` metadata types. Orgs below this version are
+ * retrieved as the legacy `Bot` / `GenAiPlanner` / `GenAiPlugin` metadata.
+ *
+ * TODO: remove this version gate and the legacy retrieval fallback once the old
+ * metadata types are retired (v68/264) and every supported org has the feature
+ * enabled — at that point always retrieve the new types (TD-0333078).
+ */
+export const AI_AGENT_DEFINITION_MIN_API_VERSION = 68;
+
+/**
+ * Whether the org behind the given connection supports retrieving agents as the
+ * simplified `AiAgentDefinition` / `AiAgentDefinitionVersion` metadata types.
+ *
+ * Note: this keys off the connection's API version only. The server also gates
+ * the feature behind a flag; an org at/above the min API version with the flag
+ * still off would resolve the new types to nothing.
+ *
+ * @param connection the connection whose API version determines the format
+ * @returns true if the new metadata format should be used
+ */
+export const supportsAiAgentDefinition = (connection: Connection): boolean => {
+  const apiVersion = Number.parseInt(connection.getApiVersion(), 10);
+  return !Number.isNaN(apiVersion) && apiVersion >= AI_AGENT_DEFINITION_MIN_API_VERSION;
+};
+
+/**
  * Sanitize a filename by removing or replacing illegal characters.
  * This ensures the filename is valid across different operating systems.
  *

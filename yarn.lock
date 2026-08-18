@@ -867,10 +867,10 @@
   resolved "https://registry.yarnpkg.com/@salesforce/prettier-config/-/prettier-config-0.0.3.tgz#ba648d4886bb38adabe073dbea0b3a91b3753bb0"
   integrity sha512-hYOhoPTCSYMDYn+U1rlEk16PoBeAJPkrdg4/UtAzupM1mRRJOwEPMG1d7U8DxJFKuXW3DMEYWr2MwAIBDaHmFg==
 
-"@salesforce/source-deploy-retrieve@^13.0.0":
-  version "13.0.0"
-  resolved "https://registry.yarnpkg.com/@salesforce/source-deploy-retrieve/-/source-deploy-retrieve-13.0.0.tgz#dcdaf8461d6ad7af937f5b9daf38844e3933247f"
-  integrity sha512-MBqBM9Waewh+tCR89KlDHEGaUJ9cAjwS2FIyIn+Zq/NwW7aRucyCF25MWs4gSHeFsBiNUGyGtxlIt+2oWNUIlw==
+"@salesforce/source-deploy-retrieve@^13.1.1":
+  version "13.1.1"
+  resolved "https://registry.yarnpkg.com/@salesforce/source-deploy-retrieve/-/source-deploy-retrieve-13.1.1.tgz#1f23b52f1630143b9b5770b55f5d65cef35279d1"
+  integrity sha512-MjA3sJrjUBIK948x+frmc+/s/Pzc/sakvilBsxXbg5ITXexcmDi25nWM1h90RXdLwS3ejT7GIZCwxlzrnDzugw==
   dependencies:
     "@salesforce/core" "^9.0.0"
     "@salesforce/kit" "^4.0.0"

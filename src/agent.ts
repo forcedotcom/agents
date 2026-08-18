@@ -34,7 +34,7 @@ import {
   ScriptAgentOptions,
 } from './types';
 import { MaybeMock } from './maybe-mock';
-import { decodeHtmlEntities, findLocalAgents } from './utils';
+import { decodeHtmlEntities, findLocalAgents, supportsAiAgentDefinition } from './utils';
 import { ScriptAgent } from './agents/scriptAgent';
 import { ProductionAgent } from './agents/productionAgent';
 import { managerFor } from './connectionManager';
@@ -259,10 +259,25 @@ export class Agent {
       await Lifecycle.getInstance().emit(AgentCreateLifecycleStages.Retrieving, {});
       const defaultPackagePath = project.getDefaultPackage().path ?? 'force-app';
       const standardConnection = connectionManager.getStandardConnection();
+      const apiName = config.agentSettings.agentApiName;
       try {
+        // On orgs that support it (API version >= 68), retrieve the just-created agent as the
+        // simplified AiAgentDefinition / AiAgentDefinitionVersion metadata types, spidering
+        // action dependencies via rootTypesWithDependencies. Older orgs fall back to the
+        // legacy Agent manifest.
+        const useNewFormat = supportsAiAgentDefinition(standardConnection);
+        let metadataEntries: string[];
+        if (useNewFormat) {
+          const { VersionNumber: versionNumber } = await standardConnection.singleRecordQuery<{
+            VersionNumber: number;
+          }>(`SELECT VersionNumber FROM BotVersion WHERE Id='${response.agentId!.botVersionId}'`);
+          metadataEntries = [`AiAgentDefinition:${apiName}`, `AiAgentDefinitionVersion:${apiName}#${versionNumber}`];
+        } else {
+          metadataEntries = [`Agent:${apiName}`];
+        }
         const cs = await ComponentSetBuilder.build({
           metadata: {
-            metadataEntries: [`Agent:${config.agentSettings.agentApiName}`],
+            metadataEntries,
             directoryPaths: [defaultPackagePath],
           },
           org: {
@@ -275,6 +290,8 @@ export class Agent {
           merge: true,
           format: 'source',
           output: path.resolve(project.getPath(), defaultPackagePath),
+          // spider action dependencies for the new metadata types only
+          ...(useNewFormat ? { rootTypesWithDependencies: ['AiAgentDefinitionVersion'] } : {}),
         });
         const retrieveResult = await retrieve.pollStatus({
           frequency: Duration.milliseconds(200),
