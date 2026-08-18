@@ -822,5 +822,24 @@ describe('ProductionAgent', () => {
 
       expect(getStartRequestBody().variables).to.deep.equal([]);
     });
+
+    const getStartRequestHeaders = (): Record<string, string> => {
+      const startCall = requestStub
+        .getCalls()
+        .find((c) => (c.args[0] as { url: string }).url.endsWith('/sessions'));
+      if (!startCall) throw new Error('agent sessions request not captured');
+      return (startCall.args[0] as { headers: Record<string, string> }).headers;
+    };
+
+    it('sends the x-attributed-client: no-builder header on session start to strip markdown', async () => {
+      $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves(buildBotMetadata('EinsteinServiceAgent'));
+
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: 'TestAgent' });
+      await agent.preview.start();
+
+      const headers = getStartRequestHeaders();
+      expect(headers['x-attributed-client']).to.equal('no-builder');
+      expect(headers['x-client-name']).to.equal('afdx');
+    });
   });
 });

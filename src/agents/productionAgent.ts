@@ -391,6 +391,7 @@ export class ProductionAgent extends AgentBase {
         url,
         body: JSON.stringify(body),
         headers: {
+          'x-attributed-client': 'no-builder', // <- removes markdown from responses
           'x-client-name': 'afdx',
         },
       });
