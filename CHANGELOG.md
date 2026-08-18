@@ -1,3 +1,12 @@
+## [2.0.4](https://github.com/forcedotcom/agents/compare/2.0.3...2.0.4) (2026-08-18)
+
+
+### Bug Fixes
+
+* record reasoning traces for --api-name previews via v1.1 plans endpoint @W-23896220@ ([#340](https://github.com/forcedotcom/agents/issues/340)) ([0f1babb](https://github.com/forcedotcom/agents/commit/0f1babb5166e16e55f32cf90fd049af35b35fcda))
+
+
+
 ## [2.0.3](https://github.com/forcedotcom/agents/compare/2.0.2...2.0.3) (2026-08-18)
 
 
