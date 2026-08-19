@@ -118,13 +118,15 @@ export abstract class AgentBase {
    * Reads traces from the session directory if available, otherwise fetches from API
    */
   protected async getAllTracesFromDisc(): Promise<PlannerResponse[]> {
-    if (!this.historyDir) {
-      throw SfError.create({ message: 'history never created' });
-    }
+    // historyDir is populated in-process by start()/resumeSession()/sendMessage(). When a caller
+    // resumes an existing session via Agent.init() + setSessionId() (without start/send in this
+    // process), the field is unset, so derive it from the sessionId instead of throwing. getHistoryDir()
+    // still throws its own clear error if no sessionId was ever set.
+    const historyDir = this.historyDir ?? (await this.getHistoryDir());
     const traces: PlannerResponse[] = [];
 
     // If we have a session directory, try reading traces from disk first
-    const tracesDir = join(this.historyDir, 'traces');
+    const tracesDir = join(historyDir, 'traces');
     const files = await readdir(tracesDir);
     const tracePromises = files
       .filter((file) => file.endsWith('.json'))
