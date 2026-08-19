@@ -13,12 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import { join } from 'node:path';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { expect } from 'chai';
 import sinon from 'sinon';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection, Messages, SfError, SfProject } from '@salesforce/core';
 import { ProductionAgent } from '../src/agents/productionAgent';
 import { ConnectionManager, setManagerForTesting } from '../src/connectionManager';
+import { getHistoryDir } from '../src/utils';
 import type { BotMetadata, ContextVariable, PlannerResponse } from '../src/types';
 
 Messages.importMessagesDirectory(__dirname);
@@ -919,6 +922,64 @@ describe('ProductionAgent', () => {
         'https://api.salesforce.com/einstein/ai-agent/v1.1/preview/sessions/test-session-id/plans/plan-123'
       );
       expect(result).to.deep.equal(trace);
+    });
+  });
+
+  describe('getAllTraces (resumed session)', () => {
+    // Regression guard for the "history never created" throw. Mirrors the z-series preview NUT
+    // flow: a fresh Agent instance resumes an existing session via setSessionId() — start()/send()
+    // ran in an earlier CLI subprocess, so historyDir (populated only in-process by start/send) is
+    // unset on this instance. getAllTracesFromDisc must derive the dir from the sessionId rather
+    // than throw. A 0Xx-form id sets this.id in the constructor so getAgentIdForStorage() resolves
+    // without a metadata query. The fix lives in the shared base class, so this also covers the
+    // ScriptAgent (authoring-bundle) path the NUT actually exercises.
+    const agentId = '0Xx000000000ABC';
+    const sessionId = 'resumed-session-abc';
+
+    const trace: PlannerResponse = {
+      type: 'PlanSuccessResponse',
+      planId: 'plan-123',
+      sessionId,
+      intent: 'answer',
+      topic: 'general',
+      plan: [],
+    };
+
+    let seededAgentDir: string | undefined;
+
+    afterEach(async () => {
+      if (seededAgentDir) {
+        await rm(seededAgentDir, { recursive: true, force: true });
+        seededAgentDir = undefined;
+      }
+    });
+
+    it('reads on-disk traces for a session resumed via setSessionId (no start/send in this process)', async () => {
+      // Seed the session directory exactly as an earlier start/send process would have.
+      const historyDir = await getHistoryDir(agentId, sessionId);
+      seededAgentDir = join(historyDir, '..', '..'); // .sfdx/agents/<agentId>
+      const tracesDir = join(historyDir, 'traces');
+      await mkdir(tracesDir, { recursive: true });
+      await writeFile(join(tracesDir, 'plan-123.json'), JSON.stringify(trace), 'utf-8');
+
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: agentId });
+      agent.setSessionId(sessionId);
+
+      const traces = await agent.preview.getAllTraces();
+
+      expect(traces).to.deep.equal([trace]);
+    });
+
+    it('still throws a clear error when no sessionId was ever set', async () => {
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: agentId });
+
+      try {
+        await agent.preview.getAllTraces();
+        expect.fail('Should have thrown an error');
+      } catch (error) {
+        expect(error).to.be.instanceOf(SfError);
+        expect((error as SfError).message).to.include('No sessionId set');
+      }
     });
   });
 });
