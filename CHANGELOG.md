@@ -1,3 +1,12 @@
+## [2.0.5](https://github.com/forcedotcom/agents/compare/2.0.4...2.0.5) (2026-08-19)
+
+
+### Bug Fixes
+
+* resolve failing agent NUTs (getAllTraces "history never created" + create-user) @W-23915028@ ([#345](https://github.com/forcedotcom/agents/issues/345)) ([6766dcf](https://github.com/forcedotcom/agents/commit/6766dcf49aed362bb2bfc3d8fb47db824676749d))
+
+
+
 ## [2.0.4](https://github.com/forcedotcom/agents/compare/2.0.3...2.0.4) (2026-08-18)
 
 
