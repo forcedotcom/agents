@@ -19,6 +19,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { XMLBuilder, XMLParser } from 'fast-xml-parser';
 import { Connection, Logger, Messages, SfError, SfProject } from '@salesforce/core';
+import { Duration, env } from '@salesforce/kit';
 import { ComponentSet, ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { MaybeMock } from '../maybe-mock';
 import { type AgentJson, type PublishAgent, type PublishAgentJsonResponse } from '../types';
@@ -35,6 +36,17 @@ const getLogger = (): Logger => {
   }
   return logger;
 };
+
+/**
+ * The metadata retrieve/deploy steps after a publish poll the server with SDR's pollStatus(),
+ * which defaults to a 60-minute timeout when called without one. A stuck server-side operation
+ * therefore blocks silently for up to an hour with no interim output (especially under --json).
+ * Bound each poll to a shorter, env-overridable timeout so a stalled publish fails fast with a
+ * clear error instead of hanging. Normal publishes complete in well under a minute, so 10 minutes
+ * leaves generous headroom for a legitimately slow one.
+ */
+const getMetadataPollTimeout = (): Duration =>
+  Duration.minutes(env.getNumber('SF_AGENT_PUBLISH_METADATA_POLL_TIMEOUT_MINUTES', 10));
 
 /**
  * Service class responsible for publishing agents to Salesforce orgs
@@ -196,7 +208,11 @@ export class ScriptAgentPublisher {
       output: path.resolve(this.project.getPath(), defaultPackagePath),
     });
 
-    const retrieveResult = await retrieve.pollStatus();
+    const retrieveTimeout = getMetadataPollTimeout();
+    const retrieveStart = Date.now();
+    getLogger().debug(`Polling for agent metadata retrieve (timeout: ${retrieveTimeout.minutes} min)`);
+    const retrieveResult = await retrieve.pollStatus({ timeout: retrieveTimeout });
+    getLogger().debug(`Agent metadata retrieve poll completed in ${Date.now() - retrieveStart} ms`);
 
     if (!retrieveResult.response?.success) {
       const errMessages = retrieveResult.response?.messages?.toString() ?? 'unknown';
@@ -240,7 +256,11 @@ export class ScriptAgentPublisher {
     const deploy = await ComponentSet.fromSource(this.bundleDir).deploy({
       usernameOrConnection: standardConn,
     });
-    const deployResult = await deploy.pollStatus();
+    const deployTimeout = getMetadataPollTimeout();
+    const deployStart = Date.now();
+    getLogger().debug(`Polling for authoring bundle deploy (timeout: ${deployTimeout.minutes} min)`);
+    const deployResult = await deploy.pollStatus({ timeout: deployTimeout });
+    getLogger().debug(`Authoring bundle deploy poll completed in ${Date.now() - deployStart} ms`);
 
     // 3.remove the target from the local authoring bundle meta.xml file
     delete authoringBundle.AiAuthoringBundle.target;
