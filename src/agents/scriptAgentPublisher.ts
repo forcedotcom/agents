@@ -199,7 +199,7 @@ export class ScriptAgentPublisher {
     const retrieveResult = await retrieve.pollStatus();
 
     if (!retrieveResult.response?.success) {
-      const errMessages = retrieveResult.response?.messages?.toString() ?? 'unknown';
+      const errMessages = JSON.stringify(retrieveResult.response?.messages) ?? 'unknown';
       const error = messages.createError('agentRetrievalError', [errMessages]);
       error.actions = [messages.getMessage('agentRetrievalErrorActions')];
       throw error;
@@ -294,7 +294,7 @@ export class ScriptAgentPublisher {
       );
       getLogger().debug(`Bot version with id ${botVersionId} is ${queryResult.DeveloperName}.`);
       return queryResult.DeveloperName;
-    } catch (error) {
+    } catch {
       const err = messages.createError('findBotVersionError', [botVersionId]);
       err.actions = [messages.getMessage('authoringBundleDeploymentErrorActions')];
       throw err;

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-/* eslint-disable camelcase */
+ 
 
 import { Org, SfError } from '@salesforce/core';
 import { requestWithEndpointFallback } from './utils';

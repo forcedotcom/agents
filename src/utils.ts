@@ -120,7 +120,7 @@ export const findAuthoringBundle = (dirOrDirs: string | string[], botName: strin
         if (found) return found;
       }
     }
-  } catch (err) {
+  } catch {
     // Directory doesn't exist or can't be read
     return undefined;
   }
@@ -161,7 +161,7 @@ export const findLocalAgents = (dir: string): string[] => {
         results.push(...findLocalAgents(filePath));
       }
     }
-  } catch (err) {
+  } catch {
     // Directory doesn't exist or can't be read
     return [];
   }
@@ -307,7 +307,7 @@ const resolveProjectLocalSfdx = async (): Promise<string | undefined> => {
   try {
     const project = await SfProject.resolve();
     return path.join(project.getPath(), '.sfdx');
-  } catch (_e) {
+  } catch {
     return undefined;
   }
 };
@@ -948,7 +948,7 @@ export const readTranscriptEntries = async (agentId: string, sessionId: string):
       .split('\n')
       .filter((l) => l.trim().length > 0)
       .map((l) => JSON.parse(l) as TranscriptEntry);
-  } catch (_e) {
+  } catch {
     return [];
   }
 };

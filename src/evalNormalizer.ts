@@ -231,7 +231,7 @@ export function normalizeMcpShorthand(steps: EvalStep[]): EvalStep[] {
       evalCounter++;
     }
 
-    return normalized as EvalStep;
+    return normalized;
   });
 }
 
@@ -260,7 +260,7 @@ export function autoCorrectFields(steps: EvalStep[]): EvalStep[] {
       }
     }
 
-    return corrected as EvalStep;
+    return corrected;
   });
 }
 
@@ -281,7 +281,7 @@ export function normalizeCamelCase(steps: EvalStep[]): EvalStep[] {
         delete normalized[alias];
       }
     }
-    return normalized as EvalStep;
+    return normalized;
   });
 }
 
@@ -356,7 +356,7 @@ export function normalizeEvaluatorFields(steps: EvalStep[]): EvalStep[] {
     // Don't inject metric_name for unknown evaluator types to avoid API validation errors
     // Unknown evaluators like bot_response_rating and planner_topic_assertion don't use metric_name
 
-    return normalized as EvalStep;
+    return normalized;
   });
 }
 

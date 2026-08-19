@@ -132,8 +132,8 @@ export class Agent {
         }
 
         bots.push(...(await readdir(botPath)));
-      } catch (_err) {
-        // eslint-disable-next-line no-unused-vars
+      } catch {
+        // directory not accessible
       }
     };
 
@@ -249,9 +249,7 @@ export class Agent {
 
     getLogger().debug(`Creating agent using config: ${inspect(config)} in project: ${project.getPath()}`);
     await Lifecycle.getInstance().emit(AgentCreateLifecycleStages.Creating, {});
-    if (!config.agentSettings.agentApiName) {
-      config.agentSettings.agentApiName = generateApiName(config.agentSettings?.agentName);
-    }
+    config.agentSettings.agentApiName ??= generateApiName(config.agentSettings?.agentName);
     const response = await maybeMock.request<AgentCreateResponse>('POST', url, config);
 
     // When saving agent creation we need to retrieve the created metadata.
@@ -281,7 +279,7 @@ export class Agent {
           timeout: Duration.minutes(5),
         });
         if (!retrieveResult.response.success) {
-          const errMessages = retrieveResult.response.messages?.toString() ?? 'unknown';
+          const errMessages = JSON.stringify(retrieveResult.response.messages) ?? 'unknown';
           const error = messages.createError('agentRetrievalError', [errMessages]);
           error.actions = [messages.getMessage('agentRetrievalErrorActions')];
           throw error;

@@ -77,38 +77,47 @@ export function formatResults(results: EvalApiResponse, format: ResultFormat): s
 
 // --- formatHuman helpers ---
 
+function formatSendMessageLine(output: EvalOutput): string {
+  const stepId = output.id ?? '';
+  const resp = output.response;
+  let msgStr: string;
+  if (typeof resp === 'string') {
+    msgStr = resp;
+  } else if (resp !== null && typeof resp === 'object' && 'messages' in resp) {
+    msgStr = resp.messages?.[0]?.message ?? '';
+  } else {
+    msgStr = JSON.stringify(resp ?? '');
+  }
+  const displayMsg = msgStr.length > 200 ? msgStr.substring(0, 200) + '...' : msgStr;
+  return `- **Agent Response** (${stepId}): ${displayMsg}`;
+}
+
+function formatGetStateLines(output: EvalOutput): string[] {
+  const resp = output.response;
+  if (resp !== null && typeof resp === 'object' && 'planner_response' in resp) {
+    const { planner_response: plannerResp } = resp;
+    const lastExec = plannerResp?.lastExecution;
+    return [
+      `- **Topic Selected**: ${lastExec?.topic ?? 'N/A'}`,
+      `- **Response Latency**: ${lastExec?.latency ?? 'N/A'}ms`,
+    ];
+  }
+  return [`- **State**: ${JSON.stringify(resp).substring(0, 200)}`];
+}
+
 function formatOutputLines(outputs: EvalOutput[]): string[] {
   const lines: string[] = [];
 
   for (const output of outputs) {
     const stepType = output.type ?? '';
-    const stepId = output.id ?? '';
 
     if (stepType === 'agent.create_session') {
       const sessionId = output.session_id ?? 'N/A';
       lines.push(`- **Create Session**: ${sessionId}`);
     } else if (stepType === 'agent.send_message') {
-      const resp = output.response;
-      let msgStr: string;
-      if (typeof resp === 'string') {
-        msgStr = resp;
-      } else if (resp !== null && typeof resp === 'object' && 'messages' in resp) {
-        msgStr = (resp as { messages: Array<{ message: string }> }).messages?.[0]?.message ?? '';
-      } else {
-        msgStr = String(resp ?? '');
-      }
-      const displayMsg = msgStr.length > 200 ? msgStr.substring(0, 200) + '...' : msgStr;
-      lines.push(`- **Agent Response** (${stepId}): ${displayMsg}`);
+      lines.push(formatSendMessageLine(output));
     } else if (stepType === 'agent.get_state') {
-      const resp = output.response;
-      if (resp !== null && typeof resp === 'object' && 'planner_response' in resp) {
-        const { planner_response: plannerResp } = resp as { planner_response?: GetStateResponse['planner_response'] };
-        const lastExec = plannerResp?.lastExecution;
-        lines.push(`- **Topic Selected**: ${lastExec?.topic ?? 'N/A'}`);
-        lines.push(`- **Response Latency**: ${lastExec?.latency ?? 'N/A'}ms`);
-      } else {
-        lines.push(`- **State**: ${String(resp).substring(0, 200)}`);
-      }
+      lines.push(...formatGetStateLines(output));
     }
   }
 
@@ -153,7 +162,7 @@ function formatErrorLines(errors: TestError[]): string[] {
     lines.push('### Errors\n');
     for (const error of errors) {
       const errorId = error.id ?? 'unknown';
-      const errorMsg = error.error_message ?? String(error);
+      const errorMsg = error.error_message ?? JSON.stringify(error);
       lines.push(`- **${errorId}**: ${errorMsg}`);
     }
     lines.push('');
@@ -231,11 +240,11 @@ function formatJunit(results: EvalApiResponse): string {
         classname: 'agent-eval-labs',
         failed: isPass === false,
         errored: !!error,
-        message: error
-          ? error
-          : isPass === false
-          ? `Expected ${String(evalR.expected_value ?? '')} but got ${String(evalR.actual_value ?? '')}`
-          : '',
+        message:
+          error ??
+          (isPass === false
+            ? `Expected ${String(evalR.expected_value ?? '')} but got ${String(evalR.actual_value ?? '')}`
+            : ''),
         score: score != null ? score.toFixed(3) : 'N/A',
       });
     }

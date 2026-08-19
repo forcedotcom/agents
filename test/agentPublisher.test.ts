@@ -101,7 +101,7 @@ describe('AgentPublisher', () => {
     // Clean up any test files
     try {
       await rm(join('force-app'), { recursive: true, force: true });
-    } catch (error) {
+    } catch {
       // Ignore if directory doesn't exist
     }
   });
@@ -329,8 +329,8 @@ describe('AgentPublisher', () => {
       $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
 
       // Let the REAL deployAuthoringBundle run; stub only the org boundary it calls.
-      const pollStatusStub = $$.SANDBOX.stub().resolves({ response: { success: true } } as never);
-      const deployStub = $$.SANDBOX.stub().resolves({ pollStatus: pollStatusStub } as unknown);
+      const pollStatusStub = $$.SANDBOX.stub().resolves({ response: { success: true } });
+      const deployStub = $$.SANDBOX.stub().resolves({ pollStatus: pollStatusStub });
       const fromSourceStub = $$.SANDBOX.stub(ComponentSet, 'fromSource').returns({ deploy: deployStub } as never);
 
       const result = await publisher.publishAgentJson();
@@ -357,9 +357,9 @@ describe('AgentPublisher', () => {
       const expectedBotId = '0Xx1234567890ABC';
       $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves({ Id: expectedBotId });
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
       const getPublishedBotId = (publisher as any).getPublishedBotId.bind(publisher);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       const result = await getPublishedBotId('test_agent');
 
       expect(result).to.equal(expectedBotId);
@@ -374,9 +374,9 @@ describe('AgentPublisher', () => {
 
       $$.SANDBOX.stub(connection, 'singleRecordQuery').throws(new Error('No records found'));
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
       const getPublishedBotId = (publisher as any).getPublishedBotId.bind(publisher);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       const result = await getPublishedBotId('nonexistent_agent');
 
       expect(result).to.be.undefined;
@@ -394,9 +394,9 @@ describe('AgentPublisher', () => {
       const expectedVersionName = 'v1';
       $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves({ DeveloperName: expectedVersionName });
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
       const getVersionDeveloperName = (publisher as any).getVersionDeveloperName.bind(publisher);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       const result = await getVersionDeveloperName('0Bv1234567890ABC');
 
       expect(result).to.equal(expectedVersionName);
@@ -411,7 +411,7 @@ describe('AgentPublisher', () => {
 
       $$.SANDBOX.stub(connection, 'singleRecordQuery').throws(new Error('No records found'));
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
       const getVersionDeveloperName = (publisher as any).getVersionDeveloperName.bind(publisher);
 
       try {
@@ -438,7 +438,7 @@ describe('AgentPublisher', () => {
 
       const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
       const deployAuthoringBundle = (publisher as any).deployAuthoringBundle.bind(publisher);
 
       try {
@@ -465,7 +465,7 @@ describe('AgentPublisher', () => {
       // The standard connection is already set up in connectionManager via createMockConnectionManager
 
       // Mock ComponentSet.fromSource(...).deploy(...).pollStatus()
-      const pollStatusStub = $$.SANDBOX.stub().resolves({ response: { success: true } } as never);
+      const pollStatusStub = $$.SANDBOX.stub().resolves({ response: { success: true } });
       const deployStub = $$.SANDBOX.stub().callsFake(async () => {
         // The meta.xml must contain the computed target when deploy is invoked
         const contentDuringDeploy = await readFile(bundleMetaPath, 'utf-8');
@@ -475,7 +475,7 @@ describe('AgentPublisher', () => {
       });
       const fromSourceStub = $$.SANDBOX.stub(ComponentSet, 'fromSource').returns({ deploy: deployStub } as never);
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
       const deployAuthoringBundle = (publisher as any).deployAuthoringBundle.bind(publisher);
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       await deployAuthoringBundle('v1');
@@ -505,7 +505,7 @@ describe('AgentPublisher', () => {
         usernameOrConnection: testOrg.getMockUserInfo().Username,
         output: 'nowhere',
       });
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       $$.SANDBOX.stub(mdApiRetrieve, 'pollStatus').resolves({
         response: {
           success: true,
@@ -517,7 +517,7 @@ describe('AgentPublisher', () => {
 
       const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
       const retrieveAgentMetadata = (publisher as any).retrieveAgentMetadata.bind(publisher);
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       await retrieveAgentMetadata();
@@ -538,7 +538,7 @@ describe('AgentPublisher', () => {
         usernameOrConnection: testOrg.getMockUserInfo().Username,
         output: 'nowhere',
       });
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       $$.SANDBOX.stub(mdApiRetrieve, 'pollStatus').resolves({
         response: {
           success: false,
@@ -551,7 +551,7 @@ describe('AgentPublisher', () => {
 
       const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
       const retrieveAgentMetadata = (publisher as any).retrieveAgentMetadata.bind(publisher);
 
       try {
