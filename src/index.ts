@@ -203,6 +203,31 @@ export {
   type StageArtifact,
   type FileListResponse,
 } from './dataLibraryTypes';
+export {
+  type ScorerSpec,
+  type ScorerDataType,
+  type ScorerType,
+  type ScorerSemanticType,
+  type ScorerInputScope,
+  type ScorerEngineType,
+  type ScorerStatus,
+  type ScorerOutcomeType,
+  type OutputEnumValue,
+  type ValueSpecification,
+  type NumberSpecification,
+  type AgentAssociation,
+  type ScorerCreateResult,
+  type SupportedLightningType,
+  MAX_ENUM_VALUES,
+  SUPPORTED_LIGHTNING_TYPES,
+  labelToApiName,
+  generateNumberEnumValues,
+  validateScorerSpec,
+  buildDefaultPromptContent,
+  buildScorerXml,
+  buildPromptTemplateXml,
+  createScorerDefinition,
+} from './agentScorer';
 export { ApiCatalog } from './apiCatalog';
 export {
   type McpServerType,
