@@ -27,7 +27,7 @@
     "ts-morph": "^28.0.0",
     "ts-node": "^10.9.2",
     "ts-patch": "^3.3.0",
-    "typedoc": "^0.28.19",
+    "typedoc": "^0.28.20",
     "typescript": "^5.9.3"
   },
   "resolutions": {
