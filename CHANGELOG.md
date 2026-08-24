@@ -1,3 +1,12 @@
+## [2.0.6](https://github.com/forcedotcom/agents/compare/2.0.5...2.0.6) (2026-08-24)
+
+
+### Bug Fixes
+
+* guard against nodes without a tools array when publishing authoring bundles ([#350](https://github.com/forcedotcom/agents/issues/350)) ([eca1c20](https://github.com/forcedotcom/agents/commit/eca1c20f30798a4e588f9fb42c8d93e38a53850d))
+
+
+
 ## [2.0.5](https://github.com/forcedotcom/agents/compare/2.0.4...2.0.5) (2026-08-19)
 
 
