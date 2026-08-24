@@ -774,6 +774,86 @@ describe('AgentPublisher', () => {
       validateStub.restore();
     });
 
+    it('should not crash when a node has no tools property (e.g. a related_agent delegation node)', async () => {
+      // Regression test for the crash reported against `sf agent publish authoring-bundle`:
+      // `related_agent` nodes (compiled from AgentScript `connected_subagent` blocks, which
+      // have no `actions:` section) omit the `tools` array entirely. The old code did
+      // `n.tools.map(...)` unconditionally and threw
+      // `TypeError: Cannot read properties of undefined (reading 'map')`.
+      // Note this differs from the `tools: []` case above: here the property is absent, not empty.
+      const relatedAgentNode = {
+        type: 'related_agent',
+        reasoningType: 'standard',
+        description: 'Delegate to a connected subagent',
+        beforeReasoning: '',
+        instructions: '',
+        focusPrompt: '',
+        // tools intentionally omitted — this is what caused the crash
+        preToolCall: null,
+        postToolCall: null,
+        afterReasoning: null,
+        developerName: 'RelatedAgentNode',
+        label: 'Related Agent Node',
+        onInit: null,
+        transitions: null,
+        onExit: null,
+        actionDefinitions: [],
+      };
+      const agentJsonWithRelatedAgentNode: AgentJson = {
+        ...agentJson,
+        agentVersion: {
+          ...agentJson.agentVersion,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          nodes: [relatedAgentNode as any],
+        },
+      };
+
+      const validateStub = createValidateDeveloperNameStub();
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJsonWithRelatedAgentNode, false);
+
+      // Setup successful metadata retrieval mock
+      const compSet = new ComponentSet();
+      const mdApiRetrieve = new MetadataApiRetrieve({
+        usernameOrConnection: testOrg.getMockUserInfo().Username,
+        output: 'nowhere',
+      });
+      $$.SANDBOX.stub(mdApiRetrieve, 'pollStatus').resolves({
+        // @ts-expect-error only stubbed response
+        response: {
+          success: true,
+        },
+      });
+      $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
+
+      let capturedMetadataEntries: string[] = [];
+      const buildStub = $$.SANDBOX.stub(ComponentSetBuilder, 'build').callsFake(async (options) => {
+        if (options?.metadata?.metadataEntries) {
+          capturedMetadataEntries = options.metadata.metadataEntries;
+        }
+        return compSet;
+      });
+
+      // @ts-expect-error private method
+      const retrieveAgentMetadata = publisher.retrieveAgentMetadata.bind(publisher);
+      // Should NOT throw despite the node lacking a `tools` property.
+      await retrieveAgentMetadata('v1');
+
+      expect(buildStub.calledOnce).to.be.true;
+
+      // The GenAiPlugin entry is still emitted for the node...
+      expect(capturedMetadataEntries).to.include('GenAiPlugin:RelatedAgentNode');
+
+      // ...but no GenAiFunction entries, since the node has no tools.
+      const genAiFunctionEntries = capturedMetadataEntries.filter((entry) => entry.startsWith('GenAiFunction:'));
+      expect(genAiFunctionEntries).to.be.empty;
+
+      // Bot and Agent entries are still included.
+      expect(capturedMetadataEntries).to.include('Bot:test_agent');
+      expect(capturedMetadataEntries).to.include('Agent:test_agent_v1');
+
+      validateStub.restore();
+    });
+
     it('should not include GenAiPlugin and GenAiFunction entries when nodes array is empty', async () => {
       // Use the default agentJson which has empty nodes array
       const validateStub = createValidateDeveloperNameStub();

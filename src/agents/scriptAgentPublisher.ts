@@ -184,7 +184,9 @@ export class ScriptAgentPublisher {
 
     const genAiPluginAndFunctions = this.agentJson.agentVersion.nodes.flatMap((n) => [
       `GenAiPlugin:${n.developerName}`,
-      ...n.tools.map((t) => `GenAiFunction:${t.name}`),
+      // Some node types (e.g. `related_agent` from a `connected_subagent` block) are pure
+      // delegation stubs and compile with no `tools` array, so guard against undefined.
+      ...(n.tools ?? []).map((t) => `GenAiFunction:${t.name}`),
     ]);
 
     const cs = await ComponentSetBuilder.build({

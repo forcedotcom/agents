@@ -918,7 +918,8 @@ export type AgentJson = {
       beforeReasoning: string;
       instructions: string;
       focusPrompt: string;
-      tools: Array<{
+      // Optional: delegation node types (e.g. `related_agent`) compile with no `tools`.
+      tools?: Array<{
         type: string;
         target: string | null;
         boundInputs: unknown;
