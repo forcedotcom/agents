@@ -33,7 +33,7 @@
   "resolutions": {
     "serialize-javascript": "^7.0.5",
     "uuid": "^11.1.1",
-    "@salesforce/source-deploy-retrieve/@salesforce/core": "^9.0.0"
+    "@salesforce/core": "^9.0.0"
   },
   "engines": {
     "node": ">=22.0.0"
