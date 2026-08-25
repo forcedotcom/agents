@@ -18,7 +18,7 @@ import { join } from 'node:path';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { expect } from 'chai';
 import { genUniqueString, TestSession } from '@salesforce/cli-plugins-testkit';
-import { AuthInfo, Connection, generateApiName, Org, SfProject, User, UserFields } from '@salesforce/core';
+import { AuthInfo, Connection, generateApiName, Org, SfProject, User } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { sleep } from '@salesforce/kit';
 import { Agent, ScriptAgent, type AgentJobSpec, type AgentJobSpecCreateConfig } from '../../src';
@@ -62,7 +62,7 @@ async function waitForPermSetAssignment(
   permSetName: string,
   maxAttempts = 12
 ): Promise<void> {
-  // eslint-disable-next-line no-await-in-loop
+   
   for (let i = 0; i < maxAttempts; i++) {
     // eslint-disable-next-line no-await-in-loop
     const result = await connection.query<{ Id: string }>(
@@ -582,7 +582,7 @@ describe('agent NUTs', () => {
         languageLocaleKey: 'en_US',
         localeSidKey: 'en_US',
         profileId,
-      } as UserFields)) as { userId: string };
+      })) as { userId: string };
       botUserId = userId;
 
       await botUser.assignPermissionSets(userId, ['AgentforceServiceAgentUser']);

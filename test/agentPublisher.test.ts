@@ -393,9 +393,9 @@ describe('AgentPublisher', () => {
 
       $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves({ DeveloperName: 'v1', VersionNumber: 1 });
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
       const getBotVersion = (publisher as any).getBotVersion.bind(publisher);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       const result = await getBotVersion('0Bv1234567890ABC');
 
       expect(result).to.deep.equal({ developerName: 'v1', versionNumber: 1 });
@@ -410,7 +410,7 @@ describe('AgentPublisher', () => {
 
       $$.SANDBOX.stub(connection, 'singleRecordQuery').throws(new Error('No records found'));
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
       const getBotVersion = (publisher as any).getBotVersion.bind(publisher);
 
       try {
