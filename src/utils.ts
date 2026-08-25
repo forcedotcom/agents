@@ -671,30 +671,62 @@ export function getHttpStatusCode(err: unknown): number | undefined {
 /**
  * Render structured log fields as a `key=value, key=value` string for the `msg-ctx`
  * logging convention (a static message prefix, then ` | `, then this rendering). The
- * same field names are used here as in the structured fields object. Non-primitive
- * values (e.g. Error objects) and null/undefined are omitted from the rendering — they
- * stay in the structured fields as the source of truth. Arrays are joined with `;` and
- * Dates rendered as ISO so neither collides with the `, ` pair separator.
+ * same field names are used here as in the structured fields object. This produces a
+ * best-effort, human-readable breadcrumb; the structured fields object remains the
+ * authoritative, machine-parseable source of truth.
+ *
+ * Rendering rules:
+ * - Non-primitive values (e.g. Error objects) and null/undefined/empty-string/empty-array
+ *   are omitted — they add no readable signal. Log a primitive projection instead (e.g.
+ *   `errName`/`errMsg` rather than the whole error).
+ * - Arrays are joined with `;` and Dates rendered as ISO.
+ * - Control characters (CR/LF/tab) are collapsed to a single space so a field value can
+ *   never inject a second apparent log line (CWE-117 log forging).
+ * - A rendered value containing the pair separator `,` or the message separator `|` is
+ *   quoted so the pair stays unambiguous to a reader (the intra-array `;` is expected and
+ *   does not trigger quoting).
  */
 const renderLogCtx = (fields: Record<string, unknown>): string =>
   Object.entries(fields)
-    .filter(([, v]) => v != null && (typeof v !== 'object' || Array.isArray(v) || v instanceof Date))
+    .filter(
+      ([, v]) =>
+        v != null &&
+        v !== '' &&
+        (typeof v !== 'object' || (Array.isArray(v) && v.length > 0) || v instanceof Date)
+    )
     .map(([k, v]) => {
-      const rendered = Array.isArray(v) ? v.join(';') : v instanceof Date ? v.toISOString() : String(v);
+      const raw = Array.isArray(v) ? v.join(';') : v instanceof Date ? v.toISOString() : String(v);
+      const sanitized = raw.replace(/[\r\n\t]+/g, ' ');
+      const rendered = /[,|]/.test(sanitized) ? `"${sanitized}"` : sanitized;
       return `${k}=${rendered}`;
     })
     .join(', ');
 
 /**
  * Build a `msg-ctx` log message: the static `message` prefix followed by ` | ` and the
- * rendered context. Pass the SAME `fields` object as the logger's structured-fields
- * argument so the human-readable rendering and the structured source-of-truth never
- * drift, e.g. `logger.debug(msgCtx('Request failed', ctx), ctx)`. When no field renders
- * to context, the bare message is returned so there is no dangling ` | `.
+ * rendered context. When no field renders to context, the bare message is returned so
+ * there is no dangling ` | `. Prefer {@link logCtx}, which renders and logs in one call
+ * so the fields object is passed exactly once and cannot drift from the message.
  */
 export const msgCtx = (message: string, fields: Record<string, unknown>): string => {
   const ctx = renderLogCtx(fields);
   return ctx ? `${message} | ${ctx}` : message;
+};
+
+/**
+ * Emit a `msg-ctx` log line in a single call: renders `fields` into the message prefix
+ * AND passes the same `fields` object as the logger's structured-fields argument, so the
+ * human-readable rendering and the structured source-of-truth are guaranteed identical —
+ * eliminating the drift that a manual `logger.debug(msgCtx(m, ctx), ctx)` two-arg call
+ * risks. Use this at every call site, e.g. `logCtx(getLogger(), 'debug', 'Request failed', ctx)`.
+ */
+export const logCtx = (
+  logger: Logger,
+  level: 'trace' | 'debug' | 'info' | 'warn' | 'error',
+  message: string,
+  fields: Record<string, unknown>
+): void => {
+  logger[level](msgCtx(message, fields), fields);
 };
 
 /**
@@ -772,8 +804,10 @@ export async function requestWithEndpointFallback<T>(
       );
     } catch (error) {
       const statusCode = getHttpStatusCode(error);
-      const ctx = { url: modifiedUrl, statusCode: statusCode ?? 'unknown' };
-      logger.debug(msgCtx('Agent API request failed for endpoint', ctx), ctx);
+      logCtx(logger, 'debug', 'Agent API request failed for endpoint', {
+        url: modifiedUrl,
+        statusCode: statusCode ?? 'unknown',
+      });
       if (statusCode === 404) {
         lastError = error;
         continue; // Try next endpoint
@@ -784,7 +818,7 @@ export async function requestWithEndpointFallback<T>(
   }
 
   // All endpoints failed with 404
-  logger.debug(msgCtx('All Agent API endpoints returned 404', { attemptedEndpoints }), { attemptedEndpoints });
+  logCtx(logger, 'debug', 'All Agent API endpoints returned 404', { attemptedEndpoints });
   throw SfError.create({
     name: 'AgentApiNotFound',
     message: `Unable to access the Salesforce Agent APIs. Ensure the user '${

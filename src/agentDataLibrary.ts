@@ -17,7 +17,7 @@
 import { readFileSync, statSync } from 'node:fs';
 import { basename } from 'node:path';
 import { Connection, Lifecycle, Logger, SfError } from '@salesforce/core';
-import { getHttpStatusCode, msgCtx } from './utils';
+import { getHttpStatusCode, logCtx } from './utils';
 import {
   type DataLibrarySummary,
   type DataLibraryDetail,
@@ -65,8 +65,12 @@ export class AgentDataLibrary {
       });
     } catch (error) {
       const wrapped = SfError.wrap(error);
-      const ctx = { sourceType: options?.sourceType, statusCode: getHttpStatusCode(error), err: wrapped };
-      getLogger().debug(msgCtx('Data library list request failed', ctx), ctx);
+      logCtx(getLogger(), 'debug', 'Data library list request failed', {
+        sourceType: options?.sourceType,
+        statusCode: getHttpStatusCode(error),
+        errName: wrapped.name,
+        errMsg: wrapped.message,
+      });
       await Lifecycle.getInstance().emitTelemetry({ eventName: 'agent_adl_list_failed' });
       throw wrapped;
     }
@@ -83,8 +87,12 @@ export class AgentDataLibrary {
       });
     } catch (error) {
       const wrapped = SfError.wrap(error);
-      const ctx = { sourceType: input.groundingSource?.sourceType, statusCode: getHttpStatusCode(error), err: wrapped };
-      getLogger().debug(msgCtx('Data library create request failed', ctx), ctx);
+      logCtx(getLogger(), 'debug', 'Data library create request failed', {
+        sourceType: input.groundingSource?.sourceType,
+        statusCode: getHttpStatusCode(error),
+        errName: wrapped.name,
+        errMsg: wrapped.message,
+      });
       await Lifecycle.getInstance().emitTelemetry({ eventName: 'agent_adl_create_failed' });
       throw wrapped;
     }
@@ -123,8 +131,12 @@ export class AgentDataLibrary {
       });
     } catch (error) {
       const wrapped = SfError.wrap(error);
-      const ctx = { libraryId, statusCode: getHttpStatusCode(error), err: wrapped };
-      getLogger().debug(msgCtx('Data library get request failed', ctx), ctx);
+      logCtx(getLogger(), 'debug', 'Data library get request failed', {
+        libraryId,
+        statusCode: getHttpStatusCode(error),
+        errName: wrapped.name,
+        errMsg: wrapped.message,
+      });
       await Lifecycle.getInstance().emitTelemetry({ eventName: 'agent_adl_get_failed' });
       throw wrapped;
     }
@@ -140,8 +152,12 @@ export class AgentDataLibrary {
       });
     } catch (error) {
       const wrapped = SfError.wrap(error);
-      const ctx = { libraryId, statusCode: getHttpStatusCode(error), err: wrapped };
-      getLogger().debug(msgCtx('Data library update request failed', ctx), ctx);
+      logCtx(getLogger(), 'debug', 'Data library update request failed', {
+        libraryId,
+        statusCode: getHttpStatusCode(error),
+        errName: wrapped.name,
+        errMsg: wrapped.message,
+      });
       await Lifecycle.getInstance().emitTelemetry({ eventName: 'agent_adl_update_failed' });
       throw wrapped;
     }
@@ -155,8 +171,12 @@ export class AgentDataLibrary {
       });
     } catch (error) {
       const wrapped = SfError.wrap(error);
-      const ctx = { libraryId, statusCode: getHttpStatusCode(error), err: wrapped };
-      getLogger().debug(msgCtx('Data library delete request failed', ctx), ctx);
+      logCtx(getLogger(), 'debug', 'Data library delete request failed', {
+        libraryId,
+        statusCode: getHttpStatusCode(error),
+        errName: wrapped.name,
+        errMsg: wrapped.message,
+      });
       await Lifecycle.getInstance().emitTelemetry({ eventName: 'agent_adl_delete_failed' });
       throw wrapped;
     }
@@ -178,13 +198,13 @@ export class AgentDataLibrary {
       });
     } catch (error) {
       const wrapped = SfError.wrap(error);
-      const ctx = {
+      logCtx(getLogger(), 'debug', 'Data library status request failed', {
         libraryId,
         includeArtifacts: options?.includeArtifacts ?? false,
         statusCode: getHttpStatusCode(error),
-        err: wrapped,
-      };
-      getLogger().debug(msgCtx('Data library status request failed', ctx), ctx);
+        errName: wrapped.name,
+        errMsg: wrapped.message,
+      });
       await Lifecycle.getInstance().emitTelemetry({ eventName: 'agent_adl_status_failed' });
       throw wrapped;
     }
@@ -223,8 +243,12 @@ export class AgentDataLibrary {
       });
     } catch (error) {
       const wrapped = SfError.wrap(error);
-      const ctx = { libraryId, statusCode: getHttpStatusCode(error), err: wrapped };
-      getLogger().debug(msgCtx('Data library list-files request failed', ctx), ctx);
+      logCtx(getLogger(), 'debug', 'Data library list-files request failed', {
+        libraryId,
+        statusCode: getHttpStatusCode(error),
+        errName: wrapped.name,
+        errMsg: wrapped.message,
+      });
       await Lifecycle.getInstance().emitTelemetry({ eventName: 'agent_adl_list_files_failed' });
       throw wrapped;
     }
@@ -238,8 +262,13 @@ export class AgentDataLibrary {
       });
     } catch (error) {
       const wrapped = SfError.wrap(error);
-      const ctx = { libraryId, fileId, statusCode: getHttpStatusCode(error), err: wrapped };
-      getLogger().debug(msgCtx('Data library file-delete request failed', ctx), ctx);
+      logCtx(getLogger(), 'debug', 'Data library file-delete request failed', {
+        libraryId,
+        fileId,
+        statusCode: getHttpStatusCode(error),
+        errName: wrapped.name,
+        errMsg: wrapped.message,
+      });
       await Lifecycle.getInstance().emitTelemetry({ eventName: 'agent_adl_file_delete_failed' });
       throw wrapped;
     }

@@ -22,7 +22,7 @@ import { env } from '@salesforce/kit';
 // Type-only import: erased at compile time. Only used for the `nock.Body`
 // constraint on the generic type parameter.
 import type nock from 'nock';
-import { msgCtx, requestWithEndpointFallback } from './utils';
+import { logCtx, requestWithEndpointFallback } from './utils';
 
 type HttpHeaders = {
   [name: string]: string;
@@ -94,22 +94,19 @@ async function readResponses<T extends nock.Body>(mockDir: string, url: string, 
     await Promise.all([
       readJson(`${mockResponsePath}.json`)
         .then((r) => {
-          logger.debug(
-            msgCtx('Found JSON mock file', { mockResponsePath: `${mockResponsePath}.json` }),
-            { mockResponsePath: `${mockResponsePath}.json` }
-          );
+          logCtx(logger, 'debug', 'Found JSON mock file', { mockResponsePath: `${mockResponsePath}.json` });
           return r;
         })
         .catch(() => undefined),
       readPlainText(mockResponsePath)
         .then((r) => {
-          logger.debug(msgCtx('Found plain text mock file', { mockResponsePath }), { mockResponsePath });
+          logCtx(logger, 'debug', 'Found plain text mock file', { mockResponsePath });
           return r;
         })
         .catch(() => undefined),
       readDirectory(mockResponsePath)
         .then((r) => {
-          logger.debug(msgCtx('Found directory of mock files', { mockResponsePath }), { mockResponsePath });
+          logCtx(logger, 'debug', 'Found directory of mock files', { mockResponsePath });
           return r;
         })
         .catch(() => undefined),
@@ -124,10 +121,7 @@ async function readResponses<T extends nock.Body>(mockDir: string, url: string, 
     });
   }
 
-  logger.debug(
-    msgCtx('Loaded mock responses', { mockResponsePath, count: responses.length }),
-    { mockResponsePath, count: responses.length }
-  );
+  logCtx(logger, 'debug', 'Loaded mock responses', { mockResponsePath, count: responses.length });
 
   return responses;
 }
@@ -164,10 +158,7 @@ export class MaybeMock {
     headers: HttpHeaders = {}
   ): Promise<T> {
     if (this.mockDir) {
-      this.logger.debug(
-        msgCtx('Mocking request', { method, url, mockDir: this.mockDir }),
-        { method, url, mockDir: this.mockDir }
-      );
+      logCtx(this.logger, 'debug', 'Mocking request', { method, url, mockDir: this.mockDir });
       const responses = await readResponses<T>(this.mockDir, url, this.logger);
       // Return mock responses directly — nock cannot intercept jsforce's undici-based
       // HTTP transport, so we short-circuit here. For polling scenarios with multiple
@@ -178,7 +169,7 @@ export class MaybeMock {
       return responses[Math.min(callIndex, responses.length - 1)];
     }
 
-    this.logger.debug(msgCtx('Making request', { method, url }), { method, url });
+    logCtx(this.logger, 'debug', 'Making request', { method, url });
 
     // For api.salesforce.com URLs, use endpoint fallback
     const isApiSalesforceUrl = url.includes('https://api.salesforce.com');

@@ -33,7 +33,7 @@ import {
   ScriptAgentOptions,
 } from './types';
 import { MaybeMock } from './maybe-mock';
-import { decodeHtmlEntities, findLocalAgents, msgCtx } from './utils';
+import { decodeHtmlEntities, findLocalAgents, logCtx } from './utils';
 import { ScriptAgent } from './agents/scriptAgent';
 import { ProductionAgent } from './agents/productionAgent';
 import { managerFor } from './connectionManager';
@@ -235,13 +235,12 @@ export class Agent {
 
     // When previewing agent creation just return the response.
     if (!config.saveAgent) {
-      const previewCtx = {
+      logCtx(getLogger(), 'debug', 'Previewing agent creation', {
         agentName: config.agentSettings?.agentName,
         agentApiName: config.agentSettings?.agentApiName,
         saveAgent: config.saveAgent ?? false,
         projectPath: project.getPath(),
-      };
-      getLogger().debug(msgCtx('Previewing agent creation', previewCtx), previewCtx);
+      });
       await Lifecycle.getInstance().emit(AgentCreateLifecycleStages.Previewing, {});
 
       const response = await maybeMock.request<AgentCreateResponse>('POST', url, config);
@@ -252,12 +251,11 @@ export class Agent {
       throw messages.createError('missingAgentName');
     }
 
-    const creatingCtx = {
+    logCtx(getLogger(), 'debug', 'Creating agent', {
       agentName: config.agentSettings?.agentName,
       agentApiName: config.agentSettings?.agentApiName,
       projectPath: project.getPath(),
-    };
-    getLogger().debug(msgCtx('Creating agent', creatingCtx), creatingCtx);
+    });
     await Lifecycle.getInstance().emit(AgentCreateLifecycleStages.Creating, {});
     config.agentSettings.agentApiName ??= generateApiName(config.agentSettings?.agentName);
     const response = await maybeMock.request<AgentCreateResponse>('POST', url, config);

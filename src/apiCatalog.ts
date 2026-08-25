@@ -15,7 +15,7 @@
  */
 
 import { Connection, Lifecycle, Logger, SfError } from '@salesforce/core';
-import { getHttpStatusCode, msgCtx } from './utils';
+import { getHttpStatusCode, logCtx } from './utils';
 import {
   type ListMcpServersOptions,
   type McpServerCollection,
@@ -153,8 +153,14 @@ export class ApiCatalog {
       result = await connection.request<T>(req);
     } catch (error) {
       const wrapped = SfError.wrap(error);
-      const ctx = { op, method, url, statusCode: getHttpStatusCode(error), err: wrapped };
-      getLogger().debug(msgCtx('API Catalog request failed', ctx), ctx);
+      logCtx(getLogger(), 'debug', 'API Catalog request failed', {
+        op,
+        method,
+        url,
+        statusCode: getHttpStatusCode(error),
+        errName: wrapped.name,
+        errMsg: wrapped.message,
+      });
       await ApiCatalog.emitTelemetry(`api_catalog_${op}_failed`);
       throw wrapped;
     }

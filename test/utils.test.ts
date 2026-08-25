@@ -38,6 +38,7 @@ import {
   readTurnIndex,
   writeTraceToHistory,
   getHistoryDir,
+  msgCtx,
   type TurnIndex,
   type TraceFileInfo,
 } from '../src/utils';
@@ -1211,4 +1212,37 @@ describe('readTurnIndex', () => {
   });
 
   after(() => void ctx);
+});
+
+describe('msgCtx', () => {
+  it('appends rendered context after " | " and keeps the static prefix', () => {
+    expect(msgCtx('Retry limit exceeded', { retryCount: 3, maxRetries: 3 })).to.equal(
+      'Retry limit exceeded | retryCount=3, maxRetries=3'
+    );
+  });
+
+  it('returns the bare message when no field renders to context', () => {
+    expect(msgCtx('Nothing to see', { err: new Error('boom'), missing: undefined, empty: '' })).to.equal(
+      'Nothing to see'
+    );
+  });
+
+  it('omits null, undefined, empty strings, empty arrays, and non-primitive objects', () => {
+    expect(msgCtx('m', { a: [], b: '', c: null, d: undefined, e: { nested: 1 }, f: 1 })).to.equal('m | f=1');
+  });
+
+  it('joins arrays with ";" and renders Dates as ISO', () => {
+    const when = new Date('2026-01-02T03:04:05.000Z');
+    expect(msgCtx('m', { items: ['a', 'b'], when })).to.equal('m | items=a;b, when=2026-01-02T03:04:05.000Z');
+  });
+
+  it('collapses CR/LF/tab so a value cannot forge a second log line (CWE-117)', () => {
+    const rendered = msgCtx('m', { agentName: 'Acme\n2026 INFO forged' });
+    expect(rendered).to.not.match(/[\r\n\t]/);
+    expect(rendered).to.equal('m | agentName=Acme 2026 INFO forged');
+  });
+
+  it('quotes values that contain a separator so the pair stays unambiguous', () => {
+    expect(msgCtx('m', { url: 'x?a=1,b=2' })).to.equal('m | url="x?a=1,b=2"');
+  });
 });
