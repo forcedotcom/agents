@@ -23,7 +23,7 @@ import { Duration, env } from '@salesforce/kit';
 import { ComponentSet, ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { MaybeMock } from '../maybe-mock';
 import { type AgentJson, type PublishAgent, type PublishAgentJsonResponse } from '../types';
-import { findAuthoringBundle } from '../utils';
+import { findAuthoringBundle, msgCtx } from '../utils';
 import { managerFor } from '../connectionManager';
 
 Messages.importMessagesDirectory(__dirname);
@@ -99,7 +99,10 @@ export class ScriptAgentPublisher {
    * @returns Promise<PublishAgent> The publish response
    */
   public async publishAgentJson(): Promise<PublishAgent> {
-    getLogger().debug('Publishing Agent');
+    getLogger().debug(
+      msgCtx('Publishing agent', { developerName: this.developerName }),
+      { developerName: this.developerName }
+    );
 
     const manager = await managerFor(this.connection);
 
@@ -212,9 +215,11 @@ export class ScriptAgentPublisher {
 
     const retrieveTimeout = getMetadataPollTimeout();
     const retrieveStart = Date.now();
-    getLogger().debug(`Polling for agent metadata retrieve (timeout: ${retrieveTimeout.minutes} min)`);
+    const retrievePollCtx = { timeoutMinutes: retrieveTimeout.minutes };
+    getLogger().debug(msgCtx('Polling for agent metadata retrieve', retrievePollCtx), retrievePollCtx);
     const retrieveResult = await retrieve.pollStatus({ timeout: retrieveTimeout });
-    getLogger().debug(`Agent metadata retrieve poll completed in ${Date.now() - retrieveStart} ms`);
+    const retrieveDoneCtx = { durationMs: Date.now() - retrieveStart };
+    getLogger().debug(msgCtx('Agent metadata retrieve poll completed', retrieveDoneCtx), retrieveDoneCtx);
 
     if (!retrieveResult.response?.success) {
       const errMessages = JSON.stringify(retrieveResult.response?.messages) ?? 'unknown';
@@ -244,7 +249,8 @@ export class ScriptAgentPublisher {
     };
     const target = `${this.developerName}.${botVersionName}`;
     authoringBundle.AiAuthoringBundle.target = target;
-    getLogger().debug(`Setting target to ${target} in ${this.bundleMetaPath}`);
+    const targetCtx = { target, bundleMetaPath: this.bundleMetaPath };
+    getLogger().debug(msgCtx('Setting target on authoring bundle meta.xml', targetCtx), targetCtx);
     const xmlBuilder = new XMLBuilder({
       ignoreAttributes: false,
       format: true,
@@ -260,9 +266,11 @@ export class ScriptAgentPublisher {
     });
     const deployTimeout = getMetadataPollTimeout();
     const deployStart = Date.now();
-    getLogger().debug(`Polling for authoring bundle deploy (timeout: ${deployTimeout.minutes} min)`);
+    const deployPollCtx = { timeoutMinutes: deployTimeout.minutes };
+    getLogger().debug(msgCtx('Polling for authoring bundle deploy', deployPollCtx), deployPollCtx);
     const deployResult = await deploy.pollStatus({ timeout: deployTimeout });
-    getLogger().debug(`Authoring bundle deploy poll completed in ${Date.now() - deployStart} ms`);
+    const deployDoneCtx = { durationMs: Date.now() - deployStart };
+    getLogger().debug(msgCtx('Authoring bundle deploy poll completed', deployDoneCtx), deployDoneCtx);
 
     // 3.remove the target from the local authoring bundle meta.xml file
     delete authoringBundle.AiAuthoringBundle.target;
@@ -294,10 +302,15 @@ export class ScriptAgentPublisher {
       const queryResult = await standardConn.singleRecordQuery<{ Id: string }>(
         `SELECT Id FROM BotDefinition WHERE DeveloperName='${agentApiName}'`
       );
-      getLogger().debug(`Agent with developer name ${agentApiName} and id ${queryResult.Id} is already published.`);
+      const publishedCtx = { agentApiName, botId: queryResult.Id };
+      getLogger().debug(msgCtx('Agent is already published', publishedCtx), publishedCtx);
       return queryResult.Id;
     } catch (error) {
-      getLogger().debug(`Error reading agent metadata: ${JSON.stringify(error)}`);
+      const notPublishedCtx = { agentApiName, err: SfError.wrap(error) };
+      getLogger().debug(
+        msgCtx('Error querying BotDefinition; treating agent as not yet published', notPublishedCtx),
+        notPublishedCtx
+      );
       return undefined;
     }
   }
@@ -314,7 +327,8 @@ export class ScriptAgentPublisher {
       const queryResult = await standardConn.singleRecordQuery<{ DeveloperName: string }>(
         `SELECT DeveloperName FROM BotVersion WHERE Id='${botVersionId}'`
       );
-      getLogger().debug(`Bot version with id ${botVersionId} is ${queryResult.DeveloperName}.`);
+      const versionCtx = { botVersionId, developerName: queryResult.DeveloperName };
+      getLogger().debug(msgCtx('Resolved bot version developer name', versionCtx), versionCtx);
       return queryResult.DeveloperName;
     } catch {
       const err = messages.createError('findBotVersionError', [botVersionId]);

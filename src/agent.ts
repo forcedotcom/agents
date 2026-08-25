@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-import { inspect } from 'node:util';
 import * as path from 'node:path';
 import { readdir, stat } from 'node:fs/promises';
 import { Connection, generateApiName, Lifecycle, Logger, Messages, SfError, SfProject } from '@salesforce/core';
@@ -34,7 +33,7 @@ import {
   ScriptAgentOptions,
 } from './types';
 import { MaybeMock } from './maybe-mock';
-import { decodeHtmlEntities, findLocalAgents } from './utils';
+import { decodeHtmlEntities, findLocalAgents, msgCtx } from './utils';
 import { ScriptAgent } from './agents/scriptAgent';
 import { ProductionAgent } from './agents/productionAgent';
 import { managerFor } from './connectionManager';
@@ -236,7 +235,13 @@ export class Agent {
 
     // When previewing agent creation just return the response.
     if (!config.saveAgent) {
-      getLogger().debug(`Previewing agent creation using config: ${inspect(config)} in project: ${project.getPath()}`);
+      const previewCtx = {
+        agentName: config.agentSettings?.agentName,
+        agentApiName: config.agentSettings?.agentApiName,
+        saveAgent: config.saveAgent ?? false,
+        projectPath: project.getPath(),
+      };
+      getLogger().debug(msgCtx('Previewing agent creation', previewCtx), previewCtx);
       await Lifecycle.getInstance().emit(AgentCreateLifecycleStages.Previewing, {});
 
       const response = await maybeMock.request<AgentCreateResponse>('POST', url, config);
@@ -247,7 +252,12 @@ export class Agent {
       throw messages.createError('missingAgentName');
     }
 
-    getLogger().debug(`Creating agent using config: ${inspect(config)} in project: ${project.getPath()}`);
+    const creatingCtx = {
+      agentName: config.agentSettings?.agentName,
+      agentApiName: config.agentSettings?.agentApiName,
+      projectPath: project.getPath(),
+    };
+    getLogger().debug(msgCtx('Creating agent', creatingCtx), creatingCtx);
     await Lifecycle.getInstance().emit(AgentCreateLifecycleStages.Creating, {});
     config.agentSettings.agentApiName ??= generateApiName(config.agentSettings?.agentName);
     const response = await maybeMock.request<AgentCreateResponse>('POST', url, config);

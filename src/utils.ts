@@ -669,6 +669,35 @@ export function getHttpStatusCode(err: unknown): number | undefined {
 }
 
 /**
+ * Render structured log fields as a `key=value, key=value` string for the `msg-ctx`
+ * logging convention (a static message prefix, then ` | `, then this rendering). The
+ * same field names are used here as in the structured fields object. Non-primitive
+ * values (e.g. Error objects) and null/undefined are omitted from the rendering — they
+ * stay in the structured fields as the source of truth. Arrays are joined with `;` and
+ * Dates rendered as ISO so neither collides with the `, ` pair separator.
+ */
+const renderLogCtx = (fields: Record<string, unknown>): string =>
+  Object.entries(fields)
+    .filter(([, v]) => v != null && (typeof v !== 'object' || Array.isArray(v) || v instanceof Date))
+    .map(([k, v]) => {
+      const rendered = Array.isArray(v) ? v.join(';') : v instanceof Date ? v.toISOString() : String(v);
+      return `${k}=${rendered}`;
+    })
+    .join(', ');
+
+/**
+ * Build a `msg-ctx` log message: the static `message` prefix followed by ` | ` and the
+ * rendered context. Pass the SAME `fields` object as the logger's structured-fields
+ * argument so the human-readable rendering and the structured source-of-truth never
+ * drift, e.g. `logger.debug(msgCtx('Request failed', ctx), ctx)`. When no field renders
+ * to context, the bare message is returned so there is no dangling ` | `.
+ */
+export const msgCtx = (message: string, fields: Record<string, unknown>): string => {
+  const ctx = renderLogCtx(fields);
+  return ctx ? `${message} | ${ctx}` : message;
+};
+
+/**
  * Internal implementation with circular reference tracking
  */
 function getHttpStatusCodeInternal(err: unknown, visited: Set<unknown>): number | undefined {
@@ -743,7 +772,8 @@ export async function requestWithEndpointFallback<T>(
       );
     } catch (error) {
       const statusCode = getHttpStatusCode(error);
-      logger.debug(`Request failed for url ${modifiedUrl} with status code ${statusCode ?? 'unknown'}`);
+      const ctx = { url: modifiedUrl, statusCode: statusCode ?? 'unknown' };
+      logger.debug(msgCtx('Agent API request failed for endpoint', ctx), ctx);
       if (statusCode === 404) {
         lastError = error;
         continue; // Try next endpoint
@@ -754,7 +784,7 @@ export async function requestWithEndpointFallback<T>(
   }
 
   // All endpoints failed with 404
-  logger.debug(`Attempted endpoints: ${attemptedEndpoints.join(', ')}`);
+  logger.debug(msgCtx('All Agent API endpoints returned 404', { attemptedEndpoints }), { attemptedEndpoints });
   throw SfError.create({
     name: 'AgentApiNotFound',
     message: `Unable to access the Salesforce Agent APIs. Ensure the user '${
