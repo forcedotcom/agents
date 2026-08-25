@@ -16,8 +16,8 @@
 
 import { readFileSync, statSync } from 'node:fs';
 import { basename } from 'node:path';
-import { Connection, Lifecycle, Logger, SfError } from '@salesforce/core';
-import { getHttpStatusCode, logCtx } from './utils';
+import { Connection, Lifecycle, SfError } from '@salesforce/core';
+import { CtxLogger, getHttpStatusCode } from './utils';
 import {
   type DataLibrarySummary,
   type DataLibraryDetail,
@@ -29,10 +29,10 @@ import {
   type FileListResponse,
 } from './dataLibraryTypes.js';
 
-let logger: Logger;
-const getLogger = (): Logger => {
+let logger: CtxLogger;
+const getLogger = (): CtxLogger => {
   if (!logger) {
-    logger = Logger.childFromRoot('AgentDataLibrary');
+    logger = CtxLogger.child('AgentDataLibrary');
   }
   return logger;
 };
@@ -65,7 +65,7 @@ export class AgentDataLibrary {
       });
     } catch (error) {
       const wrapped = SfError.wrap(error);
-      logCtx(getLogger(), 'debug', 'Data library list request failed', {
+      getLogger().debug('Data library list request failed', {
         sourceType: options?.sourceType,
         statusCode: getHttpStatusCode(error),
         errName: wrapped.name,
@@ -87,7 +87,7 @@ export class AgentDataLibrary {
       });
     } catch (error) {
       const wrapped = SfError.wrap(error);
-      logCtx(getLogger(), 'debug', 'Data library create request failed', {
+      getLogger().debug('Data library create request failed', {
         sourceType: input.groundingSource?.sourceType,
         statusCode: getHttpStatusCode(error),
         errName: wrapped.name,
@@ -131,7 +131,7 @@ export class AgentDataLibrary {
       });
     } catch (error) {
       const wrapped = SfError.wrap(error);
-      logCtx(getLogger(), 'debug', 'Data library get request failed', {
+      getLogger().debug('Data library get request failed', {
         libraryId,
         statusCode: getHttpStatusCode(error),
         errName: wrapped.name,
@@ -152,7 +152,7 @@ export class AgentDataLibrary {
       });
     } catch (error) {
       const wrapped = SfError.wrap(error);
-      logCtx(getLogger(), 'debug', 'Data library update request failed', {
+      getLogger().debug('Data library update request failed', {
         libraryId,
         statusCode: getHttpStatusCode(error),
         errName: wrapped.name,
@@ -171,7 +171,7 @@ export class AgentDataLibrary {
       });
     } catch (error) {
       const wrapped = SfError.wrap(error);
-      logCtx(getLogger(), 'debug', 'Data library delete request failed', {
+      getLogger().debug('Data library delete request failed', {
         libraryId,
         statusCode: getHttpStatusCode(error),
         errName: wrapped.name,
@@ -198,7 +198,7 @@ export class AgentDataLibrary {
       });
     } catch (error) {
       const wrapped = SfError.wrap(error);
-      logCtx(getLogger(), 'debug', 'Data library status request failed', {
+      getLogger().debug('Data library status request failed', {
         libraryId,
         includeArtifacts: options?.includeArtifacts ?? false,
         statusCode: getHttpStatusCode(error),
@@ -243,7 +243,7 @@ export class AgentDataLibrary {
       });
     } catch (error) {
       const wrapped = SfError.wrap(error);
-      logCtx(getLogger(), 'debug', 'Data library list-files request failed', {
+      getLogger().debug('Data library list-files request failed', {
         libraryId,
         statusCode: getHttpStatusCode(error),
         errName: wrapped.name,
@@ -262,7 +262,7 @@ export class AgentDataLibrary {
       });
     } catch (error) {
       const wrapped = SfError.wrap(error);
-      logCtx(getLogger(), 'debug', 'Data library file-delete request failed', {
+      getLogger().debug('Data library file-delete request failed', {
         libraryId,
         fileId,
         statusCode: getHttpStatusCode(error),

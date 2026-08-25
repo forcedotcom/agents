@@ -16,7 +16,7 @@
 
 import * as path from 'node:path';
 import { readdir, stat } from 'node:fs/promises';
-import { Connection, generateApiName, Lifecycle, Logger, Messages, SfError, SfProject } from '@salesforce/core';
+import { Connection, generateApiName, Lifecycle, Messages, SfError, SfProject } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { Duration } from '@salesforce/kit';
 import {
@@ -33,7 +33,7 @@ import {
   ScriptAgentOptions,
 } from './types';
 import { MaybeMock } from './maybe-mock';
-import { decodeHtmlEntities, findLocalAgents, logCtx } from './utils';
+import { CtxLogger, decodeHtmlEntities, findLocalAgents } from './utils';
 import { ScriptAgent } from './agents/scriptAgent';
 import { ProductionAgent } from './agents/productionAgent';
 import { managerFor } from './connectionManager';
@@ -44,10 +44,10 @@ export type AgentInstance = ScriptAgent | ProductionAgent;
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agents');
 
-let logger: Logger;
-const getLogger = (): Logger => {
+let logger: CtxLogger;
+const getLogger = (): CtxLogger => {
   if (!logger) {
-    logger = Logger.childFromRoot('Agent');
+    logger = CtxLogger.child('Agent');
   }
   return logger;
 };
@@ -235,7 +235,7 @@ export class Agent {
 
     // When previewing agent creation just return the response.
     if (!config.saveAgent) {
-      logCtx(getLogger(), 'debug', 'Previewing agent creation', {
+      getLogger().debug('Previewing agent creation', {
         agentName: config.agentSettings?.agentName,
         agentApiName: config.agentSettings?.agentApiName,
         saveAgent: config.saveAgent ?? false,
@@ -251,7 +251,7 @@ export class Agent {
       throw messages.createError('missingAgentName');
     }
 
-    logCtx(getLogger(), 'debug', 'Creating agent', {
+    getLogger().debug('Creating agent', {
       agentName: config.agentSettings?.agentName,
       agentApiName: config.agentSettings?.agentApiName,
       projectPath: project.getPath(),

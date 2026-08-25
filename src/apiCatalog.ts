@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-import { Connection, Lifecycle, Logger, SfError } from '@salesforce/core';
-import { getHttpStatusCode, logCtx } from './utils';
+import { Connection, Lifecycle, SfError } from '@salesforce/core';
+import { CtxLogger, getHttpStatusCode } from './utils';
 import {
   type ListMcpServersOptions,
   type McpServerCollection,
@@ -30,10 +30,10 @@ import {
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
-let logger: Logger;
-const getLogger = (): Logger => {
+let logger: CtxLogger;
+const getLogger = (): CtxLogger => {
   if (!logger) {
-    logger = Logger.childFromRoot('ApiCatalog');
+    logger = CtxLogger.child('ApiCatalog');
   }
   return logger;
 };
@@ -153,7 +153,7 @@ export class ApiCatalog {
       result = await connection.request<T>(req);
     } catch (error) {
       const wrapped = SfError.wrap(error);
-      logCtx(getLogger(), 'debug', 'API Catalog request failed', {
+      getLogger().debug('API Catalog request failed', {
         op,
         method,
         url,

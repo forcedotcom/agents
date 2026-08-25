@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-import { AuthInfo, Connection, Logger, SfError } from '@salesforce/core';
-import { logCtx, useNamedUserJwt } from './utils';
+import { AuthInfo, Connection, SfError } from '@salesforce/core';
+import { CtxLogger, useNamedUserJwt } from './utils';
 
 /**
  * Result of JWT validation
@@ -80,7 +80,7 @@ export class ConnectionManager {
    * @throws {SfError} If JWT creation or validation fails, or if the connection has no username
    */
   public static async create(connection: Connection): Promise<ConnectionManager> {
-    const logger = Logger.childFromRoot('ConnectionManager');
+    const logger = CtxLogger.child('ConnectionManager');
     const username = connection.getUsername();
 
     if (!username) {
@@ -90,17 +90,17 @@ export class ConnectionManager {
       });
     }
 
-    logCtx(logger, 'debug', 'Creating ConnectionManager', { username });
+    logger.debug('Creating ConnectionManager', { username });
 
     // Build two fresh, independent connections — one for org operations, one for SFAP JWT.
     // Building from username (not from the caller's connection object) guarantees the
     // caller's connection is not mutated by the JWT upgrade.
     const standardConn = await this.createConnectionFromUsername(username);
     const jwtSeed = await this.createConnectionFromUsername(username);
-    logCtx(logger, 'debug', 'Standard and JWT seed connections created', { username });
+    logger.debug('Standard and JWT seed connections created', { username });
 
     const jwtConn = await this.createAndValidateJwtConnection(jwtSeed, logger);
-    logCtx(logger, 'debug', 'JWT connection created and validated', { username });
+    logger.debug('JWT connection created and validated', { username });
 
     return new ConnectionManager(jwtConn, standardConn);
   }
@@ -119,16 +119,16 @@ export class ConnectionManager {
    * The connection passed in is mutated (its accessToken is replaced with the JWT) — callers
    * must pass a fresh, isolated Connection rather than a connection they care about.
    */
-  private static async createAndValidateJwtConnection(connection: Connection, logger: Logger): Promise<Connection> {
+  private static async createAndValidateJwtConnection(connection: Connection, logger: CtxLogger): Promise<Connection> {
     const upgraded = await useNamedUserJwt(connection);
-    logCtx(logger, 'debug', 'Connection upgraded to JWT', { username: upgraded.getUsername() ?? undefined });
+    logger.debug('Connection upgraded to JWT', { username: upgraded.getUsername() ?? undefined });
 
     const validation = this.validateJwt(upgraded.accessToken ?? undefined);
 
     if (!validation.isValid) {
       // Breadcrumb only — the thrown InvalidJwtToken SfError below carries the full
       // validation detail + actions and is the single ERROR record for the caller.
-      logCtx(logger, 'debug', 'JWT validation failed; throwing InvalidJwtToken', {
+      logger.debug('JWT validation failed; throwing InvalidJwtToken', {
         missingFields: validation.missingFields,
         isExpired: validation.isExpired,
       });
@@ -155,12 +155,12 @@ export class ConnectionManager {
 
     if (!validation.hasRequiredFields) {
       // Degraded but proceeding — SFAP calls made with this token may fail downstream.
-      logCtx(logger, 'warn', 'JWT missing some expected fields; proceeding, SFAP requests may fail', {
+      logger.warn('JWT missing some expected fields; proceeding, SFAP requests may fail', {
         missingFields: validation.missingFields,
       });
     }
 
-    logCtx(logger, 'debug', 'JWT validation passed', {
+    logger.debug('JWT validation passed', {
       hasRequiredFields: validation.hasRequiredFields,
       expiresAt: validation.expiresAt,
       scopes: validation.scopes,

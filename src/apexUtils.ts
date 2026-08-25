@@ -16,17 +16,17 @@
 
 import { join } from 'node:path';
 import { writeFile } from 'node:fs/promises';
-import { Connection, Logger, Messages } from '@salesforce/core';
+import { Connection, Messages } from '@salesforce/core';
 import { type ApexLog, type TraceFlag } from '@salesforce/types/tooling';
-import { logCtx, sanitizeFilename } from './utils';
+import { CtxLogger, sanitizeFilename } from './utils';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'apexUtils');
 
-let logger: Logger;
-const getLogger = (): Logger => {
+let logger: CtxLogger;
+const getLogger = (): CtxLogger => {
   if (!logger) {
-    logger = Logger.childFromRoot('AgentApexDebug');
+    logger = CtxLogger.child('AgentApexDebug');
   }
   return logger;
 };
@@ -51,7 +51,7 @@ export const getDebugLog = async (connection: Connection, start: number, end: nu
     'SELECT Id, Application, DurationMilliseconds, Location, LogLength, LogUserId, LogUser.Name, Operation, Request, StartTime, Status FROM ApexLog ORDER BY StartTime DESC';
   const queryResult = await connection.tooling.query<Record<string, ApexLog>>(query);
   if (queryResult.records.length) {
-    logCtx(getLogger(), 'debug', 'Found apex debug logs', { count: queryResult.records.length });
+    getLogger().debug('Found apex debug logs', { count: queryResult.records.length });
     for (const apexLog of queryResult.records) {
       const startTime = new Date(apexLog.StartTime as unknown as string).getTime();
       if (startTime >= start && startTime <= end) {
@@ -61,7 +61,7 @@ export const getDebugLog = async (connection: Connection, start: number, end: nu
   } else {
     // Guard against a NaN/invalid timestamp: toISOString() throws where the log line must not.
     const toIso = (n: number): string => (Number.isFinite(n) ? new Date(n).toISOString() : 'invalid');
-    logCtx(getLogger(), 'debug', 'No apex debug logs found in the requested time window', {
+    getLogger().debug('No apex debug logs found in the requested time window', {
       start: toIso(start),
       end: toIso(end),
     });
@@ -77,7 +77,7 @@ export const writeDebugLog = async (connection: Connection, log: ApexLog, output
   // eslint-disable-next-line no-underscore-dangle
   const url = `${connection.tooling._baseUrl()}/sobjects/ApexLog/${logId}/Body`;
   const logContent = await connection.tooling.request<string>(url);
-  logCtx(getLogger(), 'debug', 'Writing apex debug log to file', { logId, logFile });
+  getLogger().debug('Writing apex debug log to file', { logId, logFile });
   return writeFile(logFile, logContent);
 };
 
@@ -112,7 +112,7 @@ export const createTraceFlag = async (connection: Connection, userId: string): P
   if (!result.success) {
     throw messages.createError('traceFlagCreationError', [userId]);
   } else {
-    logCtx(getLogger(), 'debug', 'Created new apex TraceFlag', { userId, expirationDate });
+    getLogger().debug('Created new apex TraceFlag', { userId, expirationDate });
   }
 };
 
@@ -135,7 +135,7 @@ export const findTraceFlag = async (connection: Connection, userId: string): Pro
   if (traceFlagResult.totalSize > 0) {
     const traceFlag = traceFlagResult.records[0] as unknown as ApexTraceFlag;
     if (traceFlag.ExpirationDate && new Date(traceFlag.ExpirationDate) > new Date()) {
-      logCtx(getLogger(), 'debug', 'Using existing apex TraceFlag in the org', {
+      getLogger().debug('Using existing apex TraceFlag in the org', {
         userId,
         expirationDate: traceFlag.ExpirationDate,
       });

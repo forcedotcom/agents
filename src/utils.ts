@@ -705,8 +705,9 @@ const renderLogCtx = (fields: Record<string, unknown>): string =>
 /**
  * Build a `msg-ctx` log message: the static `message` prefix followed by ` | ` and the
  * rendered context. When no field renders to context, the bare message is returned so
- * there is no dangling ` | `. Prefer {@link logCtx}, which renders and logs in one call
- * so the fields object is passed exactly once and cannot drift from the message.
+ * there is no dangling ` | `. Prefer a {@link CtxLogger} instance, whose level methods
+ * render and log in one call so the fields object is passed exactly once and cannot drift
+ * from the message.
  */
 export const msgCtx = (message: string, fields: Record<string, unknown>): string => {
   const ctx = renderLogCtx(fields);
@@ -714,20 +715,50 @@ export const msgCtx = (message: string, fields: Record<string, unknown>): string
 };
 
 /**
- * Emit a `msg-ctx` log line in a single call: renders `fields` into the message prefix
- * AND passes the same `fields` object as the logger's structured-fields argument, so the
- * human-readable rendering and the structured source-of-truth are guaranteed identical —
- * eliminating the drift that a manual `logger.debug(msgCtx(m, ctx), ctx)` two-arg call
- * risks. Use this at every call site, e.g. `logCtx(getLogger(), 'debug', 'Request failed', ctx)`.
+ * A thin wrapper around a `@salesforce/core` {@link Logger} that emits `msg-ctx` log lines.
+ *
+ * Each level method renders `fields` into the message prefix AND passes the same `fields`
+ * object as the logger's structured-fields argument, so the human-readable rendering and
+ * the structured source-of-truth are guaranteed identical — eliminating the drift that a
+ * manual `logger.debug(msgCtx(m, ctx), ctx)` two-arg call risks.
+ *
+ * Construct one per component with {@link CtxLogger.child}, mirroring `Logger.childFromRoot`,
+ * then call it like an ordinary logger:
+ *
+ * ```ts
+ * const logger = CtxLogger.child('AgentPublisher');
+ * logger.debug('Publishing agent', { developerName });
+ * logger.warn('Failed to trigger indexing', { libraryId, errName, errMsg });
+ * ```
  */
-export const logCtx = (
-  logger: Logger,
-  level: 'trace' | 'debug' | 'info' | 'warn' | 'error',
-  message: string,
-  fields: Record<string, unknown>
-): void => {
-  logger[level](msgCtx(message, fields), fields);
-};
+export class CtxLogger {
+  public constructor(private readonly logger: Logger) {}
+
+  /** Create a `CtxLogger` backed by a named child of the root logger. */
+  public static child(name: string): CtxLogger {
+    return new CtxLogger(Logger.childFromRoot(name));
+  }
+
+  public trace(message: string, fields: Record<string, unknown> = {}): void {
+    this.logger.trace(msgCtx(message, fields), fields);
+  }
+
+  public debug(message: string, fields: Record<string, unknown> = {}): void {
+    this.logger.debug(msgCtx(message, fields), fields);
+  }
+
+  public info(message: string, fields: Record<string, unknown> = {}): void {
+    this.logger.info(msgCtx(message, fields), fields);
+  }
+
+  public warn(message: string, fields: Record<string, unknown> = {}): void {
+    this.logger.warn(msgCtx(message, fields), fields);
+  }
+
+  public error(message: string, fields: Record<string, unknown> = {}): void {
+    this.logger.error(msgCtx(message, fields), fields);
+  }
+}
 
 /**
  * Internal implementation with circular reference tracking
@@ -781,7 +812,7 @@ export async function requestWithEndpointFallback<T>(
 ): Promise<T> {
   const endpoints = ['', 'test.', 'dev.']; // Try production, test, dev in that order
   const attemptedEndpoints: string[] = [];
-  const logger = Logger.childFromRoot('AgentApiRequest');
+  const logger = CtxLogger.child('AgentApiRequest');
 
   let lastError: unknown;
 
@@ -804,7 +835,7 @@ export async function requestWithEndpointFallback<T>(
       );
     } catch (error) {
       const statusCode = getHttpStatusCode(error);
-      logCtx(logger, 'debug', 'Agent API request failed for endpoint', {
+      logger.debug('Agent API request failed for endpoint', {
         url: modifiedUrl,
         statusCode: statusCode ?? 'unknown',
       });
@@ -818,7 +849,7 @@ export async function requestWithEndpointFallback<T>(
   }
 
   // All endpoints failed with 404
-  logCtx(logger, 'debug', 'All Agent API endpoints returned 404', { attemptedEndpoints });
+  logger.debug('All Agent API endpoints returned 404', { attemptedEndpoints });
   throw SfError.create({
     name: 'AgentApiNotFound',
     message: `Unable to access the Salesforce Agent APIs. Ensure the user '${

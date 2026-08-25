@@ -20,8 +20,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
-import { Connection, SfError, SfProject } from '@salesforce/core';
+import { Connection, Logger, SfError, SfProject } from '@salesforce/core';
 import {
+  CtxLogger,
   requestWithEndpointFallback,
   useNamedUserJwt,
   detectTestRunnerFromId,
@@ -1244,5 +1245,56 @@ describe('msgCtx', () => {
 
   it('quotes values that contain a separator so the pair stays unambiguous', () => {
     expect(msgCtx('m', { url: 'x?a=1,b=2' })).to.equal('m | url="x?a=1,b=2"');
+  });
+});
+
+describe('CtxLogger', () => {
+  type Call = { level: string; args: unknown[] };
+
+  const makeLogger = (): { calls: Call[]; ctx: CtxLogger } => {
+    const calls: Call[] = [];
+    const record =
+      (level: string) =>
+      (...args: unknown[]): void => {
+        calls.push({ level, args });
+      };
+    const fake = {
+      trace: record('trace'),
+      debug: record('debug'),
+      info: record('info'),
+      warn: record('warn'),
+      error: record('error'),
+    };
+    return { calls, ctx: new CtxLogger(fake as unknown as Logger) };
+  };
+
+  it('forwards to the matching level with the rendered message and the same fields object', () => {
+    const { calls, ctx } = makeLogger();
+    const fields = { url: 'x?a=1,b=2', statusCode: 404 };
+
+    ctx.warn('Request failed', fields);
+
+    expect(calls).to.have.lengthOf(1);
+    expect(calls[0].level).to.equal('warn');
+    // First arg is the rendered msg-ctx string...
+    expect(calls[0].args[0]).to.equal('Request failed | url="x?a=1,b=2", statusCode=404');
+    // ...and the SAME fields object is passed through as the structured source of truth.
+    expect(calls[0].args[1]).to.equal(fields);
+  });
+
+  it('routes each level to its own underlying method', () => {
+    const { calls, ctx } = makeLogger();
+    ctx.trace('t');
+    ctx.debug('d');
+    ctx.info('i');
+    ctx.error('e');
+    expect(calls.map((c) => c.level)).to.deep.equal(['trace', 'debug', 'info', 'error']);
+  });
+
+  it('logs a bare message with an empty fields object when fields are omitted', () => {
+    const { calls, ctx } = makeLogger();
+    ctx.debug('No context here');
+    expect(calls[0].args[0]).to.equal('No context here');
+    expect(calls[0].args[1]).to.deep.equal({});
   });
 });
