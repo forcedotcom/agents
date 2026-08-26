@@ -463,6 +463,18 @@ describe('AgentTest NGT (Agentforce Studio) create surface', () => {
       expect(normalizeXml(actual)).to.equal(normalizeXml(expected));
     });
 
+    it('regression: an unrecognized subjectType (e.g. a typo) falls back to the AGENT shape, not PROMPT', () => {
+      // Cast through unknown to bypass static typing; models a hand-edited YAML with a typo'd subjectType.
+      const spec = {
+        name: 'Typo',
+        subjectType: 'PROMT',
+        subjectName: 'SomeBot',
+        testCases: [{ inputs: [{ utterance: 'hi' }], scorers: [{ name: 'coherence' }] }],
+      } as unknown as NgtTestSpec;
+      const def = convertToTestingMetadata(spec);
+      expect(def.subjectType).to.equal('AGENT');
+    });
+
     it('PROMPT subject: matches the expected XML fixture (multi-invocation fan-out, multi-slot promptInput)', async () => {
       const yamlPath = join(__dirname, 'fixtures', 'ngt-prompt-spec-summarize-case.yaml');
       const xmlPath = join(__dirname, 'fixtures', 'ngt-prompt-xml-summarize-case.xml');

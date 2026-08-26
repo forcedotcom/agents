@@ -578,10 +578,10 @@ const dispatchBySubjectType = <U extends { subjectType: 'AGENT' | 'PROMPT' }, R>
     PROMPT: (v: Extract<U, { subjectType: 'PROMPT' }>) => R;
   }
 ): R => {
-  if (value.subjectType === 'AGENT') {
-    return handlers.AGENT(value as Extract<U, { subjectType: 'AGENT' }>);
+  if (value.subjectType === 'PROMPT') {
+    return handlers.PROMPT(value as Extract<U, { subjectType: 'PROMPT' }>);
   }
-  return handlers.PROMPT(value as Extract<U, { subjectType: 'PROMPT' }>);
+  return handlers.AGENT(value as Extract<U, { subjectType: 'AGENT' }>);
 };
 
 export const validateNgtSpec = (spec: NgtTestSpec, ctx: { isMultiAgent: boolean }): void => {
