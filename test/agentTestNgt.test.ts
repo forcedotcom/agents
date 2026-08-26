@@ -1139,7 +1139,7 @@ testCases:
         }),
       };
       const mockComponentSet = { deploy: sinon.stub().resolves(mockDeploy) };
-      componentSetBuildStub.resolves(mockComponentSet as never);
+      componentSetBuildStub.resolves(mockComponentSet);
 
       const result = await AgentTest.create(connection, 'MyPromptTest', 'spec.yaml', {
         outputDir: 'tmp',
