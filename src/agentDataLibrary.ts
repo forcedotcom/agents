@@ -17,7 +17,8 @@
 import { readFileSync, statSync } from 'node:fs';
 import { basename } from 'node:path';
 import { Connection, Lifecycle, SfError } from '@salesforce/core';
-import { CtxLogger, getHttpStatusCode } from './utils';
+import { getHttpStatusCode } from './utils';
+import { CtxLogger } from './ctxLogger';
 import {
   type DataLibrarySummary,
   type DataLibraryDetail,

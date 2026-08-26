@@ -18,7 +18,8 @@ import { join } from 'node:path';
 import { writeFile } from 'node:fs/promises';
 import { Connection, Messages } from '@salesforce/core';
 import { type ApexLog, type TraceFlag } from '@salesforce/types/tooling';
-import { CtxLogger, sanitizeFilename } from './utils';
+import { sanitizeFilename } from './utils';
+import { CtxLogger } from './ctxLogger';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'apexUtils');

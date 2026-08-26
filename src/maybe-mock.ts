@@ -22,7 +22,8 @@ import { env } from '@salesforce/kit';
 // Type-only import: erased at compile time. Only used for the `nock.Body`
 // constraint on the generic type parameter.
 import type nock from 'nock';
-import { CtxLogger, requestWithEndpointFallback } from './utils';
+import { requestWithEndpointFallback } from './utils';
+import { CtxLogger } from './ctxLogger';
 
 type HttpHeaders = {
   [name: string]: string;

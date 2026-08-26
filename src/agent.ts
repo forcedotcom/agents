@@ -33,7 +33,8 @@ import {
   ScriptAgentOptions,
 } from './types';
 import { MaybeMock } from './maybe-mock';
-import { CtxLogger, decodeHtmlEntities, findLocalAgents } from './utils';
+import { decodeHtmlEntities, findLocalAgents } from './utils';
+import { CtxLogger } from './ctxLogger';
 import { ScriptAgent } from './agents/scriptAgent';
 import { ProductionAgent } from './agents/productionAgent';
 import { managerFor } from './connectionManager';

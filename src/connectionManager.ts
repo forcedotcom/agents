@@ -15,7 +15,8 @@
  */
 
 import { AuthInfo, Connection, SfError } from '@salesforce/core';
-import { CtxLogger, useNamedUserJwt } from './utils';
+import { useNamedUserJwt } from './utils';
+import { CtxLogger } from './ctxLogger';
 
 /**
  * Result of JWT validation

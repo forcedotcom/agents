@@ -23,7 +23,8 @@ import { Duration, env } from '@salesforce/kit';
 import { ComponentSet, ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { MaybeMock } from '../maybe-mock';
 import { type AgentJson, type PublishAgent, type PublishAgentJsonResponse } from '../types';
-import { CtxLogger, findAuthoringBundle } from '../utils';
+import { findAuthoringBundle } from '../utils';
+import { CtxLogger } from '../ctxLogger';
 import { managerFor } from '../connectionManager';
 
 Messages.importMessagesDirectory(__dirname);

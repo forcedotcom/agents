@@ -15,7 +15,8 @@
  */
 
 import { Connection, Lifecycle, SfError } from '@salesforce/core';
-import { CtxLogger, getHttpStatusCode } from './utils';
+import { getHttpStatusCode } from './utils';
+import { CtxLogger } from './ctxLogger';
 import {
   type ListMcpServersOptions,
   type McpServerCollection,
