@@ -582,14 +582,41 @@ export type NgtTestCase = {
   scorers: NgtTestCaseScorer[];
 };
 
-export type NgtTestSpec = {
-  name: string;
-  description?: string;
-  subjectType: 'AGENT';
-  subjectName: string;
-  subjectVersion?: string;
-  testCases: NgtTestCase[];
+// PROMPT-subject authoring (YAML) types. One `NgtPromptInputSet` = one template
+// invocation (all input slots it needs, filled together); `NgtPromptTestCase.inputs`
+// is an array of invocations that fan out 1:1 into XML <testCase> elements sharing
+// one scorer set — mirrors AGENT's NgtTestCase.inputs[] fan-out.
+export type NgtPromptTestCaseInput = {
+  referenceName: string;
+  value: string;
 };
+
+export type NgtPromptInputSet = {
+  promptInput: NgtPromptTestCaseInput[];
+};
+
+export type NgtPromptTestCase = {
+  inputs: NgtPromptInputSet[];
+  scorers: NgtTestCaseScorer[];
+};
+
+export type NgtTestSpec =
+  | {
+      name: string;
+      description?: string;
+      subjectType: 'AGENT';
+      subjectName: string;
+      subjectVersion?: string;
+      testCases: NgtTestCase[];
+    }
+  | {
+      name: string;
+      description?: string;
+      subjectType: 'PROMPT';
+      subjectName: string;
+      subjectVersion?: string;
+      testCases: NgtPromptTestCase[];
+    };
 
 // Metadata (XML) types for AiTestingDefinition.
 
@@ -616,14 +643,35 @@ export type AiTestCase = {
   scorer: AiTestCaseScorer[];
 };
 
-export type AiTestingDefinition = {
-  description?: string;
-  name: string;
-  subjectName: string;
-  subjectType: 'AGENT';
-  subjectVersion?: string;
-  testCase: AiTestCase[];
+// PROMPT-subject metadata (XML) types. `AiTestCasePromptInputXml` maps to the
+// `<inputs>` element of one <testCase>; `promptInput` is its repeatable child.
+export type AiTestCasePromptInputXml = {
+  promptInput: Array<{ referenceName: string; value: string }>;
 };
+
+export type AiPromptTestCase = {
+  number: number;
+  inputs: AiTestCasePromptInputXml;
+  scorer: AiTestCaseScorer[];
+};
+
+export type AiTestingDefinition =
+  | {
+      description?: string;
+      name: string;
+      subjectName: string;
+      subjectType: 'AGENT';
+      subjectVersion?: string;
+      testCase: AiTestCase[];
+    }
+  | {
+      description?: string;
+      name: string;
+      subjectName: string;
+      subjectType: 'PROMPT';
+      subjectVersion?: string;
+      testCase: AiPromptTestCase[];
+    };
 
 // ====================================================
 //               Agent Preview Types

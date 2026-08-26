@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<AiTestingDefinition xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Validates the SummarizeCase prompt template.</description>
+    <name>SummarizeCasePromptSuite</name>
+    <subjectName>SummarizeCasePrompt</subjectName>
+    <subjectType>PROMPT</subjectType>
+    <subjectVersion>v3</subjectVersion>
+    <testCase>
+        <number>1</number>
+        <inputs>
+            <promptInput>
+                <referenceName>CaseDescription</referenceName>
+                <value>Customer reports login failures since yesterday.</value>
+            </promptInput>
+            <promptInput>
+                <referenceName>CustomerTone</referenceName>
+                <value>frustrated</value>
+            </promptInput>
+        </inputs>
+        <scorer>
+            <name>factuality</name>
+        </scorer>
+        <scorer>
+            <name>completeness</name>
+        </scorer>
+        <scorer>
+            <name>response_match</name>
+            <expectedValue>A concise, accurate case summary</expectedValue>
+        </scorer>
+    </testCase>
+    <testCase>
+        <number>2</number>
+        <inputs>
+            <promptInput>
+                <referenceName>CaseDescription</referenceName>
+                <value>Customer asks how to reset their password.</value>
+            </promptInput>
+            <promptInput>
+                <referenceName>CustomerTone</referenceName>
+                <value>neutral</value>
+            </promptInput>
+        </inputs>
+        <scorer>
+            <name>factuality</name>
+        </scorer>
+        <scorer>
+            <name>completeness</name>
+        </scorer>
+        <scorer>
+            <name>response_match</name>
+            <expectedValue>A concise, accurate case summary</expectedValue>
+        </scorer>
+    </testCase>
+    <testCase>
+        <number>3</number>
+        <inputs>
+            <promptInput>
+                <referenceName>CaseDescription</referenceName>
+                <value>Customer requests refund for a damaged item.</value>
+            </promptInput>
+        </inputs>
+        <scorer>
+            <name>coherence</name>
+        </scorer>
+    </testCase>
+</AiTestingDefinition>

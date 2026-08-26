@@ -29,7 +29,7 @@ import {
   buildTestingMetadataXml,
   parseNgtMetadataXml,
 } from '../src/agentTest';
-import type { NgtTestSpec } from '../src/types';
+import type { NgtTestSpec, AiTestCaseInputXml, NgtTestCaseInput } from '../src/types';
 
 /**
  * Normalize a serialized XML string for comparison:
@@ -269,6 +269,126 @@ describe('AgentTest NGT (Agentforce Studio) create surface', () => {
   });
 
   // -------------------------------------------------------------------------
+  // validateNgtSpec — PROMPT subject
+  // -------------------------------------------------------------------------
+  describe('validateNgtSpec — PROMPT subject', () => {
+    /** Smallest legal PROMPT spec. Tests mutate copies of this. */
+    const basePromptSpec = (): NgtTestSpec => ({
+      name: 'PromptSuite',
+      subjectType: 'PROMPT',
+      subjectName: 'MyPrompt',
+      subjectVersion: 'v3',
+      testCases: [
+        {
+          inputs: [{ promptInput: [{ referenceName: 'CaseDescription', value: 'a case' }] }],
+          scorers: [{ name: 'coherence' }],
+        },
+      ],
+    });
+
+    afterEach(() => {
+      sinon.restore();
+    });
+
+    it('passes for a minimal valid PROMPT spec', () => {
+      expect(() => validateNgtSpec(basePromptSpec(), { isMultiAgent: false })).to.not.throw();
+    });
+
+    it('throws ngtTestCaseMissingInputs when a PROMPT test case has empty inputs[]', () => {
+      const spec = basePromptSpec();
+      spec.testCases[0].inputs = [];
+      try {
+        validateNgtSpec(spec, { isMultiAgent: false });
+        expect.fail('expected validateNgtSpec to throw');
+      } catch (err) {
+        expect(err).to.be.instanceOf(SfError);
+        expect((err as SfError).name).to.equal('ngtTestCaseMissingInputs');
+      }
+    });
+
+    it('throws ngtTestCaseMissingScorers when a PROMPT test case has empty scorers[]', () => {
+      const spec = basePromptSpec();
+      spec.testCases[0].scorers = [];
+      try {
+        validateNgtSpec(spec, { isMultiAgent: false });
+        expect.fail('expected validateNgtSpec to throw');
+      } catch (err) {
+        expect(err).to.be.instanceOf(SfError);
+        expect((err as SfError).name).to.equal('ngtTestCaseMissingScorers');
+      }
+    });
+
+    it('throws ngtScorerMissingExpected when a needsExpected scorer omits expected (PROMPT)', () => {
+      const spec = basePromptSpec();
+      // response_match is needsExpected:true (LLM_PASS_FAIL)
+      spec.testCases[0].scorers = [{ name: 'response_match' }];
+      try {
+        validateNgtSpec(spec, { isMultiAgent: false });
+        expect.fail('expected validateNgtSpec to throw');
+      } catch (err) {
+        expect(err).to.be.instanceOf(SfError);
+        expect((err as SfError).name).to.equal('ngtScorerMissingExpected');
+        expect((err as SfError).message).to.include('response_match');
+      }
+    });
+
+    it('passes when a quality scorer (needsExpected:false) omits expected (PROMPT)', () => {
+      const spec = basePromptSpec();
+      expect(() => validateNgtSpec(spec, { isMultiAgent: false })).to.not.throw();
+    });
+
+    it('throws ngtPromptInputSetEmpty when an inputs[] entry has an empty promptInput[]', () => {
+      const spec = basePromptSpec();
+      spec.testCases[0].inputs = [{ promptInput: [] }];
+      try {
+        validateNgtSpec(spec, { isMultiAgent: false });
+        expect.fail('expected validateNgtSpec to throw');
+      } catch (err) {
+        expect(err).to.be.instanceOf(SfError);
+        expect((err as SfError).name).to.equal('ngtPromptInputSetEmpty');
+      }
+    });
+
+    it('throws ngtPromptInputMissingReferenceName when a promptInput entry has a blank referenceName', () => {
+      const spec = basePromptSpec();
+      spec.testCases[0].inputs = [{ promptInput: [{ referenceName: '', value: 'x' }] }];
+      try {
+        validateNgtSpec(spec, { isMultiAgent: false });
+        expect.fail('expected validateNgtSpec to throw');
+      } catch (err) {
+        expect(err).to.be.instanceOf(SfError);
+        expect((err as SfError).name).to.equal('ngtPromptInputMissingReferenceName');
+      }
+    });
+
+    it('throws ngtPromptInputMissingValue when a promptInput entry has a blank value', () => {
+      const spec = basePromptSpec();
+      spec.testCases[0].inputs = [{ promptInput: [{ referenceName: 'CaseDescription', value: '   ' }] }];
+      try {
+        validateNgtSpec(spec, { isMultiAgent: false });
+        expect.fail('expected validateNgtSpec to throw');
+      } catch (err) {
+        expect(err).to.be.instanceOf(SfError);
+        expect((err as SfError).name).to.equal('ngtPromptInputMissingValue');
+        expect((err as SfError).message).to.include('CaseDescription');
+      }
+    });
+
+    it('does NOT apply the multi-agent handoff rule to PROMPT (structurally AGENT-only)', () => {
+      const spec = basePromptSpec();
+      // No agent_handoff_match scorer anywhere — would throw ngtMultiAgentMissingHandoff for AGENT.
+      expect(() => validateNgtSpec(spec, { isMultiAgent: true })).to.not.throw();
+    });
+
+    it('does NOT apply the task_resolution/conversationHistory rule to PROMPT (structurally AGENT-only)', () => {
+      const spec = basePromptSpec();
+      spec.testCases[0].scorers = [{ name: 'task_resolution' }];
+      // No conversationHistory concept exists on NgtPromptInputSet — would throw for AGENT.
+      expect(() => validateNgtSpec(spec, { isMultiAgent: false })).to.not.throw();
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // convertToTestingMetadata — pure converter (and buildTestingMetadataXml)
   // -------------------------------------------------------------------------
   describe('convertToTestingMetadata + buildTestingMetadataXml', () => {
@@ -289,6 +409,81 @@ describe('AgentTest NGT (Agentforce Studio) create surface', () => {
       const expected = await fs.readFile(xmlPath, 'utf-8');
 
       expect(normalizeXml(actual)).to.equal(normalizeXml(expected));
+    });
+
+    it('PROMPT subject: matches the expected XML fixture (multi-invocation fan-out, multi-slot promptInput)', async () => {
+      const yamlPath = join(__dirname, 'fixtures', 'ngt-prompt-spec-summarize-case.yaml');
+      const xmlPath = join(__dirname, 'fixtures', 'ngt-prompt-xml-summarize-case.xml');
+
+      const { parse } = await import('yaml');
+      const spec = parse(await fs.readFile(yamlPath, 'utf-8')) as NgtTestSpec;
+
+      const def = convertToTestingMetadata(spec);
+      const actual = buildTestingMetadataXml(def);
+      const expected = await fs.readFile(xmlPath, 'utf-8');
+
+      expect(normalizeXml(actual)).to.equal(normalizeXml(expected));
+    });
+
+    it('PROMPT subject: fans out N invocations to N <testCase> elements sharing one scorer set, globally numbered', () => {
+      const spec: NgtTestSpec = {
+        name: 'PromptFanOut',
+        subjectType: 'PROMPT',
+        subjectName: 'MyPrompt',
+        subjectVersion: 'v3',
+        testCases: [
+          {
+            inputs: [
+              { promptInput: [{ referenceName: 'CaseDescription', value: 'case A' }] },
+              { promptInput: [{ referenceName: 'CaseDescription', value: 'case B' }] },
+            ],
+            scorers: [{ name: 'coherence' }, { name: 'response_match', expected: 'a good summary' }],
+          },
+        ],
+      };
+
+      const def = convertToTestingMetadata(spec);
+      expect(def.subjectType).to.equal('PROMPT');
+      if (def.subjectType !== 'PROMPT') throw new Error('unreachable');
+      expect(def.testCase).to.have.length(2);
+      expect(def.testCase.map((tc) => tc.number)).to.deep.equal([1, 2]);
+      def.testCase.forEach((tc) => {
+        expect(tc.scorer.map((s) => s.name)).to.deep.equal(['coherence', 'response_match']);
+        expect(tc.scorer.map((s) => s.expectedValue)).to.deep.equal([undefined, 'a good summary']);
+      });
+      expect(def.testCase.map((tc) => tc.inputs.promptInput.map((pi) => pi.value))).to.deep.equal([
+        ['case A'],
+        ['case B'],
+      ]);
+    });
+
+    it('PROMPT subject: one invocation with multiple promptInput slots maps to one <testCase> with multiple <promptInput>', () => {
+      const spec: NgtTestSpec = {
+        name: 'PromptMultiSlot',
+        subjectType: 'PROMPT',
+        subjectName: 'MyPrompt',
+        testCases: [
+          {
+            inputs: [
+              {
+                promptInput: [
+                  { referenceName: 'CaseDescription', value: 'case text' },
+                  { referenceName: 'CustomerTone', value: 'angry' },
+                ],
+              },
+            ],
+            scorers: [{ name: 'factuality' }],
+          },
+        ],
+      };
+
+      const def = convertToTestingMetadata(spec);
+      if (def.subjectType !== 'PROMPT') throw new Error('unreachable');
+      expect(def.testCase).to.have.length(1);
+      expect(def.testCase[0].inputs.promptInput).to.deep.equal([
+        { referenceName: 'CaseDescription', value: 'case text' },
+        { referenceName: 'CustomerTone', value: 'angry' },
+      ]);
     });
 
     it('multi-input fan-out: one inputs[] with 3 entries → 3 <testCase> elements, shared scorers, globally numbered', () => {
@@ -326,7 +521,7 @@ describe('AgentTest NGT (Agentforce Studio) create surface', () => {
         ]);
       });
       // Utterances are distributed 1-per-testCase in input order.
-      expect(def.testCase.map((tc) => tc.inputs.utterance)).to.deep.equal([
+      expect(def.testCase.map((tc) => (tc.inputs as AiTestCaseInputXml).utterance)).to.deep.equal([
         "What's the status of order #12345?",
         'Where is my order 12345',
         'Tell me about order #12345',
@@ -443,7 +638,7 @@ describe('AgentTest NGT (Agentforce Studio) create surface', () => {
         ],
       };
       const def = convertToTestingMetadata(spec);
-      const turns = def.testCase[0].inputs.conversationHistory!;
+      const turns = (def.testCase[0].inputs as AiTestCaseInputXml).conversationHistory!;
       expect(turns.map((t) => t.index)).to.deep.equal([0, 1, 2]);
     });
 
@@ -468,7 +663,7 @@ describe('AgentTest NGT (Agentforce Studio) create surface', () => {
         ],
       };
       const def = convertToTestingMetadata(spec);
-      const turns = def.testCase[0].inputs.conversationHistory!;
+      const turns = (def.testCase[0].inputs as AiTestCaseInputXml).conversationHistory!;
       expect(turns.map((t) => t.index)).to.deep.equal([7, 8]);
     });
   });
@@ -509,6 +704,73 @@ describe('AgentTest NGT (Agentforce Studio) create surface', () => {
       const synthesizedXml = buildTestingMetadataXml(convertToTestingMetadata(sourceSpec));
       const reparsed = parseToSpec(synthesizedXml);
       expect(reparsed).to.deep.equal(parsed);
+    });
+
+    it('PROMPT subject: round-trips the canonical fixture and collapses fanned-out testCases back into 2 cases', async () => {
+      const yamlPath = join(__dirname, 'fixtures', 'ngt-prompt-spec-summarize-case.yaml');
+      const xmlPath = join(__dirname, 'fixtures', 'ngt-prompt-xml-summarize-case.xml');
+
+      const { parse } = await import('yaml');
+      const sourceSpec = parse(await fs.readFile(yamlPath, 'utf-8')) as NgtTestSpec;
+
+      const xml = await fs.readFile(xmlPath, 'utf-8');
+      const parsed = parseToSpec(xml);
+
+      expect(parsed.name).to.equal(sourceSpec.name);
+      expect(parsed.description).to.equal(sourceSpec.description);
+      expect(parsed.subjectName).to.equal(sourceSpec.subjectName);
+      expect(parsed.subjectType).to.equal('PROMPT');
+      expect(parsed.subjectVersion).to.equal(sourceSpec.subjectVersion);
+
+      // 3 XML <testCase> elements collapse back to 2 YAML testCases: the first
+      // 2 XML testCases share an identical scorer set (factuality/completeness/response_match)
+      // and collapse into 1 case with 2 invocations; the 3rd (coherence-only) stays separate.
+      expect(parsed.testCases).to.have.length(2);
+      if (parsed.subjectType !== 'PROMPT') throw new Error('unreachable');
+      expect(parsed.testCases[0].inputs).to.have.length(2);
+      expect(parsed.testCases[0].inputs.map((i) => i.promptInput.map((pi) => pi.value))).to.deep.equal([
+        ['Customer reports login failures since yesterday.', 'frustrated'],
+        ['Customer asks how to reset their password.', 'neutral'],
+      ]);
+      expect(parsed.testCases[1].inputs).to.have.length(1);
+
+      // Convert source → metadata → xml → parse and compare structurally (matches the AGENT test's pattern).
+      const synthesizedXml = buildTestingMetadataXml(convertToTestingMetadata(sourceSpec));
+      const reparsed = parseToSpec(synthesizedXml);
+      expect(reparsed).to.deep.equal(parsed);
+    });
+
+    it('PROMPT subject: does NOT collapse adjacent test cases when scorer sets differ', () => {
+      const xml =
+        '<?xml version="1.0" encoding="UTF-8"?>\n' +
+        '<AiTestingDefinition xmlns="http://soap.sforce.com/2006/04/metadata">\n' +
+        '  <name>S</name><subjectName>A</subjectName><subjectType>PROMPT</subjectType>\n' +
+        '  <testCase><number>1</number><inputs>\n' +
+        '    <promptInput><referenceName>Case</referenceName><value>v1</value></promptInput>\n' +
+        '  </inputs>\n' +
+        '    <scorer><name>coherence</name></scorer></testCase>\n' +
+        '  <testCase><number>2</number><inputs>\n' +
+        '    <promptInput><referenceName>Case</referenceName><value>v2</value></promptInput>\n' +
+        '  </inputs>\n' +
+        '    <scorer><name>factuality</name></scorer></testCase>\n' +
+        '</AiTestingDefinition>\n';
+      const spec = parseToSpec(xml);
+      expect(spec.testCases).to.have.length(2);
+    });
+
+    it('PROMPT subject: a single-slot promptInput round-trips as an array of length 1 (isArray predicate covers promptInput)', () => {
+      const xml =
+        '<?xml version="1.0" encoding="UTF-8"?>\n' +
+        '<AiTestingDefinition xmlns="http://soap.sforce.com/2006/04/metadata">\n' +
+        '  <name>S</name><subjectName>A</subjectName><subjectType>PROMPT</subjectType>\n' +
+        '  <testCase><number>1</number><inputs>\n' +
+        '    <promptInput><referenceName>Case</referenceName><value>only one slot</value></promptInput>\n' +
+        '  </inputs>\n' +
+        '    <scorer><name>coherence</name></scorer></testCase>\n' +
+        '</AiTestingDefinition>\n';
+      const spec = parseToSpec(xml);
+      if (spec.subjectType !== 'PROMPT') throw new Error('unreachable');
+      expect(spec.testCases[0].inputs[0].promptInput).to.deep.equal([{ referenceName: 'Case', value: 'only one slot' }]);
     });
 
     it('preserves all 11 catalog scorers across the canonical fixture (presence + expected shape)', async () => {
@@ -562,7 +824,7 @@ describe('AgentTest NGT (Agentforce Studio) create surface', () => {
         '</AiTestingDefinition>\n';
       const spec = parseToSpec(xml);
       expect(spec.testCases).to.have.length(1);
-      expect(spec.testCases[0].inputs.map((i) => i.utterance)).to.deep.equal(['u1', 'u2', 'u3']);
+      expect((spec.testCases[0].inputs as NgtTestCaseInput[]).map((i) => i.utterance)).to.deep.equal(['u1', 'u2', 'u3']);
       expect(spec.testCases[0].scorers).to.deep.equal([{ name: 'topic_sequence_match', expected: 'T' }]);
     });
 
@@ -594,7 +856,7 @@ describe('AgentTest NGT (Agentforce Studio) create surface', () => {
         '  <scorer><name>task_resolution</name></scorer>\n' +
         '  </testCase></AiTestingDefinition>\n';
       const spec = parseToSpec(xml);
-      const input = spec.testCases[0].inputs[0];
+      const input = spec.testCases[0].inputs[0] as NgtTestCaseInput;
       expect(input.contextVariables).to.deep.equal([{ name: 'RoutableId', value: '0Mw' }]);
       expect(input.conversationHistory).to.deep.equal([
         { role: 'user', message: 'a' },
@@ -614,7 +876,7 @@ describe('AgentTest NGT (Agentforce Studio) create surface', () => {
         '  </inputs>\n' +
         '  <scorer><name>task_resolution</name></scorer></testCase></AiTestingDefinition>\n';
       const spec = parseToSpec(xml);
-      const turns = spec.testCases[0].inputs[0].conversationHistory!;
+      const turns = (spec.testCases[0].inputs[0] as NgtTestCaseInput).conversationHistory!;
       expect(turns.map((t) => t.index)).to.deep.equal([7, 8]);
     });
 
@@ -737,7 +999,7 @@ describe('AgentTest NGT (Agentforce Studio) create surface', () => {
 
       // NGT shape: testCases[].inputs is an array, scorers is the marker.
       expect(spec.testCases[0]).to.have.property('scorers');
-      expect(spec.testCases[0].inputs[0].utterance).to.equal('u');
+      expect((spec.testCases[0].inputs[0] as NgtTestCaseInput).utterance).to.equal('u');
     });
 
     it('mdPath with <AiEvaluationDefinition> root → still returns legacy TestSpec (regression)', async () => {
@@ -849,6 +1111,62 @@ testCases:
       expect(componentSetBuildStub.calledOnce).to.be.true;
       expect(mockComponentSet.deploy.calledOnce).to.be.true;
       expect(mkdirStub.calledOnce).to.be.true;
+    });
+
+    const promptYamlSpec = `name: PromptSuite
+description: NGT prompt minimal
+subjectType: PROMPT
+subjectName: MyPrompt
+subjectVersion: v3
+testCases:
+  - inputs:
+      - promptInput:
+          - referenceName: CaseDescription
+            value: a case
+    scorers:
+      - name: coherence
+`;
+
+    it('PROMPT subject: does not call BotDefinition.IsMultiAgent, and deploys the correct filename', async () => {
+      readFileStub.resolves(promptYamlSpec);
+      const metadataReadStub = sinon.stub(connection.metadata, 'read');
+
+      const mockDeploy = {
+        onUpdate: sinon.stub(),
+        onFinish: sinon.stub(),
+        pollStatus: sinon.stub().resolves({
+          response: { success: true, details: { componentFailures: [] } },
+        }),
+      };
+      const mockComponentSet = { deploy: sinon.stub().resolves(mockDeploy) };
+      componentSetBuildStub.resolves(mockComponentSet as never);
+
+      const result = await AgentTest.create(connection, 'MyPromptTest', 'spec.yaml', {
+        outputDir: 'tmp',
+        preview: false,
+        testRunner: 'agentforce-studio',
+      } as never);
+
+      expect(metadataReadStub.called, 'BotDefinition.IsMultiAgent must not be looked up for a PROMPT subject').to.be
+        .false;
+      expect(result.path).to.match(/MyPromptTest\.aiTestingDefinition-meta\.xml$/);
+      expect(componentSetBuildStub.calledOnce).to.be.true;
+      expect(mockComponentSet.deploy.calledOnce).to.be.true;
+    });
+
+    it('PROMPT subject preview: writes a subjectType=PROMPT AiTestingDefinition XML with promptInput elements', async () => {
+      readFileStub.resolves(promptYamlSpec);
+
+      const { contents } = await AgentTest.create(connection, 'MyPromptTest', 'spec.yaml', {
+        outputDir: 'tmp',
+        preview: true,
+        testRunner: 'agentforce-studio',
+      } as never);
+
+      expect(contents).to.include('<AiTestingDefinition xmlns="http://soap.sforce.com/2006/04/metadata">');
+      expect(contents).to.include('<subjectType>PROMPT</subjectType>');
+      expect(contents).to.include('<promptInput>');
+      expect(contents).to.include('<referenceName>CaseDescription</referenceName>');
     });
 
     // Regression guard: omitting testRunner must route through the legacy path,

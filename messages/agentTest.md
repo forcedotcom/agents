@@ -61,3 +61,15 @@ Both an AiEvaluationDefinition and an AiTestingDefinition exist for '%s' in the 
 # ngtSpecCannotProduceLegacyMetadata
 
 This AgentTest holds an NGT (`NgtTestSpec`) spec but `getMetadata()` returns the legacy `AiEvaluationDefinition` shape. Use `convertToTestingMetadata` + `buildTestingMetadataXml` to serialize an NGT spec to its `AiTestingDefinition` XML.
+
+# ngtPromptInputSetEmpty
+
+NGT test case %s, input %s must define at least one entry under `promptInput:`.
+
+# ngtPromptInputMissingReferenceName
+
+NGT test case %s, input %s has a `promptInput` entry missing a non-blank `referenceName`.
+
+# ngtPromptInputMissingValue
+
+NGT test case %s, input %s: promptInput '%s' requires a non-blank `value`.
