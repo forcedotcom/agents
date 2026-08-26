@@ -153,8 +153,10 @@ export class AgentTest {
 
     if (testRunner === 'agentforce-studio') {
       const ngtSpec = parse(rawSpec) as NgtTestSpec;
-      const isMultiAgent =
-        ngtSpec.subjectType === 'PROMPT' ? false : await fetchIsMultiAgent(connection, ngtSpec.subjectName);
+      const isMultiAgent = await dispatchBySubjectType(ngtSpec, {
+        AGENT: (s) => fetchIsMultiAgent(connection, s.subjectName),
+        PROMPT: () => Promise.resolve(false),
+      });
       validateNgtSpec(ngtSpec, { isMultiAgent });
       await lifecycle.emit(AgentTestCreateLifecycleStages.CreatingLocalMetadata, {});
 
@@ -568,17 +570,33 @@ const buildMetadataXml = (data: AiEvaluationDefinition): string => {
  * error at a time. Emits a Lifecycle warning (does not throw) for unknown
  * scorer names — Core's MD validator catches those at deploy time.
  */
+/** Routes a subjectType-discriminated value to its AGENT or PROMPT handler. */
+const dispatchBySubjectType = <U extends { subjectType: 'AGENT' | 'PROMPT' }, R>(
+  value: U,
+  handlers: {
+    AGENT: (v: Extract<U, { subjectType: 'AGENT' }>) => R;
+    PROMPT: (v: Extract<U, { subjectType: 'PROMPT' }>) => R;
+  }
+): R => {
+  if (value.subjectType === 'AGENT') {
+    return handlers.AGENT(value as Extract<U, { subjectType: 'AGENT' }>);
+  }
+  return handlers.PROMPT(value as Extract<U, { subjectType: 'PROMPT' }>);
+};
+
 export const validateNgtSpec = (spec: NgtTestSpec, ctx: { isMultiAgent: boolean }): void => {
   if (!spec.testCases || spec.testCases.length === 0) {
     throw ngtError('ngtMissingTestCases');
   }
 
-  if (spec.subjectType === 'PROMPT') {
-    validatePromptTestCases(spec.testCases);
-    return;
-  }
+  dispatchBySubjectType(spec, {
+    AGENT: (s) => validateAgentTestCases(s.testCases, ctx),
+    PROMPT: (s) => validatePromptTestCases(s.testCases),
+  });
+};
 
-  spec.testCases.forEach((testCase, tcIdx) => {
+const validateAgentTestCases = (testCases: NgtTestCase[], ctx: { isMultiAgent: boolean }): void => {
+  testCases.forEach((testCase, tcIdx) => {
     if (!testCase.inputs || testCase.inputs.length === 0) {
       throw ngtError('ngtTestCaseMissingInputs', [tcIdx + 1]);
     }
@@ -586,7 +604,7 @@ export const validateNgtSpec = (spec: NgtTestSpec, ctx: { isMultiAgent: boolean 
       throw ngtError('ngtTestCaseMissingScorers', [tcIdx + 1]);
     }
 
-    validateScorers(testCase.scorers, tcIdx);
+    validateScorers(testCase.scorers, tcIdx, 'AGENT');
 
     const hasTaskResolution = testCase.scorers.some((s) => s.name === 'task_resolution');
     if (hasTaskResolution) {
@@ -618,8 +636,8 @@ export const validateNgtSpec = (spec: NgtTestSpec, ctx: { isMultiAgent: boolean 
   });
 };
 
-/** Shared by both subject types: unknown-name warning + needsExpected check. */
-const validateScorers = (scorers: NgtTestCaseScorer[], tcIdx: number): void => {
+/** Shared by both subject types: unknown-name warning + subject-scoping warning + needsExpected check. */
+const validateScorers = (scorers: NgtTestCaseScorer[], tcIdx: number, subjectType: NgtTestSpec['subjectType']): void => {
   scorers.forEach((scorer) => {
     if (!isNgtScorerName(scorer.name)) {
       const unknownName = String(scorer.name);
@@ -629,6 +647,11 @@ const validateScorers = (scorers: NgtTestCaseScorer[], tcIdx: number): void => {
       return;
     }
     const entry = NgtScorerCatalog[scorer.name];
+    if (!entry.supportedSubjects.includes(subjectType)) {
+      void Lifecycle.getInstance().emitWarning(
+        `Scorer '${scorer.name}' is not supported for subject type '${subjectType}'. The deploy will be validated by the server.`
+      );
+    }
     if (entry.needsExpected && (scorer.expected === undefined || scorer.expected === '')) {
       throw ngtError('ngtScorerMissingExpected', [scorer.name, tcIdx + 1]);
     }
@@ -652,7 +675,7 @@ const validatePromptTestCases = (testCases: NgtPromptTestCase[]): void => {
       throw ngtError('ngtTestCaseMissingScorers', [tcIdx + 1]);
     }
 
-    validateScorers(testCase.scorers, tcIdx);
+    validateScorers(testCase.scorers, tcIdx, 'PROMPT');
 
     testCase.inputs.forEach((inputSet, inputIdx) => {
       if (!inputSet.promptInput || inputSet.promptInput.length === 0) {
@@ -694,30 +717,15 @@ const fetchIsMultiAgent = async (connection: Connection, subjectName: string): P
  *
  * Must be called after `validateNgtSpec`.
  */
-export const convertToTestingMetadata = (spec: NgtTestSpec): AiTestingDefinition => {
-  if (spec.subjectType === 'PROMPT') {
-    const testCases: AiPromptTestCase[] = [];
-    let counter = 1;
-    for (const tc of spec.testCases) {
-      const sharedScorers = tc.scorers.map(toScorerXml);
-      for (const inputSet of tc.inputs) {
-        testCases.push({
-          number: counter++,
-          inputs: toPromptInputsXml(inputSet),
-          scorer: sharedScorers,
-        });
-      }
-    }
-    return {
-      ...(spec.description && { description: spec.description }),
-      name: spec.name,
-      subjectName: spec.subjectName,
-      subjectType: 'PROMPT',
-      ...(spec.subjectVersion && { subjectVersion: spec.subjectVersion }),
-      testCase: testCases,
-    };
-  }
+export const convertToTestingMetadata = (spec: NgtTestSpec): AiTestingDefinition =>
+  dispatchBySubjectType<NgtTestSpec, AiTestingDefinition>(spec, {
+    AGENT: convertToTestingMetadataAgent,
+    PROMPT: convertToTestingMetadataPrompt,
+  });
 
+const convertToTestingMetadataAgent = (
+  spec: Extract<NgtTestSpec, { subjectType: 'AGENT' }>
+): Extract<AiTestingDefinition, { subjectType: 'AGENT' }> => {
   const testCases: AiTestCase[] = [];
   let counter = 1;
   for (const tc of spec.testCases) {
@@ -735,6 +743,31 @@ export const convertToTestingMetadata = (spec: NgtTestSpec): AiTestingDefinition
     name: spec.name,
     subjectName: spec.subjectName,
     subjectType: 'AGENT',
+    ...(spec.subjectVersion && { subjectVersion: spec.subjectVersion }),
+    testCase: testCases,
+  };
+};
+
+const convertToTestingMetadataPrompt = (
+  spec: Extract<NgtTestSpec, { subjectType: 'PROMPT' }>
+): Extract<AiTestingDefinition, { subjectType: 'PROMPT' }> => {
+  const testCases: AiPromptTestCase[] = [];
+  let counter = 1;
+  for (const tc of spec.testCases) {
+    const sharedScorers = tc.scorers.map(toScorerXml);
+    for (const inputSet of tc.inputs) {
+      testCases.push({
+        number: counter++,
+        inputs: toPromptInputsXml(inputSet),
+        scorer: sharedScorers,
+      });
+    }
+  }
+  return {
+    ...(spec.description && { description: spec.description }),
+    name: spec.name,
+    subjectName: spec.subjectName,
+    subjectType: 'PROMPT',
     ...(spec.subjectVersion && { subjectVersion: spec.subjectVersion }),
     testCase: testCases,
   };
@@ -843,30 +876,40 @@ export const parseNgtMetadataXml = (xml: string): AiTestingDefinition => {
  * Inverse of {@link convertToTestingMetadata}; collapses contiguous test cases that share
  * an identical scorer set into a single multi-input case.
  */
-export const convertToNgtSpec = (data: AiTestingDefinition): NgtTestSpec => {
-  if (data.subjectType === 'PROMPT') {
-    const flatCases = ensureArray(data.testCase).map((tc) => parsePromptTestCaseXml(tc));
-    const collapsedCases = collapseContiguousTestCases(flatCases);
+export const convertToNgtSpec = (data: AiTestingDefinition): NgtTestSpec =>
+  dispatchBySubjectType<AiTestingDefinition, NgtTestSpec>(data, {
+    AGENT: convertToNgtSpecAgent,
+    PROMPT: convertToNgtSpecPrompt,
+  });
 
-    const spec: NgtTestSpec = {
-      name: String(data.name),
-      subjectType: 'PROMPT',
-      subjectName: String(data.subjectName),
-      testCases: collapsedCases,
-    };
-    if (data.description !== undefined && data.description !== '') spec.description = String(data.description);
-    if (data.subjectVersion !== undefined && data.subjectVersion !== '') {
-      spec.subjectVersion = String(data.subjectVersion);
-    }
-    return spec;
-  }
-
+const convertToNgtSpecAgent = (
+  data: Extract<AiTestingDefinition, { subjectType: 'AGENT' }>
+): Extract<NgtTestSpec, { subjectType: 'AGENT' }> => {
   const flatCases = ensureArray(data.testCase).map((tc) => parseTestCaseXml(tc));
   const collapsedCases = collapseContiguousTestCases(flatCases);
 
-  const spec: NgtTestSpec = {
+  const spec: Extract<NgtTestSpec, { subjectType: 'AGENT' }> = {
     name: String(data.name),
     subjectType: 'AGENT',
+    subjectName: String(data.subjectName),
+    testCases: collapsedCases,
+  };
+  if (data.description !== undefined && data.description !== '') spec.description = String(data.description);
+  if (data.subjectVersion !== undefined && data.subjectVersion !== '') {
+    spec.subjectVersion = String(data.subjectVersion);
+  }
+  return spec;
+};
+
+const convertToNgtSpecPrompt = (
+  data: Extract<AiTestingDefinition, { subjectType: 'PROMPT' }>
+): Extract<NgtTestSpec, { subjectType: 'PROMPT' }> => {
+  const flatCases = ensureArray(data.testCase).map((tc) => parsePromptTestCaseXml(tc));
+  const collapsedCases = collapseContiguousTestCases(flatCases);
+
+  const spec: Extract<NgtTestSpec, { subjectType: 'PROMPT' }> = {
+    name: String(data.name),
+    subjectType: 'PROMPT',
     subjectName: String(data.subjectName),
     testCases: collapsedCases,
   };

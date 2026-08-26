@@ -266,6 +266,34 @@ describe('AgentTest NGT (Agentforce Studio) create surface', () => {
       ];
       expect(() => validateNgtSpec(noneSet, { isMultiAgent: false })).to.not.throw();
     });
+
+    it('does not emit a subject-scoping warning for any catalog scorer on AGENT', () => {
+      const lifecycleSpy = sinon.spy(Lifecycle.prototype, 'emitWarning');
+      const spec = baseSpec();
+      spec.testCases[0].scorers = [
+        { name: 'topic_sequence_match', expected: 'GeneralCRM' },
+        { name: 'action_sequence_match', expected: 'a' },
+        { name: 'agent_handoff_match', expected: 'CheckoutAgent' },
+        { name: 'bot_response_rating', expected: 'a friendly greeting' },
+        { name: 'response_match', expected: 'x' },
+        { name: 'coherence' },
+        { name: 'conciseness' },
+        { name: 'factuality' },
+        { name: 'completeness' },
+        { name: 'output_latency_milliseconds' },
+      ];
+      spec.testCases[0].inputs = [
+        {
+          utterance: 'hello',
+          conversationHistory: [
+            { role: 'user', message: 'first' },
+            { role: 'agent', message: 'sure', topic: 'GeneralCRM' },
+          ],
+        },
+      ];
+      expect(() => validateNgtSpec(spec, { isMultiAgent: false })).to.not.throw();
+      expect(lifecycleSpy.called).to.be.false;
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -385,6 +413,30 @@ describe('AgentTest NGT (Agentforce Studio) create surface', () => {
       spec.testCases[0].scorers = [{ name: 'task_resolution' }];
       // No conversationHistory concept exists on NgtPromptInputSet — would throw for AGENT.
       expect(() => validateNgtSpec(spec, { isMultiAgent: false })).to.not.throw();
+    });
+
+    it('emits a subject-scoping Lifecycle warn event for an AGENT-only scorer used on PROMPT (does not throw)', () => {
+      const lifecycleSpy = sinon.spy(Lifecycle.prototype, 'emitWarning');
+      const spec = basePromptSpec();
+      spec.testCases[0].scorers = [{ name: 'topic_sequence_match', expected: 'GeneralCRM' }];
+      expect(() => validateNgtSpec(spec, { isMultiAgent: false })).to.not.throw();
+      expect(lifecycleSpy.called).to.be.true;
+      const allWarnArgs = lifecycleSpy.getCalls().flatMap((c) => c.args.map(String));
+      expect(allWarnArgs.some((a) => a.includes('topic_sequence_match') && a.includes('PROMPT'))).to.be.true;
+    });
+
+    it('does not emit a subject-scoping warning for any of the 5 PROMPT-supported scorers', () => {
+      const lifecycleSpy = sinon.spy(Lifecycle.prototype, 'emitWarning');
+      const spec = basePromptSpec();
+      spec.testCases[0].scorers = [
+        { name: 'coherence' },
+        { name: 'conciseness' },
+        { name: 'factuality' },
+        { name: 'completeness' },
+        { name: 'response_match', expected: 'x' },
+      ];
+      expect(() => validateNgtSpec(spec, { isMultiAgent: false })).to.not.throw();
+      expect(lifecycleSpy.called).to.be.false;
     });
   });
 
