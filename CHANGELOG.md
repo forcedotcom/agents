@@ -1,3 +1,12 @@
+# [2.1.0](https://github.com/forcedotcom/agents/compare/2.0.6...2.1.0) (2026-08-27)
+
+
+### Features
+
+* Support new simplified metadata type for 264 orgs (@W-23897701) ([#341](https://github.com/forcedotcom/agents/issues/341)) ([ad698c7](https://github.com/forcedotcom/agents/commit/ad698c763f0fc689210e27aedaa29bf72dc3a684))
+
+
+
 ## [2.0.6](https://github.com/forcedotcom/agents/compare/2.0.5...2.0.6) (2026-08-24)
 
 

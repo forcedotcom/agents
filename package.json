@@ -1,7 +1,7 @@
 {
   "name": "@salesforce/agents",
   "description": "Client side APIs for working with Salesforce agents",
-  "version": "2.0.6",
+  "version": "2.1.0",
   "license": "Apache-2.0",
   "author": "Salesforce",
   "main": "lib/index",
@@ -13,7 +13,7 @@
   "dependencies": {
     "@salesforce/core": "^9.0.0",
     "@salesforce/kit": "^4.0.0",
-    "@salesforce/source-deploy-retrieve": "^13.0.0",
+    "@salesforce/source-deploy-retrieve": "^13.1.1",
     "@salesforce/types": "^1.8.0",
     "fast-xml-parser": "^5.8.0",
     "yaml": "^2.8.4"
@@ -32,7 +32,8 @@
   },
   "resolutions": {
     "serialize-javascript": "^7.0.5",
-    "uuid": "^11.1.1"
+    "uuid": "^11.1.1",
+    "@salesforce/core": "^9.0.0"
   },
   "engines": {
     "node": ">=22.0.0"
