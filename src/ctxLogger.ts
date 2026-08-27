@@ -25,14 +25,14 @@ import { Logger } from '@salesforce/core';
  *
  * Rendering rules:
  * - Non-primitive values (e.g. Error objects) and null/undefined/empty-string/empty-array
- *   are omitted — they add no readable signal. Log a primitive projection instead (e.g.
- *   `errName`/`errMsg` rather than the whole error).
+ * are omitted — they add no readable signal. Log a primitive projection instead (e.g.
+ * `errName`/`errMsg` rather than the whole error).
  * - Arrays are joined with `;` and Dates rendered as ISO.
  * - Control characters (CR/LF/tab) are collapsed to a single space so a field value can
- *   never inject a second apparent log line (CWE-117 log forging).
+ * never inject a second apparent log line (CWE-117 log forging).
  * - A rendered value containing the pair separator `,` or the message separator `|` is
- *   quoted so the pair stays unambiguous to a reader (the intra-array `;` is expected and
- *   does not trigger quoting).
+ * quoted so the pair stays unambiguous to a reader (the intra-array `;` is expected and
+ * does not trigger quoting).
  */
 const renderLogCtx = (fields: Record<string, unknown>): string =>
   Object.entries(fields)
