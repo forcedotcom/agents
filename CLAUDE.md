@@ -10,6 +10,10 @@ we expect every change to follow. Read the linked docs before writing code in th
 - **[Logging](ai-docs/logging.md)** — how we log. Log through `CtxLogger`, keep messages
   static with variable data in structured fields, and write every line to pass the 3am test.
   Read this before adding or changing any log line.
+- **[Downstream consumers](ai-docs/downstream-consumers.md)** — who depends on this
+  package's public API (`plugin-agent`, `vscode-agents`, the `sf` CLI) and how to check a
+  change against the latest `main` of each. Read this when generating or reading a code
+  review to judge whether a change is breaking or backwards-incompatible, and where.
 
 _Add new convention docs under `ai-docs/` and link them here as the hub grows._
 
