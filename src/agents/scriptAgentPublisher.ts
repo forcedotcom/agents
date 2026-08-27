@@ -18,21 +18,22 @@ import * as path from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { XMLBuilder, XMLParser } from 'fast-xml-parser';
-import { Connection, Logger, Messages, SfError, SfProject } from '@salesforce/core';
+import { Connection, Messages, SfError, SfProject } from '@salesforce/core';
 import { Duration, env } from '@salesforce/kit';
 import { ComponentSet, ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { MaybeMock } from '../maybe-mock';
 import { type AgentJson, type PublishAgent, type PublishAgentJsonResponse } from '../types';
 import { findAuthoringBundle, supportsAiAgentDefinition } from '../utils';
+import { CtxLogger } from '../ctxLogger';
 import { managerFor } from '../connectionManager';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agentPublisher');
 
-let logger: Logger;
-const getLogger = (): Logger => {
+let logger: CtxLogger;
+const getLogger = (): CtxLogger => {
   if (!logger) {
-    logger = Logger.childFromRoot('AgentPublisher');
+    logger = CtxLogger.child('AgentPublisher');
   }
   return logger;
 };
@@ -99,7 +100,7 @@ export class ScriptAgentPublisher {
    * @returns Promise<PublishAgent> The publish response
    */
   public async publishAgentJson(): Promise<PublishAgent> {
-    getLogger().debug('Publishing Agent');
+    getLogger().debug('Publishing agent', { developerName: this.developerName });
 
     const manager = await managerFor(this.connection);
 
@@ -189,11 +190,11 @@ export class ScriptAgentPublisher {
     const defaultPackagePath = path.resolve(this.project.getDefaultPackage().path);
 
     const useNewFormat = supportsAiAgentDefinition(standardConn);
-    getLogger().debug(
-      `Retrieving agent ${this.developerName} using ${
-        useNewFormat ? 'new AiAgentDefinition' : 'legacy Bot/GenAiPlanner'
-      } format (org API v${standardConn.getApiVersion()})`
-    );
+    getLogger().debug('Retrieving agent metadata', {
+      developerName: this.developerName,
+      format: useNewFormat ? 'AiAgentDefinition' : 'Bot/GenAiPlanner',
+      orgApiVersion: standardConn.getApiVersion(),
+    });
     const metadataEntries = useNewFormat
       ? [
           `AiAgentDefinition:${this.developerName}`,
@@ -231,9 +232,9 @@ export class ScriptAgentPublisher {
 
     const retrieveTimeout = getMetadataPollTimeout();
     const retrieveStart = Date.now();
-    getLogger().debug(`Polling for agent metadata retrieve (timeout: ${retrieveTimeout.minutes} min)`);
+    getLogger().debug('Polling for agent metadata retrieve', { timeoutMinutes: retrieveTimeout.minutes });
     const retrieveResult = await retrieve.pollStatus({ timeout: retrieveTimeout });
-    getLogger().debug(`Agent metadata retrieve poll completed in ${Date.now() - retrieveStart} ms`);
+    getLogger().debug('Agent metadata retrieve poll completed', { durationMs: Date.now() - retrieveStart });
 
     if (!retrieveResult.response?.success) {
       const errMessages = JSON.stringify(retrieveResult.response?.messages) ?? 'unknown';
@@ -246,15 +247,16 @@ export class ScriptAgentPublisher {
     // nothing, producing a success:true retrieve that wrote zero agent files. Surface that.
     const fileResponses = retrieveResult.getFileResponses();
     const resolvedTypes = [...new Set(fileResponses.map((f) => f.type))];
-    getLogger().debug(
-      `Agent metadata retrieve resolved ${fileResponses.length} component(s) of type(s): ${
-        resolvedTypes.join(', ') || 'none'
-      }`
-    );
+    getLogger().debug('Agent metadata retrieve resolved components', {
+      developerName: this.developerName,
+      componentCount: fileResponses.length,
+      types: resolvedTypes,
+    });
     if (useNewFormat && fileResponses.length === 0) {
-      getLogger().warn(
-        `New-format retrieve for ${this.developerName} resolved zero components — org (API v${standardConn.getApiVersion()}) may have the AiAgentDefinition feature flag disabled.`
-      );
+      getLogger().warn('New-format retrieve resolved zero components; org may have the AiAgentDefinition feature flag disabled', {
+        developerName: this.developerName,
+        orgApiVersion: standardConn.getApiVersion(),
+      });
     }
   }
 
@@ -278,7 +280,10 @@ export class ScriptAgentPublisher {
     };
     const target = `${this.developerName}.${botVersionName}`;
     authoringBundle.AiAuthoringBundle.target = target;
-    getLogger().debug(`Setting target to ${target} in ${this.bundleMetaPath}`);
+    getLogger().debug('Setting target on authoring bundle meta.xml', {
+      target,
+      bundleMetaPath: this.bundleMetaPath,
+    });
     const xmlBuilder = new XMLBuilder({
       ignoreAttributes: false,
       format: true,
@@ -294,9 +299,9 @@ export class ScriptAgentPublisher {
     });
     const deployTimeout = getMetadataPollTimeout();
     const deployStart = Date.now();
-    getLogger().debug(`Polling for authoring bundle deploy (timeout: ${deployTimeout.minutes} min)`);
+    getLogger().debug('Polling for authoring bundle deploy', { timeoutMinutes: deployTimeout.minutes });
     const deployResult = await deploy.pollStatus({ timeout: deployTimeout });
-    getLogger().debug(`Authoring bundle deploy poll completed in ${Date.now() - deployStart} ms`);
+    getLogger().debug('Authoring bundle deploy poll completed', { durationMs: Date.now() - deployStart });
 
     // 3.remove the target from the local authoring bundle meta.xml file
     delete authoringBundle.AiAuthoringBundle.target;
@@ -328,10 +333,15 @@ export class ScriptAgentPublisher {
       const queryResult = await standardConn.singleRecordQuery<{ Id: string }>(
         `SELECT Id FROM BotDefinition WHERE DeveloperName='${agentApiName}'`
       );
-      getLogger().debug(`Agent with developer name ${agentApiName} and id ${queryResult.Id} is already published.`);
+      getLogger().debug('Agent is already published', { agentApiName, botId: queryResult.Id });
       return queryResult.Id;
     } catch (error) {
-      getLogger().debug(`Error reading agent metadata: ${JSON.stringify(error)}`);
+      const wrapped = SfError.wrap(error);
+      getLogger().debug('Error querying BotDefinition; treating agent as not yet published', {
+        agentApiName,
+        errName: wrapped.name,
+        errMsg: wrapped.message,
+      });
       return undefined;
     }
   }
@@ -348,9 +358,11 @@ export class ScriptAgentPublisher {
       const queryResult = await standardConn.singleRecordQuery<{ DeveloperName: string; VersionNumber: number }>(
         `SELECT DeveloperName, VersionNumber FROM BotVersion WHERE Id='${botVersionId}'`
       );
-      getLogger().debug(
-        `Bot version with id ${botVersionId} is ${queryResult.DeveloperName} (version ${queryResult.VersionNumber}).`
-      );
+      getLogger().debug('Resolved bot version', {
+        botVersionId,
+        developerName: queryResult.DeveloperName,
+        versionNumber: queryResult.VersionNumber,
+      });
       return { developerName: queryResult.DeveloperName, versionNumber: queryResult.VersionNumber };
     } catch (error) {
       const err = messages.createError('findBotVersionError', [botVersionId], undefined, error as Error);

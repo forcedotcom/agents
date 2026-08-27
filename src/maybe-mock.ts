@@ -17,12 +17,13 @@
 import { join, resolve } from 'node:path';
 import { type Stats, statSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
-import { Connection, Logger, SfError } from '@salesforce/core';
+import { Connection, SfError } from '@salesforce/core';
 import { env } from '@salesforce/kit';
 // Type-only import: erased at compile time. Only used for the `nock.Body`
 // constraint on the generic type parameter.
 import type nock from 'nock';
 import { requestWithEndpointFallback } from './utils';
+import { CtxLogger } from './ctxLogger';
 
 type HttpHeaders = {
   [name: string]: string;
@@ -85,7 +86,7 @@ async function readDirectory<T extends nock.Body>(path: string): Promise<T[] | u
   return (await Promise.all(promises)).filter((r): r is T => !!r);
 }
 
-async function readResponses<T extends nock.Body>(mockDir: string, url: string, logger: Logger): Promise<T[]> {
+async function readResponses<T extends nock.Body>(mockDir: string, url: string, logger: CtxLogger): Promise<T[]> {
   const mockResponseName = url.replace(/\//g, '_').replace(/:/g, '_').replace(/^_/, '').split('?')[0];
   const mockResponsePath = join(mockDir, mockResponseName);
 
@@ -94,19 +95,19 @@ async function readResponses<T extends nock.Body>(mockDir: string, url: string, 
     await Promise.all([
       readJson(`${mockResponsePath}.json`)
         .then((r) => {
-          logger.debug(`Found JSON mock file: ${mockResponsePath}.json`);
+          logger.debug('Found JSON mock file', { mockResponsePath: `${mockResponsePath}.json` });
           return r;
         })
         .catch(() => undefined),
       readPlainText(mockResponsePath)
         .then((r) => {
-          logger.debug(`Found plain text mock file: ${mockResponsePath}`);
+          logger.debug('Found plain text mock file', { mockResponsePath });
           return r;
         })
         .catch(() => undefined),
       readDirectory(mockResponsePath)
         .then((r) => {
-          logger.debug(`Found directory of mock files: ${mockResponsePath}`);
+          logger.debug('Found directory of mock files', { mockResponsePath });
           return r;
         })
         .catch(() => undefined),
@@ -121,7 +122,7 @@ async function readResponses<T extends nock.Body>(mockDir: string, url: string, 
     });
   }
 
-  logger.debug(`Using responses: ${responses.map((r) => JSON.stringify(r)).join(', ')}`);
+  logger.debug('Loaded mock responses', { mockResponsePath, count: responses.length });
 
   return responses;
 }
@@ -136,10 +137,10 @@ async function readResponses<T extends nock.Body>(mockDir: string, url: string, 
 export class MaybeMock {
   private mockDir = getMockDir();
   private mockCallCounts = new Map<string, number>();
-  private logger: Logger;
+  private logger: CtxLogger;
 
   public constructor(private connection: Connection) {
-    this.logger = Logger.childFromRoot(this.constructor.name);
+    this.logger = CtxLogger.child(this.constructor.name);
   }
 
   /**
@@ -158,7 +159,7 @@ export class MaybeMock {
     headers: HttpHeaders = {}
   ): Promise<T> {
     if (this.mockDir) {
-      this.logger.debug(`Mocking ${method} request to ${url} using ${this.mockDir}`);
+      this.logger.debug('Mocking request', { method, url, mockDir: this.mockDir });
       const responses = await readResponses<T>(this.mockDir, url, this.logger);
       // Return mock responses directly — nock cannot intercept jsforce's undici-based
       // HTTP transport, so we short-circuit here. For polling scenarios with multiple
@@ -169,7 +170,7 @@ export class MaybeMock {
       return responses[Math.min(callIndex, responses.length - 1)];
     }
 
-    this.logger.debug(`Making ${method} request to ${url}`);
+    this.logger.debug('Making request', { method, url });
 
     // For api.salesforce.com URLs, use endpoint fallback
     const isApiSalesforceUrl = url.includes('https://api.salesforce.com');

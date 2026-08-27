@@ -15,6 +15,8 @@
  */
 
 import { Connection, Lifecycle, SfError } from '@salesforce/core';
+import { getHttpStatusCode } from './utils';
+import { CtxLogger } from './ctxLogger';
 import {
   type ListMcpServersOptions,
   type McpServerCollection,
@@ -28,6 +30,14 @@ import {
 } from './apiCatalogTypes.js';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
+
+let logger: CtxLogger;
+const getLogger = (): CtxLogger => {
+  if (!logger) {
+    logger = CtxLogger.child('ApiCatalog');
+  }
+  return logger;
+};
 
 function base(connection: Connection): string {
   return `/services/data/v${String(connection.version)}/api-catalog`;
@@ -144,6 +154,14 @@ export class ApiCatalog {
       result = await connection.request<T>(req);
     } catch (error) {
       const wrapped = SfError.wrap(error);
+      getLogger().debug('API Catalog request failed', {
+        op,
+        method,
+        url,
+        statusCode: getHttpStatusCode(error),
+        errName: wrapped.name,
+        errMsg: wrapped.message,
+      });
       await ApiCatalog.emitTelemetry(`api_catalog_${op}_failed`);
       throw wrapped;
     }
