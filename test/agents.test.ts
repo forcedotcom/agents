@@ -471,10 +471,11 @@ describe('Agents', () => {
         ),
       });
 
-      // Mock connection.singleRecordQuery to return undefined (no existing bot)
+      // No existing bot: singleRecordQuery throws SingleRecordQuery_NoRecords for zero rows,
+      // which getPublishedBotId treats as "not yet published" and continues to the publish POST.
       $$.SANDBOX.stub(connection, 'singleRecordQuery')
         .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='myAgent'")
-        .resolves(undefined);
+        .rejects(new SfError('No record found', 'SingleRecordQuery_NoRecords'));
 
       // Mock connection.getConnectionOptions for JWT creation
       $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({

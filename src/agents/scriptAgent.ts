@@ -478,10 +478,13 @@ export class ScriptAgent extends AgentBase {
 
     // send bypassUser=false when the compiledAgent.globalConfiguration.defaultAgentUser is INVALID
     const standardConn = await this.getStandardConnection();
+    // Escape single quotes so a defaultAgentUser carrying one cannot break out of the SOQL
+    // string literal (CWE-89). Mirrors the repo's canonical pattern in agentEvalRunner.ts.
+    const escapedDefaultAgentUser = this.agentJson.globalConfiguration.defaultAgentUser.replace(/'/g, "''");
     let bypassUser =
       (
         await standardConn.query<{ Id: string }>(
-          `SELECT Id FROM USER WHERE username='${this.agentJson.globalConfiguration.defaultAgentUser}'`
+          `SELECT Id FROM USER WHERE username='${escapedDefaultAgentUser}'`
         )
       ).totalSize === 1;
 
