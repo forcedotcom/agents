@@ -189,6 +189,11 @@ export class ScriptAgentPublisher {
     const defaultPackagePath = path.resolve(this.project.getDefaultPackage().path);
 
     const useNewFormat = supportsAiAgentDefinition(standardConn);
+    getLogger().debug(
+      `Retrieving agent ${this.developerName} using ${
+        useNewFormat ? 'new AiAgentDefinition' : 'legacy Bot/GenAiPlanner'
+      } format (org API v${standardConn.getApiVersion()})`
+    );
     const metadataEntries = useNewFormat
       ? [
           `AiAgentDefinition:${this.developerName}`,
@@ -235,6 +240,21 @@ export class ScriptAgentPublisher {
       const error = messages.createError('agentRetrievalError', [errMessages]);
       error.actions = [messages.getMessage('agentRetrievalErrorActions')];
       throw error;
+    }
+
+    // A v68+ org with the AiAgentDefinition feature flag disabled resolves the new types to
+    // nothing, producing a success:true retrieve that wrote zero agent files. Surface that.
+    const fileResponses = retrieveResult.getFileResponses();
+    const resolvedTypes = [...new Set(fileResponses.map((f) => f.type))];
+    getLogger().debug(
+      `Agent metadata retrieve resolved ${fileResponses.length} component(s) of type(s): ${
+        resolvedTypes.join(', ') || 'none'
+      }`
+    );
+    if (useNewFormat && fileResponses.length === 0) {
+      getLogger().warn(
+        `New-format retrieve for ${this.developerName} resolved zero components — org (API v${standardConn.getApiVersion()}) may have the AiAgentDefinition feature flag disabled.`
+      );
     }
   }
 
@@ -332,8 +352,8 @@ export class ScriptAgentPublisher {
         `Bot version with id ${botVersionId} is ${queryResult.DeveloperName} (version ${queryResult.VersionNumber}).`
       );
       return { developerName: queryResult.DeveloperName, versionNumber: queryResult.VersionNumber };
-    } catch {
-      const err = messages.createError('findBotVersionError', [botVersionId]);
+    } catch (error) {
+      const err = messages.createError('findBotVersionError', [botVersionId], undefined, error as Error);
       err.actions = [messages.getMessage('authoringBundleDeploymentErrorActions')];
       throw err;
     }

@@ -426,6 +426,7 @@ describe('Agents', () => {
       $$.SANDBOX.stub(mdApiRetrieve, 'pollStatus').resolves({
         // @ts-expect-error Not the full response
         response: { success: true },
+        getFileResponses: () => [],
       });
       $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
       $$.SANDBOX.stub(ComponentSetBuilder, 'build').resolves(compSet);
@@ -897,6 +898,7 @@ describe('Agents', () => {
     const pollingStub = $$.SANDBOX.stub(mdApiRetrieve, 'pollStatus').resolves({
       // @ts-expect-error Not the full response
       response: { success: true },
+      getFileResponses: () => [],
     });
     const compSet = new ComponentSet();
     const retrieveStub = $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
@@ -953,6 +955,7 @@ describe('Agents', () => {
     $$.SANDBOX.stub(mdApiRetrieve, 'pollStatus').resolves({
       // @ts-expect-error Not the full response
       response: { success: true },
+      getFileResponses: () => [],
     });
     const compSet = new ComponentSet();
     const retrieveStub = $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);

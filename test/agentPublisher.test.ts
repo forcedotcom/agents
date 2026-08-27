@@ -509,6 +509,7 @@ describe('AgentPublisher', () => {
         response: {
           success: true,
         },
+        getFileResponses: () => [],
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
       $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
@@ -582,6 +583,7 @@ describe('AgentPublisher', () => {
         response: {
           success: true,
         },
+        getFileResponses: () => [],
       });
 
       let capturedRetrieveOptions: Parameters<ComponentSet['retrieve']>[0] | undefined;
@@ -679,6 +681,7 @@ describe('AgentPublisher', () => {
         response: {
           success: true,
         },
+        getFileResponses: () => [],
       });
 
       let capturedRetrieveOptions: Parameters<ComponentSet['retrieve']>[0] | undefined;
@@ -762,6 +765,7 @@ describe('AgentPublisher', () => {
         response: {
           success: true,
         },
+        getFileResponses: () => [],
       });
       $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
 
@@ -845,6 +849,7 @@ describe('AgentPublisher', () => {
         response: {
           success: true,
         },
+        getFileResponses: () => [],
       });
       $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
 
@@ -896,6 +901,7 @@ describe('AgentPublisher', () => {
         response: {
           success: true,
         },
+        getFileResponses: () => [],
       });
       $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
 
