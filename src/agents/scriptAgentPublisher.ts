@@ -190,11 +190,11 @@ export class ScriptAgentPublisher {
     const defaultPackagePath = path.resolve(this.project.getDefaultPackage().path);
 
     const useNewFormat = supportsAiAgentDefinition(standardConn);
-    getLogger().debug(
-      `Retrieving agent ${this.developerName} using ${
-        useNewFormat ? 'new AiAgentDefinition' : 'legacy Bot/GenAiPlanner'
-      } format (org API v${standardConn.getApiVersion()})`
-    );
+    getLogger().debug('Retrieving agent metadata', {
+      developerName: this.developerName,
+      format: useNewFormat ? 'AiAgentDefinition' : 'Bot/GenAiPlanner',
+      orgApiVersion: standardConn.getApiVersion(),
+    });
     const metadataEntries = useNewFormat
       ? [
           `AiAgentDefinition:${this.developerName}`,
@@ -247,15 +247,16 @@ export class ScriptAgentPublisher {
     // nothing, producing a success:true retrieve that wrote zero agent files. Surface that.
     const fileResponses = retrieveResult.getFileResponses();
     const resolvedTypes = [...new Set(fileResponses.map((f) => f.type))];
-    getLogger().debug(
-      `Agent metadata retrieve resolved ${fileResponses.length} component(s) of type(s): ${
-        resolvedTypes.join(', ') || 'none'
-      }`
-    );
+    getLogger().debug('Agent metadata retrieve resolved components', {
+      developerName: this.developerName,
+      componentCount: fileResponses.length,
+      types: resolvedTypes,
+    });
     if (useNewFormat && fileResponses.length === 0) {
-      getLogger().warn(
-        `New-format retrieve for ${this.developerName} resolved zero components — org (API v${standardConn.getApiVersion()}) may have the AiAgentDefinition feature flag disabled.`
-      );
+      getLogger().warn('New-format retrieve resolved zero components; org may have the AiAgentDefinition feature flag disabled', {
+        developerName: this.developerName,
+        orgApiVersion: standardConn.getApiVersion(),
+      });
     }
   }
 

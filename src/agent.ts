@@ -273,11 +273,11 @@ export class Agent {
         // action dependencies via rootTypesWithDependencies. Older orgs fall back to the
         // legacy Agent manifest.
         const useNewFormat = supportsAiAgentDefinition(standardConnection);
-        getLogger().debug(
-          `Retrieving created agent ${apiName} using ${
-            useNewFormat ? 'new AiAgentDefinition' : 'legacy Agent'
-          } format (org API v${standardConnection.getApiVersion()})`
-        );
+        getLogger().debug('Retrieving created agent', {
+          agentApiName: apiName,
+          format: useNewFormat ? 'AiAgentDefinition' : 'Agent',
+          orgApiVersion: standardConnection.getApiVersion(),
+        });
         let metadataEntries: string[];
         if (useNewFormat) {
           // agentId is typed optional; a success response without it would otherwise NPE on the
@@ -328,15 +328,16 @@ export class Agent {
         // nothing, producing a success:true retrieve that wrote zero agent files. Surface that.
         const fileResponses = retrieveResult.getFileResponses();
         const resolvedTypes = [...new Set(fileResponses.map((f) => f.type))];
-        getLogger().debug(
-          `Agent metadata retrieve resolved ${fileResponses.length} component(s) of type(s): ${
-            resolvedTypes.join(', ') || 'none'
-          }`
-        );
+        getLogger().debug('Agent metadata retrieve resolved components', {
+          agentApiName: apiName,
+          componentCount: fileResponses.length,
+          types: resolvedTypes,
+        });
         if (useNewFormat && fileResponses.length === 0) {
-          getLogger().warn(
-            `New-format retrieve for ${apiName} resolved zero components — org (API v${standardConnection.getApiVersion()}) may have the AiAgentDefinition feature flag disabled.`
-          );
+          getLogger().warn('New-format retrieve resolved zero components; org may have the AiAgentDefinition feature flag disabled', {
+            agentApiName: apiName,
+            orgApiVersion: standardConnection.getApiVersion(),
+          });
         }
       } catch (err) {
         const error = SfError.wrap(err);
