@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
-import { inspect } from 'node:util';
 import * as path from 'node:path';
 import { readdir, stat } from 'node:fs/promises';
-import { Connection, generateApiName, Lifecycle, Logger, Messages, SfError, SfProject } from '@salesforce/core';
+import { Connection, generateApiName, Lifecycle, Messages, SfError, SfProject } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { Duration } from '@salesforce/kit';
 import {
@@ -35,6 +34,7 @@ import {
 } from './types';
 import { MaybeMock } from './maybe-mock';
 import { decodeHtmlEntities, findLocalAgents, supportsAiAgentDefinition } from './utils';
+import { CtxLogger } from './ctxLogger';
 import { ScriptAgent } from './agents/scriptAgent';
 import { ProductionAgent } from './agents/productionAgent';
 import { managerFor } from './connectionManager';
@@ -45,10 +45,10 @@ export type AgentInstance = ScriptAgent | ProductionAgent;
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agents');
 
-let logger: Logger;
-const getLogger = (): Logger => {
+let logger: CtxLogger;
+const getLogger = (): CtxLogger => {
   if (!logger) {
-    logger = Logger.childFromRoot('Agent');
+    logger = CtxLogger.child('Agent');
   }
   return logger;
 };
@@ -236,7 +236,12 @@ export class Agent {
 
     // When previewing agent creation just return the response.
     if (!config.saveAgent) {
-      getLogger().debug(`Previewing agent creation using config: ${inspect(config)} in project: ${project.getPath()}`);
+      getLogger().debug('Previewing agent creation', {
+        agentName: config.agentSettings?.agentName,
+        agentApiName: config.agentSettings?.agentApiName,
+        saveAgent: config.saveAgent ?? false,
+        projectPath: project.getPath(),
+      });
       await Lifecycle.getInstance().emit(AgentCreateLifecycleStages.Previewing, {});
 
       const response = await maybeMock.request<AgentCreateResponse>('POST', url, config);
@@ -247,7 +252,11 @@ export class Agent {
       throw messages.createError('missingAgentName');
     }
 
-    getLogger().debug(`Creating agent using config: ${inspect(config)} in project: ${project.getPath()}`);
+    getLogger().debug('Creating agent', {
+      agentName: config.agentSettings?.agentName,
+      agentApiName: config.agentSettings?.agentApiName,
+      projectPath: project.getPath(),
+    });
     await Lifecycle.getInstance().emit(AgentCreateLifecycleStages.Creating, {});
     config.agentSettings.agentApiName ??= generateApiName(config.agentSettings?.agentName);
     const response = await maybeMock.request<AgentCreateResponse>('POST', url, config);
@@ -264,11 +273,11 @@ export class Agent {
         // action dependencies via rootTypesWithDependencies. Older orgs fall back to the
         // legacy Agent manifest.
         const useNewFormat = supportsAiAgentDefinition(standardConnection);
-        getLogger().debug(
-          `Retrieving created agent ${apiName} using ${
-            useNewFormat ? 'new AiAgentDefinition' : 'legacy Agent'
-          } format (org API v${standardConnection.getApiVersion()})`
-        );
+        getLogger().debug('Retrieving created agent', {
+          agentApiName: apiName,
+          format: useNewFormat ? 'AiAgentDefinition' : 'Agent',
+          orgApiVersion: standardConnection.getApiVersion(),
+        });
         let metadataEntries: string[];
         if (useNewFormat) {
           // agentId is typed optional; a success response without it would otherwise NPE on the
@@ -319,15 +328,16 @@ export class Agent {
         // nothing, producing a success:true retrieve that wrote zero agent files. Surface that.
         const fileResponses = retrieveResult.getFileResponses();
         const resolvedTypes = [...new Set(fileResponses.map((f) => f.type))];
-        getLogger().debug(
-          `Agent metadata retrieve resolved ${fileResponses.length} component(s) of type(s): ${
-            resolvedTypes.join(', ') || 'none'
-          }`
-        );
+        getLogger().debug('Agent metadata retrieve resolved components', {
+          agentApiName: apiName,
+          componentCount: fileResponses.length,
+          types: resolvedTypes,
+        });
         if (useNewFormat && fileResponses.length === 0) {
-          getLogger().warn(
-            `New-format retrieve for ${apiName} resolved zero components — org (API v${standardConnection.getApiVersion()}) may have the AiAgentDefinition feature flag disabled.`
-          );
+          getLogger().warn('New-format retrieve resolved zero components; org may have the AiAgentDefinition feature flag disabled', {
+            agentApiName: apiName,
+            orgApiVersion: standardConnection.getApiVersion(),
+          });
         }
       } catch (err) {
         const error = SfError.wrap(err);

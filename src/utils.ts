@@ -16,8 +16,9 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { appendFile, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
-import { Connection, Logger, SfError, SfProject } from '@salesforce/core';
+import { Connection, SfError, SfProject } from '@salesforce/core';
 import { AvailableDefinition, NamedUserJwtResponse, type PlannerResponse, PreviewMetadata } from './types';
+import { CtxLogger } from './ctxLogger';
 
 export const metric = ['completeness', 'coherence', 'conciseness', 'output_latency_milliseconds'] as const;
 
@@ -747,7 +748,7 @@ export async function requestWithEndpointFallback<T>(
 ): Promise<T> {
   const endpoints = ['', 'test.', 'dev.']; // Try production, test, dev in that order
   const attemptedEndpoints: string[] = [];
-  const logger = Logger.childFromRoot('AgentApiRequest');
+  const logger = CtxLogger.child('AgentApiRequest');
 
   let lastError: unknown;
 
@@ -770,7 +771,10 @@ export async function requestWithEndpointFallback<T>(
       );
     } catch (error) {
       const statusCode = getHttpStatusCode(error);
-      logger.debug(`Request failed for url ${modifiedUrl} with status code ${statusCode ?? 'unknown'}`);
+      logger.debug('Agent API request failed for endpoint', {
+        url: modifiedUrl,
+        statusCode: statusCode ?? 'unknown',
+      });
       if (statusCode === 404) {
         lastError = error;
         continue; // Try next endpoint
@@ -781,7 +785,7 @@ export async function requestWithEndpointFallback<T>(
   }
 
   // All endpoints failed with 404
-  logger.debug(`Attempted endpoints: ${attemptedEndpoints.join(', ')}`);
+  logger.debug('All Agent API endpoints returned 404', { attemptedEndpoints });
   throw SfError.create({
     name: 'AgentApiNotFound',
     message: `Unable to access the Salesforce Agent APIs. Ensure the user '${
