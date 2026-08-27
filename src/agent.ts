@@ -34,7 +34,7 @@ import {
   ScriptAgentOptions,
 } from './types';
 import { MaybeMock } from './maybe-mock';
-import { decodeHtmlEntities, findLocalAgents } from './utils';
+import { decodeHtmlEntities, findLocalAgents, supportsAiAgentDefinition } from './utils';
 import { ScriptAgent } from './agents/scriptAgent';
 import { ProductionAgent } from './agents/productionAgent';
 import { managerFor } from './connectionManager';
@@ -257,10 +257,38 @@ export class Agent {
       await Lifecycle.getInstance().emit(AgentCreateLifecycleStages.Retrieving, {});
       const defaultPackagePath = project.getDefaultPackage().path ?? 'force-app';
       const standardConnection = connectionManager.getStandardConnection();
+      const apiName = config.agentSettings.agentApiName;
       try {
+        // On orgs that support it (API version >= 68), retrieve the just-created agent as the
+        // simplified AiAgentDefinition / AiAgentDefinitionVersion metadata types, spidering
+        // action dependencies via rootTypesWithDependencies. Older orgs fall back to the
+        // legacy Agent manifest.
+        const useNewFormat = supportsAiAgentDefinition(standardConnection);
+        getLogger().debug(
+          `Retrieving created agent ${apiName} using ${
+            useNewFormat ? 'new AiAgentDefinition' : 'legacy Agent'
+          } format (org API v${standardConnection.getApiVersion()})`
+        );
+        let metadataEntries: string[];
+        if (useNewFormat) {
+          // agentId is typed optional; a success response without it would otherwise NPE on the
+          // non-null assertion, so fail with a clear retrieval error instead.
+          const botVersionId = response.agentId?.botVersionId;
+          if (!botVersionId) {
+            throw messages.createError('agentRetrievalError', [
+              'the agent creation response did not include a bot version id to retrieve.',
+            ]);
+          }
+          const { VersionNumber: versionNumber } = await standardConnection.singleRecordQuery<{
+            VersionNumber: number;
+          }>(`SELECT VersionNumber FROM BotVersion WHERE Id='${botVersionId}'`);
+          metadataEntries = [`AiAgentDefinition:${apiName}`, `AiAgentDefinitionVersion:${apiName}#${versionNumber}`];
+        } else {
+          metadataEntries = [`Agent:${apiName}`];
+        }
         const cs = await ComponentSetBuilder.build({
           metadata: {
-            metadataEntries: [`Agent:${config.agentSettings.agentApiName}`],
+            metadataEntries,
             directoryPaths: [defaultPackagePath],
           },
           org: {
@@ -273,6 +301,8 @@ export class Agent {
           merge: true,
           format: 'source',
           output: path.resolve(project.getPath(), defaultPackagePath),
+          // spider action dependencies for the new metadata types only
+          ...(useNewFormat ? { rootTypesWithDependencies: ['AiAgentDefinitionVersion'] } : {}),
         });
         const retrieveResult = await retrieve.pollStatus({
           frequency: Duration.milliseconds(200),
@@ -283,6 +313,21 @@ export class Agent {
           const error = messages.createError('agentRetrievalError', [errMessages]);
           error.actions = [messages.getMessage('agentRetrievalErrorActions')];
           throw error;
+        }
+
+        // A v68+ org with the AiAgentDefinition feature flag disabled resolves the new types to
+        // nothing, producing a success:true retrieve that wrote zero agent files. Surface that.
+        const fileResponses = retrieveResult.getFileResponses();
+        const resolvedTypes = [...new Set(fileResponses.map((f) => f.type))];
+        getLogger().debug(
+          `Agent metadata retrieve resolved ${fileResponses.length} component(s) of type(s): ${
+            resolvedTypes.join(', ') || 'none'
+          }`
+        );
+        if (useNewFormat && fileResponses.length === 0) {
+          getLogger().warn(
+            `New-format retrieve for ${apiName} resolved zero components — org (API v${standardConnection.getApiVersion()}) may have the AiAgentDefinition feature flag disabled.`
+          );
         }
       } catch (err) {
         const error = SfError.wrap(err);

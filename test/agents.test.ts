@@ -426,6 +426,7 @@ describe('Agents', () => {
       $$.SANDBOX.stub(mdApiRetrieve, 'pollStatus').resolves({
         // @ts-expect-error Not the full response
         response: { success: true },
+        getFileResponses: () => [],
       });
       $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
       $$.SANDBOX.stub(ComponentSetBuilder, 'build').resolves(compSet);
@@ -897,10 +898,16 @@ describe('Agents', () => {
     const pollingStub = $$.SANDBOX.stub(mdApiRetrieve, 'pollStatus').resolves({
       // @ts-expect-error Not the full response
       response: { success: true },
+      getFileResponses: () => [],
     });
     const compSet = new ComponentSet();
     const retrieveStub = $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
     const csbStub = $$.SANDBOX.stub(ComponentSetBuilder, 'build').resolves(compSet);
+    // org supports the new metadata types
+    $$.SANDBOX.stub(connection, 'getApiVersion').returns('68.0');
+    // Agent.create resolves the numeric version of the just-created agent for the
+    // AiAgentDefinitionVersion full name.
+    $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves({ VersionNumber: 1 });
 
     const config: AgentCreateConfig = {
       agentType: 'customer',
@@ -927,6 +934,61 @@ describe('Agents', () => {
     expect(retrieveStub.calledOnce).to.be.true;
     expect(pollingStub.calledOnce).to.be.true;
     expect(config.agentSettings?.agentApiName).to.equal('My_First_Agent');
+    // Retrieves the new simplified metadata types and spiders dependencies.
+    expect(csbStub.firstCall.args[0]?.metadata?.metadataEntries).to.deep.equal([
+      'AiAgentDefinition:My_First_Agent',
+      'AiAgentDefinitionVersion:My_First_Agent#1',
+    ]);
+    expect(retrieveStub.firstCall.args[0]?.rootTypesWithDependencies).to.deep.equal(['AiAgentDefinitionVersion']);
+  });
+
+  it('create save agent on org below min API version retrieves the legacy Agent manifest', async () => {
+    process.env.SF_MOCK_DIR = join('test', 'mocks', 'createAgent-Save');
+    const sfProject = SfProject.getInstance();
+
+    // @ts-expect-error Not the full package def
+    $$.SANDBOX.stub(sfProject, 'getDefaultPackage').returns({ path: 'force-app' });
+    const mdApiRetrieve = new MetadataApiRetrieve({
+      usernameOrConnection: testOrg.getMockUserInfo().Username,
+      output: 'nowhere',
+    });
+    $$.SANDBOX.stub(mdApiRetrieve, 'pollStatus').resolves({
+      // @ts-expect-error Not the full response
+      response: { success: true },
+      getFileResponses: () => [],
+    });
+    const compSet = new ComponentSet();
+    const retrieveStub = $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
+    const csbStub = $$.SANDBOX.stub(ComponentSetBuilder, 'build').resolves(compSet);
+    // org does not support the new metadata types
+    $$.SANDBOX.stub(connection, 'getApiVersion').returns('62.0');
+    const singleRecordQueryStub = $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves({ VersionNumber: 1 });
+
+    const config: AgentCreateConfig = {
+      agentType: 'customer',
+      saveAgent: true,
+      agentSettings: {
+        agentName: 'My First Agent',
+      },
+      generationInfo: {
+        defaultInfo: {
+          role: 'answer questions about vacation rentals',
+          companyName: 'Coral Cloud Enterprises',
+          companyDescription: 'Provide vacation rentals and activities',
+        },
+      },
+      generationSettings: {
+        maxNumOfTopics: 10,
+      },
+    };
+    const response = await Agent.create(connection, sfProject, config);
+    expect(response).to.have.property('isSuccess', true);
+    expect(csbStub.calledOnce).to.be.true;
+    expect(retrieveStub.calledOnce).to.be.true;
+    // Legacy path: single Agent manifest entry, no version query, no dependency spidering.
+    expect(csbStub.firstCall.args[0]?.metadata?.metadataEntries).to.deep.equal(['Agent:My_First_Agent']);
+    expect(retrieveStub.firstCall.args[0]?.rootTypesWithDependencies).to.be.undefined;
+    expect(singleRecordQueryStub.called).to.be.false;
   });
 
   it('create preview agent', async () => {
