@@ -306,7 +306,32 @@ describe('agent NUTs', () => {
         // Set the default agent user in the agent script so we can test live preview
         const aabDir = join(session.project.dir, 'force-app', 'main', 'default', 'aiAuthoringBundles', bundleApiName);
         const agentScriptFile = readFileSync(join(aabDir, 'Test_AAB_Preview.agent'), 'utf8');
-        const updatedAgentScriptFile = agentScriptFile.replace('NEW AGENT USER', defaultAgentUsername);
+        const updatedAgentScriptFile = agentScriptFile
+          .replace('NEW AGENT USER', defaultAgentUsername)
+          // Declare one External, settable var per wire type so the typed-context-variable
+          // round-trip test below has a target for each. External visibility is what makes a
+          // mutable var settable via preview; without it the server rejects the mutation.
+          .replace(
+            '          description: "This variable may also be referred to as VerifiedCustomerId"',
+            [
+              '          description: "This variable may also be referred to as VerifiedCustomerId"',
+              '    NutProbeText: mutable string = ""',
+              '        description: "Test-only External var: a Text value set via a preview context variable."',
+              '        visibility: "External"',
+              '    NutProbeBool: mutable boolean = False',
+              '        description: "Test-only External var: a Boolean value set via a preview context variable."',
+              '        visibility: "External"',
+              '    NutProbeNum: mutable number = 0',
+              '        description: "Test-only External var: a Number value set via a preview context variable."',
+              '        visibility: "External"',
+              '    NutProbeObj: mutable object = {}',
+              '        description: "Test-only External var: a JSON object set via a preview context variable."',
+              '        visibility: "External"',
+              '    NutProbeList: mutable list[string] = []',
+              '        description: "Test-only External var: a List value set via a preview context variable."',
+              '        visibility: "External"',
+            ].join('\n')
+          );
         writeFileSync(join(aabDir, 'Test_AAB_Preview.agent'), updatedAgentScriptFile);
       });
 
@@ -504,6 +529,42 @@ describe('agent NUTs', () => {
         const allTracesJson = traces.map((t) => JSON.stringify(t)).join('\n');
 
         expect(allTracesJson).to.contain(overrideValue, 'expected override value to appear in at least one trace');
+      });
+
+      it('should round-trip every context-variable wire type into the live preview session trace', async () => {
+        const agent = await Agent.init({ connection, project, aabName: bundleApiName });
+        agent.preview.setMockMode('Live Test');
+
+        // Distinctive sentinels per wire type so a substring match can't collide across types.
+        const textValue = 'SDKCV-TEXT-7f3a9b';
+        const numberValue = 8_675_309;
+        const jsonTag = 'SDKCV-JSON-4d21c8';
+        const listElement = 'SDKCV-LIST-b58c1e';
+
+        // External mutable vars are set by their bare name (not the $Context. prefix that linked
+        // vars use). Each type maps to its own Variable union member on the wire.
+        await agent.preview.start({
+          contextVariables: [
+            { name: 'NutProbeText', type: 'Text', value: textValue },
+            { name: 'NutProbeNum', type: 'Number', value: numberValue },
+            { name: 'NutProbeBool', type: 'Boolean', value: true },
+            { name: 'NutProbeObj', type: 'Json', value: { tag: jsonTag } },
+            { name: 'NutProbeList', type: 'List', value: [listElement] },
+          ],
+        });
+
+        await agent.preview.send('hello');
+
+        const traces = await agent.preview.getAllTraces();
+        expect(traces).to.be.an('array');
+        expect(traces.length).to.be.greaterThan(0, 'expected at least one trace from the planner');
+
+        const allTracesJson = traces.map((t) => JSON.stringify(t)).join('\n');
+        expect(allTracesJson).to.contain(textValue, 'Text value should reach the session');
+        expect(allTracesJson).to.contain(String(numberValue), 'Number value should reach the session');
+        expect(allTracesJson).to.contain(jsonTag, 'Json object value should reach the session');
+        expect(allTracesJson).to.contain(listElement, 'List element should reach the session');
+        expect(allTracesJson).to.contain('NutProbeBool', 'Boolean variable should be present in the session');
       });
 
       it('should end the preview session', async () => {
