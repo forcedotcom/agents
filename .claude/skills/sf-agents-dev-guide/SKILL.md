@@ -25,8 +25,8 @@ This repo is the **foundational library** that manages all API calls for preview
     ├─► vscode-agents (forcedotcom/vscode-agents)
     │     VS Code extension: preview, publish, test UI, session management
     │
-    └─► afv-library (forcedotcom/afv-library)
-          Agent skills for vibe coding (developing/observing/testing-agentforce)
+    └─► sf-skills (forcedotcom/sf-skills)
+          Curated agent skills for Agentforce Vibes (works with all AI tools)
 ```
 
 Template or logic changes here automatically benefit all downstream consumers.
@@ -37,11 +37,12 @@ Template or logic changes here automatically benefit all downstream consumers.
 |------|--------|------|
 | agents (this repo) | forcedotcom/agents | Core TypeScript library — APIs for agent lifecycle |
 | plugin-agent | salesforcecli/plugin-agent | CLI commands (`sf agent *`), Oclif core plugin |
-| vscode-agents | forcedotcom/vscode-agents (private) | VS Code extension — UI for preview, publish, test, debug |
-| afv-library | forcedotcom/afv-library | Agent skills used by AFV, Claude Code, Cursor |
-| platformdx-shared-skills | forcedotcom/platformdx-shared-skills | Shared Claude/Cursor skills for all DX teams |
-| afdx-skill-dev | forcedotcom/afdx-skill-dev (private) | Skill development |
-| afdx-skill-test | forcedotcom/afdx-skill-test (private) | Skill testing |
+| vscode-agents | forcedotcom/vscode-agents | VS Code extension — UI for preview, publish, test, debug |
+| sf-skills | forcedotcom/sf-skills | Curated agent skills for Agentforce Vibes; works with all AI tools |
+
+For the public-API consumer contract — which repos are bound to the published API and how to
+check a change for breaking / backwards-incompatible impact — see
+[`ai-docs/downstream-consumers.md`](../../../ai-docs/downstream-consumers.md).
 
 ## How Changes Flow Downstream
 
