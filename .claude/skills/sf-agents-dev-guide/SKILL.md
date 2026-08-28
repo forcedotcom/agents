@@ -105,6 +105,10 @@ To test library changes in a downstream consumer (`plugin-agent`, `vscode-agents
 merging — `yarn link` for a live symlink, or `yarn pack` to QA the published artifact
 shape — see [`ai-docs/local-testing.md`](../../../ai-docs/local-testing.md).
 
+The `sf` CLI has no direct dependency on this library; it bundles `plugin-agent`, so you
+test the `sf agent` experience transitively through that plugin (`sf plugins link .`), not
+by building the CLI. See [`ai-docs/local-testing.md`](../../../ai-docs/local-testing.md).
+
 ## Code Conventions
 
 - **No `any` types** — uses `tsconfig-strict-esm`
