@@ -709,6 +709,10 @@ describe('agent NUTs', () => {
           saveAgent: true,
           agentSettings: {
             agentName: legacyAgentName,
+            // Reuse the already-provisioned Bot User (see before()) so core does not auto-create
+            // (and race-validate) one, which intermittently fails with "User doesn't have access
+            // to agent." Mirrors the fix already applied to the sibling spec-create test above.
+            userId: botUserId,
           },
           generationInfo: {
             defaultInfo: {
