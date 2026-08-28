@@ -263,94 +263,12 @@ export class Agent {
 
     // When saving agent creation we need to retrieve the created metadata.
     if (response.isSuccess) {
-      await Lifecycle.getInstance().emit(AgentCreateLifecycleStages.Retrieving, {});
-      const defaultPackagePath = project.getDefaultPackage().path ?? 'force-app';
-      const standardConnection = connectionManager.getStandardConnection();
-      const apiName = config.agentSettings.agentApiName;
-      try {
-        // On orgs that support it (API version >= 68), retrieve the just-created agent as the
-        // simplified AiAgentDefinition / AiAgentDefinitionVersion metadata types, spidering
-        // action dependencies via rootTypesWithDependencies. Older orgs fall back to the
-        // legacy Agent manifest.
-        const useNewFormat = supportsAiAgentDefinition(standardConnection);
-        getLogger().debug('Retrieving created agent', {
-          agentApiName: apiName,
-          format: useNewFormat ? 'AiAgentDefinition' : 'Agent',
-          orgApiVersion: standardConnection.getApiVersion(),
-        });
-        let metadataEntries: string[];
-        if (useNewFormat) {
-          // agentId is typed optional; a success response without it would otherwise NPE on the
-          // non-null assertion, so fail with a clear retrieval error instead.
-          const botVersionId = response.agentId?.botVersionId;
-          if (!botVersionId) {
-            throw messages.createError('agentRetrievalError', [
-              'the agent creation response did not include a bot version id to retrieve.',
-            ]);
-          }
-          const { VersionNumber: versionNumber } = await standardConnection.singleRecordQuery<{
-            VersionNumber: number;
-          }>(`SELECT VersionNumber FROM BotVersion WHERE Id='${botVersionId}'`);
-          metadataEntries = [`AiAgentDefinition:${apiName}`, `AiAgentDefinitionVersion:${apiName}#${versionNumber}`];
-        } else {
-          metadataEntries = [`Agent:${apiName}`];
-        }
-        const cs = await ComponentSetBuilder.build({
-          metadata: {
-            metadataEntries,
-            directoryPaths: [defaultPackagePath],
-          },
-          org: {
-            username: standardConnection.getUsername() as string,
-            exclude: [],
-          },
-        });
-        const retrieve = await cs.retrieve({
-          usernameOrConnection: standardConnection,
-          merge: true,
-          format: 'source',
-          output: path.resolve(project.getPath(), defaultPackagePath),
-          // spider action dependencies for the new metadata types only
-          ...(useNewFormat ? { rootTypesWithDependencies: ['AiAgentDefinitionVersion'] } : {}),
-        });
-        const retrieveResult = await retrieve.pollStatus({
-          frequency: Duration.milliseconds(200),
-          timeout: Duration.minutes(5),
-        });
-        if (!retrieveResult.response.success) {
-          const errMessages = JSON.stringify(retrieveResult.response.messages) ?? 'unknown';
-          const error = messages.createError('agentRetrievalError', [errMessages]);
-          error.actions = [messages.getMessage('agentRetrievalErrorActions')];
-          throw error;
-        }
-
-        // A v68+ org with the AiAgentDefinition feature flag disabled resolves the new types to
-        // nothing, producing a success:true retrieve that wrote zero agent files. Surface that.
-        const fileResponses = retrieveResult.getFileResponses();
-        const resolvedTypes = [...new Set(fileResponses.map((f) => f.type))];
-        getLogger().debug('Agent metadata retrieve resolved components', {
-          agentApiName: apiName,
-          componentCount: fileResponses.length,
-          types: resolvedTypes,
-        });
-        if (useNewFormat && fileResponses.length === 0) {
-          getLogger().warn('New-format retrieve resolved zero components; org may have the AiAgentDefinition feature flag disabled', {
-            agentApiName: apiName,
-            orgApiVersion: standardConnection.getApiVersion(),
-          });
-        }
-      } catch (err) {
-        const error = SfError.wrap(err);
-        if (error.name === 'AgentRetrievalError') {
-          throw error;
-        }
-        throw SfError.create({
-          name: 'AgentRetrievalError',
-          message: messages.getMessage('agentRetrievalError', [error.message]),
-          cause: error,
-          actions: [messages.getMessage('agentRetrievalErrorActions')],
-        });
-      }
+      await Agent.retrieveCreatedAgent(
+        project,
+        connectionManager.getStandardConnection(),
+        config.agentSettings.agentApiName,
+        response.agentId?.botVersionId
+      );
     }
 
     return decodeResponse(response);
@@ -403,6 +321,108 @@ export class Agent {
         name: 'AgentJobSpecCreateError',
         message: htmlDecodedResponse.errorMessage ?? 'unknown',
         data: htmlDecodedResponse,
+      });
+    }
+  }
+
+  /**
+   * Retrieve a just-created agent's metadata into the local project.
+   *
+   * On orgs that support it (API version >= 68) this retrieves the simplified
+   * AiAgentDefinition / AiAgentDefinitionVersion metadata types, spidering action
+   * dependencies via rootTypesWithDependencies. Older orgs fall back to the legacy
+   * Agent manifest.
+   *
+   * @param project a `SfProject` for the local DX project to retrieve into.
+   * @param standardConnection a standard `Connection` to the org.
+   * @param apiName the API name of the created agent.
+   * @param botVersionId the bot version id from the create response (new format only).
+   */
+  private static async retrieveCreatedAgent(
+    project: SfProject,
+    standardConnection: Connection,
+    apiName: string,
+    botVersionId: string | undefined
+  ): Promise<void> {
+    await Lifecycle.getInstance().emit(AgentCreateLifecycleStages.Retrieving, {});
+    const defaultPackagePath = project.getDefaultPackage().path ?? 'force-app';
+    try {
+      const useNewFormat = supportsAiAgentDefinition(standardConnection);
+      getLogger().debug('Retrieving created agent', {
+        agentApiName: apiName,
+        format: useNewFormat ? 'AiAgentDefinition' : 'Agent',
+        orgApiVersion: standardConnection.getApiVersion(),
+      });
+      let metadataEntries: string[];
+      if (useNewFormat) {
+        // agentId is typed optional; a success response without it would otherwise NPE on the
+        // non-null assertion, so fail with a clear retrieval error instead.
+        if (!botVersionId) {
+          throw messages.createError('agentRetrievalError', [
+            'the agent creation response did not include a bot version id to retrieve.',
+          ]);
+        }
+        const { VersionNumber: versionNumber } = await standardConnection.singleRecordQuery<{
+          VersionNumber: number;
+        }>(`SELECT VersionNumber FROM BotVersion WHERE Id='${botVersionId}'`);
+        metadataEntries = [`AiAgentDefinition:${apiName}`, `AiAgentDefinitionVersion:${apiName}#${versionNumber}`];
+      } else {
+        metadataEntries = [`Agent:${apiName}`];
+      }
+      const cs = await ComponentSetBuilder.build({
+        metadata: {
+          metadataEntries,
+          directoryPaths: [defaultPackagePath],
+        },
+        org: {
+          username: standardConnection.getUsername() as string,
+          exclude: [],
+        },
+      });
+      const retrieve = await cs.retrieve({
+        usernameOrConnection: standardConnection,
+        merge: true,
+        format: 'source',
+        output: path.resolve(project.getPath(), defaultPackagePath),
+        // spider action dependencies for the new metadata types only
+        ...(useNewFormat ? { rootTypesWithDependencies: ['AiAgentDefinitionVersion'] } : {}),
+      });
+      const retrieveResult = await retrieve.pollStatus({
+        frequency: Duration.milliseconds(200),
+        timeout: Duration.minutes(5),
+      });
+      if (!retrieveResult.response.success) {
+        const errMessages = JSON.stringify(retrieveResult.response.messages) ?? 'unknown';
+        const error = messages.createError('agentRetrievalError', [errMessages]);
+        error.actions = [messages.getMessage('agentRetrievalErrorActions')];
+        throw error;
+      }
+
+      // A v68+ org with the AiAgentDefinition feature flag disabled resolves the new types to
+      // nothing, producing a success:true retrieve that wrote zero agent files. Surface that.
+      const fileResponses = retrieveResult.getFileResponses();
+      const resolvedTypes = [...new Set(fileResponses.map((f) => f.type))];
+      getLogger().debug('Agent metadata retrieve resolved components', {
+        agentApiName: apiName,
+        componentCount: fileResponses.length,
+        types: resolvedTypes,
+      });
+      if (useNewFormat && fileResponses.length === 0) {
+        getLogger().warn('New-format retrieve resolved zero components; org may have the AiAgentDefinition feature flag disabled', {
+          agentApiName: apiName,
+          orgApiVersion: standardConnection.getApiVersion(),
+        });
+      }
+    } catch (err) {
+      const error = SfError.wrap(err);
+      if (error.name === 'AgentRetrievalError') {
+        throw error;
+      }
+      throw SfError.create({
+        name: 'AgentRetrievalError',
+        message: messages.getMessage('agentRetrievalError', [error.message]),
+        cause: error,
+        actions: [messages.getMessage('agentRetrievalErrorActions')],
       });
     }
   }
