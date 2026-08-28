@@ -49,6 +49,22 @@ yarn unlink
 breaks `instanceof` checks and connection/auth state in confusing ways. If you hit odd
 runtime errors under a link, prefer the packed-artifact flow below.
 
+## Exercising the real `sf agent` CLI
+
+You do **not** clone or build [forcedotcom/cli](https://github.com/forcedotcom/cli) to test
+a change here. The `sf` CLI has no direct dependency on `@salesforce/agents` — it only
+*bundles* `plugin-agent` (which imports this library), so the CLI inherits your change
+transitively through the plugin. See [downstream-consumers.md](downstream-consumers.md).
+
+So you always test through `plugin-agent`, at one of two fidelities:
+
+- **Fastest** — run the plugin standalone: `./bin/dev.js agent ...` from `plugin-agent`,
+  with `@salesforce/agents` linked into it (above). No `sf` CLI involved.
+- **End-user experience** — to run it as `sf agent ...`, link the plugin into your installed
+  CLI with `sf plugins link .` from `plugin-agent`. With `@salesforce/agents` still
+  `yarn link`ed into that plugin, your library change flows all the way through to
+  `sf agent`.
+
 ## Packed artifact with `yarn pack`
 
 Install the library exactly as it would ship to npm — this respects the published `files`
