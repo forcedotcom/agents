@@ -73,11 +73,11 @@ check a change for breaking / backwards-incompatible impact — see
 1. Branch off `main` (prefix: `<developer-name>/`)
 2. Keep branch up-to-date using `rebase`
 3. Write code + tests (95%+ coverage on new code)
-4. Commit using `type: message` format (enforced by Husky + commitizen)
+4. Commit using `type: message` format (enforced by Husky + commitlint; commitizen available as an authoring helper)
 5. PR is squash-merged — the PR title becomes the final commit message
 6. Include a GUS work item: `@W-XXXXXXXX@` in PR body
 
-Valid commit types: `feat, fix, improvement, docs, style, refactor, perf, test, build, ci, chore, revert`
+Valid commit types (`@commitlint/config-conventional`): `feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert`
 
 Semver: `feat:` → minor, `fix:` → patch, breaking changes → major.
 
@@ -90,29 +90,15 @@ yarn compile              # TypeScript → JavaScript only
 yarn lint                 # eslint
 yarn test                 # unit tests + bundle + compile check + link check
 yarn test:nuts            # non-unit tests (require org connection)
-yarn docs                 # generate TypeDoc API docs
-yarn local:link <path>    # link into plugin-agent or vscode-agents for local dev
-yarn local:unlink <path>  # unlink
-yarn local:install <path> # install as NPM module (QA the published artifact)
+yarn docs                 # generate API docs
 yarn fix-license          # add Apache 2.0 headers to new files
 ```
 
 ### Cross-Repo Development
 
-To test library changes in a downstream consumer before merging:
-
-```bash
-# In this repo — build your changes
-yarn build
-
-# Link into plugin-agent for CLI testing
-yarn local:link /path/to/plugin-agent
-
-# Or link into vscode-agents for extension testing
-yarn local:link /path/to/vscode-agents
-```
-
-Use `yarn local:install` to QA the actual published artifact shape.
+To test library changes in a downstream consumer (`plugin-agent`, `vscode-agents`) before
+merging — `yarn link` for a live symlink, or `yarn pack` to QA the published artifact
+shape — see [`ai-docs/local-testing.md`](../../../ai-docs/local-testing.md).
 
 ## Code Conventions
 
@@ -172,5 +158,3 @@ New agent types should extend `AgentBase`. Static methods on the `Agent` class a
 - CLI questions: Willie Ruemmele
 - Extension questions: Steve Hetzel
 - Design: Marcelino Llano
-
-For partner team contacts (SFAP APIs, SF Eval, AI Assist, Agent Script, etc.), see `references/external-contacts.md`.
