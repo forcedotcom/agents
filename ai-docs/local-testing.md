@@ -5,9 +5,6 @@
 inside a consumer one of two ways. See [downstream-consumers.md](downstream-consumers.md)
 for who the consumers are.
 
-There is **no `yarn local:*` script** — those were never real in this repo. Use the plain
-`yarn link` / `yarn pack` flows below.
-
 ## Which flow to use
 
 - **Live symlink (`yarn link`)** — iterate on the library and see edits in the consumer
