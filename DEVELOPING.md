@@ -40,25 +40,36 @@ Utilize the `Run Tests` VS Code debugger configuration to run the test suite wit
 
 ### Testing in another package
 
-To test the library in another local package, you can link it to such module so any changes that are built will be automatically present without reinstalling:
+`@salesforce/agents` is a library — test your change inside a consumer (`plugin-agent`,
+`vscode-agents`) before publishing. Use `yarn link` for a live symlink while iterating:
 
 ```
-yarn local:link /path/to/other/project
+# In this repo
+yarn build            # or `yarn compile --watch` to rebuild on save
+yarn link
+
+# In the consumer
+yarn link @salesforce/agents
 ```
 
-to unlink the library:
-
-```
-yarn local:unlink /path/to/other/project
-```
+Undo with `yarn unlink @salesforce/agents` (+ `yarn install --force`) in the consumer and
+`yarn unlink` here.
 
 ### Testing with the NPM artifact
 
-The library can also be installed to another local project as a regular NPM module. This is useful for manually testing the package that will be deployed to NPM. Use this instead of the linking process that's described under Development to QA changes before they are published:
+To QA the exact package that will be published — catching problems a symlink hides, such as
+a file missing from the published set — install the packed tarball instead of linking:
 
 ```
-yarn local:install /path/to/other/package
+# In this repo
+yarn build
+yarn pack             # produces salesforce-agents-v<version>.tgz
+
+# In the consumer
+yarn add /absolute/path/to/salesforce-agents-v<version>.tgz
 ```
+
+See `ai-docs/local-testing.md` for the full flows and gotchas.
 
 ## Debugging
 

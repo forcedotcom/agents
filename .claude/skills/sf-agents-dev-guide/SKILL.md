@@ -25,8 +25,8 @@ This repo is the **foundational library** that manages all API calls for preview
     ├─► vscode-agents (forcedotcom/vscode-agents)
     │     VS Code extension: preview, publish, test UI, session management
     │
-    └─► afv-library (forcedotcom/afv-library)
-          Agent skills for vibe coding (developing/observing/testing-agentforce)
+    └─► sf-skills (forcedotcom/sf-skills)
+          Curated agent skills for Agentforce Vibes (works with all AI tools)
 ```
 
 Template or logic changes here automatically benefit all downstream consumers.
@@ -37,11 +37,12 @@ Template or logic changes here automatically benefit all downstream consumers.
 |------|--------|------|
 | agents (this repo) | forcedotcom/agents | Core TypeScript library — APIs for agent lifecycle |
 | plugin-agent | salesforcecli/plugin-agent | CLI commands (`sf agent *`), Oclif core plugin |
-| vscode-agents | forcedotcom/vscode-agents (private) | VS Code extension — UI for preview, publish, test, debug |
-| afv-library | forcedotcom/afv-library | Agent skills used by AFV, Claude Code, Cursor |
-| platformdx-shared-skills | forcedotcom/platformdx-shared-skills | Shared Claude/Cursor skills for all DX teams |
-| afdx-skill-dev | forcedotcom/afdx-skill-dev (private) | Skill development |
-| afdx-skill-test | forcedotcom/afdx-skill-test (private) | Skill testing |
+| vscode-agents | forcedotcom/vscode-agents | VS Code extension — UI for preview, publish, test, debug |
+| sf-skills | forcedotcom/sf-skills | Curated agent skills for Agentforce Vibes; works with all AI tools |
+
+For the public-API consumer contract — which repos are bound to the published API and how to
+check a change for breaking / backwards-incompatible impact — see
+[`ai-docs/downstream-consumers.md`](../../../ai-docs/downstream-consumers.md).
 
 ## How Changes Flow Downstream
 
@@ -72,11 +73,11 @@ Template or logic changes here automatically benefit all downstream consumers.
 1. Branch off `main` (prefix: `<developer-name>/`)
 2. Keep branch up-to-date using `rebase`
 3. Write code + tests (95%+ coverage on new code)
-4. Commit using `type: message` format (enforced by Husky + commitizen)
+4. Commit using `type: message` format (enforced by Husky + commitlint; commitizen available as an authoring helper)
 5. PR is squash-merged — the PR title becomes the final commit message
 6. Include a GUS work item: `@W-XXXXXXXX@` in PR body
 
-Valid commit types: `feat, fix, improvement, docs, style, refactor, perf, test, build, ci, chore, revert`
+Valid commit types (`@commitlint/config-conventional`): `feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert`
 
 Semver: `feat:` → minor, `fix:` → patch, breaking changes → major.
 
@@ -87,31 +88,26 @@ yarn install              # install deps
 yarn build                # compile + lint
 yarn compile              # TypeScript → JavaScript only
 yarn lint                 # eslint
+yarn lint-fix             # eslint --fix
+yarn format               # prettier
 yarn test                 # unit tests + bundle + compile check + link check
 yarn test:nuts            # non-unit tests (require org connection)
-yarn docs                 # generate TypeDoc API docs
-yarn local:link <path>    # link into plugin-agent or vscode-agents for local dev
-yarn local:unlink <path>  # unlink
-yarn local:install <path> # install as NPM module (QA the published artifact)
+yarn docs                 # generate API docs
+yarn clean                # remove generated files (clean-all also removes node_modules)
 yarn fix-license          # add Apache 2.0 headers to new files
+yarn link                 # live symlink into a consumer for local testing
+yarn pack                 # build the publishable .tgz to QA the artifact
 ```
 
 ### Cross-Repo Development
 
-To test library changes in a downstream consumer before merging:
+To test library changes in a downstream consumer (`plugin-agent`, `vscode-agents`) before
+merging — `yarn link` for a live symlink, or `yarn pack` to QA the published artifact
+shape — see [`ai-docs/local-testing.md`](../../../ai-docs/local-testing.md).
 
-```bash
-# In this repo — build your changes
-yarn build
-
-# Link into plugin-agent for CLI testing
-yarn local:link /path/to/plugin-agent
-
-# Or link into vscode-agents for extension testing
-yarn local:link /path/to/vscode-agents
-```
-
-Use `yarn local:install` to QA the actual published artifact shape.
+The `sf` CLI has no direct dependency on this library; it bundles `plugin-agent`, so you
+test the `sf agent` experience transitively through that plugin (`sf plugins link .`), not
+by building the CLI. See [`ai-docs/local-testing.md`](../../../ai-docs/local-testing.md).
 
 ## Code Conventions
 
@@ -171,5 +167,3 @@ New agent types should extend `AgentBase`. Static methods on the `Agent` class a
 - CLI questions: Willie Ruemmele
 - Extension questions: Steve Hetzel
 - Design: Marcelino Llano
-
-For partner team contacts (SFAP APIs, SF Eval, AI Assist, Agent Script, etc.), see `references/external-contacts.md`.
