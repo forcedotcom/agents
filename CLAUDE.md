@@ -14,6 +14,10 @@ we expect every change to follow. Read the linked docs before writing code in th
   package's public API (`plugin-agent`, `vscode-agents`, the `sf` CLI) and how to check a
   change against the latest `main` of each. Read this when generating or reading a code
   review to judge whether a change is breaking or backwards-incompatible, and where.
+- **[Local testing](ai-docs/local-testing.md)** — how to test a change inside a consumer
+  before publishing: `yarn link` for a live symlink, or `yarn pack` to QA the exact
+  published artifact. Read this when you need to verify a change against `plugin-agent` or
+  `vscode-agents` locally.
 
 _Add new convention docs under `ai-docs/` and link them here as the hub grows._
 
