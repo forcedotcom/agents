@@ -857,6 +857,11 @@ describe('agent NUTs', () => {
           saveAgent: true,
           agentSettings: {
             agentName: legacyAgentName,
+            // Reuse the Bot User already provisioned in the describe `before` (and committed via
+            // waitForPermSetAssignment) instead of letting core auto-create one in the same
+            // transaction, which intermittently races the pre-save validation trigger and fails
+            // with "User doesn't have access to agent". Mirrors the sibling spec-create test.
+            userId: botUserId,
           },
           generationInfo: {
             defaultInfo: {
