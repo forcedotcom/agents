@@ -88,10 +88,15 @@ yarn install              # install deps
 yarn build                # compile + lint
 yarn compile              # TypeScript → JavaScript only
 yarn lint                 # eslint
+yarn lint-fix             # eslint --fix
+yarn format               # prettier
 yarn test                 # unit tests + bundle + compile check + link check
 yarn test:nuts            # non-unit tests (require org connection)
 yarn docs                 # generate API docs
+yarn clean                # remove generated files (clean-all also removes node_modules)
 yarn fix-license          # add Apache 2.0 headers to new files
+yarn link                 # live symlink into a consumer for local testing
+yarn pack                 # build the publishable .tgz to QA the artifact
 ```
 
 ### Cross-Repo Development
