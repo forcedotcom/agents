@@ -330,6 +330,20 @@ describe('agent NUTs', () => {
               '    NutProbeList: mutable list[string] = []',
               '        description: "Test-only External var: a List value set via a preview context variable."',
               '        visibility: "External"',
+              // The string-on-wire scalar types (Date/DateTime/Money/Ref) declare no default value,
+              // unlike the string/boolean/number/object/list vars above.
+              '    NutProbeDate: mutable date',
+              '        description: "Test-only External var: a Date value set via a preview context variable."',
+              '        visibility: "External"',
+              '    NutProbeDateTime: mutable datetime',
+              '        description: "Test-only External var: a DateTime value set via a preview context variable."',
+              '        visibility: "External"',
+              '    NutProbeMoney: mutable currency',
+              '        description: "Test-only External var: a Money value set via a preview context variable."',
+              '        visibility: "External"',
+              '    NutProbeRef: mutable id',
+              '        description: "Test-only External var: a Ref (record id) value set via a preview context variable."',
+              '        visibility: "External"',
             ].join('\n')
           );
         writeFileSync(join(aabDir, 'Test_AAB_Preview.agent'), updatedAgentScriptFile);
@@ -565,6 +579,79 @@ describe('agent NUTs', () => {
         expect(allTracesJson).to.contain(jsonTag, 'Json object value should reach the session');
         expect(allTracesJson).to.contain(listElement, 'List element should reach the session');
         expect(allTracesJson).to.contain('NutProbeBool', 'Boolean variable should be present in the session');
+      });
+
+      it('should round-trip the string-on-wire scalar types (Date/DateTime/Money/Ref) into the live preview session trace', async () => {
+        const agent = await Agent.init({ connection, project, aabName: bundleApiName });
+        agent.preview.setMockMode('Live Test');
+
+        // The four string-on-wire scalar API types each serialize as a JSON string. Distinct
+        // per-type sentinels keep the substring match from colliding across types.
+        const dateValue = '2026-01-15';
+        const dateTimeValue = '2026-01-15T09:00:00Z';
+        const moneyAmount = '42.50'; // Money wire shape is "<ISO> <amount>", e.g. "USD 42.50".
+        const refValue = '003000000000002AAA';
+
+        await agent.preview.start({
+          contextVariables: [
+            { name: 'NutProbeDate', type: 'Date', value: dateValue },
+            { name: 'NutProbeDateTime', type: 'DateTime', value: dateTimeValue },
+            { name: 'NutProbeMoney', type: 'Money', value: `USD ${moneyAmount}` },
+            { name: 'NutProbeRef', type: 'Ref', value: refValue },
+          ],
+        });
+
+        await agent.preview.send('hello');
+
+        const traces = await agent.preview.getAllTraces();
+        expect(traces).to.be.an('array');
+        expect(traces.length).to.be.greaterThan(0, 'expected at least one trace from the planner');
+
+        const allTracesJson = traces.map((t) => JSON.stringify(t)).join('\n');
+        expect(allTracesJson).to.contain(dateValue, 'Date value should reach the session');
+        // DateTime is trimmed to minute precision on the wire (seconds/zone dropped), so assert the
+        // minute prefix, which is a substring of both the full and the trimmed form.
+        expect(allTracesJson).to.contain('2026-01-15T09:00', 'DateTime value should reach the session');
+        // Money display coerces to the org currency, so assert the amount (the invariant part) rather
+        // than the ISO prefix we sent.
+        expect(allTracesJson).to.contain(moneyAmount, 'Money value should reach the session');
+        expect(allTracesJson).to.contain(refValue, 'Ref value should reach the session');
+      });
+
+      it('should round-trip structured composition (API Object type and a multi-entry List) into the live preview session trace', async () => {
+        const agent = await Agent.init({ connection, project, aabName: bundleApiName });
+        agent.preview.setMockMode('Live Test');
+
+        // API `Object` (an array of nested typed vars) is distinct from `Json` ({...}); both target
+        // an object-typed agent var. A multi-entry List must carry every element, not just the first.
+        const objectFieldValue = 'SDKCV-OBJ-9a1f2e';
+        const listFirst = 'SDKCV-LIST0-3c7d55';
+        const listSecond = 'SDKCV-LIST1-e12b90';
+
+        await agent.preview.start({
+          contextVariables: [
+            { name: 'NutProbeObj', type: 'Object', value: [{ name: 'name', type: 'Text', value: objectFieldValue }] },
+            {
+              name: 'NutProbeList',
+              type: 'List',
+              value: [
+                { type: 'Text', value: listFirst },
+                { type: 'Text', value: listSecond },
+              ],
+            },
+          ],
+        });
+
+        await agent.preview.send('hello');
+
+        const traces = await agent.preview.getAllTraces();
+        expect(traces).to.be.an('array');
+        expect(traces.length).to.be.greaterThan(0, 'expected at least one trace from the planner');
+
+        const allTracesJson = traces.map((t) => JSON.stringify(t)).join('\n');
+        expect(allTracesJson).to.contain(objectFieldValue, 'nested Object field value should reach the session');
+        expect(allTracesJson).to.contain(listFirst, 'first List element should reach the session');
+        expect(allTracesJson).to.contain(listSecond, 'second List element should reach the session');
       });
 
       it('should end the preview session', async () => {
