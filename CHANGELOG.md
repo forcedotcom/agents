@@ -1,3 +1,12 @@
+## [2.1.1](https://github.com/forcedotcom/agents/compare/2.1.0...2.1.1) (2026-08-28)
+
+
+### Bug Fixes
+
+* surface swallowed failures on data-library indexing and publish botId lookup (OBS follow-up) @W-24016300 ([#352](https://github.com/forcedotcom/agents/issues/352)) ([62fd019](https://github.com/forcedotcom/agents/commit/62fd019e3021363150c1e62bb37fde7a2235b233))
+
+
+
 # [2.1.0](https://github.com/forcedotcom/agents/compare/2.0.6...2.1.0) (2026-08-27)
 
 
