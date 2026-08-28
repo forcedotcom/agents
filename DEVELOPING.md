@@ -69,8 +69,7 @@ yarn pack             # produces salesforce-agents-v<version>.tgz
 yarn add /absolute/path/to/salesforce-agents-v<version>.tgz
 ```
 
-See `ai-docs/local-testing.md` for the full flows, including the duplicate
-`@salesforce/core` caveat.
+See `ai-docs/local-testing.md` for the full flows and gotchas.
 
 ## Debugging
 
