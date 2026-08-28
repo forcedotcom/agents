@@ -71,7 +71,7 @@ describe('CtxLogger', () => {
     return { calls, ctx: new CtxLogger(fake as unknown as Logger) };
   };
 
-  it('forwards to the matching level with the rendered message and the same fields object', () => {
+  it('forwards to the matching level as one merging object: fields top-level plus the rendered msg', () => {
     const { calls, ctx } = makeLogger();
     const fields = { url: 'x?a=1,b=2', statusCode: 404 };
 
@@ -79,10 +79,15 @@ describe('CtxLogger', () => {
 
     expect(calls).to.have.lengthOf(1);
     expect(calls[0].level).to.equal('warn');
-    // First arg is the rendered msg-ctx string...
-    expect(calls[0].args[0]).to.equal('Request failed | url="x?a=1,b=2", statusCode=404');
-    // ...and the SAME fields object is passed through as the structured source of truth.
-    expect(calls[0].args[1]).to.equal(fields);
+    // A single merging object is passed — not a (message, fields) pair — so the sf-core logger
+    // does not collapse it into a numeric-keyed array (see CtxLogger.emit / OBS-1).
+    expect(calls[0].args).to.have.lengthOf(1);
+    // Each field is a top-level key, and the msg-ctx rendering is under `msg`.
+    expect(calls[0].args[0]).to.deep.equal({
+      url: 'x?a=1,b=2',
+      statusCode: 404,
+      msg: 'Request failed | url="x?a=1,b=2", statusCode=404',
+    });
   });
 
   it('routes each level to its own underlying method', () => {
@@ -94,10 +99,41 @@ describe('CtxLogger', () => {
     expect(calls.map((c) => c.level)).to.deep.equal(['trace', 'debug', 'info', 'error']);
   });
 
-  it('logs a bare message with an empty fields object when fields are omitted', () => {
+  it('logs the bare message under `msg` when fields are omitted', () => {
     const { calls, ctx } = makeLogger();
     ctx.debug('No context here');
-    expect(calls[0].args[0]).to.equal('No context here');
-    expect(calls[0].args[1]).to.deep.equal({});
+    expect(calls[0].args).to.have.lengthOf(1);
+    expect(calls[0].args[0]).to.deep.equal({ msg: 'No context here' });
+  });
+
+  it('does not let a field named `msg` clobber the rendered message', () => {
+    const { calls, ctx } = makeLogger();
+    ctx.debug('Real message', { msg: 'attacker-supplied', id: 7 });
+    // `msg` is written last, so the rendered msg-ctx string wins over any `msg` field.
+    expect(calls[0].args[0]).to.deep.equal({ id: 7, msg: 'Real message | msg=attacker-supplied, id=7' });
+  });
+
+  // Regression guard for OBS-1: the fake-logger tests above assert the call *shape*, but the
+  // bug was in how @salesforce/core's Logger + pino serialize that call. This drives a real
+  // Logger end-to-end and inspects the emitted record.
+  it('emits a real record with `msg` set and every field as a top-level key (OBS-1)', () => {
+    const root = new Logger({ name: 'ctxLoggerTest', useMemoryLogger: true });
+    const child = root.child('Component');
+    child.setLevel(Logger.getLevelByName('trace'));
+
+    // sf-core's memory logger buffers into a shared global root, so isolate this call's output.
+    const before = root.getBufferedRecords().length;
+    new CtxLogger(child).warn('Request failed', { url: 'x?a=1,b=2', statusCode: 404 });
+    const records = root.getBufferedRecords().slice(before) as Array<Record<string, unknown>>;
+
+    expect(records).to.have.lengthOf(1);
+    const record = records[0];
+    // The human-readable msg-ctx string lands under `msg`, not a numeric key.
+    expect(record.msg).to.equal('Request failed | url="x?a=1,b=2", statusCode=404');
+    // Fields are top-level and searchable, not nested under "0"/"1".
+    expect(record.url).to.equal('x?a=1,b=2');
+    expect(record.statusCode).to.equal(404);
+    expect(record).to.not.have.property('0');
+    expect(record).to.not.have.property('1');
   });
 });

@@ -88,22 +88,38 @@ export class CtxLogger {
   }
 
   public trace(message: string, fields: Record<string, unknown> = {}): void {
-    this.logger.trace(msgCtx(message, fields), fields);
+    this.emit('trace', message, fields);
   }
 
   public debug(message: string, fields: Record<string, unknown> = {}): void {
-    this.logger.debug(msgCtx(message, fields), fields);
+    this.emit('debug', message, fields);
   }
 
   public info(message: string, fields: Record<string, unknown> = {}): void {
-    this.logger.info(msgCtx(message, fields), fields);
+    this.emit('info', message, fields);
   }
 
   public warn(message: string, fields: Record<string, unknown> = {}): void {
-    this.logger.warn(msgCtx(message, fields), fields);
+    this.emit('warn', message, fields);
   }
 
   public error(message: string, fields: Record<string, unknown> = {}): void {
-    this.logger.error(msgCtx(message, fields), fields);
+    this.emit('error', message, fields);
+  }
+
+  /**
+   * Emit one structured record: the fields spread as top-level, searchable keys and the
+   * `msg-ctx` rendering under `msg`.
+   *
+   * This must be a single merging-object argument, not a `(message, fields)` pair.
+   * `@salesforce/core`'s `Logger` forwards its args through `unwrapArray`, which only unwraps
+   * a single-element array — a two-argument `(string, object)` call reaches pino as one array
+   * argument, so pino sets no `msg` and nests the fields under numeric keys (`"0"`/`"1"`),
+   * defeating field-based search and grouping. A single object lets pino set `msg` and lift
+   * every field to a top-level key. `msg` is written last so an explicit `msg` field cannot
+   * clobber the rendered message.
+   */
+  private emit(level: 'trace' | 'debug' | 'info' | 'warn' | 'error', message: string, fields: Record<string, unknown>): void {
+    this.logger[level]({ ...fields, msg: msgCtx(message, fields) });
   }
 }

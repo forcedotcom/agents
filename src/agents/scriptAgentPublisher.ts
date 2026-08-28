@@ -18,12 +18,12 @@ import * as path from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { XMLBuilder, XMLParser } from 'fast-xml-parser';
-import { Connection, Messages, SfError, SfProject } from '@salesforce/core';
+import { Connection, Lifecycle, Messages, SfError, SfProject } from '@salesforce/core';
 import { Duration, env } from '@salesforce/kit';
 import { ComponentSet, ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { MaybeMock } from '../maybe-mock';
 import { type AgentJson, type PublishAgent, type PublishAgentJsonResponse } from '../types';
-import { findAuthoringBundle, supportsAiAgentDefinition } from '../utils';
+import { findAuthoringBundle, getHttpStatusCode, supportsAiAgentDefinition } from '../utils';
 import { CtxLogger } from '../ctxLogger';
 import { managerFor } from '../connectionManager';
 
@@ -37,6 +37,10 @@ const getLogger = (): CtxLogger => {
   }
   return logger;
 };
+
+// Error name thrown by Connection.singleRecordQuery() when the SOQL matched zero rows.
+// Not exported from @salesforce/core, so we match the string it sets on the SfError.
+const SINGLE_RECORD_QUERY_NO_RECORDS = 'SingleRecordQuery_NoRecords';
 
 /**
  * The metadata retrieve/deploy steps after a publish poll the server with SDR's pollStatus(),
@@ -330,19 +334,40 @@ export class ScriptAgentPublisher {
   private async getPublishedBotId(agentApiName: string): Promise<string | undefined> {
     try {
       const standardConn = (await managerFor(this.connection)).getStandardConnection();
+      // Escape single quotes so a developerName carrying one cannot break out of the SOQL
+      // string literal (CWE-89). Mirrors the repo's canonical pattern in agentEvalRunner.ts.
+      const escapedApiName = agentApiName.replace(/'/g, "''");
       const queryResult = await standardConn.singleRecordQuery<{ Id: string }>(
-        `SELECT Id FROM BotDefinition WHERE DeveloperName='${agentApiName}'`
+        `SELECT Id FROM BotDefinition WHERE DeveloperName='${escapedApiName}'`
       );
       getLogger().debug('Agent is already published', { agentApiName, botId: queryResult.Id });
       return queryResult.Id;
     } catch (error) {
       const wrapped = SfError.wrap(error);
-      getLogger().debug('Error querying BotDefinition; treating agent as not yet published', {
+      // No BotDefinition matched the developer name: the agent genuinely has not been
+      // published yet. Return undefined so the caller POSTs a first version.
+      if (wrapped.name === SINGLE_RECORD_QUERY_NO_RECORDS) {
+        getLogger().debug('Agent is not yet published', { agentApiName });
+        return undefined;
+      }
+      // Any other error means the lookup itself failed (auth, network, multiple matches),
+      // so we cannot tell whether the agent already exists. Collapsing this into
+      // "not published" risks POSTing a duplicate first version over an existing agent,
+      // so surface it instead of swallowing it. We log at debug and rethrow (rather than
+      // warn) per ai-docs/logging.md: the rethrown error propagates and is logged upstack,
+      // so the telemetry event — not this line — is the durable signal for this failure.
+      getLogger().debug('Failed to determine whether agent is already published', {
         agentApiName,
+        statusCode: getHttpStatusCode(error),
         errName: wrapped.name,
         errMsg: wrapped.message,
       });
-      return undefined;
+      await Lifecycle.getInstance().emitTelemetry({
+        eventName: 'agent_publish_botid_lookup_failed',
+        statusCode: getHttpStatusCode(error) ?? null,
+        errName: wrapped.name,
+      });
+      throw wrapped;
     }
   }
 
@@ -355,8 +380,9 @@ export class ScriptAgentPublisher {
   private async getBotVersion(botVersionId: string): Promise<{ developerName: string; versionNumber: number }> {
     try {
       const standardConn = (await managerFor(this.connection)).getStandardConnection();
+      const escapedBotVersionId = botVersionId.replace(/'/g, "''");
       const queryResult = await standardConn.singleRecordQuery<{ DeveloperName: string; VersionNumber: number }>(
-        `SELECT DeveloperName, VersionNumber FROM BotVersion WHERE Id='${botVersionId}'`
+        `SELECT DeveloperName, VersionNumber FROM BotVersion WHERE Id='${escapedBotVersionId}'`
       );
       getLogger().debug('Resolved bot version', {
         botVersionId,

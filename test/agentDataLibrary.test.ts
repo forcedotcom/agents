@@ -20,7 +20,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
-import { Connection } from '@salesforce/core';
+import { Connection, Lifecycle } from '@salesforce/core';
 import { AgentDataLibrary } from '../src/agentDataLibrary';
 import type { CreateLibraryInput, UpdateLibraryInput } from '../src/dataLibraryTypes';
 
@@ -88,6 +88,22 @@ describe('AgentDataLibrary', () => {
         expect(err.message).to.include('Network error');
       }
     });
+
+    it('emits failure telemetry carrying statusCode and errName dimensions (OBS-5)', async () => {
+      const events: any[] = [];
+      $$.SANDBOX.stub(Lifecycle.getInstance(), 'emitTelemetry').callsFake((event: any) => {
+        events.push(event);
+        return Promise.resolve();
+      });
+      const httpError = Object.assign(new Error('Forbidden'), { name: 'ForbiddenError', statusCode: 403 });
+      $$.fakeConnectionRequest = () => Promise.reject(httpError);
+
+      await AgentDataLibrary.list(connection).catch(() => {});
+
+      // The durable production signal (telemetry) must carry the cause dimensions, not just a
+      // bare counter — the paired debug breadcrumb is off at the default log level.
+      expect(events).to.deep.equal([{ eventName: 'agent_adl_list_failed', statusCode: 403, errName: 'ForbiddenError' }]);
+    });
   });
 
   describe('create', () => {
@@ -129,6 +145,73 @@ describe('AgentDataLibrary', () => {
       expect(fetchStub.calledOnce).to.be.true;
       expect(fetchStub.firstCall.args[0]).to.include('/indexing');
       expect((fetchStub.firstCall.args[1] as { method: string }).method).to.equal('POST');
+    });
+
+    const knowledgeInput: CreateLibraryInput = {
+      masterLabel: 'KB',
+      developerName: 'KB',
+      groundingSource: {
+        sourceType: 'KNOWLEDGE',
+        knowledgeConfig: { primaryIndexField1: 'ArticleNumber', primaryIndexField2: 'Title' },
+      },
+    };
+
+    // OBS-1/GEN-2: native fetch resolves (does not reject) on a 4xx/5xx, so an HTTP-error
+    // indexing response would otherwise be swallowed as success. create() must still resolve
+    // (indexing is best-effort) but the failure must be surfaced via telemetry with statusCode.
+    it('emits indexing-trigger failure telemetry when the indexing fetch returns a non-ok status (OBS-1/OBS-2)', async () => {
+      mockRequest({ libraryId: '1JD000004', masterLabel: 'KB', developerName: 'KB', sourceType: 'KNOWLEDGE' });
+      const fetchStub = $$.SANDBOX.stub(global, 'fetch');
+      fetchStub.resolves(new Response('Server Error', { status: 500 }));
+      const events: any[] = [];
+      $$.SANDBOX.stub(Lifecycle.getInstance(), 'emitTelemetry').callsFake((event: any) => {
+        events.push(event);
+        return Promise.resolve();
+      });
+
+      // create() still resolves — indexing is fire-and-forget and must not fail library creation.
+      const result = await AgentDataLibrary.create(connection, knowledgeInput);
+      expect(result.libraryId).to.equal('1JD000004');
+      // create() also emits agent_adl_create_success before this block, so filter to the failure.
+      expect(events.filter((e) => e.eventName === 'agent_adl_indexing_trigger_failed')).to.deep.equal([
+        { eventName: 'agent_adl_indexing_trigger_failed', statusCode: 500, errName: 'IndexingTriggerHttpError' },
+      ]);
+    });
+
+    // OBS-2: a genuine network failure (not the intentional abort) is a swallow-and-continue
+    // path, so telemetry is the only durable signal that indexing never started.
+    it('emits indexing-trigger failure telemetry when the indexing fetch rejects with a network error (OBS-2)', async () => {
+      mockRequest({ libraryId: '1JD000005', masterLabel: 'KB', developerName: 'KB', sourceType: 'KNOWLEDGE' });
+      const fetchStub = $$.SANDBOX.stub(global, 'fetch');
+      fetchStub.rejects(Object.assign(new Error('getaddrinfo ENOTFOUND'), { name: 'FetchError' }));
+      const events: any[] = [];
+      $$.SANDBOX.stub(Lifecycle.getInstance(), 'emitTelemetry').callsFake((event: any) => {
+        events.push(event);
+        return Promise.resolve();
+      });
+
+      const result = await AgentDataLibrary.create(connection, knowledgeInput);
+      expect(result.libraryId).to.equal('1JD000005');
+      expect(events.filter((e) => e.eventName === 'agent_adl_indexing_trigger_failed')).to.deep.equal([
+        { eventName: 'agent_adl_indexing_trigger_failed', statusCode: null, errName: 'FetchError' },
+      ]);
+    });
+
+    // The intentional 10s abort is an expected best-effort outcome, not a failure: the server
+    // processes indexing on receipt. It must NOT emit failure telemetry.
+    it('does not emit failure telemetry when the indexing fetch is aborted after timeout', async () => {
+      mockRequest({ libraryId: '1JD000006', masterLabel: 'KB', developerName: 'KB', sourceType: 'KNOWLEDGE' });
+      const fetchStub = $$.SANDBOX.stub(global, 'fetch');
+      fetchStub.rejects(Object.assign(new Error('The operation was aborted'), { name: 'AbortError' }));
+      const events: any[] = [];
+      $$.SANDBOX.stub(Lifecycle.getInstance(), 'emitTelemetry').callsFake((event: any) => {
+        events.push(event);
+        return Promise.resolve();
+      });
+
+      const result = await AgentDataLibrary.create(connection, knowledgeInput);
+      expect(result.libraryId).to.equal('1JD000006');
+      expect(events.filter((e) => e.eventName === 'agent_adl_indexing_trigger_failed')).to.deep.equal([]);
     });
 
     it('should not trigger indexing for RETRIEVER', async () => {

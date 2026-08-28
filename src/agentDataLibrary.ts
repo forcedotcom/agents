@@ -72,7 +72,7 @@ export class AgentDataLibrary {
         errName: wrapped.name,
         errMsg: wrapped.message,
       });
-      await Lifecycle.getInstance().emitTelemetry({ eventName: 'agent_adl_list_failed' });
+      await AgentDataLibrary.emitFailureTelemetry('agent_adl_list_failed', error);
       throw wrapped;
     }
   }
@@ -94,7 +94,7 @@ export class AgentDataLibrary {
         errName: wrapped.name,
         errMsg: wrapped.message,
       });
-      await Lifecycle.getInstance().emitTelemetry({ eventName: 'agent_adl_create_failed' });
+      await AgentDataLibrary.emitFailureTelemetry('agent_adl_create_failed', error);
       throw wrapped;
     }
 
@@ -106,7 +106,7 @@ export class AgentDataLibrary {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 10_000);
       try {
-        await fetch(`${String(connection.instanceUrl)}${baseUrl(connection, result.libraryId)}/indexing`, {
+        const response = await fetch(`${String(connection.instanceUrl)}${baseUrl(connection, result.libraryId)}/indexing`, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${String(connection.accessToken)}`,
@@ -114,8 +114,36 @@ export class AgentDataLibrary {
           },
           signal: controller.signal,
         });
-      } catch {
-        // best-effort — server processes indexing even if aborted/timeout
+        if (!response.ok) {
+          // Native fetch resolves (does not reject) on a 4xx/5xx, so an HTTP error status —
+          // the most common way indexing fails to start (expired auth, 5xx, quota 429) —
+          // would otherwise slip through unlogged. Throw it into the catch below so HTTP and
+          // network failures converge on one greppable warn + telemetry path, with statusCode
+          // distinguishing them. getHttpStatusCode reads the statusCode we attach here.
+          throw Object.assign(new SfError('Data library indexing trigger returned an error status', 'IndexingTriggerHttpError'), {
+            statusCode: response.status,
+          });
+        }
+      } catch (error) {
+        const wrapped = SfError.wrap(error);
+        if (wrapped.name === 'AbortError') {
+          // Expected best-effort path: we intentionally aborted after 10s. The server starts
+          // processing indexing on receipt, so a timeout here does not mean indexing failed.
+          getLogger().debug('Indexing trigger aborted after timeout; server processes it asynchronously', {
+            libraryId: result.libraryId,
+          });
+        } else {
+          // A real failure (an HTTP error status, or the request never reaching the server)
+          // means indexing may not have started. Surface it so a library that silently never
+          // indexes can be diagnosed, and emit telemetry so a fleet-wide regression is visible
+          // even though this path is swallowed rather than rethrown.
+          getLogger().warn('Failed to trigger data library indexing', {
+            libraryId: result.libraryId,
+            statusCode: getHttpStatusCode(error),
+            errName: wrapped.name,
+          });
+          await AgentDataLibrary.emitFailureTelemetry('agent_adl_indexing_trigger_failed', error);
+        }
       } finally {
         clearTimeout(timeout);
       }
@@ -138,7 +166,7 @@ export class AgentDataLibrary {
         errName: wrapped.name,
         errMsg: wrapped.message,
       });
-      await Lifecycle.getInstance().emitTelemetry({ eventName: 'agent_adl_get_failed' });
+      await AgentDataLibrary.emitFailureTelemetry('agent_adl_get_failed', error);
       throw wrapped;
     }
   }
@@ -159,7 +187,7 @@ export class AgentDataLibrary {
         errName: wrapped.name,
         errMsg: wrapped.message,
       });
-      await Lifecycle.getInstance().emitTelemetry({ eventName: 'agent_adl_update_failed' });
+      await AgentDataLibrary.emitFailureTelemetry('agent_adl_update_failed', error);
       throw wrapped;
     }
   }
@@ -178,7 +206,7 @@ export class AgentDataLibrary {
         errName: wrapped.name,
         errMsg: wrapped.message,
       });
-      await Lifecycle.getInstance().emitTelemetry({ eventName: 'agent_adl_delete_failed' });
+      await AgentDataLibrary.emitFailureTelemetry('agent_adl_delete_failed', error);
       throw wrapped;
     }
   }
@@ -206,7 +234,7 @@ export class AgentDataLibrary {
         errName: wrapped.name,
         errMsg: wrapped.message,
       });
-      await Lifecycle.getInstance().emitTelemetry({ eventName: 'agent_adl_status_failed' });
+      await AgentDataLibrary.emitFailureTelemetry('agent_adl_status_failed', error);
       throw wrapped;
     }
   }
@@ -250,7 +278,7 @@ export class AgentDataLibrary {
         errName: wrapped.name,
         errMsg: wrapped.message,
       });
-      await Lifecycle.getInstance().emitTelemetry({ eventName: 'agent_adl_list_files_failed' });
+      await AgentDataLibrary.emitFailureTelemetry('agent_adl_list_files_failed', error);
       throw wrapped;
     }
   }
@@ -270,7 +298,7 @@ export class AgentDataLibrary {
         errName: wrapped.name,
         errMsg: wrapped.message,
       });
-      await Lifecycle.getInstance().emitTelemetry({ eventName: 'agent_adl_file_delete_failed' });
+      await AgentDataLibrary.emitFailureTelemetry('agent_adl_file_delete_failed', error);
       throw wrapped;
     }
   }
@@ -357,6 +385,20 @@ export class AgentDataLibrary {
   }
 
   // ── Private helpers ───────────────────────────────────────
+
+  /**
+   * Emit a `*_failed` telemetry counter carrying the low-cardinality cause dimensions a
+   * responder can slice by — the HTTP status and the error class. Telemetry is the only signal
+   * present at the default log level in production (the paired `debug` breadcrumb is not), so a
+   * bare count cannot distinguish an auth wall from a 5xx from a 404 without these dimensions.
+   */
+  private static emitFailureTelemetry(eventName: string, error: unknown): Promise<void> {
+    return Lifecycle.getInstance().emitTelemetry({
+      eventName,
+      statusCode: getHttpStatusCode(error) ?? null,
+      errName: SfError.wrap(error).name,
+    });
+  }
 
   private static async checkUploadReadiness(connection: Connection, url: string): Promise<void> {
     const maxAttempts = 3;

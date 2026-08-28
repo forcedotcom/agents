@@ -140,7 +140,7 @@ describe('AgentPublisher', () => {
       // Mock connection.singleRecordQuery to return undefined (no existing bot)
       $$.SANDBOX.stub(connection, 'singleRecordQuery')
         .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
-        .throws(new Error('No records found'))
+        .throws(new SfError('No record found', 'SingleRecordQuery_NoRecords'))
         .withArgs("SELECT DeveloperName, VersionNumber FROM BotVersion WHERE Id='0Bv000000000002'")
         .resolves({ DeveloperName: 'v1', VersionNumber: 1 });
 
@@ -170,7 +170,7 @@ describe('AgentPublisher', () => {
       // Mock connection.singleRecordQuery to return undefined (no existing bot)
       $$.SANDBOX.stub(connection, 'singleRecordQuery')
         .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
-        .throws(new Error('No records found'))
+        .throws(new SfError('No record found', 'SingleRecordQuery_NoRecords'))
         .withArgs("SELECT DeveloperName, VersionNumber FROM BotVersion WHERE Id='0Bv000000000002'")
         .resolves({ DeveloperName: 'v1', VersionNumber: 1 });
 
@@ -201,7 +201,7 @@ describe('AgentPublisher', () => {
       // Mock connection.singleRecordQuery to return undefined (no existing bot)
       $$.SANDBOX.stub(connection, 'singleRecordQuery')
         .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
-        .throws(new Error('No records found'))
+        .throws(new SfError('No record found', 'SingleRecordQuery_NoRecords'))
         .withArgs("SELECT DeveloperName, VersionNumber FROM BotVersion WHERE Id='0Bv000000000002'")
         .resolves({ DeveloperName: 'v1', VersionNumber: 1 });
 
@@ -268,6 +268,11 @@ describe('AgentPublisher', () => {
       // Mock connection.refreshAuth to avoid making HTTP calls during auth refresh
       $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
 
+      // Agent not yet published, so the flow reaches the publish POST (which the error mock fails).
+      $$.SANDBOX.stub(connection, 'singleRecordQuery')
+        .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
+        .throws(new SfError('No record found', 'SingleRecordQuery_NoRecords'));
+
       try {
         await publisher.publishAgentJson();
         expect.fail('Expected error was not thrown');
@@ -281,7 +286,7 @@ describe('AgentPublisher', () => {
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishNewAgent-Success');
       $$.SANDBOX.stub(connection, 'singleRecordQuery')
         .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
-        .throws(new Error('No records found'))
+        .throws(new SfError('No record found', 'SingleRecordQuery_NoRecords'))
         .withArgs("SELECT DeveloperName, VersionNumber FROM BotVersion WHERE Id='0Bv000000000002'")
         .resolves({ DeveloperName: 'v1', VersionNumber: 1 });
 
@@ -318,7 +323,7 @@ describe('AgentPublisher', () => {
 
       $$.SANDBOX.stub(connection, 'singleRecordQuery')
         .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
-        .throws(new Error('No records found'))
+        .throws(new SfError('No record found', 'SingleRecordQuery_NoRecords'))
         .withArgs("SELECT DeveloperName, VersionNumber FROM BotVersion WHERE Id='0Bv000000000002'")
         .resolves({ DeveloperName: 'developerNameDummy', VersionNumber: 1 });
 
@@ -372,7 +377,11 @@ describe('AgentPublisher', () => {
 
       const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
 
-      $$.SANDBOX.stub(connection, 'singleRecordQuery').throws(new Error('No records found'));
+      // singleRecordQuery throws a SingleRecordQuery_NoRecords SfError when the SOQL matches
+      // zero rows, which is exactly the "agent not yet published" case.
+      $$.SANDBOX.stub(connection, 'singleRecordQuery').throws(
+        new SfError('No record found', 'SingleRecordQuery_NoRecords')
+      );
 
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
       const getPublishedBotId = (publisher as any).getPublishedBotId.bind(publisher);
@@ -380,6 +389,49 @@ describe('AgentPublisher', () => {
       const result = await getPublishedBotId('nonexistent_agent');
 
       expect(result).to.be.undefined;
+      validateStub.restore();
+    });
+
+    it('should rethrow when the lookup itself fails (not a genuine not-found)', async () => {
+      // Create minimal publisher instance by mocking validateDeveloperName
+      const validateStub = createValidateDeveloperNameStub();
+
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
+
+      // A non-NoRecords error (auth/network/multiple-matches) means we cannot tell whether the
+      // agent exists. Collapsing this into "not published" risks publishing a duplicate first
+      // version, so the lookup failure must surface rather than be swallowed.
+      $$.SANDBOX.stub(connection, 'singleRecordQuery').throws(new Error('connection reset'));
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      const getPublishedBotId = (publisher as any).getPublishedBotId.bind(publisher);
+
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+        await getPublishedBotId('some_agent');
+        expect.fail('Expected getPublishedBotId to throw on a lookup failure');
+      } catch (error) {
+        expect(error).to.be.instanceOf(SfError);
+        expect((error as SfError).message).to.include('connection reset');
+      } finally {
+        validateStub.restore();
+      }
+    });
+
+    it('escapes single quotes in the developerName so it cannot break out of the SOQL literal (SEC-1)', async () => {
+      const validateStub = createValidateDeveloperNameStub();
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
+
+      const queryStub = $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves({ Id: '0Xx000' });
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      const getPublishedBotId = (publisher as any).getPublishedBotId.bind(publisher);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      await getPublishedBotId("x' OR Id != null LIMIT 1--");
+
+      // The injected quote must be doubled so the WHERE clause semantics are preserved.
+      const soql = queryStub.firstCall.args[0];
+      expect(soql).to.equal("SELECT Id FROM BotDefinition WHERE DeveloperName='x'' OR Id != null LIMIT 1--'");
       validateStub.restore();
     });
   });
