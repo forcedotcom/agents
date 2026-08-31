@@ -29,7 +29,7 @@ import {
   buildTestingMetadataXml,
   parseNgtMetadataXml,
 } from '../src/agentTest';
-import type { NgtTestSpec, AiTestCaseInputXml, NgtTestCaseInput } from '../src/types';
+import type { NgtTestSpec, AiTestCaseInputXml, NgtTestCaseInput, AiTestingDefinition } from '../src/types';
 
 /**
  * Normalize a serialized XML string for comparison:
@@ -490,7 +490,7 @@ describe('AgentTest NGT (Agentforce Studio) create surface', () => {
       expect(normalizeXml(actual)).to.equal(normalizeXml(expected));
     });
 
-    it('regression: an unrecognized subjectType (e.g. a typo) falls back to the AGENT shape, not PROMPT', () => {
+    it('throws for an unrecognized subjectType (e.g. a typo), from both converters', () => {
       // Cast through unknown to bypass static typing; models a hand-edited YAML with a typo'd subjectType.
       const spec = {
         name: 'Typo',
@@ -498,8 +498,8 @@ describe('AgentTest NGT (Agentforce Studio) create surface', () => {
         subjectName: 'SomeBot',
         testCases: [{ inputs: [{ utterance: 'hi' }], scorers: [{ name: 'coherence' }] }],
       } as unknown as NgtTestSpec;
-      const def = convertToTestingMetadata(spec);
-      expect(def.subjectType).to.equal('AGENT');
+      expect(() => convertToTestingMetadata(spec)).to.throw(/unrecognized `subjectType`/);
+      expect(() => convertToNgtSpec(spec as unknown as AiTestingDefinition)).to.throw(/unrecognized `subjectType`/);
     });
 
     it('PROMPT subject: matches the expected XML fixture (multi-invocation fan-out, multi-slot promptInput)', async () => {

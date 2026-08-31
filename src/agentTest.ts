@@ -578,10 +578,14 @@ const dispatchBySubjectType = <U extends { subjectType: 'AGENT' | 'PROMPT' }, R>
     PROMPT: (v: Extract<U, { subjectType: 'PROMPT' }>) => R;
   }
 ): R => {
-  if (value.subjectType === 'PROMPT') {
+  const subjectType: unknown = value.subjectType;
+  if (subjectType === 'PROMPT') {
     return handlers.PROMPT(value as Extract<U, { subjectType: 'PROMPT' }>);
   }
-  return handlers.AGENT(value as Extract<U, { subjectType: 'AGENT' }>);
+  if (subjectType === 'AGENT') {
+    return handlers.AGENT(value as Extract<U, { subjectType: 'AGENT' }>);
+  }
+  throw ngtError('ngtUnknownSubjectType', [String(subjectType)]);
 };
 
 export const validateNgtSpec = (spec: NgtTestSpec, ctx: { isMultiAgent: boolean }): void => {
