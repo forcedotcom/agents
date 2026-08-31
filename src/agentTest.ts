@@ -585,6 +585,11 @@ const dispatchBySubjectType = <U extends { subjectType: 'AGENT' | 'PROMPT' }, R>
 };
 
 export const validateNgtSpec = (spec: NgtTestSpec, ctx: { isMultiAgent: boolean }): void => {
+  const subjectType: unknown = spec.subjectType;
+  if (subjectType !== 'AGENT' && subjectType !== 'PROMPT') {
+    throw ngtError('ngtUnknownSubjectType', [String(subjectType)]);
+  }
+
   if (!spec.testCases || spec.testCases.length === 0) {
     throw ngtError('ngtMissingTestCases');
   }
@@ -641,15 +646,13 @@ const validateScorers = (scorers: NgtTestCaseScorer[], tcIdx: number, subjectTyp
   scorers.forEach((scorer) => {
     if (!isNgtScorerName(scorer.name)) {
       const unknownName = String(scorer.name);
-      void Lifecycle.getInstance().emitWarning(
-        `Unknown NGT scorer name '${unknownName}'. The deploy will be validated by the server.`
-      );
+      void Lifecycle.getInstance().emitWarning(messages.getMessage('ngtUnknownScorerName', [tcIdx + 1, unknownName]));
       return;
     }
     const entry = NgtScorerCatalog[scorer.name];
     if (!entry.supportedSubjects.includes(subjectType)) {
       void Lifecycle.getInstance().emitWarning(
-        `Scorer '${scorer.name}' is not supported for subject type '${subjectType}'. The deploy will be validated by the server.`
+        messages.getMessage('ngtScorerUnsupportedForSubject', [tcIdx + 1, scorer.name, subjectType])
       );
     }
     if (entry.needsExpected && (scorer.expected === undefined || scorer.expected === '')) {
@@ -682,7 +685,7 @@ const validatePromptTestCases = (testCases: NgtPromptTestCase[]): void => {
         throw ngtError('ngtPromptInputSetEmpty', [tcIdx + 1, inputIdx + 1]);
       }
       inputSet.promptInput.forEach((pi) => {
-        if (!pi?.referenceName?.trim()) {
+        if (pi?.referenceName === undefined || pi.referenceName === null || !String(pi.referenceName).trim()) {
           throw ngtError('ngtPromptInputMissingReferenceName', [tcIdx + 1, inputIdx + 1]);
         }
         if (pi.value === undefined || pi.value === null || !String(pi.value).trim()) {
@@ -803,8 +806,8 @@ const toInputsXml = (input: NgtTestCaseInput): AiTestCase['inputs'] => {
 
 const toPromptInputsXml = (inputSet: NgtPromptInputSet): AiTestCasePromptInputXml => ({
   promptInput: inputSet.promptInput.map((pi) => ({
-    referenceName: pi.referenceName,
-    value: pi.value,
+    referenceName: String(pi.referenceName),
+    value: String(pi.value),
   })),
 });
 
@@ -946,8 +949,8 @@ const parseTestCaseXml = (tc: AiTestCase): NgtTestCase => {
 
 const parsePromptTestCaseXml = (tc: AiPromptTestCase): NgtPromptTestCase => {
   const promptInput = ensureArray(tc.inputs?.promptInput).map((pi) => ({
-    referenceName: String(pi.referenceName),
-    value: String(pi.value),
+    referenceName: String(pi.referenceName ?? ''),
+    value: String(pi.value ?? ''),
   }));
   const scorers = ensureArray(tc.scorer).map((s) => parseScorerXml(s));
   return { inputs: [{ promptInput }], scorers };

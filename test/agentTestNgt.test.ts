@@ -88,6 +88,19 @@ describe('AgentTest NGT (Agentforce Studio) create surface', () => {
       expect(() => validateNgtSpec(baseSpec(), { isMultiAgent: false })).to.not.throw();
     });
 
+    it('throws ngtUnknownSubjectType for a typo\'d subjectType (e.g. "PROMT"), naming the offending value', () => {
+      // Cast through unknown to bypass static typing; models a hand-edited YAML with a typo'd subjectType.
+      const spec = { ...baseSpec(), subjectType: 'PROMT' } as unknown as NgtTestSpec;
+      try {
+        validateNgtSpec(spec, { isMultiAgent: false });
+        expect.fail('expected validateNgtSpec to throw');
+      } catch (err) {
+        expect(err).to.be.instanceOf(SfError);
+        expect((err as SfError).name).to.equal('ngtUnknownSubjectType');
+        expect((err as SfError).message).to.include('PROMT');
+      }
+    });
+
     it('throws ngtMissingTestCases when testCases is empty', () => {
       const spec = baseSpec();
       spec.testCases = [];
@@ -168,7 +181,7 @@ describe('AgentTest NGT (Agentforce Studio) create surface', () => {
       expect(() => validateNgtSpec(spec, { isMultiAgent: false })).to.not.throw();
       expect(lifecycleSpy.called).to.be.true;
       const allWarnArgs = lifecycleSpy.getCalls().flatMap((c) => c.args.map(String));
-      expect(allWarnArgs.some((a) => a.includes('made_up_scorer'))).to.be.true;
+      expect(allWarnArgs.some((a) => a.includes('made_up_scorer') && a.includes('test case 1'))).to.be.true;
     });
 
     it('throws ngtTaskResolutionRequiresConversationHistory when task_resolution lacks conversationHistory', () => {
@@ -389,6 +402,18 @@ describe('AgentTest NGT (Agentforce Studio) create surface', () => {
       }
     });
 
+    it('does not throw a raw TypeError when referenceName is a non-string (e.g. unquoted numeric YAML) — coerces and passes like `value` already does', () => {
+      const spec = basePromptSpec();
+      // Cast through unknown to bypass static typing; models unquoted numeric YAML (referenceName: 123).
+      // Before the fix, `pi.referenceName?.trim()` threw a raw TypeError here (numbers have no .trim).
+      // 123 stringifies to a non-blank "123", so — mirroring how `value` already coerces numeric input —
+      // this is a legitimate reference name and validation must pass cleanly, not throw at all.
+      spec.testCases[0].inputs = [
+        { promptInput: [{ referenceName: 123 as unknown as string, value: 'x' }] },
+      ];
+      expect(() => validateNgtSpec(spec, { isMultiAgent: false })).to.not.throw();
+    });
+
     it('throws ngtPromptInputMissingValue when a promptInput entry has a blank value', () => {
       const spec = basePromptSpec();
       spec.testCases[0].inputs = [{ promptInput: [{ referenceName: 'CaseDescription', value: '   ' }] }];
@@ -422,7 +447,9 @@ describe('AgentTest NGT (Agentforce Studio) create surface', () => {
       expect(() => validateNgtSpec(spec, { isMultiAgent: false })).to.not.throw();
       expect(lifecycleSpy.called).to.be.true;
       const allWarnArgs = lifecycleSpy.getCalls().flatMap((c) => c.args.map(String));
-      expect(allWarnArgs.some((a) => a.includes('topic_sequence_match') && a.includes('PROMPT'))).to.be.true;
+      expect(
+        allWarnArgs.some((a) => a.includes('topic_sequence_match') && a.includes('PROMPT') && a.includes('test case 1'))
+      ).to.be.true;
     });
 
     it('does not emit a subject-scoping warning for any of the 5 PROMPT-supported scorers', () => {
@@ -548,6 +575,36 @@ describe('AgentTest NGT (Agentforce Studio) create surface', () => {
         { referenceName: 'CaseDescription', value: 'case text' },
         { referenceName: 'CustomerTone', value: 'angry' },
       ]);
+    });
+
+    it('PROMPT subject: a numeric `value`/`referenceName` is coerced to a string by the converter itself, not left as a number for the XML builder to coerce', () => {
+      const spec = {
+        name: 'PromptNumericValue',
+        subjectType: 'PROMPT',
+        subjectName: 'MyPrompt',
+        testCases: [
+          {
+            // Cast through unknown to bypass static typing; models parsed YAML `value: 42`.
+            inputs: [{ promptInput: [{ referenceName: 'RetryCount' as unknown as string, value: 42 as unknown as string }] }],
+            scorers: [{ name: 'coherence' }],
+          },
+        ],
+      } as unknown as NgtTestSpec;
+
+      const def = convertToTestingMetadata(spec);
+      if (def.subjectType !== 'PROMPT') throw new Error('unreachable');
+      // Asserted on `def` directly (pre-serialization): fast-xml-parser's XMLBuilder auto-stringifies
+      // numbers regardless, so checking the rendered XML string here would pass even without the fix.
+      expect(def.testCase[0].inputs.promptInput[0].value).to.equal('42');
+      expect(def.testCase[0].inputs.promptInput[0].value).to.be.a('string');
+
+      const xml = buildTestingMetadataXml(def);
+      expect(xml).to.include('<value>42</value>');
+
+      const reparsed = convertToNgtSpec(parseNgtMetadataXml(xml));
+      if (reparsed.subjectType !== 'PROMPT') throw new Error('unreachable');
+      expect(reparsed.testCases[0].inputs[0].promptInput[0].value).to.equal('42');
+      expect(reparsed.testCases[0].inputs[0].promptInput[0].value).to.be.a('string');
     });
 
     it('multi-input fan-out: one inputs[] with 3 entries → 3 <testCase> elements, shared scorers, globally numbered', () => {
@@ -835,6 +892,25 @@ describe('AgentTest NGT (Agentforce Studio) create surface', () => {
       const spec = parseToSpec(xml);
       if (spec.subjectType !== 'PROMPT') throw new Error('unreachable');
       expect(spec.testCases[0].inputs[0].promptInput).to.deep.equal([{ referenceName: 'Case', value: 'only one slot' }]);
+    });
+
+    it('PROMPT subject: a promptInput missing <value> or <referenceName> parses to an empty string, not the literal "undefined"', () => {
+      const xml =
+        '<?xml version="1.0" encoding="UTF-8"?>\n' +
+        '<AiTestingDefinition xmlns="http://soap.sforce.com/2006/04/metadata">\n' +
+        '  <name>S</name><subjectName>A</subjectName><subjectType>PROMPT</subjectType>\n' +
+        '  <testCase><number>1</number><inputs>\n' +
+        '    <promptInput><referenceName>Case</referenceName></promptInput>\n' +
+        '    <promptInput><value>orphan value</value></promptInput>\n' +
+        '  </inputs>\n' +
+        '    <scorer><name>coherence</name></scorer></testCase>\n' +
+        '</AiTestingDefinition>\n';
+      const spec = parseToSpec(xml);
+      if (spec.subjectType !== 'PROMPT') throw new Error('unreachable');
+      expect(spec.testCases[0].inputs[0].promptInput).to.deep.equal([
+        { referenceName: 'Case', value: '' },
+        { referenceName: '', value: 'orphan value' },
+      ]);
     });
 
     it('preserves all 11 catalog scorers across the canonical fixture (presence + expected shape)', async () => {

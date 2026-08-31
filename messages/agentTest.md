@@ -73,3 +73,15 @@ NGT test case %s, input %s has a `promptInput` entry missing a non-blank `refere
 # ngtPromptInputMissingValue
 
 NGT test case %s, input %s: promptInput '%s' requires a non-blank `value`.
+
+# ngtUnknownScorerName
+
+NGT test case %s: unknown scorer name '%s'. The deploy will be validated by the server.
+
+# ngtScorerUnsupportedForSubject
+
+NGT test case %s: scorer '%s' is not supported for subject type '%s'. The deploy will be validated by the server.
+
+# ngtUnknownSubjectType
+
+NGT test spec has an unrecognized `subjectType` '%s'. Must be one of: AGENT, PROMPT.
