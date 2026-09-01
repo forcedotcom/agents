@@ -1,3 +1,12 @@
+# [2.2.0](https://github.com/forcedotcom/agents/compare/2.1.1...2.2.0) (2026-09-01)
+
+
+### Features
+
+* add PROMPT subject support for NGT (Agentforce Studio) test creation @W-23524165@ ([#353](https://github.com/forcedotcom/agents/issues/353)) ([ceb8857](https://github.com/forcedotcom/agents/commit/ceb8857a193d942cee7dcdb229e834c922cab85f))
+
+
+
 ## [2.1.1](https://github.com/forcedotcom/agents/compare/2.1.0...2.1.1) (2026-08-28)
 
 
