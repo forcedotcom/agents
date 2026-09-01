@@ -49,6 +49,7 @@ export {
   type AgentPreviewError,
   type AgentPreviewStartOptions,
   type ContextVariable,
+  type ContextVariableType,
   AgentSource,
   type ScriptAgentType,
   type ProductionAgentType,

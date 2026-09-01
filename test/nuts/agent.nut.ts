@@ -306,7 +306,46 @@ describe('agent NUTs', () => {
         // Set the default agent user in the agent script so we can test live preview
         const aabDir = join(session.project.dir, 'force-app', 'main', 'default', 'aiAuthoringBundles', bundleApiName);
         const agentScriptFile = readFileSync(join(aabDir, 'Test_AAB_Preview.agent'), 'utf8');
-        const updatedAgentScriptFile = agentScriptFile.replace('NEW AGENT USER', defaultAgentUsername);
+        const updatedAgentScriptFile = agentScriptFile
+          .replace('NEW AGENT USER', defaultAgentUsername)
+          // Declare one External, settable var per wire type so the typed-context-variable
+          // round-trip test below has a target for each. External visibility is what makes a
+          // mutable var settable via preview; without it the server rejects the mutation.
+          .replace(
+            '          description: "This variable may also be referred to as VerifiedCustomerId"',
+            [
+              '          description: "This variable may also be referred to as VerifiedCustomerId"',
+              '    NutProbeText: mutable string = ""',
+              '        description: "Test-only External var: a Text value set via a preview context variable."',
+              '        visibility: "External"',
+              '    NutProbeBool: mutable boolean = False',
+              '        description: "Test-only External var: a Boolean value set via a preview context variable."',
+              '        visibility: "External"',
+              '    NutProbeNum: mutable number = 0',
+              '        description: "Test-only External var: a Number value set via a preview context variable."',
+              '        visibility: "External"',
+              '    NutProbeObj: mutable object = {}',
+              '        description: "Test-only External var: a JSON object set via a preview context variable."',
+              '        visibility: "External"',
+              '    NutProbeList: mutable list[string] = []',
+              '        description: "Test-only External var: a List value set via a preview context variable."',
+              '        visibility: "External"',
+              // The string-on-wire scalar types (Date/DateTime/Money/Ref) declare no default value,
+              // unlike the string/boolean/number/object/list vars above.
+              '    NutProbeDate: mutable date',
+              '        description: "Test-only External var: a Date value set via a preview context variable."',
+              '        visibility: "External"',
+              '    NutProbeDateTime: mutable datetime',
+              '        description: "Test-only External var: a DateTime value set via a preview context variable."',
+              '        visibility: "External"',
+              '    NutProbeMoney: mutable currency',
+              '        description: "Test-only External var: a Money value set via a preview context variable."',
+              '        visibility: "External"',
+              '    NutProbeRef: mutable id',
+              '        description: "Test-only External var: a Ref (record id) value set via a preview context variable."',
+              '        visibility: "External"',
+            ].join('\n')
+          );
         writeFileSync(join(aabDir, 'Test_AAB_Preview.agent'), updatedAgentScriptFile);
       });
 
@@ -504,6 +543,115 @@ describe('agent NUTs', () => {
         const allTracesJson = traces.map((t) => JSON.stringify(t)).join('\n');
 
         expect(allTracesJson).to.contain(overrideValue, 'expected override value to appear in at least one trace');
+      });
+
+      it('should round-trip every context-variable wire type into the live preview session trace', async () => {
+        const agent = await Agent.init({ connection, project, aabName: bundleApiName });
+        agent.preview.setMockMode('Live Test');
+
+        // Distinctive sentinels per wire type so a substring match can't collide across types.
+        const textValue = 'SDKCV-TEXT-7f3a9b';
+        const numberValue = 8_675_309;
+        const jsonTag = 'SDKCV-JSON-4d21c8';
+        const listElement = 'SDKCV-LIST-b58c1e';
+
+        // External mutable vars are set by their bare name (not the $Context. prefix that linked
+        // vars use). Each type maps to its own Variable union member on the wire.
+        await agent.preview.start({
+          contextVariables: [
+            { name: 'NutProbeText', type: 'Text', value: textValue },
+            { name: 'NutProbeNum', type: 'Number', value: numberValue },
+            { name: 'NutProbeBool', type: 'Boolean', value: true },
+            { name: 'NutProbeObj', type: 'Json', value: { tag: jsonTag } },
+            { name: 'NutProbeList', type: 'List', value: [listElement] },
+          ],
+        });
+
+        await agent.preview.send('hello');
+
+        const traces = await agent.preview.getAllTraces();
+        expect(traces).to.be.an('array');
+        expect(traces.length).to.be.greaterThan(0, 'expected at least one trace from the planner');
+
+        const allTracesJson = traces.map((t) => JSON.stringify(t)).join('\n');
+        expect(allTracesJson).to.contain(textValue, 'Text value should reach the session');
+        expect(allTracesJson).to.contain(String(numberValue), 'Number value should reach the session');
+        expect(allTracesJson).to.contain(jsonTag, 'Json object value should reach the session');
+        expect(allTracesJson).to.contain(listElement, 'List element should reach the session');
+        expect(allTracesJson).to.contain('NutProbeBool', 'Boolean variable should be present in the session');
+      });
+
+      it('should round-trip the string-on-wire scalar types (Date/DateTime/Money/Ref) into the live preview session trace', async () => {
+        const agent = await Agent.init({ connection, project, aabName: bundleApiName });
+        agent.preview.setMockMode('Live Test');
+
+        // The four string-on-wire scalar API types each serialize as a JSON string. Distinct
+        // per-type sentinels keep the substring match from colliding across types.
+        const dateValue = '2026-01-15';
+        const dateTimeValue = '2026-01-15T09:00:00Z';
+        const moneyAmount = '42.50'; // Money wire shape is "<ISO> <amount>", e.g. "USD 42.50".
+        const refValue = '003000000000002AAA';
+
+        await agent.preview.start({
+          contextVariables: [
+            { name: 'NutProbeDate', type: 'Date', value: dateValue },
+            { name: 'NutProbeDateTime', type: 'DateTime', value: dateTimeValue },
+            { name: 'NutProbeMoney', type: 'Money', value: `USD ${moneyAmount}` },
+            { name: 'NutProbeRef', type: 'Ref', value: refValue },
+          ],
+        });
+
+        await agent.preview.send('hello');
+
+        const traces = await agent.preview.getAllTraces();
+        expect(traces).to.be.an('array');
+        expect(traces.length).to.be.greaterThan(0, 'expected at least one trace from the planner');
+
+        const allTracesJson = traces.map((t) => JSON.stringify(t)).join('\n');
+        expect(allTracesJson).to.contain(dateValue, 'Date value should reach the session');
+        // DateTime is trimmed to minute precision on the wire (seconds/zone dropped), so assert the
+        // minute prefix, which is a substring of both the full and the trimmed form.
+        expect(allTracesJson).to.contain('2026-01-15T09:00', 'DateTime value should reach the session');
+        // Money display coerces to the org currency, so assert the amount (the invariant part) rather
+        // than the ISO prefix we sent.
+        expect(allTracesJson).to.contain(moneyAmount, 'Money value should reach the session');
+        expect(allTracesJson).to.contain(refValue, 'Ref value should reach the session');
+      });
+
+      it('should round-trip structured composition (API Object type and a multi-entry List) into the live preview session trace', async () => {
+        const agent = await Agent.init({ connection, project, aabName: bundleApiName });
+        agent.preview.setMockMode('Live Test');
+
+        // API `Object` (an array of nested typed vars) is distinct from `Json` ({...}); both target
+        // an object-typed agent var. A multi-entry List must carry every element, not just the first.
+        const objectFieldValue = 'SDKCV-OBJ-9a1f2e';
+        const listFirst = 'SDKCV-LIST0-3c7d55';
+        const listSecond = 'SDKCV-LIST1-e12b90';
+
+        await agent.preview.start({
+          contextVariables: [
+            { name: 'NutProbeObj', type: 'Object', value: [{ name: 'name', type: 'Text', value: objectFieldValue }] },
+            {
+              name: 'NutProbeList',
+              type: 'List',
+              value: [
+                { type: 'Text', value: listFirst },
+                { type: 'Text', value: listSecond },
+              ],
+            },
+          ],
+        });
+
+        await agent.preview.send('hello');
+
+        const traces = await agent.preview.getAllTraces();
+        expect(traces).to.be.an('array');
+        expect(traces.length).to.be.greaterThan(0, 'expected at least one trace from the planner');
+
+        const allTracesJson = traces.map((t) => JSON.stringify(t)).join('\n');
+        expect(allTracesJson).to.contain(objectFieldValue, 'nested Object field value should reach the session');
+        expect(allTracesJson).to.contain(listFirst, 'first List element should reach the session');
+        expect(allTracesJson).to.contain(listSecond, 'second List element should reach the session');
       });
 
       it('should end the preview session', async () => {
@@ -709,6 +857,11 @@ describe('agent NUTs', () => {
           saveAgent: true,
           agentSettings: {
             agentName: legacyAgentName,
+            // Reuse the Bot User already provisioned in the describe `before` (and committed via
+            // waitForPermSetAssignment) instead of letting core auto-create one in the same
+            // transaction, which intermittently races the pre-save validation trigger and fails
+            // with "User doesn't have access to agent". Mirrors the sibling spec-create test.
+            userId: botUserId,
           },
           generationInfo: {
             defaultInfo: {
