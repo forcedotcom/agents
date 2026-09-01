@@ -4266,10 +4266,10 @@ no-case@^3.0.4:
     lower-case "^2.0.2"
     tslib "^2.0.3"
 
-nock@^14.0.15:
-  version "14.0.15"
-  resolved "https://registry.yarnpkg.com/nock/-/nock-14.0.15.tgz#23f9978fb20d8b3607dc263f4978cb89648f550b"
-  integrity sha512-S0a47C9pLvcYx/Ugf0H30BVBEcUgMMBDk9VJIDlJ8XGrfH2QDUD4Tgdp45qDIiHttokBG+IbsOtsvIjGR/j3bg==
+nock@^14.0.17:
+  version "14.0.17"
+  resolved "https://registry.yarnpkg.com/nock/-/nock-14.0.17.tgz#356d0ba8cc8ff48194abf93c7f569f10f07b05e7"
+  integrity sha512-EjRr1weMa4ALQX35AgZTEnP+weJJjlW1KGDiNM2IQC2069YDHas4f4B4UUYR+TTLyKWxJvOz2wObDKQs/LNreA==
   dependencies:
     "@mswjs/interceptors" "^0.41.0"
     json-stringify-safe "^5.0.1"
