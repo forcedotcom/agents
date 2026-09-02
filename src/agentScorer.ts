@@ -181,18 +181,252 @@ function getPromptTemplateType(spec: ScorerSpec): string {
   return 'agentforce_session_tracing__scorerMultilabel';
 }
 
-export function buildDefaultPromptContent(spec: Pick<ScorerSpec, 'scorerType' | 'semanticType'>): string {
+/**
+ * Default OpenEnded prompt template bodies mirrored from the NGT (core) scorer prompt resource files
+ * under agentforce-session-tracing-impl/.../evals/prompt/scorer-open-*. New scorers are always authored
+ * OpenEnded (see the agentforce-observe scorer skill), so these are the defaults that actually ship;
+ * the legacy Predefined branches below are kept only for on-disk Text/Number specs.
+ *
+ * Core resolves the {{EVAL_CONTEXT_LINES}} placeholder to an empty string when a scorer has no name or
+ * description yet, so the bodies below reproduce that empty-context form -- exactly what the NGT UI shows
+ * for a freshly created scorer. The transcript is referenced as {!$Input:Session}: core pipes its Session
+ * input through a getSession data action and references {!$SalesforceDataAction:getSession.chatTranscript},
+ * but this CLI references the Session input directly (same meaning, and consistent with the inputs
+ * buildPromptTemplateXml declares).
+ */
+
+/**
+ * Shared tail of every OpenEnded scorer prompt: the "Provide the reasoning..." lead-in, the JSON output
+ * contract, and the transcript footer -- byte-for-byte identical across the core scorer-open-* resources
+ * apart from the per-type placeholders factored out below. `outputKey` is the output field name ("value"
+ * for free-form data types, "label" for labeled/boolean ones); the placeholders are the angle-bracket
+ * hints. Insignificant trailing whitespace present in the core resources is intentionally dropped.
+ */
+function openEndedResultBlock(
+  outputKey: 'value' | 'label',
+  outputPlaceholder: string,
+  explanationPlaceholder: string
+): string[] {
+  return [
+    'Provide the reasoning for your evaluation under "explanation".',
+    '',
+    'Return a single JSON object, in the following format:',
+    '{',
+    '  "outputs": [',
+    '    {',
+    `      "${outputKey}": "${outputPlaceholder}"`,
+    '    }',
+    '  ],',
+    `  "explanation": "${explanationPlaceholder}"`,
+    '}',
+    '',
+    'Do not include markdown formatting, code fences, comments or text beyond the JSON object.',
+    '',
+    'Conversation Transcript:',
+    '{!$Input:Session}',
+  ];
+}
+
+// scorer-open-boolean-content
+const OPEN_BOOLEAN_PROMPT = [
+  "You are evaluating an AI agent's conversations.",
+  "Your task is to read a conversation transcript between an AI Agent and a user, and determine [EDIT: Describe what should be labeled. For example, whether the AI agent fully resolved the user's issue].",
+  'Provide a clear explanation for your choice.',
+  '',
+  'Scorer Context:',
+  '',
+  'Allowed Labels:',
+  '"true", "false".',
+  '',
+  'Labeling Instructions:',
+  '',
+  'If [EDIT: Add the qualities a conversation with the label "true" should have], label the conversation with "true".',
+  'If [EDIT: Add the qualities a conversation with the label "false" should have], label the conversation with "false".',
+  '',
+  'Return exactly one value from the Allowed Labels list under "label".',
+  '',
+  ...openEndedResultBlock('label', '<either true or false>', '<reason the label applies>'),
+].join('\n');
+
+// scorer-open-date-content
+const OPEN_DATE_PROMPT = [
+  "You are evaluating an AI agent's conversations.",
+  'Your task is to read a conversation transcript between an AI Agent and a user, and identify [EDIT: Describe what should be tagged. For example, the confirmed date of a new order].',
+  'Provide a clear explanation for your choice.',
+  '',
+  'Scorer Context:',
+  '',
+  'Tagging Instructions:',
+  '',
+  'Tag the conversation when [EDIT: Describe the conditions that qualify for a tag. For example, if the AI agent confirms the date of a new order].',
+  'Do not tag the conversation when [EDIT: Describe the conditions that do not qualify for a tag. For example, if a date is discussed but not confirmed by the AI agent].',
+  '',
+  'Return the relevant date under "value" in "yyyy-mm-dd" format.',
+  '',
+  ...openEndedResultBlock('value', '<a date in yyyy-mm-dd format>', '<reason the date applies>'),
+].join('\n');
+
+// scorer-open-url-content
+const OPEN_URL_PROMPT = [
+  "You are evaluating an AI agent's conversations.",
+  'Your task is to read a conversation transcript between an AI Agent and a user, and identify [EDIT: Describe what should be tagged. For example, every link shared by the AI agent].',
+  'Provide a clear explanation for your choice.',
+  '',
+  'Scorer Context:',
+  '',
+  'Tagging Instructions:',
+  '',
+  'Tag the conversation when [EDIT: Describe the conditions that qualify for a tag. For example, the AI agent shares a link].',
+  'Do not tag the conversation when [EDIT: Describe the conditions that do not qualify for a tag. For example, only the user shares a link].',
+  '',
+  'Return the relevant link as a valid URL under "value". If the link is not already in valid URL format, convert it to a valid URL without changing its intended destination.',
+  '',
+  ...openEndedResultBlock('value', '<a valid URL>', '<reason the URL applies>'),
+].join('\n');
+
+// scorer-open-number-content (no predefined labels)
+const OPEN_NUMBER_PROMPT = [
+  'You are evaluating an AI agent conversation.',
+  'Your task is to read the conversation transcript between an AI Agent and a user, then assign a single rating.',
+  'Provide a clear explanation for your rating.',
+  '',
+  'The rating should be based on the following scoring parameters:',
+  '',
+  'Rating Instructions:',
+  'Select a single numerical value. You must provide both a rating and an explanation.',
+  '',
+  'Use the following criteria when assigning the rating:',
+  '[EDIT: Describe the factors that should affect the rating and explain how they should influence the score. For example, assign a higher rating when the user expresses positive sentiment.]',
+  '',
+  'Return the rating under "value".',
+  '',
+  ...openEndedResultBlock('value', '<a single numerical value>', '<reason why this rating applies>'),
+].join('\n');
+
+// scorer-open-number-labeled-content (predefined labels)
+const OPEN_NUMBER_LABELED_PROMPT = [
+  'You are evaluating an AI agent conversation.',
+  'Your task is to read the conversation transcript between an AI Agent and a user,',
+  'then assign a single rating from the allowed rating scale parameters below.',
+  'Provide a clear explanation for your rating.',
+  '',
+  'The rating should be based on the following scoring parameters:',
+  '',
+  'Rating Scale Parameters:',
+  'Minimum Value: [Min]',
+  'Maximum Value: [Max]',
+  'Increment Step: [Step]',
+  'Values range between the [Min] and [Max] values increasing in increments of [Step] value.',
+  'Allowed Rating Values: {!$Input:AllowedLabels}.',
+  '',
+  'Rating Instructions:',
+  'Select exactly one value from the allowed ratings. You must provide both a rating and an explanation for every score.',
+  '',
+  'Rate the conversation as 1 if [EDIT: Add the qualities a conversation rated 1 should have.].',
+  'Rate the conversation as 2 if [EDIT: Add the qualities a conversation rated 2 should have.].',
+  'Rate the conversation as 3 if [EDIT: Add the qualities a conversation rated 3 should have.]....',
+  '',
+  'Return the rating under "label".',
+  '',
+  ...openEndedResultBlock('label', '<a single value from the allowed ratings>', '<reason the rating applies>'),
+].join('\n');
+
+// scorer-open-text-content (no predefined labels)
+const OPEN_TEXT_PROMPT = [
+  "You are evaluating an AI agent's conversations.",
+  'Your task is to read a conversation transcript between an AI Agent and a user, and identify [EDIT: Describe what should be tagged. For example, product names mentioned by the AI agent].',
+  'Provide a clear explanation for your choice.',
+  '',
+  'Scorer Context:',
+  '',
+  'Tagging Instructions:',
+  '',
+  'Tag the conversation when [EDIT: Describe the conditions that qualify for a tag. For example, if the AI agent mentions a product name].',
+  'Do not tag the conversation when [EDIT: Describe the conditions that do not qualify for a tag. For example, if a product name is mentioned only by the user].',
+  '',
+  'Return the tag under "value".',
+  '',
+  ...openEndedResultBlock('value', '<applicable tag>', '<reason the tag applies>'),
+].join('\n');
+
+// scorer-open-text-labeled-content (predefined labels).
+// Note: "recieve" is a typo in the core resource file, preserved here for exact parity.
+const OPEN_TEXT_LABELED_PROMPT = [
+  "You are evaluating an AI agent's conversations.",
+  'Your task is to read a conversation transcript between an AI Agent and a user, and identify which - if any - of the following labels apply: {!$Input:AllowedLabels}.',
+  'Provide a clear explanation for your choice.',
+  '',
+  'Scorer Context:',
+  '',
+  'Allowed Labels:',
+  '{!$Input:AllowedLabels}.',
+  '',
+  'Labeling Instructions:',
+  'Evaluate each label independently and apply a label if its condition is met.',
+  '',
+  "If [EDIT: Define the required prerequisites for a conversation to recieve the label 'Strong'.], label the conversation as [Label, e.g. Strong].",
+  "If [EDIT: Define the required prerequisites for a conversation to recieve the label 'Weak'.], label the conversation as [Label, e.g. Weak]...",
+  '',
+  '[EDIT: Remove the following line if no Fallback Label was set.]',
+  'If no condition applies, return the following value under "label": {!$Input:FallbackLabel}.',
+  '',
+  ...openEndedResultBlock('label', '<applicable label from the Allowed Labels list>', '<reason the label applies>'),
+].join('\n');
+
+type OpenEndedCategory = 'text' | 'number' | 'boolean' | 'url' | 'date';
+
+/**
+ * Maps a scorer spec's data type / lightning type to the NGT OpenEnded prompt category. Core keys
+ * OpenEnded prompts off SUPPORTED_OPEN_ENDED_LIGHTNING_TYPES (text, multilineText, number, boolean, url,
+ * date); the extra CLI lightning types collapse to the closest category (integer -> number, richText ->
+ * text, dateTime variants -> date, object/list -> text).
+ */
+function resolveOpenEndedCategory(spec: Pick<ScorerSpec, 'dataType' | 'lightningType'>): OpenEndedCategory {
+  if (spec.dataType === 'Number') {
+    return 'number';
+  }
+  if (spec.dataType === 'Text') {
+    return 'text';
+  }
+  switch (spec.lightningType) {
+    case 'lightning__booleanType':
+      return 'boolean';
+    case 'lightning__urlType':
+      return 'url';
+    case 'lightning__dateType':
+    case 'lightning__dateTimeType':
+    case 'lightning__dateTimeStringType':
+      return 'date';
+    case 'lightning__numberType':
+    case 'lightning__integerType':
+      return 'number';
+    default:
+      return 'text';
+  }
+}
+
+export function buildDefaultPromptContent(
+  spec: Pick<ScorerSpec, 'scorerType' | 'semanticType' | 'dataType' | 'lightningType' | 'outputEnumValues'>
+): string {
   if (spec.scorerType === 'OpenEnded') {
-    return [
-      'Analyze the following agent-user conversation and provide your evaluation.',
-      '',
-      'Your response must conform to the expected data type.',
-      '',
-      'session audit data:',
-      '{!$Input:Session}',
-    ].join('\n');
+    // Labeled variants are used when the scorer defines predefined values (constrained-plus-open).
+    const usePredefinedLabels = (spec.outputEnumValues?.length ?? 0) > 0;
+    switch (resolveOpenEndedCategory(spec)) {
+      case 'boolean':
+        return OPEN_BOOLEAN_PROMPT;
+      case 'url':
+        return OPEN_URL_PROMPT;
+      case 'date':
+        return OPEN_DATE_PROMPT;
+      case 'number':
+        return usePredefinedLabels ? OPEN_NUMBER_LABELED_PROMPT : OPEN_NUMBER_PROMPT;
+      case 'text':
+      default:
+        return usePredefinedLabels ? OPEN_TEXT_LABELED_PROMPT : OPEN_TEXT_PROMPT;
+    }
   }
 
+  // Legacy Predefined scorers (Text/Number specs on disk); new scorers are always OpenEnded.
   if (spec.semanticType === 'Measurement') {
     return [
       'Analyze the following agent-user conversation and evaluate it based on your scoring criteria.',
