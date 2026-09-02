@@ -281,21 +281,96 @@ describe('validateScorerSpec', () => {
 });
 
 describe('buildDefaultPromptContent', () => {
-  it('returns open-ended prompt when scorerType is OpenEnded', () => {
-    const content = buildDefaultPromptContent({ scorerType: 'OpenEnded' });
+  it('returns the open-ended text prompt for a plain text scorer', () => {
+    const content = buildDefaultPromptContent({ scorerType: 'OpenEnded', dataType: 'Text' });
     expect(content).to.include('{!$Input:Session}');
-    expect(content).to.include('provide your evaluation');
+    expect(content).to.include('Tagging Instructions:');
+    expect(content).to.include('"value": "<applicable tag>"');
     expect(content).to.not.include('{!$Input:AllowedLabels}');
   });
 
-  it('returns measurement prompt when semanticType is Measurement', () => {
-    const content = buildDefaultPromptContent({ scorerType: 'Predefined', semanticType: 'Measurement' });
+  it('returns the labeled text prompt when a text scorer has predefined values', () => {
+    const content = buildDefaultPromptContent({
+      scorerType: 'OpenEnded',
+      dataType: 'Text',
+      outputEnumValues: [{ value: 'Strong', outcomeType: 'Pass' }],
+    });
+    expect(content).to.include('{!$Input:AllowedLabels}');
+    expect(content).to.include('{!$Input:FallbackLabel}');
+    expect(content).to.include('"label": "<applicable label from the Allowed Labels list>"');
+  });
+
+  it('returns the open-ended number prompt for a plain number scorer', () => {
+    const content = buildDefaultPromptContent({ scorerType: 'OpenEnded', dataType: 'Number' });
+    expect(content).to.include('"value": "<a single numerical value>"');
+    expect(content).to.not.include('{!$Input:AllowedLabels}');
+  });
+
+  it('returns the labeled number prompt when a number scorer has predefined values', () => {
+    const content = buildDefaultPromptContent({
+      scorerType: 'OpenEnded',
+      dataType: 'Number',
+      outputEnumValues: [{ value: '1', outcomeType: 'NotApplicable' }],
+    });
+    expect(content).to.include('Rating Scale Parameters:');
+    expect(content).to.include('Allowed Rating Values: {!$Input:AllowedLabels}.');
+    expect(content).to.include('"label": "<a single value from the allowed ratings>"');
+  });
+
+  it('routes boolean lightning types to the boolean prompt', () => {
+    const content = buildDefaultPromptContent({
+      scorerType: 'OpenEnded',
+      dataType: 'LightningType',
+      lightningType: 'lightning__booleanType',
+    });
+    expect(content).to.include('"true", "false".');
+    expect(content).to.include('"label": "<either true or false>"');
+  });
+
+  it('routes url lightning types to the url prompt', () => {
+    const content = buildDefaultPromptContent({
+      scorerType: 'OpenEnded',
+      dataType: 'LightningType',
+      lightningType: 'lightning__urlType',
+    });
+    expect(content).to.include('"value": "<a valid URL>"');
+  });
+
+  it('routes date lightning types to the date prompt', () => {
+    const content = buildDefaultPromptContent({
+      scorerType: 'OpenEnded',
+      dataType: 'LightningType',
+      lightningType: 'lightning__dateType',
+    });
+    expect(content).to.include('Return the relevant date under "value" in "yyyy-mm-dd" format.');
+    expect(content).to.include('"value": "<a date in yyyy-mm-dd format>"');
+  });
+
+  it('routes numeric lightning types to the number prompt', () => {
+    const content = buildDefaultPromptContent({
+      scorerType: 'OpenEnded',
+      dataType: 'LightningType',
+      lightningType: 'lightning__integerType',
+    });
+    expect(content).to.include('"value": "<a single numerical value>"');
+  });
+
+  it('returns the legacy measurement prompt for predefined measurement scorers', () => {
+    const content = buildDefaultPromptContent({
+      scorerType: 'Predefined',
+      dataType: 'Number',
+      semanticType: 'Measurement',
+    });
     expect(content).to.include('{!$Input:AllowedRange}');
     expect(content).to.include('ONLY a number');
   });
 
-  it('returns multilabel prompt by default', () => {
-    const content = buildDefaultPromptContent({ scorerType: 'Predefined', semanticType: 'Dimension' });
+  it('returns the legacy multilabel prompt for predefined dimension scorers', () => {
+    const content = buildDefaultPromptContent({
+      scorerType: 'Predefined',
+      dataType: 'Text',
+      semanticType: 'Dimension',
+    });
     expect(content).to.include('{!$Input:AllowedLabels}');
     expect(content).to.include('{!$Input:FallbackLabel}');
   });
