@@ -18,7 +18,7 @@ import { join } from 'node:path';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { expect } from 'chai';
 import { genUniqueString, TestSession } from '@salesforce/cli-plugins-testkit';
-import { Connection, Org, SfProject, User, UserFields } from '@salesforce/core';
+import { AuthInfo, Connection, generateApiName, Org, SfProject, User } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { sleep } from '@salesforce/kit';
 import { Agent, ScriptAgent, type AgentJobSpec, type AgentJobSpecCreateConfig } from '../../src';
@@ -26,13 +26,13 @@ import { Agent, ScriptAgent, type AgentJobSpec, type AgentJobSpecCreateConfig } 
 /* eslint-disable no-console */
 // Helper function to wait for Einstein AI services to be ready
 async function waitForEinsteinReady(connection: Connection, maxAttempts = 30): Promise<void> {
-  // eslint-disable-next-line no-await-in-loop
+   
   for (let i = 0; i < maxAttempts; i++) {
     try {
       // Check Agent API status using direct HTTP call
       // eslint-disable-next-line no-await-in-loop
       const statusResponse = await connection.request<{ status: 'UP' | 'DOWN' }>({
-        // eslint-disable-line no-await-in-loop
+         
         method: 'GET',
         url: 'https://api.salesforce.com/einstein/ai-agent/v1/status',
         headers: {
@@ -43,7 +43,7 @@ async function waitForEinsteinReady(connection: Connection, maxAttempts = 30): P
       if (statusResponse.status === 'UP') {
         return;
       }
-    } catch (error) {
+    } catch {
       // do nothing
     }
     // Wait 10 seconds between checks
@@ -51,6 +51,39 @@ async function waitForEinsteinReady(connection: Connection, maxAttempts = 30): P
   }
   const timeoutSeconds = maxAttempts * 10;
   throw new Error(`Einstein AI did not become ready within ${timeoutSeconds} seconds timeout`);
+}
+
+// Poll until the given permission set is visibly assigned to the user, so the license/permset is
+// committed and queryable before it's referenced downstream. This avoids relying on a freshly-created
+// user's entitlements being visible within the same request that consumes them.
+async function waitForPermSetAssignment(
+  connection: Connection,
+  userId: string,
+  permSetName: string,
+  maxAttempts = 12
+): Promise<void> {
+   
+  for (let i = 0; i < maxAttempts; i++) {
+    // eslint-disable-next-line no-await-in-loop
+    const result = await connection.query<{ Id: string }>(
+      `SELECT Id FROM PermissionSetAssignment WHERE AssigneeId='${userId}' AND PermissionSet.Name='${permSetName}'`
+    );
+    if (result.records.length > 0) {
+      // Give the license/permset assignment a brief settle window so it is fully committed before use.
+      await sleep(30_000); // eslint-disable-line no-await-in-loop
+      return;
+    }
+    await sleep(10_000); // eslint-disable-line no-await-in-loop
+  }
+  throw new Error(`Permission set ${permSetName} was not assigned to user ${userId} within timeout`);
+}
+
+// Format a UTC timestamp as MM/DD/YYYY:HH:mm:ss for CI log correlation (Splunk-friendly).
+function fmtUtc(d: Date): string {
+  const p = (n: number): string => String(n).padStart(2, '0');
+  return `${p(d.getUTCMonth() + 1)}/${p(d.getUTCDate())}/${d.getUTCFullYear()}:${p(d.getUTCHours())}:${p(
+    d.getUTCMinutes()
+  )}:${p(d.getUTCSeconds())}`;
 }
 
 describe('agent NUTs', () => {
@@ -61,6 +94,19 @@ describe('agent NUTs', () => {
   let project: SfProject;
   let agentSpec: AgentJobSpec;
   let defaultAgentUsername: string;
+  // Captured once at setup so any failure can be correlated back to the scratch org + pod in CI.
+  // Only non-sensitive identifiers are logged here (orgId, instance/pod) — never auth tokens or the devhub.
+  let orgId: string | undefined;
+  let instanceName: string | undefined;
+
+  // Emits a single structured line for CI log correlation.
+  const logNutFailure = (testName: string, error: string): void => {
+    console.log(
+      `[NUT-FAILURE] utc=${fmtUtc(new Date())} orgId=${orgId ?? 'unknown'} pod=${
+        instanceName ?? 'unknown'
+      } test="${testName}" error=${error}`
+    );
+  };
 
   before(async () => {
     session = await TestSession.create({
@@ -80,6 +126,14 @@ describe('agent NUTs', () => {
     connection = defaultOrg.getConnection();
     project = await SfProject.resolve(session.project.dir);
 
+    // Capture non-sensitive org identifiers for CI failure correlation (orgId + pod + UTC timestamp).
+    orgId = defaultOrg.getOrgId();
+    const orgInfo = await connection.singleRecordQuery<{ InstanceName: string }>(
+      'SELECT InstanceName FROM Organization'
+    );
+    instanceName = orgInfo.InstanceName;
+    console.log(`[NUT-CONTEXT] utc=${fmtUtc(new Date())} orgId=${orgId} pod=${instanceName}`);
+
     // assign the EinsteinGPTPromptTemplateManager to the scratch org admin user
     const queryResult = await connection.singleRecordQuery<{ Id: string }>(
       `SELECT Id FROM User WHERE Username='${username}'`
@@ -93,6 +147,14 @@ describe('agent NUTs', () => {
 
   after(async () => {
     await session?.clean();
+  });
+
+  // On any failing test, emit orgId + pod + UTC timestamp + error so CI logs can be correlated in Splunk.
+  afterEach(function (this: Mocha.Context) {
+    if (this.currentTest?.state === 'failed') {
+      const err = this.currentTest.err;
+      logNutFailure(this.currentTest.fullTitle(), err?.message ?? String(err));
+    }
   });
 
   describe('List and Get Bot Metadata', () => {
@@ -121,7 +183,7 @@ describe('agent NUTs', () => {
         languageLocaleKey: 'en_US',
         localeSidKey: 'en_US',
         profileId,
-      } as UserFields)) as { userId: string };
+      })) as { userId: string };
 
       await botUser.assignPermissionSets(userId, ['AgentforceServiceAgentUser']);
 
@@ -489,6 +551,46 @@ describe('agent NUTs', () => {
   });
 
   describe('agent create', () => {
+    // Pre-provisioned Bot User Id passed to Agent.create via agentSettings.userId (see before() below).
+    let botUserId: string;
+
+    before(async () => {
+      // Pre-provision a Bot User up front and hand its Id to Agent.create via agentSettings.userId.
+      // The 'customer' agentType maps to core's EinsteinServiceAgent, which requires a Bot User holding
+      // the Digital Agent license + AgentforceServiceAgentUser runtime permset. When no userId is
+      // supplied, core auto-creates that user in the SAME transaction as the BotDefinition save, and the
+      // pre-save validation trigger intermittently cannot see the just-created license/permset
+      // assignment, failing with "User doesn't have access to agent." Creating and fully provisioning the
+      // user here — and letting it settle before Agent.create runs — makes core reuse an already-committed
+      // user instead of racing on a freshly-created one. This describe provisions its own bot user so it
+      // does not depend on the ordering of the 'List and Get Bot Metadata' describe.
+      const { Id: profileId } = await connection.singleRecordQuery<{ Id: string }>(
+        "SELECT Id FROM Profile WHERE Name='Einstein Agent User'"
+      );
+
+      const botUsername = genUniqueString('botUser_%s@test.org');
+      const botUser = await User.create({ org: defaultOrg });
+      // @ts-expect-error - private method. Must use this to prevent the auth flow that happens with the createUser method
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      const { userId } = (await botUser.createUserInternal({
+        username: botUsername,
+        lastName: 'AgentUser',
+        alias: 'agtCrt',
+        timeZoneSidKey: 'America/Denver',
+        email: botUsername,
+        emailEncodingKey: 'UTF-8',
+        languageLocaleKey: 'en_US',
+        localeSidKey: 'en_US',
+        profileId,
+      })) as { userId: string };
+      botUserId = userId;
+
+      await botUser.assignPermissionSets(userId, ['AgentforceServiceAgentUser']);
+
+      // Wait for the license/permset assignment to be committed and visible before Agent.create runs.
+      await waitForPermSetAssignment(connection, userId, 'AgentforceServiceAgentUser');
+    });
+
     it('should create an agent spec', async () => {
       const agentConfig: AgentJobSpecCreateConfig = {
         agentType: 'customer',
@@ -531,6 +633,8 @@ describe('agent NUTs', () => {
         saveAgent: true,
         agentSettings: {
           agentName,
+          // Reuse an already-provisioned Bot User so core does not auto-create (and race-validate) one.
+          userId: botUserId,
         },
         generationInfo: {
           defaultInfo: {
@@ -547,6 +651,9 @@ describe('agent NUTs', () => {
       expect(agentResponse).to.be.ok;
       if (!agentResponse.isSuccess) {
         console.dir(agentResponse, { depth: 10 });
+        // The assertion below throws a generic "expected false to equal true"; capture the actual
+        // server error here so CI logs carry orgId + pod + UTC timestamp + the returned message.
+        logNutFailure('agent NUTs > agent create > should create an agent from a spec', agentResponse.errorMessage ?? 'unknown');
       }
       expect(agentResponse.isSuccess).to.equal(true);
       expect(agentResponse.agentDefinition).to.be.ok;
@@ -555,9 +662,90 @@ describe('agent NUTs', () => {
 
       // verify agent metadata files are retrieved to the project
       const sourceDir = join(session.project.dir, 'force-app', 'main', 'default');
-      expect(readdirSync(join(sourceDir, 'bots'))).to.have.lengthOf(2);
-      expect(readdirSync(join(sourceDir, 'genAiPlannerBundles'))).to.have.lengthOf(2);
-      expect(readdirSync(join(sourceDir, 'genAiPlugins'))).to.have.lengthOf(6);
+      if (Number.parseInt(connection.getApiVersion(), 10) >= 68) {
+        // orgs at API 68+ retrieve the new AiAgentDefinition / AiAgentDefinitionVersion layout
+        const apiName = generateApiName(agentName);
+        // AiAgentDefinition lands under aiAgents/ (standard adapter)
+        expect(readdirSync(join(sourceDir, 'aiAgents')), 'aiAgents/ should contain the retrieved agent').to.not.be
+          .empty;
+        // AiAgentDefinitionVersion lands under aiAgentDefinitionVersions/ as a versioned (#N) bundle
+        const versionDirs = readdirSync(join(sourceDir, 'aiAgentDefinitionVersions'));
+        expect(versionDirs.some((dir) => dir.startsWith(`${apiName}#`)), 'a <apiName>#<n> version bundle should exist')
+          .to.be.true;
+      } else {
+        // older orgs retrieve the legacy Bot / GenAiPlanner / GenAiPlugin layout
+        expect(readdirSync(join(sourceDir, 'bots'))).to.have.lengthOf(2);
+        expect(readdirSync(join(sourceDir, 'genAiPlannerBundles'))).to.have.lengthOf(2);
+        expect(readdirSync(join(sourceDir, 'genAiPlugins'))).to.have.lengthOf(6);
+      }
+    });
+
+    it('should retrieve the legacy Bot / GenAiPlanner layout when the org API version is below 68', async () => {
+      // The new AiAgentDefinition / AiAgentDefinitionVersion types only exist at API 68+, so
+      // Agent.create falls back to the legacy Bot / GenAiPlanner retrieval below that. Pin the
+      // API version so this branch is exercised deterministically, independent of the scratch
+      // org's actual (68+) API version.
+      //
+      // 67.0 threads two gates: it is >= the SDR `Agent:` pseudo-type gate (>63, needed for the
+      // legacy manifest to resolve) and < the new-type threshold (68). SF_ORG_API_VERSION is the
+      // lever because supportsAiAgentDefinition() checks the standard connection that
+      // ConnectionManager builds internally from the username — not the connection passed in — so
+      // connection.setApiVersion() would not reach it.
+      const priorApiVersion = process.env.SF_ORG_API_VERSION;
+      process.env.SF_ORG_API_VERSION = '67.0';
+      try {
+        const username = session.orgs.get('default')!.username as string;
+        // A distinct Connection object forces a fresh ConnectionManager whose standard connection
+        // is built while the env override is in effect. The earlier test cached a manager against
+        // the shared `connection` at the org's default API version.
+        const legacyConnection = await Connection.create({ authInfo: await AuthInfo.create({ username }) });
+        // Guard: fail loudly if the override didn't take effect (otherwise we'd silently test the
+        // wrong branch).
+        expect(Number.parseInt(legacyConnection.getApiVersion(), 10)).to.be.lessThan(68);
+
+        const legacyAgentName = `${agentName} Legacy`;
+        const agentResponse = await Agent.create(legacyConnection, project, {
+          agentType: agentSpec.agentType,
+          saveAgent: true,
+          agentSettings: {
+            agentName: legacyAgentName,
+          },
+          generationInfo: {
+            defaultInfo: {
+              role: agentSpec.role,
+              companyName: agentSpec.companyName,
+              companyDescription: agentSpec.companyDescription,
+              preDefinedTopics: agentSpec.topics,
+            },
+          },
+          generationSettings: {
+            maxNumOfTopics: agentSpec.maxNumOfTopics,
+          },
+        });
+        expect(agentResponse.isSuccess, JSON.stringify(agentResponse)).to.equal(true);
+
+        // The agent should land as legacy Bot + GenAiPlanner metadata, NOT the new
+        // aiAgents/ + aiAgentDefinitionVersions/ layout.
+        const sourceDir = join(session.project.dir, 'force-app', 'main', 'default');
+        const apiName = generateApiName(legacyAgentName);
+        expect(existsSync(join(sourceDir, 'bots', apiName)), `bots/${apiName} should exist`).to.be.true;
+        expect(existsSync(join(sourceDir, 'genAiPlannerBundles')), 'genAiPlannerBundles/ should exist').to.be.true;
+
+        // and it must NOT be retrieved as an AiAgentDefinitionVersion (#N) bundle.
+        const versionsDir = join(sourceDir, 'aiAgentDefinitionVersions');
+        if (existsSync(versionsDir)) {
+          expect(
+            readdirSync(versionsDir).some((dir) => dir.startsWith(`${apiName}#`)),
+            `aiAgentDefinitionVersions/ should not contain a ${apiName}#<n> bundle`
+          ).to.be.false;
+        }
+      } finally {
+        if (priorApiVersion === undefined) {
+          delete process.env.SF_ORG_API_VERSION;
+        } else {
+          process.env.SF_ORG_API_VERSION = priorApiVersion;
+        }
+      }
     });
   });
 });

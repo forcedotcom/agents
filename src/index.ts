@@ -74,11 +74,16 @@ export {
   type NgtTestCaseScorer,
   type NgtContextVar,
   type NgtConversationTurn,
+  type NgtPromptTestCase,
+  type NgtPromptInputSet,
+  type NgtPromptTestCaseInput,
   type AiTestingDefinition,
   type AiTestCase,
   type AiTestCaseInputXml,
   type AiTestCaseScorer,
   type AiConversationTurnXml,
+  type AiPromptTestCase,
+  type AiTestCasePromptInputXml,
 
   // Agentforce Studio Testing Types
   type AgentforceStudioTestStartResponse,

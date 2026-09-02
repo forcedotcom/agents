@@ -384,7 +384,7 @@ describe('useNamedUserJwt', () => {
     });
 
     // Return null/undefined response
-    $$.SANDBOX.stub(connection, 'request').resolves(null as never);
+    $$.SANDBOX.stub(connection, 'request').resolves(null);
 
     try {
       await useNamedUserJwt(connection);
@@ -411,7 +411,7 @@ describe('useNamedUserJwt', () => {
       // eslint-disable-next-line camelcase
       token_type: 'Bearer',
       scope: 'full',
-    } as never);
+    });
 
     try {
       await useNamedUserJwt(connection);
@@ -438,7 +438,7 @@ describe('useNamedUserJwt', () => {
       access_token: '   ',
       // eslint-disable-next-line camelcase
       token_type: 'Bearer',
-    } as never);
+    });
 
     try {
       await useNamedUserJwt(connection);
@@ -465,7 +465,7 @@ describe('useNamedUserJwt', () => {
       access_token: 12_345,
       // eslint-disable-next-line camelcase
       token_type: 'Bearer',
-    } as never);
+    });
 
     try {
       await useNamedUserJwt(connection);
@@ -493,7 +493,7 @@ describe('useNamedUserJwt', () => {
       access_token: 'invalid.token',
       // eslint-disable-next-line camelcase
       token_type: 'Bearer',
-    } as never);
+    });
 
     try {
       await useNamedUserJwt(connection);
@@ -523,7 +523,7 @@ describe('useNamedUserJwt', () => {
       access_token: 'part1.part2.part3.part4',
       // eslint-disable-next-line camelcase
       token_type: 'Bearer',
-    } as never);
+    });
 
     try {
       await useNamedUserJwt(connection);

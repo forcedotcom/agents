@@ -1,3 +1,185 @@
+# [2.2.0](https://github.com/forcedotcom/agents/compare/2.1.1...2.2.0) (2026-09-01)
+
+
+### Features
+
+* add PROMPT subject support for NGT (Agentforce Studio) test creation @W-23524165@ ([#353](https://github.com/forcedotcom/agents/issues/353)) ([ceb8857](https://github.com/forcedotcom/agents/commit/ceb8857a193d942cee7dcdb229e834c922cab85f))
+
+
+
+## [2.1.1](https://github.com/forcedotcom/agents/compare/2.1.0...2.1.1) (2026-08-28)
+
+
+### Bug Fixes
+
+* surface swallowed failures on data-library indexing and publish botId lookup (OBS follow-up) @W-24016300 ([#352](https://github.com/forcedotcom/agents/issues/352)) ([62fd019](https://github.com/forcedotcom/agents/commit/62fd019e3021363150c1e62bb37fde7a2235b233))
+
+
+
+# [2.1.0](https://github.com/forcedotcom/agents/compare/2.0.6...2.1.0) (2026-08-27)
+
+
+### Features
+
+* Support new simplified metadata type for 264 orgs (@W-23897701) ([#341](https://github.com/forcedotcom/agents/issues/341)) ([ad698c7](https://github.com/forcedotcom/agents/commit/ad698c763f0fc689210e27aedaa29bf72dc3a684))
+
+
+
+## [2.0.6](https://github.com/forcedotcom/agents/compare/2.0.5...2.0.6) (2026-08-24)
+
+
+### Bug Fixes
+
+* guard against nodes without a tools array when publishing authoring bundles ([#350](https://github.com/forcedotcom/agents/issues/350)) ([eca1c20](https://github.com/forcedotcom/agents/commit/eca1c20f30798a4e588f9fb42c8d93e38a53850d))
+
+
+
+## [2.0.5](https://github.com/forcedotcom/agents/compare/2.0.4...2.0.5) (2026-08-19)
+
+
+### Bug Fixes
+
+* resolve failing agent NUTs (getAllTraces "history never created" + create-user) @W-23915028@ ([#345](https://github.com/forcedotcom/agents/issues/345)) ([6766dcf](https://github.com/forcedotcom/agents/commit/6766dcf49aed362bb2bfc3d8fb47db824676749d))
+
+
+
+## [2.0.4](https://github.com/forcedotcom/agents/compare/2.0.3...2.0.4) (2026-08-18)
+
+
+### Bug Fixes
+
+* record reasoning traces for --api-name previews via v1.1 plans endpoint @W-23896220@ ([#340](https://github.com/forcedotcom/agents/issues/340)) ([0f1babb](https://github.com/forcedotcom/agents/commit/0f1babb5166e16e55f32cf90fd049af35b35fcda))
+
+
+
+## [2.0.3](https://github.com/forcedotcom/agents/compare/2.0.2...2.0.3) (2026-08-18)
+
+
+### Bug Fixes
+
+* send x-attributed-client no-builder header on --api-name preview start (@W-23896240@) ([#338](https://github.com/forcedotcom/agents/issues/338)) ([3701ca9](https://github.com/forcedotcom/agents/commit/3701ca9b185aff4f534e527130379d338e6ba1c5))
+* throw when groundingContext is passed without promptTemplateName in createSpec (@W-23896239@) ([#339](https://github.com/forcedotcom/agents/issues/339)) ([bcea0e6](https://github.com/forcedotcom/agents/commit/bcea0e61e93c9d01895e16d43f3664d9316bce2d))
+
+
+
+## [2.0.2](https://github.com/forcedotcom/agents/compare/2.0.1...2.0.2) (2026-08-14)
+
+
+### Bug Fixes
+
+* send context variables when previewing a published agent via --api-name @W-23842329@ ([#335](https://github.com/forcedotcom/agents/issues/335)) ([964367b](https://github.com/forcedotcom/agents/commit/964367b6f6ec22d87e39c077bcb26a4604cb8cfa))
+
+
+
+## [2.0.1](https://github.com/forcedotcom/agents/compare/2.0.0...2.0.1) (2026-08-10)
+
+
+### Bug Fixes
+
+* send bypassUser:false for employee agents on --api-name preview @W-23734892@ ([#329](https://github.com/forcedotcom/agents/issues/329)) ([f0beace](https://github.com/forcedotcom/agents/commit/f0beace7437fdad0ad5c7244764098e1ce5b1f4d))
+
+
+
+# [2.0.0](https://github.com/forcedotcom/agents/compare/1.11.7...2.0.0) (2026-07-29)
+
+
+* feat!: require Node >=22, drop EOL Node versions @W-23480655@ (#326) ([53c862f](https://github.com/forcedotcom/agents/commit/53c862f5686455e64430294372a1f8a6ba503de0)), closes [#326](https://github.com/forcedotcom/agents/issues/326)
+
+
+### BREAKING CHANGES
+
+* engines.node raised to >=22.0.0, dropping support for Node 18 and 20
+
+- engines.node bumped to >=22.0.0
+- @salesforce/core bumped to ^9.0.0
+- @salesforce/kit bumped to ^4.0.0
+- @salesforce/source-deploy-retrieve bumped to ^13.0.0
+
+
+
+## [1.11.7](https://github.com/forcedotcom/agents/compare/1.11.6...1.11.7) (2026-07-28)
+
+
+### Bug Fixes
+
+* **deps:** bump websocket-driver from 0.7.4 to 0.7.5 ([#320](https://github.com/forcedotcom/agents/issues/320)) ([2b447ce](https://github.com/forcedotcom/agents/commit/2b447ce0b6c21ca72e38c042529c9794e581f3f2))
+
+
+
+## [1.11.6](https://github.com/forcedotcom/agents/compare/1.11.5...1.11.6) (2026-07-28)
+
+
+### Bug Fixes
+
+* **deps:** bump @salesforce/core from 8.31.1 to 8.32.6 ([#305](https://github.com/forcedotcom/agents/issues/305)) ([9e089f8](https://github.com/forcedotcom/agents/commit/9e089f87f9fa61c4ea2900b436b815eabe847a00))
+
+
+
+## [1.11.5](https://github.com/forcedotcom/agents/compare/1.11.4...1.11.5) (2026-07-28)
+
+
+### Bug Fixes
+
+* **deps:** bump markdown-it from 14.1.1 to 14.3.0 ([#307](https://github.com/forcedotcom/agents/issues/307)) ([ef14898](https://github.com/forcedotcom/agents/commit/ef148987052a30004aba1f8a88ba17ab9705532f))
+
+
+
+## [1.11.4](https://github.com/forcedotcom/agents/compare/1.11.3...1.11.4) (2026-07-28)
+
+
+### Bug Fixes
+
+* **deps:** bump form-data from 4.0.5 to 4.0.6 ([#308](https://github.com/forcedotcom/agents/issues/308)) ([af8ec74](https://github.com/forcedotcom/agents/commit/af8ec74e8d49319be8e01aca33a126ccf419c299))
+
+
+
+## [1.11.3](https://github.com/forcedotcom/agents/compare/1.11.2...1.11.3) (2026-07-28)
+
+
+### Bug Fixes
+
+* **deps:** bump @salesforce/types from 1.7.3 to 1.8.0 ([#304](https://github.com/forcedotcom/agents/issues/304)) ([482ef34](https://github.com/forcedotcom/agents/commit/482ef34c275b6696251dae4afc72ff0488a0588c))
+
+
+
+## [1.11.2](https://github.com/forcedotcom/agents/compare/1.11.1...1.11.2) (2026-07-28)
+
+
+### Bug Fixes
+
+* **deps:** bump @babel/core from 7.29.0 to 7.29.7 ([#311](https://github.com/forcedotcom/agents/issues/311)) ([92b2472](https://github.com/forcedotcom/agents/commit/92b2472dde70b9def7845ea90a35bf726b5c66e1))
+* **deps:** bump fast-uri from 3.1.2 to 3.1.4 ([#323](https://github.com/forcedotcom/agents/issues/323)) ([8092653](https://github.com/forcedotcom/agents/commit/8092653154f353c2ecef80b8321777822873466e))
+* **deps:** bump linkify-it from 5.0.0 to 5.0.2 ([#321](https://github.com/forcedotcom/agents/issues/321)) ([a936cda](https://github.com/forcedotcom/agents/commit/a936cdabf10cfb456c4bda579469d8f444f76089))
+
+
+
+## [1.11.1](https://github.com/forcedotcom/agents/compare/1.11.0...1.11.1) (2026-07-28)
+
+
+### Bug Fixes
+
+* make nock a devDependency to prevent proxy startup crash @W-23607779 ([#324](https://github.com/forcedotcom/agents/issues/324)) ([2ca65c7](https://github.com/forcedotcom/agents/commit/2ca65c7f58be872ac4741e4867e189a18f58d96a))
+
+
+
+# [1.11.0](https://github.com/forcedotcom/agents/compare/1.10.3...1.11.0) (2026-07-27)
+
+
+### Features
+
+* add securityWarning to McpFetchedAsset ([#322](https://github.com/forcedotcom/agents/issues/322)) ([c2e58ba](https://github.com/forcedotcom/agents/commit/c2e58bae995fd5fecb095315711dbdef97bfb04b))
+
+
+
+## [1.10.3](https://github.com/forcedotcom/agents/compare/1.10.2...1.10.3) (2026-07-13)
+
+
+### Bug Fixes
+
+* send explicit empty body on POST fetchMcpServer @W-23371674@ ([#318](https://github.com/forcedotcom/agents/issues/318)) ([9206d59](https://github.com/forcedotcom/agents/commit/9206d59479829699993aeb6d66ac7c2980aad864))
+
+
+
 ## [1.10.2](https://github.com/forcedotcom/agents/compare/1.10.1...1.10.2) (2026-07-01)
 
 

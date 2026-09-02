@@ -19,6 +19,7 @@ import {
   type AgentPreviewEndResponse,
   AgentPreviewInterface,
   type AgentPreviewSendResponse,
+  type AgentPreviewStartOptions,
   type AgentPreviewStartResponse,
   type BotActivationResponse,
   type BotMetadata,
@@ -60,7 +61,16 @@ export class ProductionAgent extends AgentBase {
     }
 
     this.preview = {
-      start: (apexDebugging?: boolean): Promise<AgentPreviewStartResponse> => this.startPreview(apexDebugging),
+      start: (
+        apexDebuggingOrOptions?: boolean | AgentPreviewStartOptions,
+        startOptions?: AgentPreviewStartOptions
+      ): Promise<AgentPreviewStartResponse> => {
+        // The CLI passes an AgentPreviewStartOptions object as the first arg; a boolean means apexDebugging.
+        if (typeof apexDebuggingOrOptions === 'object' && apexDebuggingOrOptions !== null) {
+          return this.startPreview(undefined, apexDebuggingOrOptions);
+        }
+        return this.startPreview(apexDebuggingOrOptions, startOptions);
+      },
       send: (message: string): Promise<AgentPreviewSendResponse> => this.sendMessage(message),
       getAllTraces: (): Promise<PlannerResponse[]> => this.getAllTracesFromDisc(),
       end: (reason: EndReason): Promise<AgentPreviewEndResponse> => this.endSession(reason),
@@ -100,9 +110,7 @@ export class ProductionAgent extends AgentBase {
    * @returns the latest bot version metadata
    */
   public async getLatestBotVersionMetadata(): Promise<BotVersionMetadata> {
-    if (!this.botMetadata) {
-      this.botMetadata = await this.getBotMetadata();
-    }
+    this.botMetadata ??= await this.getBotMetadata();
     const botVersions = this.botMetadata.BotVersions.records;
     if (botVersions.length === 0) {
       throw messages.createError('noVersionsFound', [this.botMetadata.DeveloperName]);
@@ -118,9 +126,7 @@ export class ProductionAgent extends AgentBase {
    * @returns {Promise<BotVersionMetadata>}
    */
   public async getBotVersionMetadata(version?: number): Promise<BotVersionMetadata> {
-    if (!this.botMetadata) {
-      this.botMetadata = await this.getBotMetadata();
-    }
+    this.botMetadata ??= await this.getBotMetadata();
     const botVersions = this.botMetadata.BotVersions.records;
 
     if (botVersions.length === 0) {
@@ -141,9 +147,21 @@ export class ProductionAgent extends AgentBase {
     return foundVersion;
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await,class-methods-use-this,@typescript-eslint/no-unused-vars
   public async getTrace(planId: string): Promise<PlannerResponse | undefined> {
-    return undefined;
+    if (!this.sessionId) {
+      return undefined;
+    }
+    // The committed (v1) Agent API has no plan/trace endpoint of its own, but the v1.1 preview plans
+    // endpoint accepts a v1 committed session's sessionId and returns its reasoning trace. This mirrors
+    // ScriptAgent.getTrace; the only difference is stripping the trailing `/v1` from this agent's apiBase.
+    const previewBase = this.apiBase.replace(/\/v1$/, '');
+    return requestWithEndpointFallback<PlannerResponse>(await this.getJwtConnection(), {
+      method: 'GET',
+      url: `${previewBase}/v1.1/preview/sessions/${this.sessionId}/plans/${planId}`,
+      headers: {
+        'x-client-name': 'afdx',
+      },
+    });
   }
 
   public getHistoryFromDisc(sessionId?: string): Promise<{
@@ -253,9 +271,7 @@ export class ProductionAgent extends AgentBase {
       const agentId = this.getAgentIdForStorage();
 
       // Ensure session directory exists
-      if (!this.historyDir) {
-        this.historyDir = await getHistoryDir(agentId, this.sessionId);
-      }
+      this.historyDir ??= await getHistoryDir(agentId, this.sessionId);
 
       const userEntry = {
         timestamp: new Date().toISOString(),
@@ -289,9 +305,11 @@ export class ProductionAgent extends AgentBase {
       const agentTurn = ++this.turnCounter;
       await logTurnToHistory(agentEntry, agentTurn, this.historyDir, this.historyBuffer);
 
-      // Fetch and write trace immediately if available
+      // Fetch and write trace immediately if available. A trace-fetch failure must not fail the
+      // message turn, so fall back to recording no trace if it can't be retrieved.
       if (planId) {
-        await recordTraceForTurn(this.historyDir, agentTurn, planId, undefined, this.historyBuffer);
+        const trace = await this.getTrace(planId).catch(() => undefined);
+        await recordTraceForTurn(this.historyDir, agentTurn, planId, trace, this.historyBuffer);
       }
 
       // Flush buffer to keep turn-index.json and metadata.json up to date
@@ -340,7 +358,10 @@ export class ProductionAgent extends AgentBase {
     return botVersionMetadata;
   }
 
-  private async startPreview(apexDebugging?: boolean): Promise<AgentPreviewStartResponse> {
+  private async startPreview(
+    apexDebugging?: boolean,
+    options?: AgentPreviewStartOptions
+  ): Promise<AgentPreviewStartResponse> {
     if (!this.id) {
       await this.getId();
     }
@@ -350,6 +371,13 @@ export class ProductionAgent extends AgentBase {
       this.apexDebugging = apexDebugging;
     }
 
+    // Employee agents (AgentforceEmployeeAgent / InternalCopilot) run as the logged-in user, so the
+    // Agent API requires a user context on session start and rejects `bypassUser: true` with a
+    // "400 Invalid user ID" error. Only bypass the user for non-employee agents. This mirrors the
+    // logic already present on the ScriptAgent (--authoring-bundle) preview path.
+    const botMetadata = await this.getBotMetadata();
+    const bypassUser = botMetadata.AgentType !== 'AgentforceEmployeeAgent';
+
     const body = {
       externalSessionKey: randomUUID(),
       instanceConfig: {
@@ -358,7 +386,11 @@ export class ProductionAgent extends AgentBase {
       streamingCapabilities: {
         chunkTypes: ['Text'],
       },
-      bypassUser: true,
+      // The committed-agent endpoint (/agents/{id}/sessions) accepts the same `variables` array as the
+      // preview endpoint used by ScriptAgent. Without this, --context-variables were silently dropped
+      // when previewing by --api-name. The wire field is `variables`, not `contextVariables`.
+      variables: options?.contextVariables ?? [],
+      bypassUser,
     };
 
     try {
@@ -367,6 +399,7 @@ export class ProductionAgent extends AgentBase {
         url,
         body: JSON.stringify(body),
         headers: {
+          'x-attributed-client': 'no-builder', // <- removes markdown from responses
           'x-client-name': 'afdx',
         },
       });

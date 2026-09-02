@@ -16,10 +16,38 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { appendFile, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
-import { Connection, Logger, SfError, SfProject } from '@salesforce/core';
+import { Connection, SfError, SfProject } from '@salesforce/core';
 import { AvailableDefinition, NamedUserJwtResponse, type PlannerResponse, PreviewMetadata } from './types';
+import { CtxLogger } from './ctxLogger';
 
 export const metric = ['completeness', 'coherence', 'conciseness', 'output_latency_milliseconds'] as const;
+
+/**
+ * The minimum org API version that supports the `AiAgentDefinition` /
+ * `AiAgentDefinitionVersion` metadata types. Orgs below this version are
+ * retrieved as the legacy `Bot` / `GenAiPlanner` / `GenAiPlugin` metadata.
+ *
+ * TODO: remove this version gate and the legacy retrieval fallback once the old
+ * metadata types are retired (v68/264) and every supported org has the feature
+ * enabled — at that point always retrieve the new types (TD-0333078).
+ */
+export const AI_AGENT_DEFINITION_MIN_API_VERSION = 68;
+
+/**
+ * Whether the org behind the given connection supports retrieving agents as the
+ * simplified `AiAgentDefinition` / `AiAgentDefinitionVersion` metadata types.
+ *
+ * Note: this keys off the connection's API version only. The server also gates
+ * the feature behind a flag; an org at/above the min API version with the flag
+ * still off would resolve the new types to nothing.
+ *
+ * @param connection the connection whose API version determines the format
+ * @returns true if the new metadata format should be used
+ */
+export const supportsAiAgentDefinition = (connection: Connection): boolean => {
+  const apiVersion = Number.parseInt(connection.getApiVersion(), 10);
+  return !Number.isNaN(apiVersion) && apiVersion >= AI_AGENT_DEFINITION_MIN_API_VERSION;
+};
 
 /**
  * Sanitize a filename by removing or replacing illegal characters.
@@ -120,7 +148,7 @@ export const findAuthoringBundle = (dirOrDirs: string | string[], botName: strin
         if (found) return found;
       }
     }
-  } catch (err) {
+  } catch {
     // Directory doesn't exist or can't be read
     return undefined;
   }
@@ -161,7 +189,7 @@ export const findLocalAgents = (dir: string): string[] => {
         results.push(...findLocalAgents(filePath));
       }
     }
-  } catch (err) {
+  } catch {
     // Directory doesn't exist or can't be read
     return [];
   }
@@ -307,7 +335,7 @@ const resolveProjectLocalSfdx = async (): Promise<string | undefined> => {
   try {
     const project = await SfProject.resolve();
     return path.join(project.getPath(), '.sfdx');
-  } catch (_e) {
+  } catch {
     return undefined;
   }
 };
@@ -720,7 +748,7 @@ export async function requestWithEndpointFallback<T>(
 ): Promise<T> {
   const endpoints = ['', 'test.', 'dev.']; // Try production, test, dev in that order
   const attemptedEndpoints: string[] = [];
-  const logger = Logger.childFromRoot('AgentApiRequest');
+  const logger = CtxLogger.child('AgentApiRequest');
 
   let lastError: unknown;
 
@@ -743,7 +771,10 @@ export async function requestWithEndpointFallback<T>(
       );
     } catch (error) {
       const statusCode = getHttpStatusCode(error);
-      logger.debug(`Request failed for url ${modifiedUrl} with status code ${statusCode ?? 'unknown'}`);
+      logger.debug('Agent API request failed for endpoint', {
+        url: modifiedUrl,
+        statusCode: statusCode ?? 'unknown',
+      });
       if (statusCode === 404) {
         lastError = error;
         continue; // Try next endpoint
@@ -754,7 +785,7 @@ export async function requestWithEndpointFallback<T>(
   }
 
   // All endpoints failed with 404
-  logger.debug(`Attempted endpoints: ${attemptedEndpoints.join(', ')}`);
+  logger.debug('All Agent API endpoints returned 404', { attemptedEndpoints });
   throw SfError.create({
     name: 'AgentApiNotFound',
     message: `Unable to access the Salesforce Agent APIs. Ensure the user '${
@@ -948,7 +979,7 @@ export const readTranscriptEntries = async (agentId: string, sessionId: string):
       .split('\n')
       .filter((l) => l.trim().length > 0)
       .map((l) => JSON.parse(l) as TranscriptEntry);
-  } catch (_e) {
+  } catch {
     return [];
   }
 };

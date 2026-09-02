@@ -58,21 +58,28 @@ export type NgtScorerEntry = {
   needsExpected: boolean;
   grade: NgtScorerGrade;
   requiresConversationHistory?: true;
+  /** Subject types this scorer is valid for. Used to warn when a spec uses a scorer outside this list. */
+  supportedSubjects: ReadonlyArray<'AGENT' | 'PROMPT'>;
 };
 
 /* eslint-disable camelcase */
 export const NgtScorerCatalog: Readonly<Record<KnownNgtScorerName, NgtScorerEntry>> = {
-  topic_sequence_match: { needsExpected: true, grade: 'PASS_FAIL' },
-  action_sequence_match: { needsExpected: true, grade: 'PASS_FAIL' },
-  agent_handoff_match: { needsExpected: true, grade: 'PASS_FAIL' },
-  bot_response_rating: { needsExpected: true, grade: 'LLM_PASS_FAIL' },
-  response_match: { needsExpected: true, grade: 'LLM_PASS_FAIL' },
-  coherence: { needsExpected: false, grade: 'LLM_0_100' },
-  conciseness: { needsExpected: false, grade: 'LLM_0_100' },
-  factuality: { needsExpected: false, grade: 'LLM_0_100' },
-  completeness: { needsExpected: false, grade: 'LLM_0_100' },
-  task_resolution: { needsExpected: false, grade: 'LLM_0_5', requiresConversationHistory: true },
-  output_latency_milliseconds: { needsExpected: false, grade: 'NUMERIC' },
+  topic_sequence_match: { needsExpected: true, grade: 'PASS_FAIL', supportedSubjects: ['AGENT'] },
+  action_sequence_match: { needsExpected: true, grade: 'PASS_FAIL', supportedSubjects: ['AGENT'] },
+  agent_handoff_match: { needsExpected: true, grade: 'PASS_FAIL', supportedSubjects: ['AGENT'] },
+  bot_response_rating: { needsExpected: true, grade: 'LLM_PASS_FAIL', supportedSubjects: ['AGENT'] },
+  response_match: { needsExpected: true, grade: 'LLM_PASS_FAIL', supportedSubjects: ['AGENT', 'PROMPT'] },
+  coherence: { needsExpected: false, grade: 'LLM_0_100', supportedSubjects: ['AGENT', 'PROMPT'] },
+  conciseness: { needsExpected: false, grade: 'LLM_0_100', supportedSubjects: ['AGENT', 'PROMPT'] },
+  factuality: { needsExpected: false, grade: 'LLM_0_100', supportedSubjects: ['AGENT', 'PROMPT'] },
+  completeness: { needsExpected: false, grade: 'LLM_0_100', supportedSubjects: ['AGENT', 'PROMPT'] },
+  task_resolution: {
+    needsExpected: false,
+    grade: 'LLM_0_5',
+    requiresConversationHistory: true,
+    supportedSubjects: ['AGENT'],
+  },
+  output_latency_milliseconds: { needsExpected: false, grade: 'NUMERIC', supportedSubjects: ['AGENT'] },
 } as const;
 /* eslint-enable camelcase */
 

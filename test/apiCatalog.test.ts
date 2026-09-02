@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument */
 
 import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
@@ -120,11 +120,14 @@ describe('ApiCatalog client', () => {
   });
 
   describe('fetchMcpServer', () => {
-    it('POSTs to /mcp-servers/{id}/fetch', async () => {
+    it('POSTs to /mcp-servers/{id}/fetch with an explicit body', async () => {
       mockRequest({ assets: [] });
       await ApiCatalog.fetchMcpServer(connection, '1');
       expect(requests[0].method).to.equal('POST');
       expect(requests[0].url).to.match(/\/mcp-servers\/1\/fetch$/);
+      // A body must be sent: a bodyless POST over HTTP/2 leaves the stream half-open and the
+      // request hangs until the 300s headers timeout (jsforce/undici never sees the response).
+      expect(requests[0].body).to.equal('{}');
     });
   });
 

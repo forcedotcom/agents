@@ -18,23 +18,40 @@ import * as path from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { XMLBuilder, XMLParser } from 'fast-xml-parser';
-import { Connection, Logger, Messages, SfError, SfProject } from '@salesforce/core';
+import { Connection, Lifecycle, Messages, SfError, SfProject } from '@salesforce/core';
+import { Duration, env } from '@salesforce/kit';
 import { ComponentSet, ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { MaybeMock } from '../maybe-mock';
 import { type AgentJson, type PublishAgent, type PublishAgentJsonResponse } from '../types';
-import { findAuthoringBundle } from '../utils';
+import { findAuthoringBundle, getHttpStatusCode, supportsAiAgentDefinition } from '../utils';
+import { CtxLogger } from '../ctxLogger';
 import { managerFor } from '../connectionManager';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agentPublisher');
 
-let logger: Logger;
-const getLogger = (): Logger => {
+let logger: CtxLogger;
+const getLogger = (): CtxLogger => {
   if (!logger) {
-    logger = Logger.childFromRoot('AgentPublisher');
+    logger = CtxLogger.child('AgentPublisher');
   }
   return logger;
 };
+
+// Error name thrown by Connection.singleRecordQuery() when the SOQL matched zero rows.
+// Not exported from @salesforce/core, so we match the string it sets on the SfError.
+const SINGLE_RECORD_QUERY_NO_RECORDS = 'SingleRecordQuery_NoRecords';
+
+/**
+ * The metadata retrieve/deploy steps after a publish poll the server with SDR's pollStatus(),
+ * which defaults to a 60-minute timeout when called without one. A stuck server-side operation
+ * therefore blocks silently for up to an hour with no interim output (especially under --json).
+ * Bound each poll to a shorter, env-overridable timeout so a stalled publish fails fast with a
+ * clear error instead of hanging. Normal publishes complete in well under a minute, so 10 minutes
+ * leaves generous headroom for a legitimately slow one.
+ */
+const getMetadataPollTimeout = (): Duration =>
+  Duration.minutes(env.getNumber('SF_AGENT_PUBLISH_METADATA_POLL_TIMEOUT_MINUTES', 10));
 
 /**
  * Service class responsible for publishing agents to Salesforce orgs
@@ -87,7 +104,7 @@ export class ScriptAgentPublisher {
    * @returns Promise<PublishAgent> The publish response
    */
   public async publishAgentJson(): Promise<PublishAgent> {
-    getLogger().debug('Publishing Agent');
+    getLogger().debug('Publishing agent', { developerName: this.developerName });
 
     const manager = await managerFor(this.connection);
 
@@ -109,11 +126,11 @@ export class ScriptAgentPublisher {
       // we've published the AgentJson, now we need to:
       // 1. retrieve the new Agent metadata that's in the org
       // 2. deploy the AuthoringBundle's -meta.xml file with correct target attribute
-      const botVersionName = await this.getVersionDeveloperName(response.botVersionId);
+      const botVersion = await this.getBotVersion(response.botVersionId);
       if (!this.skipRetrieve) {
-        await this.retrieveAgentMetadata(botVersionName);
+        await this.retrieveAgentMetadata(botVersion);
       }
-      await this.deployAuthoringBundle(botVersionName);
+      await this.deployAuthoringBundle(botVersion.developerName);
 
       return { ...response, developerName: this.developerName };
     } else {
@@ -162,26 +179,45 @@ export class ScriptAgentPublisher {
   }
 
   /**
-   * Retrieve the agent metadata from the org after publishing
+   * Retrieve the agent metadata from the org after publishing.
    *
-   * @param botVersionName The bot version name
+   * On orgs that support it (API version >= 68), the agent is retrieved as the simplified
+   * `AiAgentDefinition` / `AiAgentDefinitionVersion` metadata types, with action dependencies
+   * (Flow, ApexClass, PromptTemplate, etc.) spidered via `rootTypesWithDependencies` so they
+   * do not need to be enumerated in the manifest. Older orgs fall back to the legacy
+   * `Bot` / `GenAiPlugin` / `GenAiFunction` / `Agent` manifest.
+   *
+   * @param botVersion The developerName and numeric version of the just-published agent
    */
-  private async retrieveAgentMetadata(botVersionName: string): Promise<void> {
+  private async retrieveAgentMetadata(botVersion: { developerName: string; versionNumber: number }): Promise<void> {
     const standardConn = (await managerFor(this.connection)).getStandardConnection();
     const defaultPackagePath = path.resolve(this.project.getDefaultPackage().path);
 
-    const genAiPluginAndFunctions = this.agentJson.agentVersion.nodes.flatMap((n) => [
-      `GenAiPlugin:${n.developerName}`,
-      ...n.tools.map((t) => `GenAiFunction:${t.name}`),
-    ]);
+    const useNewFormat = supportsAiAgentDefinition(standardConn);
+    getLogger().debug('Retrieving agent metadata', {
+      developerName: this.developerName,
+      format: useNewFormat ? 'AiAgentDefinition' : 'Bot/GenAiPlanner',
+      orgApiVersion: standardConn.getApiVersion(),
+    });
+    const metadataEntries = useNewFormat
+      ? [
+          `AiAgentDefinition:${this.developerName}`,
+          `AiAgentDefinitionVersion:${this.developerName}#${botVersion.versionNumber}`,
+        ]
+      : [
+          `Bot:${this.developerName}`,
+          ...this.agentJson.agentVersion.nodes.flatMap((n) => [
+            `GenAiPlugin:${n.developerName}`,
+            // Some node types (e.g. `related_agent` from a `connected_subagent` block) are pure
+            // delegation stubs and compile with no `tools` array, so guard against undefined.
+            ...(n.tools ?? []).map((t) => `GenAiFunction:${t.name}`),
+          ]),
+          `Agent:${this.developerName}_${botVersion.developerName}`,
+        ];
 
     const cs = await ComponentSetBuilder.build({
       metadata: {
-        metadataEntries: [
-          `Bot:${this.developerName}`,
-          ...genAiPluginAndFunctions,
-          `Agent:${this.developerName}_${botVersionName}`,
-        ],
+        metadataEntries,
         directoryPaths: [defaultPackagePath],
       },
       org: {
@@ -194,15 +230,37 @@ export class ScriptAgentPublisher {
       merge: true,
       format: 'source',
       output: path.resolve(this.project.getPath(), defaultPackagePath),
+      // spider action dependencies for the new metadata types only
+      ...(useNewFormat ? { rootTypesWithDependencies: ['AiAgentDefinitionVersion'] } : {}),
     });
 
-    const retrieveResult = await retrieve.pollStatus();
+    const retrieveTimeout = getMetadataPollTimeout();
+    const retrieveStart = Date.now();
+    getLogger().debug('Polling for agent metadata retrieve', { timeoutMinutes: retrieveTimeout.minutes });
+    const retrieveResult = await retrieve.pollStatus({ timeout: retrieveTimeout });
+    getLogger().debug('Agent metadata retrieve poll completed', { durationMs: Date.now() - retrieveStart });
 
     if (!retrieveResult.response?.success) {
-      const errMessages = retrieveResult.response?.messages?.toString() ?? 'unknown';
+      const errMessages = JSON.stringify(retrieveResult.response?.messages) ?? 'unknown';
       const error = messages.createError('agentRetrievalError', [errMessages]);
       error.actions = [messages.getMessage('agentRetrievalErrorActions')];
       throw error;
+    }
+
+    // A v68+ org with the AiAgentDefinition feature flag disabled resolves the new types to
+    // nothing, producing a success:true retrieve that wrote zero agent files. Surface that.
+    const fileResponses = retrieveResult.getFileResponses();
+    const resolvedTypes = [...new Set(fileResponses.map((f) => f.type))];
+    getLogger().debug('Agent metadata retrieve resolved components', {
+      developerName: this.developerName,
+      componentCount: fileResponses.length,
+      types: resolvedTypes,
+    });
+    if (useNewFormat && fileResponses.length === 0) {
+      getLogger().warn('New-format retrieve resolved zero components; org may have the AiAgentDefinition feature flag disabled', {
+        developerName: this.developerName,
+        orgApiVersion: standardConn.getApiVersion(),
+      });
     }
   }
 
@@ -226,7 +284,10 @@ export class ScriptAgentPublisher {
     };
     const target = `${this.developerName}.${botVersionName}`;
     authoringBundle.AiAuthoringBundle.target = target;
-    getLogger().debug(`Setting target to ${target} in ${this.bundleMetaPath}`);
+    getLogger().debug('Setting target on authoring bundle meta.xml', {
+      target,
+      bundleMetaPath: this.bundleMetaPath,
+    });
     const xmlBuilder = new XMLBuilder({
       ignoreAttributes: false,
       format: true,
@@ -240,7 +301,11 @@ export class ScriptAgentPublisher {
     const deploy = await ComponentSet.fromSource(this.bundleDir).deploy({
       usernameOrConnection: standardConn,
     });
-    const deployResult = await deploy.pollStatus();
+    const deployTimeout = getMetadataPollTimeout();
+    const deployStart = Date.now();
+    getLogger().debug('Polling for authoring bundle deploy', { timeoutMinutes: deployTimeout.minutes });
+    const deployResult = await deploy.pollStatus({ timeout: deployTimeout });
+    getLogger().debug('Authoring bundle deploy poll completed', { durationMs: Date.now() - deployStart });
 
     // 3.remove the target from the local authoring bundle meta.xml file
     delete authoringBundle.AiAuthoringBundle.target;
@@ -269,33 +334,64 @@ export class ScriptAgentPublisher {
   private async getPublishedBotId(agentApiName: string): Promise<string | undefined> {
     try {
       const standardConn = (await managerFor(this.connection)).getStandardConnection();
+      // Escape single quotes so a developerName carrying one cannot break out of the SOQL
+      // string literal (CWE-89). Mirrors the repo's canonical pattern in agentEvalRunner.ts.
+      const escapedApiName = agentApiName.replace(/'/g, "''");
       const queryResult = await standardConn.singleRecordQuery<{ Id: string }>(
-        `SELECT Id FROM BotDefinition WHERE DeveloperName='${agentApiName}'`
+        `SELECT Id FROM BotDefinition WHERE DeveloperName='${escapedApiName}'`
       );
-      getLogger().debug(`Agent with developer name ${agentApiName} and id ${queryResult.Id} is already published.`);
+      getLogger().debug('Agent is already published', { agentApiName, botId: queryResult.Id });
       return queryResult.Id;
     } catch (error) {
-      getLogger().debug(`Error reading agent metadata: ${JSON.stringify(error)}`);
-      return undefined;
+      const wrapped = SfError.wrap(error);
+      // No BotDefinition matched the developer name: the agent genuinely has not been
+      // published yet. Return undefined so the caller POSTs a first version.
+      if (wrapped.name === SINGLE_RECORD_QUERY_NO_RECORDS) {
+        getLogger().debug('Agent is not yet published', { agentApiName });
+        return undefined;
+      }
+      // Any other error means the lookup itself failed (auth, network, multiple matches),
+      // so we cannot tell whether the agent already exists. Collapsing this into
+      // "not published" risks POSTing a duplicate first version over an existing agent,
+      // so surface it instead of swallowing it. We log at debug and rethrow (rather than
+      // warn) per ai-docs/logging.md: the rethrown error propagates and is logged upstack,
+      // so the telemetry event — not this line — is the durable signal for this failure.
+      getLogger().debug('Failed to determine whether agent is already published', {
+        agentApiName,
+        statusCode: getHttpStatusCode(error),
+        errName: wrapped.name,
+        errMsg: wrapped.message,
+      });
+      await Lifecycle.getInstance().emitTelemetry({
+        eventName: 'agent_publish_botid_lookup_failed',
+        statusCode: getHttpStatusCode(error) ?? null,
+        errName: wrapped.name,
+      });
+      throw wrapped;
     }
   }
 
   /**
-   * Returns the developerName of the given bot version ID.
+   * Returns the developerName and numeric version of the given bot version ID.
    *
    * @param botVersionId The Id of the bot version
-   * @returns The developer name of the bot version
+   * @returns The developer name (e.g. `v1`) and numeric version (e.g. `1`) of the bot version
    */
-  private async getVersionDeveloperName(botVersionId: string): Promise<string> {
+  private async getBotVersion(botVersionId: string): Promise<{ developerName: string; versionNumber: number }> {
     try {
       const standardConn = (await managerFor(this.connection)).getStandardConnection();
-      const queryResult = await standardConn.singleRecordQuery<{ DeveloperName: string }>(
-        `SELECT DeveloperName FROM BotVersion WHERE Id='${botVersionId}'`
+      const escapedBotVersionId = botVersionId.replace(/'/g, "''");
+      const queryResult = await standardConn.singleRecordQuery<{ DeveloperName: string; VersionNumber: number }>(
+        `SELECT DeveloperName, VersionNumber FROM BotVersion WHERE Id='${escapedBotVersionId}'`
       );
-      getLogger().debug(`Bot version with id ${botVersionId} is ${queryResult.DeveloperName}.`);
-      return queryResult.DeveloperName;
+      getLogger().debug('Resolved bot version', {
+        botVersionId,
+        developerName: queryResult.DeveloperName,
+        versionNumber: queryResult.VersionNumber,
+      });
+      return { developerName: queryResult.DeveloperName, versionNumber: queryResult.VersionNumber };
     } catch (error) {
-      const err = messages.createError('findBotVersionError', [botVersionId]);
+      const err = messages.createError('findBotVersionError', [botVersionId], undefined, error as Error);
       err.actions = [messages.getMessage('authoringBundleDeploymentErrorActions')];
       throw err;
     }

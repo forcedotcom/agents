@@ -13,12 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import { join } from 'node:path';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { expect } from 'chai';
+import sinon from 'sinon';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection, Messages, SfError, SfProject } from '@salesforce/core';
 import { ProductionAgent } from '../src/agents/productionAgent';
 import { ConnectionManager, setManagerForTesting } from '../src/connectionManager';
-import type { BotMetadata } from '../src/types';
+import { getHistoryDir } from '../src/utils';
+import type { BotMetadata, ContextVariable, PlannerResponse } from '../src/types';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agents');
@@ -723,6 +727,258 @@ describe('ProductionAgent', () => {
       } catch (error) {
         expect(error).to.be.instanceOf(SfError);
         expect((error as SfError).message).to.include(messages.getMessage('noVersionsFound', ['TestAgent']));
+      }
+    });
+  });
+
+  describe('preview.start bypassUser', () => {
+    const buildBotMetadata = (agentType: string): BotMetadata => ({
+      Id: '0Xx123456789ABC',
+      IsDeleted: false,
+      DeveloperName: 'TestAgent',
+      MasterLabel: 'Test Agent',
+      CreatedDate: '2025-01-01T00:00:00.000+0000',
+      CreatedById: 'user123',
+      LastModifiedDate: '2025-01-02T00:00:00.000+0000',
+      LastModifiedById: 'user123',
+      SystemModstamp: '2025-01-02T00:00:00.000+0000',
+      BotUserId: 'botUser123',
+      Description: 'Test bot description',
+      Type: 'AgentForce',
+      AgentType: agentType,
+      AgentTemplate: null,
+      BotVersions: {
+        records: [
+          {
+            Id: 'version1',
+            Status: 'Active',
+            IsDeleted: false,
+            BotDefinitionId: '0Xx123456789ABC',
+            DeveloperName: 'TestAgent_v1',
+            CreatedDate: '2025-01-01T00:00:00.000+0000',
+            CreatedById: 'user123',
+            LastModifiedDate: '2025-01-01T00:00:00.000+0000',
+            LastModifiedById: 'user123',
+            SystemModstamp: '2025-01-01T00:00:00.000+0000',
+            VersionNumber: 1,
+            CopilotPrimaryLanguage: 'en_US',
+            ToneType: 'formal',
+            CopilotSecondaryLanguages: [],
+          },
+        ],
+      },
+    });
+
+    let requestStub: sinon.SinonStub;
+
+    beforeEach(() => {
+      // Capture the session-start request body without hitting the network.
+      requestStub = $$.SANDBOX.stub(connection, 'request');
+      requestStub.resolves({ sessionId: 'test-session-id', _links: {}, messages: [] });
+    });
+
+    const getStartRequestBody = (): Record<string, unknown> => {
+      const startCall = requestStub
+        .getCalls()
+        .find((c) => (c.args[0] as { url: string }).url.endsWith('/sessions'));
+      if (!startCall) throw new Error('agent sessions request not captured');
+      return JSON.parse((startCall.args[0] as { body: string }).body) as Record<string, unknown>;
+    };
+
+    it('sends bypassUser: false for an employee agent', async () => {
+      $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves(buildBotMetadata('AgentforceEmployeeAgent'));
+
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: 'TestAgent' });
+      await agent.preview.start();
+
+      expect(getStartRequestBody().bypassUser).to.equal(false);
+    });
+
+    it('sends bypassUser: true for a non-employee (service) agent', async () => {
+      $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves(buildBotMetadata('EinsteinServiceAgent'));
+
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: 'TestAgent' });
+      await agent.preview.start();
+
+      expect(getStartRequestBody().bypassUser).to.equal(true);
+    });
+
+    it('sends context variables as the `variables` array when provided', async () => {
+      $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves(buildBotMetadata('EinsteinServiceAgent'));
+
+      const contextVariables: ContextVariable[] = [
+        { name: 'CustomerId', type: 'Text', value: '001xx000003DGb2' },
+        { name: 'IsVip', type: 'Boolean', value: 'true' },
+      ];
+
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: 'TestAgent' });
+      await agent.preview.start({ contextVariables });
+
+      expect(getStartRequestBody().variables).to.deep.equal(contextVariables);
+    });
+
+    it('defaults `variables` to an empty array when no context variables are provided', async () => {
+      $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves(buildBotMetadata('EinsteinServiceAgent'));
+
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: 'TestAgent' });
+      await agent.preview.start();
+
+      expect(getStartRequestBody().variables).to.deep.equal([]);
+    });
+
+    const getStartRequestHeaders = (): Record<string, string> => {
+      const startCall = requestStub
+        .getCalls()
+        .find((c) => (c.args[0] as { url: string }).url.endsWith('/sessions'));
+      if (!startCall) throw new Error('agent sessions request not captured');
+      return (startCall.args[0] as { headers: Record<string, string> }).headers;
+    };
+
+    it('sends the x-attributed-client: no-builder header on session start to strip markdown', async () => {
+      $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves(buildBotMetadata('EinsteinServiceAgent'));
+
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: 'TestAgent' });
+      await agent.preview.start();
+
+      const headers = getStartRequestHeaders();
+      expect(headers['x-attributed-client']).to.equal('no-builder');
+      expect(headers['x-client-name']).to.equal('afdx');
+    });
+  });
+
+  describe('getTrace', () => {
+    const buildBotMetadata = (): BotMetadata => ({
+      Id: '0Xx123456789ABC',
+      IsDeleted: false,
+      DeveloperName: 'TestAgent',
+      MasterLabel: 'Test Agent',
+      CreatedDate: '2025-01-01T00:00:00.000+0000',
+      CreatedById: 'user123',
+      LastModifiedDate: '2025-01-02T00:00:00.000+0000',
+      LastModifiedById: 'user123',
+      SystemModstamp: '2025-01-02T00:00:00.000+0000',
+      BotUserId: 'botUser123',
+      Description: 'Test bot description',
+      Type: 'AgentForce',
+      AgentType: 'EinsteinServiceAgent',
+      AgentTemplate: null,
+      BotVersions: {
+        records: [
+          {
+            Id: 'version1',
+            Status: 'Active',
+            IsDeleted: false,
+            BotDefinitionId: '0Xx123456789ABC',
+            DeveloperName: 'TestAgent_v1',
+            CreatedDate: '2025-01-01T00:00:00.000+0000',
+            CreatedById: 'user123',
+            LastModifiedDate: '2025-01-01T00:00:00.000+0000',
+            LastModifiedById: 'user123',
+            SystemModstamp: '2025-01-01T00:00:00.000+0000',
+            VersionNumber: 1,
+            CopilotPrimaryLanguage: 'en_US',
+            ToneType: 'formal',
+            CopilotSecondaryLanguages: [],
+          },
+        ],
+      },
+    });
+
+    const trace: PlannerResponse = {
+      type: 'PlanSuccessResponse',
+      planId: 'plan-123',
+      sessionId: 'test-session-id',
+      intent: 'answer',
+      topic: 'general',
+      plan: [],
+    };
+
+    it('returns undefined when no session has been started', async () => {
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: 'TestAgent' });
+      expect(await agent.getTrace('plan-123')).to.equal(undefined);
+    });
+
+    it('GETs the v1.1 preview plans endpoint for the committed session and returns the trace', async () => {
+      $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves(buildBotMetadata());
+
+      const requestStub = $$.SANDBOX.stub(connection, 'request');
+      // Session start returns the sessionId; the getTrace call returns the reasoning trace.
+      requestStub.onFirstCall().resolves({ sessionId: 'test-session-id', _links: {}, messages: [] });
+      requestStub.resolves(trace);
+
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: 'TestAgent' });
+      await agent.preview.start();
+
+      const result = await agent.getTrace('plan-123');
+
+      const traceCall = requestStub
+        .getCalls()
+        .find((c) => (c.args[0] as { url: string }).url.includes('/plans/'));
+      if (!traceCall) throw new Error('getTrace request not captured');
+      const { url, method } = traceCall.args[0] as { url: string; method: string };
+
+      expect(method).to.equal('GET');
+      expect(url).to.equal(
+        'https://api.salesforce.com/einstein/ai-agent/v1.1/preview/sessions/test-session-id/plans/plan-123'
+      );
+      expect(result).to.deep.equal(trace);
+    });
+  });
+
+  describe('getAllTraces (resumed session)', () => {
+    // Regression guard for the "history never created" throw. Mirrors the z-series preview NUT
+    // flow: a fresh Agent instance resumes an existing session via setSessionId() — start()/send()
+    // ran in an earlier CLI subprocess, so historyDir (populated only in-process by start/send) is
+    // unset on this instance. getAllTracesFromDisc must derive the dir from the sessionId rather
+    // than throw. A 0Xx-form id sets this.id in the constructor so getAgentIdForStorage() resolves
+    // without a metadata query. The fix lives in the shared base class, so this also covers the
+    // ScriptAgent (authoring-bundle) path the NUT actually exercises.
+    const agentId = '0Xx000000000ABC';
+    const sessionId = 'resumed-session-abc';
+
+    const trace: PlannerResponse = {
+      type: 'PlanSuccessResponse',
+      planId: 'plan-123',
+      sessionId,
+      intent: 'answer',
+      topic: 'general',
+      plan: [],
+    };
+
+    let seededAgentDir: string | undefined;
+
+    afterEach(async () => {
+      if (seededAgentDir) {
+        await rm(seededAgentDir, { recursive: true, force: true });
+        seededAgentDir = undefined;
+      }
+    });
+
+    it('reads on-disk traces for a session resumed via setSessionId (no start/send in this process)', async () => {
+      // Seed the session directory exactly as an earlier start/send process would have.
+      const historyDir = await getHistoryDir(agentId, sessionId);
+      seededAgentDir = join(historyDir, '..', '..'); // .sfdx/agents/<agentId>
+      const tracesDir = join(historyDir, 'traces');
+      await mkdir(tracesDir, { recursive: true });
+      await writeFile(join(tracesDir, 'plan-123.json'), JSON.stringify(trace), 'utf-8');
+
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: agentId });
+      agent.setSessionId(sessionId);
+
+      const traces = await agent.preview.getAllTraces();
+
+      expect(traces).to.deep.equal([trace]);
+    });
+
+    it('still throws a clear error when no sessionId was ever set', async () => {
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: agentId });
+
+      try {
+        await agent.preview.getAllTraces();
+        expect.fail('Should have thrown an error');
+      } catch (error) {
+        expect(error).to.be.instanceOf(SfError);
+        expect((error as SfError).message).to.include('No sessionId set');
       }
     });
   });

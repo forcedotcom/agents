@@ -1,0 +1,33 @@
+# Canonical PROMPT-subject fixture for W-23524165.
+# Exercises: multi-invocation fan-out (test case 1 has 2 invocations -> 2 XML
+# <testCase> elements sharing one scorer set) and multi-slot promptInput
+# (each invocation fills 2 template input slots). Test case 2 is a
+# single-invocation, single-slot case with a quality scorer (no <expectedValue>).
+name: SummarizeCasePromptSuite
+description: Validates the SummarizeCase prompt template.
+subjectType: PROMPT
+subjectName: SummarizeCasePrompt
+subjectVersion: v3
+testCases:
+  - inputs:
+      - promptInput:
+          - referenceName: CaseDescription
+            value: Customer reports login failures since yesterday.
+          - referenceName: CustomerTone
+            value: frustrated
+      - promptInput:
+          - referenceName: CaseDescription
+            value: Customer asks how to reset their password.
+          - referenceName: CustomerTone
+            value: neutral
+    scorers:
+      - name: factuality
+      - name: completeness
+      - name: response_match
+        expected: A concise, accurate case summary
+  - inputs:
+      - promptInput:
+          - referenceName: CaseDescription
+            value: Customer requests refund for a damaged item.
+    scorers:
+      - name: coherence

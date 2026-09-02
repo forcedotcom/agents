@@ -38,7 +38,7 @@ describe('String Replacements', () => {
     // Clean up test files
     try {
       await rm(testDir, { recursive: true, force: true });
-    } catch (error) {
+    } catch {
       // Ignore if directory doesn't exist
     }
   });

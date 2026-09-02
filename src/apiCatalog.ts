@@ -15,6 +15,8 @@
  */
 
 import { Connection, Lifecycle, SfError } from '@salesforce/core';
+import { getHttpStatusCode } from './utils';
+import { CtxLogger } from './ctxLogger';
 import {
   type ListMcpServersOptions,
   type McpServerCollection,
@@ -28,6 +30,14 @@ import {
 } from './apiCatalogTypes.js';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
+
+let logger: CtxLogger;
+const getLogger = (): CtxLogger => {
+  if (!logger) {
+    logger = CtxLogger.child('ApiCatalog');
+  }
+  return logger;
+};
 
 function base(connection: Connection): string {
   return `/services/data/v${String(connection.version)}/api-catalog`;
@@ -98,7 +108,11 @@ export class ApiCatalog {
   /** POST /api-catalog/mcp-servers/{id}/fetch */
   public static async fetchMcpServer(connection: Connection, id: string): Promise<McpServerFetchOutput> {
     const url = `${base(connection)}/mcp-servers/${encode(id)}/fetch`;
-    return ApiCatalog.request<McpServerFetchOutput>(connection, 'POST', url, 'fetchMcpServer');
+    // Send an explicit (empty) JSON body: a bodyless POST over HTTP/2 leaves the request
+    // stream half-open (no END_STREAM), so jsforce/undici never sees response headers and
+    // the call hangs until the 300s headers timeout. Passing a body sets Content-Length and
+    // closes the stream, so the response is read immediately.
+    return ApiCatalog.request<McpServerFetchOutput>(connection, 'POST', url, 'fetchMcpServer', {});
   }
 
   /** GET /api-catalog/mcp-servers/{id}/assets */
@@ -140,7 +154,15 @@ export class ApiCatalog {
       result = await connection.request<T>(req);
     } catch (error) {
       const wrapped = SfError.wrap(error);
-      await ApiCatalog.emitTelemetry(`api_catalog_${op}_failed`);
+      getLogger().debug('API Catalog request failed', {
+        op,
+        method,
+        url,
+        statusCode: getHttpStatusCode(error),
+        errName: wrapped.name,
+        errMsg: wrapped.message,
+      });
+      await ApiCatalog.emitTelemetry(`api_catalog_${op}_failed`, error);
       throw wrapped;
     }
 
@@ -151,10 +173,18 @@ export class ApiCatalog {
     return result;
   }
 
-  /** Best-effort telemetry — never let a telemetry failure mask the real result or error. */
-  private static async emitTelemetry(eventName: string): Promise<void> {
+  /**
+   * Best-effort telemetry — never let a telemetry failure mask the real result or error. When an
+   * `error` is supplied (failure events), the low-cardinality cause dimensions a responder can
+   * slice by (HTTP status, error class) are attached; telemetry is the only signal present at the
+   * default log level, so a bare count could not distinguish an auth wall from a 5xx from a 404.
+   */
+  private static async emitTelemetry(eventName: string, error?: unknown): Promise<void> {
     try {
-      await Lifecycle.getInstance().emitTelemetry({ eventName });
+      await Lifecycle.getInstance().emitTelemetry({
+        eventName,
+        ...(error !== undefined && { statusCode: getHttpStatusCode(error) ?? null, errName: SfError.wrap(error).name }),
+      });
     } catch {
       // telemetry is best-effort
     }

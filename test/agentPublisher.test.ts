@@ -101,7 +101,7 @@ describe('AgentPublisher', () => {
     // Clean up any test files
     try {
       await rm(join('force-app'), { recursive: true, force: true });
-    } catch (error) {
+    } catch {
       // Ignore if directory doesn't exist
     }
   });
@@ -140,9 +140,9 @@ describe('AgentPublisher', () => {
       // Mock connection.singleRecordQuery to return undefined (no existing bot)
       $$.SANDBOX.stub(connection, 'singleRecordQuery')
         .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
-        .throws(new Error('No records found'))
-        .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
-        .resolves({ DeveloperName: 'v1' });
+        .throws(new SfError('No record found', 'SingleRecordQuery_NoRecords'))
+        .withArgs("SELECT DeveloperName, VersionNumber FROM BotVersion WHERE Id='0Bv000000000002'")
+        .resolves({ DeveloperName: 'v1', VersionNumber: 1 });
 
       publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
 
@@ -170,9 +170,9 @@ describe('AgentPublisher', () => {
       // Mock connection.singleRecordQuery to return undefined (no existing bot)
       $$.SANDBOX.stub(connection, 'singleRecordQuery')
         .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
-        .throws(new Error('No records found'))
-        .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
-        .resolves({ DeveloperName: 'v1' });
+        .throws(new SfError('No record found', 'SingleRecordQuery_NoRecords'))
+        .withArgs("SELECT DeveloperName, VersionNumber FROM BotVersion WHERE Id='0Bv000000000002'")
+        .resolves({ DeveloperName: 'v1', VersionNumber: 1 });
 
       publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, true);
 
@@ -201,9 +201,9 @@ describe('AgentPublisher', () => {
       // Mock connection.singleRecordQuery to return undefined (no existing bot)
       $$.SANDBOX.stub(connection, 'singleRecordQuery')
         .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
-        .throws(new Error('No records found'))
-        .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
-        .resolves({ DeveloperName: 'v1' });
+        .throws(new SfError('No record found', 'SingleRecordQuery_NoRecords'))
+        .withArgs("SELECT DeveloperName, VersionNumber FROM BotVersion WHERE Id='0Bv000000000002'")
+        .resolves({ DeveloperName: 'v1', VersionNumber: 1 });
 
       // Note: constructor called WITHOUT the 4th arg (defaults to false)
       publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
@@ -241,8 +241,8 @@ describe('AgentPublisher', () => {
       $$.SANDBOX.stub(connection, 'singleRecordQuery')
         .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
         .resolves({ Id: '0Xx000000000001' })
-        .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
-        .resolves({ DeveloperName: 'v2' });
+        .withArgs("SELECT DeveloperName, VersionNumber FROM BotVersion WHERE Id='0Bv000000000002'")
+        .resolves({ DeveloperName: 'v2', VersionNumber: 2 });
 
       // Mock the private methods
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -268,6 +268,11 @@ describe('AgentPublisher', () => {
       // Mock connection.refreshAuth to avoid making HTTP calls during auth refresh
       $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
 
+      // Agent not yet published, so the flow reaches the publish POST (which the error mock fails).
+      $$.SANDBOX.stub(connection, 'singleRecordQuery')
+        .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
+        .throws(new SfError('No record found', 'SingleRecordQuery_NoRecords'));
+
       try {
         await publisher.publishAgentJson();
         expect.fail('Expected error was not thrown');
@@ -281,9 +286,9 @@ describe('AgentPublisher', () => {
       process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishNewAgent-Success');
       $$.SANDBOX.stub(connection, 'singleRecordQuery')
         .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
-        .throws(new Error('No records found'))
-        .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
-        .resolves({ DeveloperName: 'v1' });
+        .throws(new SfError('No record found', 'SingleRecordQuery_NoRecords'))
+        .withArgs("SELECT DeveloperName, VersionNumber FROM BotVersion WHERE Id='0Bv000000000002'")
+        .resolves({ DeveloperName: 'v1', VersionNumber: 1 });
 
       const originalAccessToken = connection.accessToken;
       const refreshStub = $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
@@ -318,9 +323,9 @@ describe('AgentPublisher', () => {
 
       $$.SANDBOX.stub(connection, 'singleRecordQuery')
         .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
-        .throws(new Error('No records found'))
-        .withArgs("SELECT DeveloperName FROM BotVersion WHERE Id='0Bv000000000002'")
-        .resolves({ DeveloperName: 'developerNameDummy' });
+        .throws(new SfError('No record found', 'SingleRecordQuery_NoRecords'))
+        .withArgs("SELECT DeveloperName, VersionNumber FROM BotVersion WHERE Id='0Bv000000000002'")
+        .resolves({ DeveloperName: 'developerNameDummy', VersionNumber: 1 });
 
       // skipMetadataRetrieve=true so retrieveAgentMetadata is bypassed (no need to stub it).
       publisher = new ScriptAgentPublisher(connection, sfProject, localAgentJson, true);
@@ -329,8 +334,8 @@ describe('AgentPublisher', () => {
       $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
 
       // Let the REAL deployAuthoringBundle run; stub only the org boundary it calls.
-      const pollStatusStub = $$.SANDBOX.stub().resolves({ response: { success: true } } as never);
-      const deployStub = $$.SANDBOX.stub().resolves({ pollStatus: pollStatusStub } as unknown);
+      const pollStatusStub = $$.SANDBOX.stub().resolves({ response: { success: true } });
+      const deployStub = $$.SANDBOX.stub().resolves({ pollStatus: pollStatusStub });
       const fromSourceStub = $$.SANDBOX.stub(ComponentSet, 'fromSource').returns({ deploy: deployStub } as never);
 
       const result = await publisher.publishAgentJson();
@@ -357,9 +362,9 @@ describe('AgentPublisher', () => {
       const expectedBotId = '0Xx1234567890ABC';
       $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves({ Id: expectedBotId });
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
       const getPublishedBotId = (publisher as any).getPublishedBotId.bind(publisher);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       const result = await getPublishedBotId('test_agent');
 
       expect(result).to.equal(expectedBotId);
@@ -372,34 +377,80 @@ describe('AgentPublisher', () => {
 
       const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
 
-      $$.SANDBOX.stub(connection, 'singleRecordQuery').throws(new Error('No records found'));
+      // singleRecordQuery throws a SingleRecordQuery_NoRecords SfError when the SOQL matches
+      // zero rows, which is exactly the "agent not yet published" case.
+      $$.SANDBOX.stub(connection, 'singleRecordQuery').throws(
+        new SfError('No record found', 'SingleRecordQuery_NoRecords')
+      );
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
       const getPublishedBotId = (publisher as any).getPublishedBotId.bind(publisher);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       const result = await getPublishedBotId('nonexistent_agent');
 
       expect(result).to.be.undefined;
       validateStub.restore();
     });
-  });
 
-  describe('getVersionDeveloperName', () => {
-    it('should return version developer name', async () => {
+    it('should rethrow when the lookup itself fails (not a genuine not-found)', async () => {
       // Create minimal publisher instance by mocking validateDeveloperName
       const validateStub = createValidateDeveloperNameStub();
 
       const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
 
-      const expectedVersionName = 'v1';
-      $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves({ DeveloperName: expectedVersionName });
+      // A non-NoRecords error (auth/network/multiple-matches) means we cannot tell whether the
+      // agent exists. Collapsing this into "not published" risks publishing a duplicate first
+      // version, so the lookup failure must surface rather than be swallowed.
+      $$.SANDBOX.stub(connection, 'singleRecordQuery').throws(new Error('connection reset'));
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-      const getVersionDeveloperName = (publisher as any).getVersionDeveloperName.bind(publisher);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
-      const result = await getVersionDeveloperName('0Bv1234567890ABC');
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      const getPublishedBotId = (publisher as any).getPublishedBotId.bind(publisher);
 
-      expect(result).to.equal(expectedVersionName);
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+        await getPublishedBotId('some_agent');
+        expect.fail('Expected getPublishedBotId to throw on a lookup failure');
+      } catch (error) {
+        expect(error).to.be.instanceOf(SfError);
+        expect((error as SfError).message).to.include('connection reset');
+      } finally {
+        validateStub.restore();
+      }
+    });
+
+    it('escapes single quotes in the developerName so it cannot break out of the SOQL literal (SEC-1)', async () => {
+      const validateStub = createValidateDeveloperNameStub();
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
+
+      const queryStub = $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves({ Id: '0Xx000' });
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      const getPublishedBotId = (publisher as any).getPublishedBotId.bind(publisher);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      await getPublishedBotId("x' OR Id != null LIMIT 1--");
+
+      // The injected quote must be doubled so the WHERE clause semantics are preserved.
+      const soql = queryStub.firstCall.args[0];
+      expect(soql).to.equal("SELECT Id FROM BotDefinition WHERE DeveloperName='x'' OR Id != null LIMIT 1--'");
+      validateStub.restore();
+    });
+  });
+
+  describe('getBotVersion', () => {
+    it('should return version developer name and numeric version', async () => {
+      // Create minimal publisher instance by mocking validateDeveloperName
+      const validateStub = createValidateDeveloperNameStub();
+
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
+
+      $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves({ DeveloperName: 'v1', VersionNumber: 1 });
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      const getBotVersion = (publisher as any).getBotVersion.bind(publisher);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      const result = await getBotVersion('0Bv1234567890ABC');
+
+      expect(result).to.deep.equal({ developerName: 'v1', versionNumber: 1 });
       validateStub.restore();
     });
 
@@ -411,12 +462,12 @@ describe('AgentPublisher', () => {
 
       $$.SANDBOX.stub(connection, 'singleRecordQuery').throws(new Error('No records found'));
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-      const getVersionDeveloperName = (publisher as any).getVersionDeveloperName.bind(publisher);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      const getBotVersion = (publisher as any).getBotVersion.bind(publisher);
 
       try {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-        await getVersionDeveloperName('invalid_version_id');
+        await getBotVersion('invalid_version_id');
         expect.fail('Expected error was not thrown');
       } catch (error) {
         expect(error).to.be.instanceOf(SfError);
@@ -438,7 +489,7 @@ describe('AgentPublisher', () => {
 
       const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
       const deployAuthoringBundle = (publisher as any).deployAuthoringBundle.bind(publisher);
 
       try {
@@ -465,7 +516,7 @@ describe('AgentPublisher', () => {
       // The standard connection is already set up in connectionManager via createMockConnectionManager
 
       // Mock ComponentSet.fromSource(...).deploy(...).pollStatus()
-      const pollStatusStub = $$.SANDBOX.stub().resolves({ response: { success: true } } as never);
+      const pollStatusStub = $$.SANDBOX.stub().resolves({ response: { success: true } });
       const deployStub = $$.SANDBOX.stub().callsFake(async () => {
         // The meta.xml must contain the computed target when deploy is invoked
         const contentDuringDeploy = await readFile(bundleMetaPath, 'utf-8');
@@ -475,7 +526,7 @@ describe('AgentPublisher', () => {
       });
       const fromSourceStub = $$.SANDBOX.stub(ComponentSet, 'fromSource').returns({ deploy: deployStub } as never);
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
       const deployAuthoringBundle = (publisher as any).deployAuthoringBundle.bind(publisher);
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       await deployAuthoringBundle('v1');
@@ -505,11 +556,12 @@ describe('AgentPublisher', () => {
         usernameOrConnection: testOrg.getMockUserInfo().Username,
         output: 'nowhere',
       });
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       $$.SANDBOX.stub(mdApiRetrieve, 'pollStatus').resolves({
         response: {
           success: true,
         },
+        getFileResponses: () => [],
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
       $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
@@ -517,10 +569,10 @@ describe('AgentPublisher', () => {
 
       const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
       const retrieveAgentMetadata = (publisher as any).retrieveAgentMetadata.bind(publisher);
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      await retrieveAgentMetadata();
+      await retrieveAgentMetadata({ developerName: 'v1', versionNumber: 1 });
 
       // Verify that ComponentSetBuilder.build was called
       expect(buildStub.calledOnce).to.be.true;
@@ -538,7 +590,7 @@ describe('AgentPublisher', () => {
         usernameOrConnection: testOrg.getMockUserInfo().Username,
         output: 'nowhere',
       });
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       $$.SANDBOX.stub(mdApiRetrieve, 'pollStatus').resolves({
         response: {
           success: false,
@@ -551,12 +603,12 @@ describe('AgentPublisher', () => {
 
       const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
       const retrieveAgentMetadata = (publisher as any).retrieveAgentMetadata.bind(publisher);
 
       try {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-        await retrieveAgentMetadata();
+        await retrieveAgentMetadata({ developerName: 'v1', versionNumber: 1 });
         expect.fail('Expected error was not thrown');
       } catch (error) {
         expect(error).to.be.instanceOf(SfError);
@@ -566,8 +618,68 @@ describe('AgentPublisher', () => {
       validateStub.restore();
     });
 
-    it('should include GenAiPlugin and GenAiFunction entries when present', async () => {
-      // Create agent JSON with nodes that have tools
+    it('should build the AiAgentDefinition / AiAgentDefinitionVersion manifest and spider dependencies', async () => {
+      const validateStub = createValidateDeveloperNameStub();
+      // org supports the new metadata types
+      $$.SANDBOX.stub(connection, 'getApiVersion').returns('68.0');
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
+
+      // Setup successful metadata retrieval mock
+      const compSet = new ComponentSet();
+      const mdApiRetrieve = new MetadataApiRetrieve({
+        usernameOrConnection: testOrg.getMockUserInfo().Username,
+        output: 'nowhere',
+      });
+      $$.SANDBOX.stub(mdApiRetrieve, 'pollStatus').resolves({
+        // @ts-expect-error only stubbed response
+        response: {
+          success: true,
+        },
+        getFileResponses: () => [],
+      });
+
+      let capturedRetrieveOptions: Parameters<ComponentSet['retrieve']>[0] | undefined;
+      $$.SANDBOX.stub(compSet, 'retrieve').callsFake((options) => {
+        capturedRetrieveOptions = options;
+        return Promise.resolve(mdApiRetrieve);
+      });
+
+      let capturedMetadataEntries: string[] = [];
+      const buildStub = $$.SANDBOX.stub(ComponentSetBuilder, 'build').callsFake(async (options) => {
+        if (options?.metadata?.metadataEntries) {
+          capturedMetadataEntries = options.metadata.metadataEntries;
+        }
+        return compSet;
+      });
+
+      // @ts-expect-error private method
+      const retrieveAgentMetadata = publisher.retrieveAgentMetadata.bind(publisher);
+      await retrieveAgentMetadata({ developerName: 'v1', versionNumber: 1 });
+
+      // Verify that ComponentSetBuilder.build was called
+      expect(buildStub.calledOnce).to.be.true;
+
+      // Verify the manifest is exactly the two new metadata types
+      expect(capturedMetadataEntries).to.deep.equal([
+        'AiAgentDefinition:test_agent',
+        'AiAgentDefinitionVersion:test_agent#1',
+      ]);
+
+      // Verify no legacy Bot / Agent / GenAi* entries are present
+      expect(capturedMetadataEntries.some((entry) => /^(Bot|Agent|GenAiPlugin|GenAiFunction):/.test(entry))).to.be
+        .false;
+
+      // Verify dependencies are spidered via rootTypesWithDependencies
+      expect(capturedRetrieveOptions?.rootTypesWithDependencies).to.deep.equal(['AiAgentDefinitionVersion']);
+
+      validateStub.restore();
+    });
+
+    it('should build the legacy Bot / GenAi / Agent manifest on orgs below the min API version', async () => {
+      // org does not support the new metadata types
+      $$.SANDBOX.stub(connection, 'getApiVersion').returns('62.0');
+
+      // agent JSON with a node + tools to exercise the GenAiPlugin / GenAiFunction assembly
       const agentJsonWithNodes: AgentJson = {
         ...agentJson,
         agentVersion: {
@@ -593,55 +705,12 @@ describe('AgentPublisher', () => {
                   inputParameters: null,
                   forced: null,
                 },
-                {
-                  type: 'action',
-                  target: '__state_update_action__',
-                  boundInputs: null,
-                  llmInputs: null,
-                  enabled: null,
-                  stateUpdates: null,
-                  name: 'Function2',
-                  description: 'Test function 2',
-                  inputParameters: null,
-                  forced: null,
-                },
               ],
               preToolCall: null,
               postToolCall: null,
               afterReasoning: null,
               developerName: 'Node1',
               label: 'Node 1',
-              onInit: null,
-              transitions: null,
-              onExit: null,
-              actionDefinitions: [],
-            },
-            {
-              type: 'reasoning',
-              reasoningType: 'standard',
-              description: 'Test node 2',
-              beforeReasoning: '',
-              instructions: '',
-              focusPrompt: '',
-              tools: [
-                {
-                  type: 'action',
-                  target: '__state_update_action__',
-                  boundInputs: null,
-                  llmInputs: null,
-                  enabled: null,
-                  stateUpdates: null,
-                  name: 'Function3',
-                  description: 'Test function 3',
-                  inputParameters: null,
-                  forced: null,
-                },
-              ],
-              preToolCall: null,
-              postToolCall: null,
-              afterReasoning: null,
-              developerName: 'Node2',
-              label: 'Node 2',
               onInit: null,
               transitions: null,
               onExit: null,
@@ -654,7 +723,6 @@ describe('AgentPublisher', () => {
       const validateStub = createValidateDeveloperNameStub();
       const publisher = new ScriptAgentPublisher(connection, sfProject, agentJsonWithNodes, false);
 
-      // Setup successful metadata retrieval mock
       const compSet = new ComponentSet();
       const mdApiRetrieve = new MetadataApiRetrieve({
         usernameOrConnection: testOrg.getMockUserInfo().Username,
@@ -665,8 +733,14 @@ describe('AgentPublisher', () => {
         response: {
           success: true,
         },
+        getFileResponses: () => [],
       });
-      $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
+
+      let capturedRetrieveOptions: Parameters<ComponentSet['retrieve']>[0] | undefined;
+      $$.SANDBOX.stub(compSet, 'retrieve').callsFake((options) => {
+        capturedRetrieveOptions = options;
+        return Promise.resolve(mdApiRetrieve);
+      });
 
       let capturedMetadataEntries: string[] = [];
       const buildStub = $$.SANDBOX.stub(ComponentSetBuilder, 'build').callsFake(async (options) => {
@@ -678,28 +752,29 @@ describe('AgentPublisher', () => {
 
       // @ts-expect-error private method
       const retrieveAgentMetadata = publisher.retrieveAgentMetadata.bind(publisher);
-      await retrieveAgentMetadata('v1');
+      await retrieveAgentMetadata({ developerName: 'v1', versionNumber: 1 });
 
-      // Verify that ComponentSetBuilder.build was called
       expect(buildStub.calledOnce).to.be.true;
 
-      // Verify that GenAiPlugin entries are included
-      expect(capturedMetadataEntries).to.include('GenAiPlugin:Node1');
-      expect(capturedMetadataEntries).to.include('GenAiPlugin:Node2');
+      // Legacy manifest: Bot + spidered GenAi* + Agent (developerName-based version suffix)
+      expect(capturedMetadataEntries).to.deep.equal([
+        'Bot:test_agent',
+        'GenAiPlugin:Node1',
+        'GenAiFunction:Function1',
+        'Agent:test_agent_v1',
+      ]);
 
-      // Verify that GenAiFunction entries are included
-      expect(capturedMetadataEntries).to.include('GenAiFunction:Function1');
-      expect(capturedMetadataEntries).to.include('GenAiFunction:Function2');
-      expect(capturedMetadataEntries).to.include('GenAiFunction:Function3');
-
-      // Verify that Bot and Agent entries are still included
-      expect(capturedMetadataEntries).to.include('Bot:test_agent');
-      expect(capturedMetadataEntries).to.include('Agent:test_agent_v1');
+      // No new metadata types and no dependency spidering on the legacy path
+      expect(capturedMetadataEntries.some((entry) => entry.startsWith('AiAgentDefinition'))).to.be.false;
+      expect(capturedRetrieveOptions?.rootTypesWithDependencies).to.be.undefined;
 
       validateStub.restore();
     });
 
     it('should not include GenAiFunction entries when nodes have no tools', async () => {
+      // Legacy path only: the GenAiPlugin / GenAiFunction assembly runs solely on orgs below the min API version.
+      $$.SANDBOX.stub(connection, 'getApiVersion').returns('62.0');
+
       // Create agent JSON with nodes that have no tools
       const agentJsonWithNodesNoTools: AgentJson = {
         ...agentJson,
@@ -742,6 +817,7 @@ describe('AgentPublisher', () => {
         response: {
           success: true,
         },
+        getFileResponses: () => [],
       });
       $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
 
@@ -755,7 +831,7 @@ describe('AgentPublisher', () => {
 
       // @ts-expect-error private method
       const retrieveAgentMetadata = publisher.retrieveAgentMetadata.bind(publisher);
-      await retrieveAgentMetadata('v1');
+      await retrieveAgentMetadata({ developerName: 'v1', versionNumber: 1 });
 
       // Verify that ComponentSetBuilder.build was called
       expect(buildStub.calledOnce).to.be.true;
@@ -774,7 +850,94 @@ describe('AgentPublisher', () => {
       validateStub.restore();
     });
 
+    it('should not crash when a node has no tools property (e.g. a related_agent delegation node)', async () => {
+      // Legacy path only: the tools assembly (and its `?? []` guard) runs solely on orgs below the min API version.
+      $$.SANDBOX.stub(connection, 'getApiVersion').returns('62.0');
+
+      // Regression test for the crash reported against `sf agent publish authoring-bundle`:
+      // `related_agent` nodes (compiled from AgentScript `connected_subagent` blocks, which
+      // have no `actions:` section) omit the `tools` array entirely. The old code did
+      // `n.tools.map(...)` unconditionally and threw
+      // `TypeError: Cannot read properties of undefined (reading 'map')`.
+      // Note this differs from the `tools: []` case above: here the property is absent, not empty.
+      const relatedAgentNode = {
+        type: 'related_agent',
+        reasoningType: 'standard',
+        description: 'Delegate to a connected subagent',
+        beforeReasoning: '',
+        instructions: '',
+        focusPrompt: '',
+        // tools intentionally omitted — this is what caused the crash
+        preToolCall: null,
+        postToolCall: null,
+        afterReasoning: null,
+        developerName: 'RelatedAgentNode',
+        label: 'Related Agent Node',
+        onInit: null,
+        transitions: null,
+        onExit: null,
+        actionDefinitions: [],
+      };
+      const agentJsonWithRelatedAgentNode: AgentJson = {
+        ...agentJson,
+        agentVersion: {
+          ...agentJson.agentVersion,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          nodes: [relatedAgentNode as any],
+        },
+      };
+
+      const validateStub = createValidateDeveloperNameStub();
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJsonWithRelatedAgentNode, false);
+
+      // Setup successful metadata retrieval mock
+      const compSet = new ComponentSet();
+      const mdApiRetrieve = new MetadataApiRetrieve({
+        usernameOrConnection: testOrg.getMockUserInfo().Username,
+        output: 'nowhere',
+      });
+      $$.SANDBOX.stub(mdApiRetrieve, 'pollStatus').resolves({
+        // @ts-expect-error only stubbed response
+        response: {
+          success: true,
+        },
+        getFileResponses: () => [],
+      });
+      $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
+
+      let capturedMetadataEntries: string[] = [];
+      const buildStub = $$.SANDBOX.stub(ComponentSetBuilder, 'build').callsFake(async (options) => {
+        if (options?.metadata?.metadataEntries) {
+          capturedMetadataEntries = options.metadata.metadataEntries;
+        }
+        return compSet;
+      });
+
+      // @ts-expect-error private method
+      const retrieveAgentMetadata = publisher.retrieveAgentMetadata.bind(publisher);
+      // Should NOT throw despite the node lacking a `tools` property.
+      await retrieveAgentMetadata({ developerName: 'v1', versionNumber: 1 });
+
+      expect(buildStub.calledOnce).to.be.true;
+
+      // The GenAiPlugin entry is still emitted for the node...
+      expect(capturedMetadataEntries).to.include('GenAiPlugin:RelatedAgentNode');
+
+      // ...but no GenAiFunction entries, since the node has no tools.
+      const genAiFunctionEntries = capturedMetadataEntries.filter((entry) => entry.startsWith('GenAiFunction:'));
+      expect(genAiFunctionEntries).to.be.empty;
+
+      // Bot and Agent entries are still included.
+      expect(capturedMetadataEntries).to.include('Bot:test_agent');
+      expect(capturedMetadataEntries).to.include('Agent:test_agent_v1');
+
+      validateStub.restore();
+    });
+
     it('should not include GenAiPlugin and GenAiFunction entries when nodes array is empty', async () => {
+      // Legacy path only: the GenAiPlugin / GenAiFunction assembly runs solely on orgs below the min API version.
+      $$.SANDBOX.stub(connection, 'getApiVersion').returns('62.0');
+
       // Use the default agentJson which has empty nodes array
       const validateStub = createValidateDeveloperNameStub();
       const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
@@ -790,6 +953,7 @@ describe('AgentPublisher', () => {
         response: {
           success: true,
         },
+        getFileResponses: () => [],
       });
       $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
 
@@ -803,7 +967,7 @@ describe('AgentPublisher', () => {
 
       // @ts-expect-error private method
       const retrieveAgentMetadata = publisher.retrieveAgentMetadata.bind(publisher);
-      await retrieveAgentMetadata('v1');
+      await retrieveAgentMetadata({ developerName: 'v1', versionNumber: 1 });
 
       // Verify that ComponentSetBuilder.build was called
       expect(buildStub.calledOnce).to.be.true;
