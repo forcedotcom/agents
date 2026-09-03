@@ -281,98 +281,96 @@ describe('validateScorerSpec', () => {
 });
 
 describe('buildDefaultPromptContent', () => {
-  it('returns the open-ended text prompt for a plain text scorer', () => {
-    const content = buildDefaultPromptContent({ scorerType: 'OpenEnded', dataType: 'Text' });
+  it('renders the generic prompt scaffold for every scorer', () => {
+    const content = buildDefaultPromptContent({ dataType: 'Text' });
+    expect(content).to.include('You are evaluating an AI agent conversation.');
+    expect(content).to.include('conforms to the following output schema:');
+    expect(content).to.include('Scoring instructions:');
+    expect(content).to.include('"value": "<value matching the schema>"');
+    expect(content).to.include('Conversation Transcript:');
     expect(content).to.include('{!$Input:Session}');
-    expect(content).to.include('Tagging Instructions:');
-    expect(content).to.include('"value": "<applicable tag>"');
+    // The generic prompt no longer references the per-type NGT inputs.
     expect(content).to.not.include('{!$Input:AllowedLabels}');
+    expect(content).to.not.include('{!$Input:AllowedRange}');
   });
 
-  it('returns the labeled text prompt when a text scorer has predefined values', () => {
+  it('substitutes a plain string schema for a text scorer', () => {
+    const content = buildDefaultPromptContent({ dataType: 'Text' });
+    expect(content).to.include('"type": "string"');
+    expect(content).to.not.include('"enum"');
+  });
+
+  it('encodes predefined values as a schema enum', () => {
     const content = buildDefaultPromptContent({
-      scorerType: 'OpenEnded',
       dataType: 'Text',
-      outputEnumValues: [{ value: 'Strong', outcomeType: 'Pass' }],
+      outputEnumValues: [
+        { value: 'Strong', outcomeType: 'Pass' },
+        { value: 'Weak', outcomeType: 'Fail' },
+      ],
     });
-    expect(content).to.include('{!$Input:AllowedLabels}');
-    expect(content).to.include('{!$Input:FallbackLabel}');
-    expect(content).to.include('"label": "<applicable label from the Allowed Labels list>"');
+    expect(content).to.include('"enum"');
+    expect(content).to.include('"Strong"');
+    expect(content).to.include('"Weak"');
   });
 
-  it('returns the open-ended number prompt for a plain number scorer', () => {
-    const content = buildDefaultPromptContent({ scorerType: 'OpenEnded', dataType: 'Number' });
-    expect(content).to.include('"value": "<a single numerical value>"');
-    expect(content).to.not.include('{!$Input:AllowedLabels}');
-  });
-
-  it('returns the labeled number prompt when a number scorer has predefined values', () => {
+  it('encodes a number scorer schema with min/max/step', () => {
     const content = buildDefaultPromptContent({
-      scorerType: 'OpenEnded',
       dataType: 'Number',
-      outputEnumValues: [{ value: '1', outcomeType: 'NotApplicable' }],
+      specification: { valueSpecification: { min: 0, max: 10, step: 2 } },
     });
-    expect(content).to.include('Rating Scale Parameters:');
-    expect(content).to.include('Allowed Rating Values: {!$Input:AllowedLabels}.');
-    expect(content).to.include('"label": "<a single value from the allowed ratings>"');
+    expect(content).to.include('"type": "number"');
+    expect(content).to.include('"minimum": 0');
+    expect(content).to.include('"maximum": 10');
+    expect(content).to.include('"multipleOf": 2');
   });
 
-  it('routes boolean lightning types to the boolean prompt', () => {
+  it('maps the boolean lightning type to a boolean schema', () => {
     const content = buildDefaultPromptContent({
-      scorerType: 'OpenEnded',
       dataType: 'LightningType',
       lightningType: 'lightning__booleanType',
     });
-    expect(content).to.include('"true", "false".');
-    expect(content).to.include('"label": "<either true or false>"');
+    expect(content).to.include('"type": "boolean"');
   });
 
-  it('routes url lightning types to the url prompt', () => {
+  it('maps the url lightning type to a uri-format string schema', () => {
     const content = buildDefaultPromptContent({
-      scorerType: 'OpenEnded',
       dataType: 'LightningType',
       lightningType: 'lightning__urlType',
     });
-    expect(content).to.include('"value": "<a valid URL>"');
+    expect(content).to.include('"type": "string"');
+    expect(content).to.include('"format": "uri"');
   });
 
-  it('routes date lightning types to the date prompt', () => {
+  it('maps the date lightning type to a date-format string schema', () => {
     const content = buildDefaultPromptContent({
-      scorerType: 'OpenEnded',
       dataType: 'LightningType',
       lightningType: 'lightning__dateType',
     });
-    expect(content).to.include('Return the relevant date under "value" in "yyyy-mm-dd" format.');
-    expect(content).to.include('"value": "<a date in yyyy-mm-dd format>"');
+    expect(content).to.include('"format": "date"');
   });
 
-  it('routes numeric lightning types to the number prompt', () => {
+  it('maps the integer lightning type to an integer schema', () => {
     const content = buildDefaultPromptContent({
-      scorerType: 'OpenEnded',
       dataType: 'LightningType',
       lightningType: 'lightning__integerType',
     });
-    expect(content).to.include('"value": "<a single numerical value>"');
+    expect(content).to.include('"type": "integer"');
   });
 
-  it('returns the legacy measurement prompt for predefined measurement scorers', () => {
-    const content = buildDefaultPromptContent({
-      scorerType: 'Predefined',
-      dataType: 'Number',
-      semanticType: 'Measurement',
-    });
-    expect(content).to.include('{!$Input:AllowedRange}');
-    expect(content).to.include('ONLY a number');
+  it('uses the default instructions placeholder when none is supplied', () => {
+    const content = buildDefaultPromptContent({ dataType: 'Text' });
+    expect(content).to.include('[EDIT:');
+    expect(content).to.not.include('{!$Instructions}');
+    expect(content).to.not.include('{!$OutputSchema}');
   });
 
-  it('returns the legacy multilabel prompt for predefined dimension scorers', () => {
+  it('substitutes supplied instructions verbatim', () => {
     const content = buildDefaultPromptContent({
-      scorerType: 'Predefined',
       dataType: 'Text',
-      semanticType: 'Dimension',
+      instructions: 'Score high when the agent resolves the issue.',
     });
-    expect(content).to.include('{!$Input:AllowedLabels}');
-    expect(content).to.include('{!$Input:FallbackLabel}');
+    expect(content).to.include('Score high when the agent resolves the issue.');
+    expect(content).to.not.include('[EDIT:');
   });
 });
 
@@ -643,7 +641,8 @@ describe('createScorerDefinition', () => {
 
   it('uses default prompt content when promptContent is not provided', async () => {
     const result = await createScorerDefinition(textSpec, { outputDir: '/tmp/test', write: false });
-    expect(result.promptTemplateContents).to.include('{!$Input:AllowedLabels}');
+    expect(result.promptTemplateContents).to.include('{!$Input:Session}');
+    expect(result.promptTemplateContents).to.include('conforms to the following output schema:');
   });
 
   it('validates spec before building', async () => {
