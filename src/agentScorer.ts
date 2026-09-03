@@ -102,25 +102,6 @@ export function labelToApiName(label: string): string {
   return label.replace(/\s+/g, '_').replace(/[^A-Za-z0-9_]/g, '');
 }
 
-export function generateNumberEnumValues(spec: ValueSpecification): OutputEnumValue[] {
-  const values: OutputEnumValue[] = [];
-  const epsilon = 1e-9;
-  let current = spec.min;
-
-  while (current <= spec.max + epsilon) {
-    const rounded = Math.round(current * 1e9) / 1e9;
-    values.push({
-      value: String(rounded),
-      outcomeType: 'NotApplicable',
-      isFallback: false,
-      isSystemFallback: false,
-    });
-    current += spec.step;
-  }
-
-  return values;
-}
-
 export function validateScorerSpec(spec: ScorerSpec): void {
   if (!spec.apiName || spec.apiName.length > 35 || !/^[A-Za-z][A-Za-z0-9_]*$/.test(spec.apiName)) {
     throw new Error('API name must start with a letter, contain only alphanumerics/underscores, and be at most 35 characters.');

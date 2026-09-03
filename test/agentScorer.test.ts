@@ -17,7 +17,6 @@ import { expect } from 'chai';
 import {
   validateScorerSpec,
   labelToApiName,
-  generateNumberEnumValues,
   buildDefaultPromptContent,
   buildScorerXml,
   buildPromptTemplateXml,
@@ -36,30 +35,6 @@ describe('labelToApiName', () => {
 
   it('collapses multiple spaces into one underscore', () => {
     expect(labelToApiName('a   b')).to.equal('a_b');
-  });
-});
-
-describe('generateNumberEnumValues', () => {
-  it('generates correct number of values for integer steps', () => {
-    const values = generateNumberEnumValues({ min: 0, max: 5, step: 1 });
-    expect(values).to.have.lengthOf(6);
-    expect(values[0].value).to.equal('0');
-    expect(values[5].value).to.equal('5');
-  });
-
-  it('generates values for fractional steps', () => {
-    const values = generateNumberEnumValues({ min: 0, max: 1, step: 0.5 });
-    expect(values).to.have.lengthOf(3);
-    expect(values.map((v) => v.value)).to.deep.equal(['0', '0.5', '1']);
-  });
-
-  it('sets outcomeType to NotApplicable and isFallback to false', () => {
-    const values = generateNumberEnumValues({ min: 1, max: 3, step: 1 });
-    for (const v of values) {
-      expect(v.outcomeType).to.equal('NotApplicable');
-      expect(v.isFallback).to.equal(false);
-      expect(v.isSystemFallback).to.equal(false);
-    }
   });
 });
 
