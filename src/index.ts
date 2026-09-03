@@ -226,7 +226,6 @@ export {
   MAX_ENUM_VALUES,
   SUPPORTED_LIGHTNING_TYPES,
   labelToApiName,
-  generateNumberEnumValues,
   validateScorerSpec,
   buildDefaultPromptContent,
   buildScorerXml,
