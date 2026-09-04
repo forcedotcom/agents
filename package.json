@@ -20,7 +20,7 @@
   },
   "devDependencies": {
     "@salesforce/cli-plugins-testkit": "^5.3.59",
-    "@salesforce/dev-scripts": "^13.0.2",
+    "@salesforce/dev-scripts": "^14.0.0",
     "esbuild": "^0.28.1",
     "eslint": "^10.8.1",
     "nock": "^14.0.15",
@@ -28,7 +28,7 @@
     "ts-node": "^10.9.2",
     "ts-patch": "^3.3.0",
     "typedoc": "^0.28.19",
-    "typescript": "^5.9.3"
+    "typescript": "^6"
   },
   "resolutions": {
     "serialize-javascript": "^7.0.5",
