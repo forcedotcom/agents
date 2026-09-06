@@ -224,6 +224,43 @@ export function labelToApiName(label: string): string {
   return label.replace(/\s+/g, '_').replace(/[^A-Za-z0-9_]/g, '');
 }
 
+function validateNumberScorer(spec: ScorerSpec): void {
+  if (spec.dataType !== 'Number') return;
+
+  if (!spec.specification) {
+    throw new Error("specification is required when dataType is 'Number'.");
+  }
+  if (spec.outputEnumValues) {
+    throw new Error("outputEnumValues cannot be provided when dataType is 'Number'. Use specification instead.");
+  }
+
+  const { min, max, step, threshold } = spec.specification.valueSpecification;
+  if (min >= max) {
+    throw new Error(`Minimum value (${min}) must be less than maximum value (${max}).`);
+  }
+  if (step <= 0) {
+    throw new Error('Step must be a positive number.');
+  }
+  const numValues = scorerEnumValueCount(min, max, step);
+  if (numValues > MAX_ENUM_VALUES) {
+    throw new Error(`Step too small: would generate ${numValues} values (max ${MAX_ENUM_VALUES}).`);
+  }
+  if (threshold != null && (threshold < min || threshold > max)) {
+    throw new Error(`Threshold (${threshold}) must be within the range [${min}, ${max}].`);
+  }
+}
+
+function validateLightningTypeScorer(spec: ScorerSpec): void {
+  if (spec.dataType !== 'LightningType') return;
+
+  if (!spec.lightningType) {
+    throw new Error("lightningType is required when dataType is 'LightningType'.");
+  }
+  if (!SUPPORTED_LIGHTNING_TYPES.includes(spec.lightningType)) {
+    throw new Error(`Unsupported lightningType '${spec.lightningType}'. Must be one of: ${SUPPORTED_LIGHTNING_TYPES.join(', ')}`);
+  }
+}
+
 export function validateScorerSpec(spec: ScorerSpec): void {
   if (!isValidScorerApiName(spec.apiName)) {
     throw new Error('API name must start with a letter, contain only alphanumerics/underscores, and be at most 35 characters.');
@@ -244,44 +281,14 @@ export function validateScorerSpec(spec: ScorerSpec): void {
     throw new Error(`samplingRate must be between 0 and 1, but got ${spec.agentAssociation.samplingRate}.`);
   }
 
-  if (spec.dataType === 'Number' && !spec.specification) {
-    throw new Error("specification is required when dataType is 'Number'.");
-  }
-
-  if (spec.dataType === 'Number' && spec.outputEnumValues) {
-    throw new Error("outputEnumValues cannot be provided when dataType is 'Number'. Use specification instead.");
-  }
-
-  // Cap the enum list for every type that carries one (Text / LightningType / OpenEnded). Number generates its
-  // enum from the range and is bounded separately below; the same MAX_ENUM_VALUES ceiling applies to both.
+  // Cap the enum list for every type that carries one (Text / LightningType / OpenEnded). Number rejects
+  // outputEnumValues outright (see validateNumberScorer), so this ceiling only applies to the other types.
   if (spec.outputEnumValues && spec.outputEnumValues.length > MAX_ENUM_VALUES) {
     throw new Error(`Too many outputEnumValues: ${spec.outputEnumValues.length} (max ${MAX_ENUM_VALUES}).`);
   }
 
-  if (spec.dataType === 'Number' && spec.specification) {
-    const { min, max, step, threshold } = spec.specification.valueSpecification;
-    if (min >= max) {
-      throw new Error(`Minimum value (${min}) must be less than maximum value (${max}).`);
-    }
-    if (step <= 0) {
-      throw new Error('Step must be a positive number.');
-    }
-    const numValues = scorerEnumValueCount(min, max, step);
-    if (numValues > MAX_ENUM_VALUES) {
-      throw new Error(`Step too small: would generate ${numValues} values (max ${MAX_ENUM_VALUES}).`);
-    }
-    if (threshold != null && (threshold < min || threshold > max)) {
-      throw new Error(`Threshold (${threshold}) must be within the range [${min}, ${max}].`);
-    }
-  }
-
-  if (spec.dataType === 'LightningType' && !spec.lightningType) {
-    throw new Error("lightningType is required when dataType is 'LightningType'.");
-  }
-
-  if (spec.dataType === 'LightningType' && spec.lightningType && !SUPPORTED_LIGHTNING_TYPES.includes(spec.lightningType)) {
-    throw new Error(`Unsupported lightningType '${spec.lightningType}'. Must be one of: ${SUPPORTED_LIGHTNING_TYPES.join(', ')}`);
-  }
+  validateNumberScorer(spec);
+  validateLightningTypeScorer(spec);
 }
 
 function getPromptTemplateType(spec: Pick<ScorerSpec, 'scorerType' | 'dataType'>): string {
@@ -295,7 +302,7 @@ function getPromptTemplateType(spec: Pick<ScorerSpec, 'scorerType' | 'dataType'>
   return 'agentforce_session_tracing__scorerMultilabel';
 }
 
-/**
+/*
  * The default scorer prompt is a single generic skeleton whose type-specific parts are substituted in:
  *
  *  - {!$Instructions}     the per-scorer evaluation guidance (or the DEFAULT_INSTRUCTIONS placeholder).
@@ -368,6 +375,7 @@ function lightningTypeSchema(lightningType: string | undefined): JsonSchema {
     case 'lightning__textType':
     case 'lightning__multilineTextType':
     case 'lightning__richTextType':
+    case undefined:
     default:
       return { type: 'string' };
   }
@@ -415,7 +423,7 @@ const OPEN_ENDED_LABEL_GUIDANCE = [
   '{!$Input:FallbackLabel}',
 ];
 
-/**
+/*
  * Type-specific scoring mechanics -- only what the prompt template type does NOT already fix. The output
  * envelope itself is defined by the template (multilabel / measurement / openended), so this adds just:
  *  - measurement: the numeric range (via the AllowedRange input);
