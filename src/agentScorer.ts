@@ -38,17 +38,49 @@ export type ScorerEngineType = (typeof SCORER_ENGINE_TYPES)[number];
 export type ScorerStatus = (typeof SCORER_STATUSES)[number];
 export type ScorerOutcomeType = (typeof SCORER_OUTCOME_TYPES)[number];
 
+// NOTE: The JSDoc on the scorer authoring types below (OutputEnumValue, ValueSpecification, AgentAssociation,
+// ScorerSpec) is the single source of truth for the spec JSON Schema surfaced by
+// `sf agent scorer create --spec-schema`. That schema is generated from these types (scripts/gen-scorer-schema.mjs
+// → src/scorerSpecSchema.generated.ts), so field descriptions and constraints (@pattern, @minLength, @minimum,
+// @maximum, @exclusiveMinimum, @default) live here only. To add or change a field, edit the type.
+
+/** A possible output value for the scorer. */
 export type OutputEnumValue = {
+  /**
+   * The output label (e.g., 'Good', 'Bad', 'N/A').
+   *
+   * @minLength 1
+   */
   value: string;
+  /** Maps this value to a pass/fail outcome for reporting. */
   outcomeType: ScorerOutcomeType;
+  /**
+   * Whether this is the fallback value. Exactly one value must be the fallback for Text scorers.
+   *
+   * @default false
+   */
   isFallback?: boolean;
+  /**
+   * Whether this is a system-generated fallback. Typically false for user-defined scorers.
+   *
+   * @default false
+   */
   isSystemFallback?: boolean;
 };
 
+/** Defines the numeric scale. The number of generated values ((max - min) / step + 1) must not exceed 101. */
 export type ValueSpecification = {
+  /** Minimum value of the scale. */
   min: number;
+  /** Maximum value of the scale. Must be greater than min. */
   max: number;
+  /**
+   * Step size between values.
+   *
+   * @exclusiveMinimum 0
+   */
   step: number;
+  /** Optional threshold value (must be between min and max). */
   threshold?: number;
 };
 
@@ -56,29 +88,92 @@ export type NumberSpecification = {
   valueSpecification: ValueSpecification;
 };
 
+/** Associates the scorer with an agent in the org. */
 export type AgentAssociation = {
+  /** API name of the agent to associate with this scorer. */
   agentApiName: string;
+  /** Whether scoring is active for this agent association. */
   isActive: boolean;
+  /**
+   * Fraction of sessions to score (0.0 to 1.0). Only relevant when isActive is true.
+   *
+   * @minimum 0
+   * @maximum 1
+   * @default 1
+   */
   samplingRate?: number;
+  /** Override input scope for this specific agent association. */
   inputScope?: ScorerInputScope;
 };
 
+/** YAML spec file for creating an agent scorer definition via `sf agent scorer create --spec <file>`. */
 export type ScorerSpec = {
+  /**
+   * API name of the scorer definition. Max 35 characters, must start with a letter, only alphanumerics and underscores.
+   *
+   * @pattern ^[A-Za-z][A-Za-z0-9_]{0,34}$
+   * @maxLength 35
+   */
   apiName: string;
+  /**
+   * Data type produced by the scorer. Use 'Text' for categorical labels, 'Number' for numeric scales,
+   * 'LightningType' for open-ended evaluations.
+   */
   dataType: ScorerDataType;
+  /** Set to 'OpenEnded' when dataType is 'LightningType' for free-form evaluation. */
   scorerType?: ScorerType;
-  lightningType?: string;
+  /** Required when dataType is 'LightningType'. Specifies the lightning type for open-ended values. */
+  lightningType?: SupportedLightningType;
+  /**
+   * How this scorer is used in analytics. 'Dimension' for categorical grouping, 'Measurement' for numeric
+   * aggregation.
+   */
   semanticType?: ScorerSemanticType;
+  /**
+   * Whether the scorer evaluates an entire session or a single intent within a session.
+   *
+   * @default Session
+   */
   inputScope?: ScorerInputScope;
+  /**
+   * Display label for the scorer version.
+   *
+   * @minLength 1
+   */
   label: string;
+  /** Human-readable description of what this scorer evaluates. */
   description?: string;
+  /** 'Manual' for human-evaluated scoring, 'PromptTemplate' for LLM-evaluated scoring. */
   engineType: ScorerEngineType;
+  /**
+   * Prompt text for PromptTemplate engine type. Use {!$Input:Session} to reference the session data,
+   * {!$Input:AllowedLabels} for allowed output values, and {!$Input:FallbackLabel} for the fallback value.
+   * Ignored when engineType is 'Manual'.
+   */
   promptContent?: string;
+  /**
+   * API name of an existing prompt template to use instead of generating a new one. Mutually exclusive with
+   * promptContent.
+   */
   promptTemplateName?: string;
+  /**
+   * Per-scorer evaluation guidance substituted into the generated prompt. Used only when a prompt is generated
+   * (PromptTemplate engine without promptTemplateName); ignored otherwise.
+   */
   instructions?: string;
+  /**
+   * Initial status of the scorer version.
+   *
+   * @default Draft
+   */
   status?: ScorerStatus;
   agentAssociation: AgentAssociation;
+  /**
+   * Output value definitions. Required for 'Text' dataType. For 'Text' scorers, exactly one value must have
+   * isFallback: true.
+   */
   outputEnumValues?: OutputEnumValue[];
+  /** Required when dataType is 'Number'. Defines the numeric scale. */
   specification?: NumberSpecification;
 };
 
@@ -184,7 +279,7 @@ export function validateScorerSpec(spec: ScorerSpec): void {
     throw new Error("lightningType is required when dataType is 'LightningType'.");
   }
 
-  if (spec.dataType === 'LightningType' && spec.lightningType && !SUPPORTED_LIGHTNING_TYPES.includes(spec.lightningType as SupportedLightningType)) {
+  if (spec.dataType === 'LightningType' && spec.lightningType && !SUPPORTED_LIGHTNING_TYPES.includes(spec.lightningType)) {
     throw new Error(`Unsupported lightningType '${spec.lightningType}'. Must be one of: ${SUPPORTED_LIGHTNING_TYPES.join(', ')}`);
   }
 }
@@ -434,7 +529,7 @@ export function buildScorerXml(spec: ScorerSpec): string {
     suppressBooleanAttributes: false,
   });
 
-  return builder.build(xmlObj) as string;
+  return builder.build(xmlObj);
 }
 
 export function buildPromptTemplateXml(apiName: string, promptContent: string, spec: ScorerSpec): string {
@@ -509,7 +604,7 @@ export function buildPromptTemplateXml(apiName: string, promptContent: string, s
     suppressBooleanAttributes: false,
   });
 
-  return builder.build(xmlObj) as string;
+  return builder.build(xmlObj);
 }
 
 /**

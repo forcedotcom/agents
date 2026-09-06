@@ -15,6 +15,9 @@ yarn-error.log
 # compile source
 lib
 dist
+
+# generated at build time from the ScorerSpec type (see scripts/gen-scorer-schema.mjs)
+src/scorerSpecSchema.generated.ts
 # test artifacts
 *xunit.xml
 *checkstyle.xml

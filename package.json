@@ -24,6 +24,7 @@
     "esbuild": "^0.28.1",
     "eslint": "^10.8.1",
     "nock": "^14.0.15",
+    "ts-json-schema-generator": "1.5.1",
     "ts-morph": "^28.0.0",
     "ts-node": "^10.9.2",
     "ts-patch": "^3.3.0",
@@ -57,6 +58,7 @@
     "clean": "sf-clean",
     "clean-all": "sf-clean all",
     "compile": "wireit",
+    "gen:scorer-schema": "wireit",
     "docs": "sf-docs",
     "format": "wireit",
     "link-check": "wireit",
@@ -93,6 +95,9 @@
     },
     "compile": {
       "command": "tspc -p . --pretty --incremental",
+      "dependencies": [
+        "gen:scorer-schema"
+      ],
       "files": [
         "src/**/*.ts",
         "**/tsconfig.json",
@@ -103,6 +108,18 @@
         "*.tsbuildinfo"
       ],
       "clean": "if-file-deleted"
+    },
+    "gen:scorer-schema": {
+      "command": "node scripts/gen-scorer-schema.mjs",
+      "files": [
+        "src/agentScorer.ts",
+        "scripts/gen-scorer-schema.mjs",
+        "tsconfig.json",
+        "package.json"
+      ],
+      "output": [
+        "src/scorerSpecSchema.generated.ts"
+      ]
     },
     "format": {
       "command": "prettier --write \"+(src|test|schemas)/**/*.+(ts|js|json)|command-snapshot.json\"",

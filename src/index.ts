@@ -243,6 +243,7 @@ export {
   buildPromptTemplateXml,
   createScorerDefinition,
 } from './agentScorer';
+export { SCORER_SPEC_JSON_SCHEMA, scorerSpecJsonSchema } from './scorerSpecSchema';
 export { ApiCatalog } from './apiCatalog';
 export {
   type McpServerType,

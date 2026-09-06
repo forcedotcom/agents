@@ -311,7 +311,7 @@ describe('validateScorerSpec', () => {
       validateScorerSpec({
         ...baseSpec,
         dataType: 'LightningType',
-        lightningType: 'bogus__type',
+        lightningType: 'bogus__type' as unknown as ScorerSpec['lightningType'],
       })
     ).to.throw("Unsupported lightningType 'bogus__type'.");
   });
