@@ -19,13 +19,24 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { XMLBuilder } from 'fast-xml-parser';
 
-export type ScorerDataType = 'Text' | 'Number' | 'LightningType';
-export type ScorerType = 'Predefined' | 'OpenEnded';
-export type ScorerSemanticType = 'Dimension' | 'Measurement';
-export type ScorerInputScope = 'Session' | 'Intent';
-export type ScorerEngineType = 'Manual' | 'PromptTemplate';
-export type ScorerStatus = 'Available' | 'Draft';
-export type ScorerOutcomeType = 'Pass' | 'Fail' | 'NotApplicable';
+// Enum value sets are declared as `const` arrays so both this package and consumers (e.g. the CLI's
+// interactive prompt options/validators) can share a single source of truth; the union types are derived
+// from them so the two never drift apart.
+export const SCORER_DATA_TYPES = ['Text', 'Number', 'LightningType'] as const;
+export const SCORER_TYPES = ['Predefined', 'OpenEnded'] as const;
+export const SCORER_SEMANTIC_TYPES = ['Dimension', 'Measurement'] as const;
+export const SCORER_INPUT_SCOPES = ['Session', 'Intent'] as const;
+export const SCORER_ENGINE_TYPES = ['Manual', 'PromptTemplate'] as const;
+export const SCORER_STATUSES = ['Draft', 'Available'] as const;
+export const SCORER_OUTCOME_TYPES = ['Pass', 'Fail', 'NotApplicable'] as const;
+
+export type ScorerDataType = (typeof SCORER_DATA_TYPES)[number];
+export type ScorerType = (typeof SCORER_TYPES)[number];
+export type ScorerSemanticType = (typeof SCORER_SEMANTIC_TYPES)[number];
+export type ScorerInputScope = (typeof SCORER_INPUT_SCOPES)[number];
+export type ScorerEngineType = (typeof SCORER_ENGINE_TYPES)[number];
+export type ScorerStatus = (typeof SCORER_STATUSES)[number];
+export type ScorerOutcomeType = (typeof SCORER_OUTCOME_TYPES)[number];
 
 export type OutputEnumValue = {
   value: string;
@@ -81,6 +92,22 @@ export type ScorerCreateResult = {
 
 export const MAX_ENUM_VALUES = 101;
 
+/** Maximum length of a scorer API name. */
+export const SCORER_API_NAME_MAX_LENGTH = 35;
+
+/** A scorer API name must start with a letter and contain only alphanumerics and underscores. */
+export const SCORER_API_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/;
+
+/** Single source of truth for scorer API-name validity, shared by validateScorerSpec and CLI prompts. */
+export function isValidScorerApiName(apiName: string): boolean {
+  return apiName.length > 0 && apiName.length <= SCORER_API_NAME_MAX_LENGTH && SCORER_API_NAME_PATTERN.test(apiName);
+}
+
+/** Number of discrete values a numeric scorer's [min, max] range yields at the given step. */
+export function scorerEnumValueCount(min: number, max: number, step: number): number {
+  return Math.floor((max - min) / step) + 1;
+}
+
 export const SUPPORTED_LIGHTNING_TYPES = [
   'lightning__textType',
   'lightning__multilineTextType',
@@ -103,7 +130,7 @@ export function labelToApiName(label: string): string {
 }
 
 export function validateScorerSpec(spec: ScorerSpec): void {
-  if (!spec.apiName || spec.apiName.length > 35 || !/^[A-Za-z][A-Za-z0-9_]*$/.test(spec.apiName)) {
+  if (!isValidScorerApiName(spec.apiName)) {
     throw new Error('API name must start with a letter, contain only alphanumerics/underscores, and be at most 35 characters.');
   }
 
@@ -144,7 +171,7 @@ export function validateScorerSpec(spec: ScorerSpec): void {
     if (step <= 0) {
       throw new Error('Step must be a positive number.');
     }
-    const numValues = Math.floor((max - min) / step) + 1;
+    const numValues = scorerEnumValueCount(min, max, step);
     if (numValues > MAX_ENUM_VALUES) {
       throw new Error(`Step too small: would generate ${numValues} values (max ${MAX_ENUM_VALUES}).`);
     }
