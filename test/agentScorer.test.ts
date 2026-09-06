@@ -22,6 +22,7 @@ import {
   buildScorerXml,
   buildPromptTemplateXml,
   createScorerDefinition,
+  MAX_ENUM_VALUES,
 } from '../src/agentScorer';
 import type { ScorerSpec } from '../src/agentScorer';
 
@@ -147,6 +148,46 @@ describe('validateScorerSpec', () => {
         ],
       })
     ).to.not.throw();
+  });
+
+  // Build an outputEnumValues array of the given length with exactly one fallback (so the Text fallback check
+  // passes and the length cap is the assertion under test).
+  const enumValues = (count: number): ScorerSpec['outputEnumValues'] =>
+    Array.from({ length: count }, (_, i) => ({
+      value: `Label${i}`,
+      outcomeType: 'Pass' as const,
+      isFallback: i === count - 1,
+    }));
+
+  it('throws when a Text scorer has more than MAX_ENUM_VALUES outputEnumValues', () => {
+    expect(() =>
+      validateScorerSpec({
+        ...baseSpec,
+        dataType: 'Text',
+        outputEnumValues: enumValues(MAX_ENUM_VALUES + 1),
+      })
+    ).to.throw(`Too many outputEnumValues: ${MAX_ENUM_VALUES + 1} (max ${MAX_ENUM_VALUES}).`);
+  });
+
+  it('does not throw when a Text scorer has exactly MAX_ENUM_VALUES outputEnumValues', () => {
+    expect(() =>
+      validateScorerSpec({
+        ...baseSpec,
+        dataType: 'Text',
+        outputEnumValues: enumValues(MAX_ENUM_VALUES),
+      })
+    ).to.not.throw();
+  });
+
+  it('throws when a LightningType scorer has more than MAX_ENUM_VALUES outputEnumValues', () => {
+    expect(() =>
+      validateScorerSpec({
+        ...baseSpec,
+        dataType: 'LightningType',
+        lightningType: 'lightning__numberType',
+        outputEnumValues: enumValues(MAX_ENUM_VALUES + 1),
+      })
+    ).to.throw(`Too many outputEnumValues: ${MAX_ENUM_VALUES + 1} (max ${MAX_ENUM_VALUES}).`);
   });
 
   it('throws when samplingRate is greater than 1', () => {

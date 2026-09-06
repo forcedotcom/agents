@@ -130,6 +130,12 @@ export function validateScorerSpec(spec: ScorerSpec): void {
     throw new Error("outputEnumValues cannot be provided when dataType is 'Number'. Use specification instead.");
   }
 
+  // Cap the enum list for every type that carries one (Text / LightningType / OpenEnded). Number generates its
+  // enum from the range and is bounded separately below; the same MAX_ENUM_VALUES ceiling applies to both.
+  if (spec.outputEnumValues && spec.outputEnumValues.length > MAX_ENUM_VALUES) {
+    throw new Error(`Too many outputEnumValues: ${spec.outputEnumValues.length} (max ${MAX_ENUM_VALUES}).`);
+  }
+
   if (spec.dataType === 'Number' && spec.specification) {
     const { min, max, step } = spec.specification.valueSpecification;
     if (min >= max) {
