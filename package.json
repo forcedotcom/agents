@@ -20,7 +20,7 @@
   },
   "devDependencies": {
     "@salesforce/cli-plugins-testkit": "^5.3.59",
-    "@salesforce/dev-scripts": "^13.0.2",
+    "@salesforce/dev-scripts": "^14.0.0",
     "esbuild": "^0.28.1",
     "eslint": "^10.8.1",
     "nock": "^14.0.15",
