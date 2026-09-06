@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 import { expect } from 'chai';
+import { XMLParser } from 'fast-xml-parser';
 import {
   validateScorerSpec,
   labelToApiName,
@@ -23,6 +24,18 @@ import {
   createScorerDefinition,
 } from '../src/agentScorer';
 import type { ScorerSpec } from '../src/agentScorer';
+
+type PromptTemplateInput = { apiName: string; required: boolean };
+
+/** Parses prompt-template XML and returns its declared inputs keyed by apiName. */
+function parsePromptTemplateInputs(xml: string): Map<string, PromptTemplateInput> {
+  const parsed = new XMLParser({ ignoreAttributes: false }).parse(xml) as {
+    GenAiPromptTemplate: { templateVersions: { inputs: PromptTemplateInput | PromptTemplateInput[] } };
+  };
+  const inputs = parsed.GenAiPromptTemplate.templateVersions.inputs;
+  const list = Array.isArray(inputs) ? inputs : [inputs];
+  return new Map(list.map((input) => [input.apiName, input]));
+}
 
 describe('labelToApiName', () => {
   it('replaces spaces with underscores', () => {
@@ -256,92 +269,116 @@ describe('validateScorerSpec', () => {
 });
 
 describe('buildDefaultPromptContent', () => {
-  it('renders the generic prompt scaffold for every scorer', () => {
-    const content = buildDefaultPromptContent({ dataType: 'Text' });
+  const multilabelSpec: ScorerSpec = {
+    apiName: 'Sentiment',
+    label: 'Sentiment',
+    dataType: 'Text',
+    engineType: 'PromptTemplate',
+    scorerType: 'Predefined',
+    semanticType: 'Dimension',
+    agentAssociation: { agentApiName: 'Agent1', isActive: true },
+    outputEnumValues: [
+      { value: 'Positive', outcomeType: 'Pass' },
+      { value: 'Negative', outcomeType: 'Fail', isFallback: true },
+    ],
+  };
+
+  it('renders the shared prompt scaffold and resolves every author-time placeholder', () => {
+    const content = buildDefaultPromptContent(multilabelSpec);
     expect(content).to.include('You are evaluating an AI agent conversation.');
-    expect(content).to.include('conforms to the following output schema:');
     expect(content).to.include('Scoring instructions:');
-    expect(content).to.include('"value": "<value matching the schema>"');
+    expect(content).to.include('Provide the reasoning for your evaluation under "explanation".');
     expect(content).to.include('Conversation Transcript:');
     expect(content).to.include('{!$Input:Session}');
-    // The generic prompt no longer references the per-type NGT inputs.
-    expect(content).to.not.include('{!$Input:AllowedLabels}');
+    // No author-time placeholder should survive substitution.
+    expect(content).to.not.include('{!$Instructions}');
+    expect(content).to.not.include('{!$ScoringGuidance}');
+  });
+
+  it('does not restate the output envelope (the prompt template type already fixes it)', () => {
+    // The generated prompt must not duplicate the platform's fixed output schema.
+    const content = buildDefaultPromptContent(multilabelSpec);
+    expect(content).to.not.include('output schema');
+    expect(content).to.not.include('"properties"');
+    expect(content).to.not.include('additionalProperties');
+  });
+
+  it('references the AllowedLabels/FallbackLabel inputs for multilabel guidance', () => {
+    const content = buildDefaultPromptContent(multilabelSpec);
+    // Guidance names the "output" array member so it's clear which field the labels populate.
+    expect(content).to.include('Choose one or more labels for the "output" array from the allowed labels:');
+    expect(content).to.include('{!$Input:AllowedLabels}');
+    expect(content).to.include('{!$Input:FallbackLabel}');
     expect(content).to.not.include('{!$Input:AllowedRange}');
+    // Labels come from the input, never hardcoded.
+    expect(content).to.not.include('Positive');
+    // Multilabel has no dynamic "value" member to describe.
+    expect(content).to.not.include('"value" member');
   });
 
-  it('substitutes a plain string schema for a text scorer', () => {
-    const content = buildDefaultPromptContent({ dataType: 'Text' });
-    expect(content).to.include('"type": "string"');
-    expect(content).to.not.include('"enum"');
-  });
-
-  it('encodes predefined values as a schema enum', () => {
-    const content = buildDefaultPromptContent({
-      dataType: 'Text',
-      outputEnumValues: [
-        { value: 'Strong', outcomeType: 'Pass' },
-        { value: 'Weak', outcomeType: 'Fail' },
-      ],
-    });
-    expect(content).to.include('"enum"');
-    expect(content).to.include('"Strong"');
-    expect(content).to.include('"Weak"');
-  });
-
-  it('encodes a number scorer schema with min/max/step', () => {
+  it('references the AllowedRange input for measurement guidance', () => {
     const content = buildDefaultPromptContent({
       dataType: 'Number',
-      specification: { valueSpecification: { min: 0, max: 10, step: 2 } },
+      specification: { valueSpecification: { min: 1, max: 5, step: 1 } },
     });
-    expect(content).to.include('"type": "number"');
-    expect(content).to.include('"minimum": 0');
-    expect(content).to.include('"maximum": 10');
-    expect(content).to.include('"multipleOf": 2');
+    // Guidance names the "output" number member.
+    expect(content).to.include('Set the "output" number to a score within the allowed range:');
+    expect(content).to.include('{!$Input:AllowedRange}');
+    expect(content).to.not.include('{!$Input:AllowedLabels}');
+    // The concrete min/max/step live in the AllowedRange input, not the prompt text.
+    expect(content).to.not.include('minimum');
+    expect(content).to.not.include('multipleOf');
   });
 
-  it('maps the boolean lightning type to a boolean schema', () => {
+  it('describes the dynamic value member for an open-ended scorer', () => {
     const content = buildDefaultPromptContent({
       dataType: 'LightningType',
-      lightningType: 'lightning__booleanType',
+      scorerType: 'OpenEnded',
+      lightningType: 'lightning__numberType',
     });
-    expect(content).to.include('"type": "boolean"');
+    expect(content).to.include('Set each item\'s "value" member to conform to this JSON schema:');
+    expect(content).to.include('{"type":"number"}');
   });
 
-  it('maps the url lightning type to a uri-format string schema', () => {
+  it('omits the label guidance for an open-ended scorer without predefined values', () => {
     const content = buildDefaultPromptContent({
-      dataType: 'LightningType',
-      lightningType: 'lightning__urlType',
+      dataType: 'Text',
+      scorerType: 'OpenEnded',
     });
-    expect(content).to.include('"type": "string"');
-    expect(content).to.include('"format": "uri"');
+    expect(content).to.not.include('{!$Input:AllowedLabels}');
+    expect(content).to.not.include('{!$Input:FallbackLabel}');
+    expect(content).to.not.include('{!$Input:AllowedRange}');
+    // The "value" member type is still described.
+    expect(content).to.include('Set each item\'s "value" member to conform to this JSON schema:');
+    expect(content).to.include('{"type":"string"}');
   });
 
-  it('maps the date lightning type to a date-format string schema', () => {
+  it('adds both the label guidance and the value member for an open-ended scorer with predefined values', () => {
     const content = buildDefaultPromptContent({
       dataType: 'LightningType',
-      lightningType: 'lightning__dateType',
+      scorerType: 'OpenEnded',
+      lightningType: 'lightning__numberType',
+      outputEnumValues: [
+        { value: 'Strong', outcomeType: 'Pass' },
+        { value: 'Weak', outcomeType: 'Fail', isFallback: true },
+      ],
     });
-    expect(content).to.include('"format": "date"');
-  });
-
-  it('maps the integer lightning type to an integer schema', () => {
-    const content = buildDefaultPromptContent({
-      dataType: 'LightningType',
-      lightningType: 'lightning__integerType',
-    });
-    expect(content).to.include('"type": "integer"');
+    // The "label" member comes from AllowedLabels; the "value" member type from the lightning schema.
+    expect(content).to.include('set its "label" member to one of the allowed labels:');
+    expect(content).to.include('{!$Input:AllowedLabels}');
+    expect(content).to.include('{!$Input:FallbackLabel}');
+    expect(content).to.include('Set each item\'s "value" member to conform to this JSON schema:');
+    expect(content).to.include('{"type":"number"}');
   });
 
   it('uses the default instructions placeholder when none is supplied', () => {
-    const content = buildDefaultPromptContent({ dataType: 'Text' });
+    const content = buildDefaultPromptContent(multilabelSpec);
     expect(content).to.include('[EDIT:');
-    expect(content).to.not.include('{!$Instructions}');
-    expect(content).to.not.include('{!$OutputSchema}');
   });
 
   it('substitutes supplied instructions verbatim', () => {
     const content = buildDefaultPromptContent({
-      dataType: 'Text',
+      ...multilabelSpec,
       instructions: 'Score high when the agent resolves the issue.',
     });
     expect(content).to.include('Score high when the agent resolves the issue.');
@@ -527,30 +564,42 @@ describe('buildPromptTemplateXml', () => {
     expect(xml).to.include('<type>agentforce_session_tracing__scorerOpenEnded</type>');
   });
 
-  it('uses scorerMeasurement type for Measurement semantic type', () => {
-    const measurementSpec: ScorerSpec = { ...spec, semanticType: 'Measurement' };
+  it('uses scorerMeasurement type for a Number scorer', () => {
+    const measurementSpec: ScorerSpec = {
+      ...spec,
+      dataType: 'Number',
+      outputEnumValues: undefined,
+      specification: { valueSpecification: { min: 1, max: 5, step: 1 } },
+    };
     const xml = buildPromptTemplateXml('TestPrompt', 'content', measurementSpec);
     expect(xml).to.include('<type>agentforce_session_tracing__scorerMeasurement</type>');
   });
 
-  it('includes AllowedRange input for Measurement type', () => {
-    const measurementSpec: ScorerSpec = { ...spec, semanticType: 'Measurement' };
+  it('includes AllowedRange input for a Number scorer', () => {
+    const measurementSpec: ScorerSpec = {
+      ...spec,
+      dataType: 'Number',
+      outputEnumValues: undefined,
+      specification: { valueSpecification: { min: 1, max: 5, step: 1 } },
+    };
     const xml = buildPromptTemplateXml('TestPrompt', 'content', measurementSpec);
     expect(xml).to.include('<apiName>AllowedRange</apiName>');
     expect(xml).to.not.include('<apiName>AllowedLabels</apiName>');
   });
 
-  it('includes AllowedLabels and FallbackLabel inputs for multilabel type', () => {
+  it('includes AllowedLabels and FallbackLabel inputs for multilabel type, marked required', () => {
     const xml = buildPromptTemplateXml('TestPrompt', 'content', spec);
-    expect(xml).to.include('<apiName>AllowedLabels</apiName>');
-    expect(xml).to.include('<apiName>FallbackLabel</apiName>');
+    const inputs = parsePromptTemplateInputs(xml);
+    expect(inputs.get('AllowedLabels')?.required).to.equal(true);
+    expect(inputs.get('FallbackLabel')?.required).to.equal(true);
   });
 
   it('marks AllowedLabels and FallbackLabel as not required for OpenEnded', () => {
     const openEndedSpec: ScorerSpec = { ...spec, scorerType: 'OpenEnded' };
     const xml = buildPromptTemplateXml('TestPrompt', 'content', openEndedSpec);
-    expect(xml).to.include('<apiName>AllowedLabels</apiName>');
-    expect(xml).to.include('<apiName>FallbackLabel</apiName>');
+    const inputs = parsePromptTemplateInputs(xml);
+    expect(inputs.get('AllowedLabels')?.required).to.equal(false);
+    expect(inputs.get('FallbackLabel')?.required).to.equal(false);
   });
 
   it('includes primaryModel and status', () => {
@@ -617,7 +666,7 @@ describe('createScorerDefinition', () => {
   it('uses default prompt content when promptContent is not provided', async () => {
     const result = await createScorerDefinition(textSpec, { outputDir: '/tmp/test', write: false });
     expect(result.promptTemplateContents).to.include('{!$Input:Session}');
-    expect(result.promptTemplateContents).to.include('conforms to the following output schema:');
+    expect(result.promptTemplateContents).to.include('Scoring instructions:');
   });
 
   it('validates spec before building', async () => {

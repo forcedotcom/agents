@@ -153,57 +153,43 @@ export function validateScorerSpec(spec: ScorerSpec): void {
   }
 }
 
-function getPromptTemplateType(spec: ScorerSpec): string {
+function getPromptTemplateType(spec: Pick<ScorerSpec, 'scorerType' | 'dataType'>): string {
   if (spec.scorerType === 'OpenEnded') {
     return 'agentforce_session_tracing__scorerOpenEnded';
   }
-  if (spec.semanticType === 'Measurement') {
+  // A numeric scorer is a measurement; this is driven by the data type, not semanticType.
+  if (spec.dataType === 'Number') {
     return 'agentforce_session_tracing__scorerMeasurement';
   }
   return 'agentforce_session_tracing__scorerMultilabel';
 }
 
 /**
- * The default scorer prompt is a single generic template. Rather than hand-writing one prompt per data
- * type, the type's JSON Schema is the source of truth for the output shape: it is substituted into the
- * {!$OutputSchema} placeholder, and the per-scorer evaluation guidance is substituted into {!$Instructions}.
- * The prompt itself never changes; only the schema and instructions do.
+ * The default scorer prompt is a single generic skeleton whose type-specific parts are substituted in:
  *
- * schemaFor() is the only place that knows about a given type, so supporting a new type -- including custom
- * Lightning Types retrieved from the org -- is a follow-up that touches schemaFor() alone, with zero prompt
- * changes. The transcript is referenced as {!$Input:Session}, consistent with the inputs
- * buildPromptTemplateXml declares.
+ *  - {!$Instructions}     the per-scorer evaluation guidance (or the DEFAULT_INSTRUCTIONS placeholder).
+ *  - {!$ScoringGuidance}  type-specific mechanics that the platform does NOT already know from the prompt
+ *                         template type: the numeric range (measurement), how to pick a label and fall back
+ *                         (multilabel / openended with predefined values), and -- for openended, whose value
+ *                         type is dynamic -- the JSON schema the scored value must conform to.
  *
- * Note: unlike the NGT UI (which ships hand-written prose per type), this generic prompt is intentionally
- * type-agnostic, so the default text differs from what NGT shows for the same scorer. This is a deliberate
- * trade-off favouring extensibility over NGT text parity.
+ * We deliberately do NOT restate the output envelope: the prompt template type (multilabel / measurement /
+ * openended) already fixes it on the platform (see the GenAiPromptTemplateOutput Apex classes), so embedding
+ * it here would only duplicate -- and risk drifting from -- that contract. The transcript, allowed labels,
+ * fallback label, and numeric range are referenced as {!$Input:...} inputs, matching the inputs
+ * buildPromptTemplateXml declares (so every declared required input is referenced).
  */
 const DEFAULT_INSTRUCTIONS =
   '[EDIT: Describe how to evaluate the conversation and what determines the result.]';
 
 const SCORER_PROMPT = [
   'You are evaluating an AI agent conversation.',
-  'Read the conversation transcript between an AI Agent and a user and produce a result that',
-  'conforms to the following output schema:',
-  '',
-  '{!$OutputSchema}',
+  'Read the conversation transcript between an AI Agent and a user and evaluate it as instructed below.',
   '',
   'Scoring instructions:',
   '{!$Instructions}',
-  '',
+  '{!$ScoringGuidance}',
   'Provide the reasoning for your evaluation under "explanation".',
-  '',
-  'Return a single JSON object, in the following format:',
-  '{',
-  '  "outputs": [',
-  '    {',
-  '      "value": "<value matching the schema>"',
-  '    }',
-  '  ],',
-  '  "explanation": "<reason it applies>"',
-  '}',
-  '',
-  'Do not include markdown formatting, code fences, comments or text beyond the JSON object.',
   '',
   'Conversation Transcript:',
   '{!$Input:Session}',
@@ -212,11 +198,17 @@ const SCORER_PROMPT = [
 type JsonSchema = {
   type: string;
   format?: string;
-  enum?: string[];
   minimum?: number;
   maximum?: number;
   multipleOf?: number;
 };
+
+/** The subset of a spec the default-prompt builders read. (semanticType is not read: template selection is
+ * driven by scorerType/dataType, see getPromptTemplateType.) */
+type PromptContentSpec = Pick<
+  ScorerSpec,
+  'dataType' | 'scorerType' | 'lightningType' | 'outputEnumValues' | 'specification' | 'instructions'
+>;
 
 /**
  * JSON Schema for a built-in Lightning Type. This is the single lookup that maps a type to its output
@@ -251,40 +243,85 @@ function lightningTypeSchema(lightningType: string | undefined): JsonSchema {
 }
 
 /**
- * Derives the output JSON Schema for a scorer. The schema is the source of truth for the output shape:
- * Number scorers carry their min/max/step, and any predefined outputEnumValues become an `enum`.
+ * Value-level JSON schema for a single scored value: Number scorers carry their min/max/step and LightningType
+ * scorers map through lightningTypeSchema. Used by scoringGuidance to describe the openended value type, which
+ * is dynamic and therefore not captured by the prompt template's fixed output schema.
  */
-function schemaFor(
-  spec: Pick<ScorerSpec, 'dataType' | 'lightningType' | 'outputEnumValues' | 'specification'>
-): JsonSchema {
-  const enumValues = spec.outputEnumValues?.length ? spec.outputEnumValues.map((v) => v.value) : undefined;
-
-  let base: JsonSchema;
+function valueSchema(spec: Pick<ScorerSpec, 'dataType' | 'lightningType' | 'specification'>): JsonSchema {
   if (spec.dataType === 'Number') {
-    base = { type: 'number' };
+    const base: JsonSchema = { type: 'number' };
     const vs = spec.specification?.valueSpecification;
     if (vs) {
       base.minimum = vs.min;
       base.maximum = vs.max;
       base.multipleOf = vs.step;
     }
-  } else if (spec.dataType === 'Text') {
-    base = { type: 'string' };
-  } else {
-    base = lightningTypeSchema(spec.lightningType);
+    return base;
   }
-
-  return enumValues ? { ...base, enum: enumValues } : base;
+  if (spec.dataType === 'Text') {
+    return { type: 'string' };
+  }
+  return lightningTypeSchema(spec.lightningType);
 }
 
-export function buildDefaultPromptContent(
-  spec: Pick<ScorerSpec, 'dataType' | 'lightningType' | 'outputEnumValues' | 'specification' | 'instructions'>
-): string {
-  const schema = schemaFor(spec);
-  // Use function replacers so `$` sequences in the schema/instructions aren't interpreted as replacement patterns.
-  return SCORER_PROMPT.replace('{!$OutputSchema}', () => JSON.stringify(schema, null, 2)).replace(
-    '{!$Instructions}',
-    () => spec.instructions ?? DEFAULT_INSTRUCTIONS
+/**
+ * Multilabel guidance: the "output" array member holds the chosen labels. Referenced as {!$Input:...} inputs.
+ */
+const MULTILABEL_GUIDANCE = [
+  'Choose one or more labels for the "output" array from the allowed labels:',
+  '{!$Input:AllowedLabels}',
+  'If none of the allowed labels apply, use the fallback label instead:',
+  '{!$Input:FallbackLabel}',
+];
+
+/**
+ * Open-ended label guidance: each item in the "outputs" array has a "label" member set from the allowed labels.
+ */
+const OPEN_ENDED_LABEL_GUIDANCE = [
+  'For each item in the "outputs" array, set its "label" member to one of the allowed labels:',
+  '{!$Input:AllowedLabels}',
+  'If none of the allowed labels apply, set "label" to the fallback label instead:',
+  '{!$Input:FallbackLabel}',
+];
+
+/**
+ * Type-specific scoring mechanics -- only what the prompt template type does NOT already fix. The output
+ * envelope itself is defined by the template (multilabel / measurement / openended), so this adds just:
+ *  - measurement: the numeric range (via the AllowedRange input);
+ *  - multilabel: which labels to choose for the "output" array and the fallback (via AllowedLabels / FallbackLabel);
+ *  - openended: the "label" member guidance when predefined labels exist, plus the "value" member's JSON schema.
+ * Guidance names the output-schema members ("output", "label", "value") so both humans and the model can tell
+ * which field each instruction applies to. Always returns a non-empty block.
+ */
+function scoringGuidance(spec: PromptContentSpec): string {
+  const templateType = getPromptTemplateType(spec);
+
+  if (templateType === 'agentforce_session_tracing__scorerMeasurement') {
+    return ['Set the "output" number to a score within the allowed range:', '{!$Input:AllowedRange}'].join('\n');
+  }
+
+  if (templateType === 'agentforce_session_tracing__scorerOpenEnded') {
+    const lines: string[] = [];
+    // Labels are optional for openended; describe the "label" member only when the scorer defines them.
+    if (spec.outputEnumValues?.length) {
+      lines.push(...OPEN_ENDED_LABEL_GUIDANCE);
+    }
+    // The "value" member's type is dynamic, so the template's fixed schema can't capture it -- describe it here.
+    lines.push('Set each item\'s "value" member to conform to this JSON schema:', JSON.stringify(valueSchema(spec)));
+    return lines.join('\n');
+  }
+
+  // Multilabel always carries predefined labels.
+  return MULTILABEL_GUIDANCE.join('\n');
+}
+
+export function buildDefaultPromptContent(spec: PromptContentSpec): string {
+  // scoringGuidance always returns a non-empty block (every template type has something type-specific to say).
+  const guidance = scoringGuidance(spec);
+  // Use function replacers so `$` sequences in the substituted text aren't interpreted as replacement patterns.
+  return SCORER_PROMPT.replace('{!$Instructions}', () => spec.instructions ?? DEFAULT_INSTRUCTIONS).replace(
+    '{!$ScoringGuidance}',
+    () => `\n${guidance}\n`
   );
 }
 
@@ -387,6 +424,9 @@ export function buildPromptTemplateXml(apiName: string, promptContent: string, s
       required: true,
     });
   } else {
+    // Labels are required for multilabel but optional for OpenEnded (a scorer may define none). We always
+    // declare the inputs so the template shape is stable; for OpenEnded they are required: false, so it is
+    // fine that the generated prompt references them only when the scorer actually has predefined labels.
     inputs.push(
       {
         apiName: 'AllowedLabels',
