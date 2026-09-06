@@ -260,6 +260,33 @@ describe('validateScorerSpec', () => {
     ).to.throw('Step must be a positive number.');
   });
 
+  it('throws when Number specification threshold is below the range', () => {
+    expect(() =>
+      validateScorerSpec({
+        ...baseSpec,
+        specification: { valueSpecification: { min: 1, max: 5, step: 1, threshold: 0 } },
+      })
+    ).to.throw('Threshold (0) must be within the range [1, 5].');
+  });
+
+  it('throws when Number specification threshold is above the range', () => {
+    expect(() =>
+      validateScorerSpec({
+        ...baseSpec,
+        specification: { valueSpecification: { min: 1, max: 5, step: 1, threshold: 99 } },
+      })
+    ).to.throw('Threshold (99) must be within the range [1, 5].');
+  });
+
+  it('does not throw when Number specification threshold is within the range', () => {
+    expect(() =>
+      validateScorerSpec({
+        ...baseSpec,
+        specification: { valueSpecification: { min: 1, max: 5, step: 1, threshold: 5 } },
+      })
+    ).to.not.throw();
+  });
+
   it('throws when Number specification step produces too many values', () => {
     expect(() =>
       validateScorerSpec({

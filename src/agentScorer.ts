@@ -137,7 +137,7 @@ export function validateScorerSpec(spec: ScorerSpec): void {
   }
 
   if (spec.dataType === 'Number' && spec.specification) {
-    const { min, max, step } = spec.specification.valueSpecification;
+    const { min, max, step, threshold } = spec.specification.valueSpecification;
     if (min >= max) {
       throw new Error(`Minimum value (${min}) must be less than maximum value (${max}).`);
     }
@@ -147,6 +147,9 @@ export function validateScorerSpec(spec: ScorerSpec): void {
     const numValues = Math.floor((max - min) / step) + 1;
     if (numValues > MAX_ENUM_VALUES) {
       throw new Error(`Step too small: would generate ${numValues} values (max ${MAX_ENUM_VALUES}).`);
+    }
+    if (threshold != null && (threshold < min || threshold > max)) {
+      throw new Error(`Threshold (${threshold}) must be within the range [${min}, ${max}].`);
     }
   }
 
