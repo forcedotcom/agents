@@ -25,6 +25,10 @@ import {
   buildScorerXml,
   buildPromptTemplateXml,
   parseScorerXml,
+  parseScorerVersions,
+  addVersionToScorerXml,
+  addVersionToPromptTemplateXml,
+  setVersionStatusInScorerXml,
   createScorerDefinition,
   loadScorerSpec,
   MAX_ENUM_VALUES,
@@ -511,12 +515,140 @@ describe('parseScorerXml', () => {
   });
 });
 
+describe('scorer versioning', () => {
+  const base: ScorerSpec = {
+    apiName: 'Resolution',
+    label: 'Resolution v1',
+    lightningType: 'lightning__numberType',
+    engineType: 'PromptTemplate',
+    status: 'Available',
+    agentAssociation: { agentApiName: 'Agent1', isActive: true },
+  };
+
+  // v1 Available, v2 Draft.
+  const twoVersionXml = (): string =>
+    addVersionToScorerXml(buildScorerXml(base), { ...base, label: 'Resolution v2', status: 'Draft' }).xml;
+
+  describe('addVersionToScorerXml', () => {
+    it('appends a version numbered one higher than the current max', () => {
+      const { xml, versionNumber } = addVersionToScorerXml(buildScorerXml(base), { ...base, label: 'Resolution v2' });
+      expect(versionNumber).to.equal(2);
+      const versions = parseScorerVersions(xml);
+      expect(versions.map((v) => v.versionNumber)).to.deep.equal([1, 2]);
+      expect(xml).to.include('<label>Resolution v1</label>');
+      expect(xml).to.include('<label>Resolution v2</label>');
+    });
+
+    it('keeps incrementing across successive bumps', () => {
+      const v2 = addVersionToScorerXml(buildScorerXml(base), { ...base, label: 'v2' }).xml;
+      const { versionNumber } = addVersionToScorerXml(v2, { ...base, label: 'v3' });
+      expect(versionNumber).to.equal(3);
+    });
+
+    it('preserves the definition-level lightningType', () => {
+      const { xml } = addVersionToScorerXml(buildScorerXml(base), { ...base, label: 'v2' });
+      expect(xml).to.include('<lightningType>lightning__numberType</lightningType>');
+    });
+
+    it('rejects changing lightningType across versions', () => {
+      expect(() =>
+        addVersionToScorerXml(buildScorerXml(base), { ...base, lightningType: 'lightning__textType' })
+      ).to.throw(/Cannot change lightningType across versions/);
+    });
+  });
+
+  describe('parseScorerVersions', () => {
+    it('lists every version with its number, status, and active flag', () => {
+      const versions = parseScorerVersions(twoVersionXml());
+      expect(versions).to.deep.equal([
+        { versionNumber: 1, status: 'Available', isActive: true, label: 'Resolution v1' },
+        { versionNumber: 2, status: 'Draft', isActive: true, label: 'Resolution v2' },
+      ]);
+    });
+  });
+
+  describe('parseScorerXml version selection', () => {
+    it('picks the highest-numbered Available version when none is requested', () => {
+      // v1 Available, v2 Draft → v1 is the only Available.
+      const parsed = parseScorerXml(twoVersionXml(), 'Resolution');
+      expect(parsed.label).to.equal('Resolution v1');
+    });
+
+    it('prefers the higher Available version when several are Available', () => {
+      const promoted = setVersionStatusInScorerXml(twoVersionXml(), 'Resolution', 2, 'Available');
+      const parsed = parseScorerXml(promoted, 'Resolution');
+      expect(parsed.label).to.equal('Resolution v2');
+    });
+
+    it('runs a requested Draft version explicitly (the refine inner loop)', () => {
+      const parsed = parseScorerXml(twoVersionXml(), 'Resolution', { scorerVersion: 2 });
+      expect(parsed.label).to.equal('Resolution v2');
+    });
+
+    it('throws when no version is Available and none is requested', () => {
+      const draftOnly = buildScorerXml({ ...base, status: 'Draft' });
+      expect(() => parseScorerXml(draftOnly, 'Resolution')).to.throw(/no Available version/);
+    });
+
+    it('throws when a requested version does not exist', () => {
+      expect(() => parseScorerXml(twoVersionXml(), 'Resolution', { scorerVersion: 99 })).to.throw(/has no version 99/);
+    });
+
+    it('throws when a requested version is archived', () => {
+      const archived = setVersionStatusInScorerXml(twoVersionXml(), 'Resolution', 2, 'Archived');
+      expect(() => parseScorerXml(archived, 'Resolution', { scorerVersion: 2 })).to.throw(/is archived and can't be run/);
+    });
+  });
+
+  describe('setVersionStatusInScorerXml', () => {
+    it('promotes a Draft version to Available', () => {
+      const promoted = setVersionStatusInScorerXml(twoVersionXml(), 'Resolution', 2, 'Available');
+      const v2 = parseScorerVersions(promoted).find((v) => v.versionNumber === 2);
+      expect(v2?.status).to.equal('Available');
+    });
+
+    it('archives a version', () => {
+      const archived = setVersionStatusInScorerXml(twoVersionXml(), 'Resolution', 1, 'Archived');
+      const v1 = parseScorerVersions(archived).find((v) => v.versionNumber === 1);
+      expect(v1?.status).to.equal('Archived');
+    });
+
+    it('throws when the version does not exist', () => {
+      expect(() => setVersionStatusInScorerXml(twoVersionXml(), 'Resolution', 5, 'Available')).to.throw(
+        /has no version 5/
+      );
+    });
+  });
+
+  describe('addVersionToPromptTemplateXml', () => {
+    it('appends a template version and repoints activeVersionIdentifier at it', () => {
+      const v1 = buildPromptTemplateXml('Resolution', 'rubric content v1');
+      const { xml, versionIdentifier } = addVersionToPromptTemplateXml(v1, 'rubric content v2');
+
+      const parsed = new XMLParser({ ignoreAttributes: false }).parse(xml) as {
+        GenAiPromptTemplate: {
+          activeVersionIdentifier: string;
+          templateVersions: Array<{ content: string; versionIdentifier: string }>;
+        };
+      };
+      const versions = parsed.GenAiPromptTemplate.templateVersions;
+      expect(versions).to.have.length(2);
+      expect(versions[1].content).to.equal('rubric content v2');
+      // The active pointer now names the new version — that's what `run` serves.
+      expect(parsed.GenAiPromptTemplate.activeVersionIdentifier).to.equal(versionIdentifier);
+      expect(parsed.GenAiPromptTemplate.activeVersionIdentifier).to.equal(versions[1].versionIdentifier);
+    });
+  });
+});
+
 describe('loadScorerSpec', () => {
   const spec: ScorerSpec = {
     apiName: 'SentimentScore',
     label: 'Sentiment Score',
     lightningType: 'lightning__textType',
     engineType: 'PromptTemplate',
+    // Available so it is runnable by default: run resolves the highest-numbered Available version.
+    status: 'Available',
     agentAssociation: { agentApiName: 'CopilotAgent', isActive: true },
   };
 

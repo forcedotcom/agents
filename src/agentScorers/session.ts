@@ -33,18 +33,29 @@ function normalizeTimestamp(value: string): string {
   return `${base}.${`${frac}000`.slice(0, 3)}${normOffset}`;
 }
 
+// Guards against pathological (deeply nested or cyclic-looking) input blowing the call stack with a raw,
+// confusing RangeError; real STDM sessions never nest anywhere near this deep.
+const MAX_NORMALIZE_DEPTH = 200;
+
 /** Recursively normalize every timestamp string (any key ending in "timestamp") to the platform's format. */
-function normalizeTimestampsDeep(node: unknown): unknown {
+function normalizeTimestampsDeep(node: unknown, depth = 0): unknown {
+  if (depth > MAX_NORMALIZE_DEPTH) {
+    throw new Error(
+      `Session data is nested more than ${MAX_NORMALIZE_DEPTH} levels deep; refusing to normalize it.`
+    );
+  }
   if (Array.isArray(node)) {
-    return node.map((el) => normalizeTimestampsDeep(el));
+    return node.map((el) => normalizeTimestampsDeep(el, depth + 1));
   }
   if (node !== null && typeof node === 'object') {
-    const out: Record<string, unknown> = {};
+    // Object.create(null) has no Object.prototype, so a field literally named "__proto__" is assigned as an
+    // ordinary own data property instead of being silently swallowed by the prototype setter.
+    const out = Object.create(null) as Record<string, unknown>;
     for (const [key, val] of Object.entries(node)) {
       out[key] =
         typeof val === 'string' && key.toLowerCase().endsWith('timestamp')
           ? normalizeTimestamp(val)
-          : normalizeTimestampsDeep(val);
+          : normalizeTimestampsDeep(val, depth + 1);
     }
     return out;
   }

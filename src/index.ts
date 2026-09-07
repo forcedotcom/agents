@@ -225,6 +225,8 @@ export {
   SCORER_INPUT_SCOPES,
   SCORER_ENGINE_TYPES,
   SCORER_STATUSES,
+  SCORER_VERSION_STATUSES,
+  type ScorerVersionStatus,
   SCORER_OUTCOME_TYPES,
   SUPPORTED_LIGHTNING_TYPES,
   isValidScorerApiName,
@@ -234,7 +236,14 @@ export {
   buildScorerXml,
   buildPromptTemplateXml,
   parseScorerXml,
+  parseScorerVersions,
+  type ScorerVersionInfo,
+  addVersionToScorerXml,
+  addVersionToPromptTemplateXml,
+  setVersionStatusInScorerXml,
   createScorerDefinition,
+  addScorerVersion,
+  setScorerVersionStatus,
   loadScorerSpec,
 
   // STDM session model scorer input (the `Input:Session` value shape)

@@ -31,12 +31,20 @@ import { type Connection } from '@salesforce/core';
 // from them so the two never drift apart.
 export const SCORER_INPUT_SCOPES = ['Session', 'Intent'] as const;
 export const SCORER_ENGINE_TYPES = ['Manual', 'PromptTemplate'] as const;
+// Statuses a *new* scorer version may be authored with (via `create`). `Archived` is deliberately excluded:
+// it is a terminal state reached only by a later status transition, never an initial one.
 export const SCORER_STATUSES = ['Draft', 'Available'] as const;
 export const SCORER_OUTCOME_TYPES = ['Pass', 'Fail', 'NotApplicable'] as const;
+
+// Full lifecycle status set a *stored* scorer version may carry. Authoring is limited to SCORER_STATUSES;
+// `Archived` is recognized when parsing/selecting an existing scorer's versions — an archived version cannot
+// be run, and a version can be moved to it via a status transition.
+export const SCORER_VERSION_STATUSES = ['Draft', 'Available', 'Archived'] as const;
 
 export type ScorerInputScope = (typeof SCORER_INPUT_SCOPES)[number];
 export type ScorerEngineType = (typeof SCORER_ENGINE_TYPES)[number];
 export type ScorerStatus = (typeof SCORER_STATUSES)[number];
+export type ScorerVersionStatus = (typeof SCORER_VERSION_STATUSES)[number];
 export type ScorerOutcomeType = (typeof SCORER_OUTCOME_TYPES)[number];
 
 export const SUPPORTED_LIGHTNING_TYPES = [

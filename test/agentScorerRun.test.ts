@@ -15,9 +15,10 @@
  */
 import { expect } from 'chai';
 import { type Connection } from '@salesforce/core';
-import { normalizeSession } from '../src/agentScorer';
+import { normalizeSession, runScorer } from '../src/agentScorer';
 import { generate } from '../src/agentScorers/engines/generations';
-import type { SessionView } from '../src/agentScorer';
+import { promptTemplateEngine } from '../src/agentScorers/engines/promptTemplateEngine';
+import type { SessionView, ScorerSpec, ValueMap } from '../src/agentScorer';
 
 /** Build a minimal-but-typed SessionView, letting a test override just the timestamps it cares about. */
 function makeSession(overrides: {
@@ -75,6 +76,22 @@ function fakeConnection(response: unknown): Connection {
   } as unknown as Connection;
 }
 
+/** A fake Connection that also captures the request body, so a test can inspect the valueMap that was sent. */
+function capturingConnection(response: unknown): { connection: Connection; valueMap: () => ValueMap } {
+  let capturedBody: string | undefined;
+  const connection = {
+    version: '64.0',
+    request: (req: { body?: string }) => {
+      capturedBody = req.body;
+      return Promise.resolve(response);
+    },
+  } as unknown as Connection;
+  return {
+    connection,
+    valueMap: () => (JSON.parse(capturedBody ?? '{}') as { inputParams: { valueMap: ValueMap } }).inputParams.valueMap,
+  };
+}
+
 describe('normalizeSession', () => {
   it("rewrites a `Z` offset to +0000 without changing the instant", () => {
     const out = normalizeSession(makeSession({ startTimestamp: '2026-01-01T12:00:00Z' }));
@@ -126,6 +143,28 @@ describe('normalizeSession', () => {
     normalizeSession(input);
     expect(input.sessionState.startTimestamp).to.equal('2026-01-01T12:00:00Z');
   });
+
+  it('throws a clear, descriptive Error instead of a raw RangeError on pathologically deep input', () => {
+    // Build a chain of 300 nested objects — deeper than any real STDM session, deep enough to hit the guard.
+    let deep: unknown = { leaf: true };
+    for (let i = 0; i < 300; i++) {
+      deep = { nested: deep };
+    }
+    const input = { ...makeSession({}), extra: deep } as unknown as SessionView;
+    expect(() => normalizeSession(input)).to.throw(Error, /nested more than \d+ levels deep/);
+  });
+
+  it('round-trips a field literally named "__proto__" as ordinary data instead of dropping it', () => {
+    // A computed key forces a real own property named "__proto__" (an object literal with a *literal* __proto__
+    // key would instead set the new object's prototype, which isn't the case this guards against).
+    const protoKey = '__proto__';
+    const extra: Record<string, unknown> = { [protoKey]: { nested: 'x' } };
+    const input = { ...makeSession({}), extra } as unknown as SessionView;
+
+    const out = normalizeSession(input) as unknown as { extra: Record<string, unknown> };
+
+    expect(Object.getOwnPropertyDescriptor(out.extra, '__proto__')?.value).to.deep.equal({ nested: 'x' });
+  });
 });
 
 describe('generate output extraction', () => {
@@ -169,5 +208,118 @@ describe('generate output extraction', () => {
     const res = await generate(fakeConnection({ generations: [] }), 'T', valueMap);
     expect(res.ok).to.equal(false);
     expect(res.error).to.match(/no generations/i);
+  });
+
+  it('surfaces a bare JSON string scalar as output rather than treating it as an envelope', async () => {
+    const res = await generate(fakeConnection({ generations: [{ text: '"7"' }] }), 'T', valueMap);
+    expect(res).to.deep.include({ ok: true, output: '7' });
+  });
+
+  it('surfaces a bare JSON number scalar as output rather than treating it as an envelope', async () => {
+    const res = await generate(fakeConnection({ generations: [{ text: '9' }] }), 'T', valueMap);
+    expect(res).to.deep.include({ ok: true, output: 9 });
+  });
+
+  it('surfaces a bare JSON array as a string[] output rather than treating it as an envelope', async () => {
+    const res = await generate(fakeConnection({ generations: [{ text: '["A","B"]' }] }), 'T', valueMap);
+    expect(res.output).to.deep.equal(['A', 'B']);
+  });
+
+  it('fails cleanly (does not throw) when the response body is null', async () => {
+    const res = await generate(fakeConnection(null), 'T', valueMap);
+    expect(res.ok).to.equal(false);
+    expect(res.error).to.match(/no generations/i);
+  });
+
+  it('fails cleanly (does not throw) when the first generation element is not an object', async () => {
+    const res = await generate(fakeConnection({ generations: [null] }), 'T', valueMap);
+    expect(res.ok).to.equal(false);
+    expect(res.error).to.match(/no generations/i);
+  });
+
+  it('fails cleanly when the request itself rejects', async () => {
+    const connection = {
+      version: '64.0',
+      request: () => Promise.reject(new Error('network down')),
+    } as unknown as Connection;
+    const res = await generate(connection, 'T', valueMap);
+    expect(res).to.deep.equal({ ok: false, error: 'network down' });
+  });
+
+  it("falls back to 'generations API error' when the error array entry has no message", async () => {
+    const res = await generate(fakeConnection([{}]), 'T', valueMap);
+    expect(res).to.deep.equal({ ok: false, error: 'generations API error' });
+  });
+
+  it("falls back to 'generations API error' for an empty error array", async () => {
+    const res = await generate(fakeConnection([]), 'T', valueMap);
+    expect(res).to.deep.equal({ ok: false, error: 'generations API error' });
+  });
+});
+
+describe('runScorer', () => {
+  const baseSpec: ScorerSpec = {
+    apiName: 'TestScorer',
+    label: 'Test Scorer',
+    lightningType: 'lightning__textType',
+    engineType: 'Manual',
+    agentAssociation: { agentApiName: 'Agent1', isActive: true },
+  };
+
+  it("throws for a 'Manual' engineType with a message mentioning no engine is implemented", () => {
+    expect(() => runScorer(baseSpec, makeSession({}), fakeConnection({}))).to.throw(
+      /no engine implemented for engineType 'Manual'/
+    );
+  });
+
+  it("drives the PromptTemplate engine and returns its generations result", async () => {
+    const text = JSON.stringify({ output: 'Good', explanation: 'looks fine' });
+    const spec: ScorerSpec = { ...baseSpec, engineType: 'PromptTemplate' };
+    const result = await runScorer(spec, makeSession({}), fakeConnection({ generations: [{ text }] }));
+    expect(result).to.deep.include({ ok: true, output: 'Good', explanation: 'looks fine' });
+  });
+});
+
+describe('promptTemplateEngine deriveInputs (via run)', () => {
+  const baseSpec: ScorerSpec = {
+    apiName: 'TestScorer',
+    label: 'Test Scorer',
+    lightningType: 'lightning__textType',
+    engineType: 'PromptTemplate',
+    agentAssociation: { agentApiName: 'Agent1', isActive: true },
+  };
+
+  async function runWithOutputEnumValues(outputEnumValues: ScorerSpec['outputEnumValues']): Promise<ValueMap> {
+    const { connection, valueMap } = capturingConnection({
+      generations: [{ text: JSON.stringify({ output: 'x' }) }],
+    });
+    await promptTemplateEngine.run({ spec: { ...baseSpec, outputEnumValues }, session: makeSession({}), connection });
+    return valueMap();
+  }
+
+  it('excludes any value with isSystemFallback: true from Input:AllowedLabels', async () => {
+    const valueMap = await runWithOutputEnumValues([
+      { value: 'Good', outcomeType: 'Pass' },
+      { value: 'Bad', outcomeType: 'Fail', isFallback: true },
+      { value: 'SystemDefault', outcomeType: 'NotApplicable', isSystemFallback: true },
+    ]);
+    expect(valueMap['Input:AllowedLabels'].value).to.equal('Good, Bad');
+  });
+
+  it('picks the explicit non-system isFallback value for Input:FallbackLabel', async () => {
+    const valueMap = await runWithOutputEnumValues([
+      { value: 'Good', outcomeType: 'Pass' },
+      { value: 'Bad', outcomeType: 'Fail', isFallback: true },
+      { value: 'SystemDefault', outcomeType: 'NotApplicable', isSystemFallback: true },
+    ]);
+    expect(valueMap['Input:FallbackLabel'].value).to.equal('Bad');
+  });
+
+  it('falls back to the last selectable value for Input:FallbackLabel when no explicit fallback exists', async () => {
+    const valueMap = await runWithOutputEnumValues([
+      { value: 'Good', outcomeType: 'Pass' },
+      { value: 'Bad', outcomeType: 'Fail' },
+    ]);
+    expect(valueMap['Input:FallbackLabel'].value).to.equal('Bad');
   });
 });

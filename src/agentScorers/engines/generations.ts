@@ -38,9 +38,9 @@ export async function generate(connection: Connection, apiName: string, valueMap
   };
   const url = `/services/data/v${String(connection.version)}/einstein/prompt-templates/${apiName}/generations`;
 
-  let resp: GenerationsResponse | GenerationsError;
+  let resp: unknown;
   try {
-    resp = await connection.request<GenerationsResponse | GenerationsError>({
+    resp = await connection.request<unknown>({
       method: 'POST',
       url,
       body: JSON.stringify(body),
@@ -52,20 +52,29 @@ export async function generate(connection: Connection, apiName: string, valueMap
 
   // API errors come back as an array of {errorCode, message}.
   if (Array.isArray(resp)) {
-    return { ok: false, error: resp[0]?.message ?? 'generations API error' };
+    return { ok: false, error: (resp as GenerationsError)[0]?.message ?? 'generations API error' };
   }
 
-  const gens = resp.generations ?? [];
-  if (!gens.length) {
+  // Guard against a null/empty/malformed body: `resp.generations` and `gens[0].text` must not be dereferenced
+  // on anything but a real object, or a null/empty response throws instead of returning {ok:false}.
+  const gens = resp !== null && typeof resp === 'object' ? (resp as GenerationsResponse).generations ?? [] : [];
+  const firstGen: { text?: string } | undefined = gens[0];
+  if (!gens.length || firstGen === null || typeof firstGen !== 'object') {
     return { ok: false, error: 'no generations returned (is the template deployed & published?)' };
   }
 
-  const text = gens[0].text ?? '';
+  const text = firstGen.text ?? '';
   // Scorer templates emit JSON in one of two shapes:
   //   legacy:     {"output": <number|["Label"]>, "explanation": "..."}
   //   open-ended: {"outputs": [{"label": "...", "value": <n|"..">, "isPassed": bool}], "explanation": "..."}
   try {
-    const obj = JSON.parse(text) as {
+    const parsed: unknown = JSON.parse(text);
+    // A bare scalar or array (e.g. `9`, `["A","B"]`) is the score itself, not the envelope object; only the
+    // latter carries `output`/`outputs`.
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { ok: true, output: coerceOutput(parsed), raw: text };
+    }
+    const obj = parsed as {
       output?: ScorerResult['output'];
       outputs?: Array<{ label?: string | null; value?: number | string | null }>;
       explanation?: string;
@@ -75,6 +84,13 @@ export async function generate(connection: Connection, apiName: string, valueMap
     // Fall back to the raw text; the caller's coercion handles loose formats.
     return { ok: true, output: text, raw: text };
   }
+}
+
+/** Coerce a bare (non-envelope) parsed JSON value into the ScorerResult['output'] shape. */
+function coerceOutput(value: unknown): ScorerResult['output'] {
+  if (Array.isArray(value)) return value.map(String);
+  if (typeof value === 'number' || typeof value === 'string') return value;
+  return String(value);
 }
 
 /**
