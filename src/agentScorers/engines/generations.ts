@@ -61,12 +61,37 @@ export async function generate(connection: Connection, apiName: string, valueMap
   }
 
   const text = gens[0].text ?? '';
-  // Scorer templates emit JSON: {"output": <number|["Label"]>, "explanation": "..."}
+  // Scorer templates emit JSON in one of two shapes:
+  //   legacy:     {"output": <number|["Label"]>, "explanation": "..."}
+  //   open-ended: {"outputs": [{"label": "...", "value": <n|"..">, "isPassed": bool}], "explanation": "..."}
   try {
-    const obj = JSON.parse(text) as { output?: ScorerResult['output']; explanation?: string };
-    return { ok: true, output: obj.output, explanation: obj.explanation, raw: text };
+    const obj = JSON.parse(text) as {
+      output?: ScorerResult['output'];
+      outputs?: Array<{ label?: string | null; value?: number | string | null }>;
+      explanation?: string;
+    };
+    return { ok: true, output: extractOutput(obj), explanation: obj.explanation, raw: text };
   } catch {
     // Fall back to the raw text; the caller's coercion handles loose formats.
     return { ok: true, output: text, raw: text };
   }
+}
+
+/**
+ * Normalize the two template response shapes into a single `output`. The open-ended `outputs[]` shape carries
+ * the score in each entry's `value` (or `label` when there's no value); a single entry collapses to a scalar,
+ * multiple entries to a string array. Falls back to the legacy top-level `output`.
+ */
+function extractOutput(obj: {
+  output?: ScorerResult['output'];
+  outputs?: Array<{ label?: string | null; value?: number | string | null }>;
+}): ScorerResult['output'] {
+  if (Array.isArray(obj.outputs)) {
+    const picked = obj.outputs
+      .map((o) => (o.value ?? o.label))
+      .filter((v): v is number | string => v !== null && v !== undefined);
+    if (picked.length === 1) return picked[0];
+    if (picked.length > 1) return picked.map(String);
+  }
+  return obj.output;
 }

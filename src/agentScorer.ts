@@ -28,6 +28,7 @@ import { type ScorerSpec, type ScorerCreateResult, type ScorerResult, type Sessi
 import { validateScorerSpec } from './agentScorers/validate';
 import { buildDefaultPromptContent } from './agentScorers/promptContent';
 import { buildScorerXml, buildPromptTemplateXml, parseScorerXml } from './agentScorers/xml';
+import { normalizeSession } from './agentScorers/session';
 import { getEngine, supportedEngineTypes } from './agentScorers/engines/registry';
 
 // Re-export the scorer feature's public surface so consumers import everything from this one root module.
@@ -35,6 +36,7 @@ export * from './agentScorers/types';
 export { isValidScorerApiName, labelToApiName, validateScorerSpec } from './agentScorers/validate';
 export { buildDefaultPromptContent } from './agentScorers/promptContent';
 export { buildScorerXml, buildPromptTemplateXml, parseScorerXml } from './agentScorers/xml';
+export { normalizeSession } from './agentScorers/session';
 export { registerEngine, getEngine, supportedEngineTypes } from './agentScorers/engines/registry';
 
 /** File-name suffix of a scorer definition in project metadata. */
@@ -156,5 +158,7 @@ export function runScorer(spec: ScorerSpec, session: SessionView, connection: Co
         `Supported: ${supportedEngineTypes().join(', ')}.`
     );
   }
-  return engine.run({ spec, session, connection });
+  // Normalize timestamps to the format the platform's Input:Session validation accepts, so real STDM data
+  // (which uses `+00:00` / `Z` / variable fractional precision) can be scored without hand-editing.
+  return engine.run({ spec, session: normalizeSession(session), connection });
 }
