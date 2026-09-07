@@ -56,6 +56,7 @@ export {
   addVersionToScorerXml,
   addVersionToPromptTemplateXml,
   setVersionStatusInScorerXml,
+  setVersionAssociationActiveInScorerXml,
   type ScorerVersionInfo,
 } from './agentScorers/xml';
 export { normalizeSession } from './agentScorers/session';

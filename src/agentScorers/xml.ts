@@ -335,6 +335,45 @@ export function setVersionStatusInScorerXml(
   return xmlBuilder().build({ '?xml': XML_DECLARATION, AiAgentScorerDefinition: def });
 }
 
+/**
+ * Activate or deactivate the agent association on one version of a scorer definition. This is the field that
+ * turns automatic scoring of the associated agent's sessions on or off for a given version.
+ *
+ * The platform enforces (at deploy time) that an active association's version must be `Available`, and that at
+ * most one version of a scorer holds an active association — this only edits the local XML, so deploy afterward.
+ *
+ * @throws if the document is not a scorer definition, has no version with `versionNumber`, or that version has
+ * no `agentAssociation` to toggle.
+ */
+export function setVersionAssociationActiveInScorerXml(
+  existingXml: string,
+  apiName: string,
+  versionNumber: number,
+  isActive: boolean
+): string {
+  const root = roundTripParser().parse(existingXml) as {
+    AiAgentScorerDefinition?: RawDefinition & Record<string, unknown>;
+  };
+  const def = root.AiAgentScorerDefinition;
+  if (!def) {
+    throw new Error(`The metadata for scorer '${apiName}' is not a valid AiAgentScorerDefinition.`);
+  }
+  const versions = toArray(def.scorerVersion);
+  const target = versions.find((v) => toVersionNumber(v.versionNumber) === versionNumber);
+  if (!target) {
+    throw new Error(`Scorer '${apiName}' has no version ${versionNumber}. Authored versions: ${listVersions(versions)}.`);
+  }
+  const association = (target as Record<string, unknown>).agentAssociation as Record<string, unknown> | undefined;
+  if (!association) {
+    throw new Error(
+      `Version ${versionNumber} of scorer '${apiName}' has no agent association to ${isActive ? 'activate' : 'deactivate'}.`
+    );
+  }
+  association.isActive = isActive;
+
+  return xmlBuilder().build({ '?xml': XML_DECLARATION, AiAgentScorerDefinition: def });
+}
+
 // --- Prompt template ------------------------------------------------------------------------------------
 
 /** The fixed input set every scorer prompt template declares. Kept identical across template versions. */

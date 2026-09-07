@@ -29,6 +29,7 @@ import {
   addVersionToScorerXml,
   addVersionToPromptTemplateXml,
   setVersionStatusInScorerXml,
+  setVersionAssociationActiveInScorerXml,
   createScorerDefinition,
   loadScorerSpec,
   MAX_ENUM_VALUES,
@@ -615,6 +616,38 @@ describe('scorer versioning', () => {
 
     it('throws when the version does not exist', () => {
       expect(() => setVersionStatusInScorerXml(twoVersionXml(), 'Resolution', 5, 'Available')).to.throw(
+        /has no version 5/
+      );
+    });
+  });
+
+  describe('setVersionAssociationActiveInScorerXml', () => {
+    // v1 has an inactive association; v2 Draft, also inactive.
+    const inactiveXml = (): string =>
+      addVersionToScorerXml(buildScorerXml({ ...base, agentAssociation: { agentApiName: 'Agent1', isActive: false } }), {
+        ...base,
+        label: 'Resolution v2',
+        status: 'Draft',
+        agentAssociation: { agentApiName: 'Agent1', isActive: false },
+      }).xml;
+
+    it('activates the agent association on a version', () => {
+      const activated = setVersionAssociationActiveInScorerXml(inactiveXml(), 'Resolution', 1, true);
+      const v1 = parseScorerVersions(activated).find((v) => v.versionNumber === 1);
+      expect(v1?.isActive).to.equal(true);
+      // The other version is untouched.
+      const v2 = parseScorerVersions(activated).find((v) => v.versionNumber === 2);
+      expect(v2?.isActive).to.equal(false);
+    });
+
+    it('deactivates the agent association on a version', () => {
+      const deactivated = setVersionAssociationActiveInScorerXml(inactiveXml(), 'Resolution', 1, false);
+      const v1 = parseScorerVersions(deactivated).find((v) => v.versionNumber === 1);
+      expect(v1?.isActive).to.equal(false);
+    });
+
+    it('throws when the version does not exist', () => {
+      expect(() => setVersionAssociationActiveInScorerXml(inactiveXml(), 'Resolution', 5, true)).to.throw(
         /has no version 5/
       );
     });

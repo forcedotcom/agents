@@ -241,6 +241,7 @@ export {
   addVersionToScorerXml,
   addVersionToPromptTemplateXml,
   setVersionStatusInScorerXml,
+  setVersionAssociationActiveInScorerXml,
   createScorerDefinition,
   addScorerVersion,
   setScorerVersionStatus,
