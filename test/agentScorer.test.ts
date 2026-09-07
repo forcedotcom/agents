@@ -15,7 +15,7 @@
  */
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { expect } from 'chai';
 import { XMLParser } from 'fast-xml-parser';
 import {
@@ -31,6 +31,7 @@ import {
   setVersionStatusInScorerXml,
   setVersionAssociationActiveInScorerXml,
   createScorerDefinition,
+  addScorerVersion,
   loadScorerSpec,
   MAX_ENUM_VALUES,
 } from '../src/agentScorer';
@@ -671,6 +672,76 @@ describe('scorer versioning', () => {
       expect(parsed.GenAiPromptTemplate.activeVersionIdentifier).to.equal(versionIdentifier);
       expect(parsed.GenAiPromptTemplate.activeVersionIdentifier).to.equal(versions[1].versionIdentifier);
     });
+  });
+});
+
+describe('addScorerVersion (PromptTemplate refine path)', () => {
+  const spec: ScorerSpec = {
+    apiName: 'RefineScorer',
+    label: 'Refine Scorer',
+    lightningType: 'lightning__numberType',
+    engineType: 'PromptTemplate',
+    status: 'Draft',
+    agentAssociation: { agentApiName: 'CopilotAgent', isActive: false },
+  };
+
+  let root: string;
+  let scorerPath: string;
+  let templatePath: string;
+
+  // Parse the GenAiPromptTemplate's version list + active pointer to prove the refine wiring end to end.
+  function readTemplate(): { activeVersionIdentifier: string; templateVersions: Array<{ content: string; versionIdentifier: string }> } {
+    const parsed = new XMLParser({ ignoreAttributes: false }).parse(readFileSync(templatePath, 'utf8')) as {
+      GenAiPromptTemplate: { activeVersionIdentifier: string; templateVersions: unknown };
+    };
+    const versions = parsed.GenAiPromptTemplate.templateVersions;
+    return {
+      activeVersionIdentifier: parsed.GenAiPromptTemplate.activeVersionIdentifier,
+      templateVersions: (Array.isArray(versions) ? versions : [versions]) as Array<{ content: string; versionIdentifier: string }>,
+    };
+  }
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'scorer-refine-'));
+    // Seed an existing v1 scorer + its generated prompt template on disk.
+    scorerPath = join(root, 'aiAgentScorerDefinitions', `${spec.apiName}.aiAgentScorerDefinition-meta.xml`);
+    templatePath = join(root, 'genAiPromptTemplates', `${spec.apiName}.genAiPromptTemplate-meta.xml`);
+    mkdirSync(join(root, 'aiAgentScorerDefinitions'), { recursive: true });
+    mkdirSync(join(root, 'genAiPromptTemplates'), { recursive: true });
+    writeFileSync(scorerPath, buildScorerXml(spec));
+    writeFileSync(templatePath, buildPromptTemplateXml(spec.apiName, 'rubric content v1'));
+  });
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it('appends a scorer version AND a prompt-template version, repointing the active version, when new promptContent is supplied', async () => {
+    const result = await addScorerVersion({ ...spec, promptContent: 'rubric content v2' }, { outputDir: root });
+
+    // scorer definition gained a second version
+    expect(result.versionNumber).to.equal(2);
+    expect(parseScorerVersions(readFileSync(scorerPath, 'utf8')).map((v) => v.versionNumber)).to.deep.equal([1, 2]);
+
+    // prompt template gained a second version and the active pointer moved to it (the risky repoint)
+    expect(result.promptTemplatePath).to.equal(templatePath);
+    const { templateVersions, activeVersionIdentifier } = readTemplate();
+    expect(templateVersions).to.have.length(2);
+    expect(String(templateVersions[1].content)).to.include('rubric content v2');
+    expect(activeVersionIdentifier).to.equal(templateVersions[1].versionIdentifier);
+    // the active version is NOT still pointing at v1 — a refined rubric must actually be served
+    expect(activeVersionIdentifier).to.not.equal(templateVersions[0].versionIdentifier);
+  });
+
+  it('leaves the prompt template untouched for a metadata-only version bump (no new promptContent)', async () => {
+    const before = readFileSync(templatePath, 'utf8');
+    const result = await addScorerVersion(spec, { outputDir: root });
+
+    expect(result.versionNumber).to.equal(2);
+    expect(result.promptTemplateContents).to.be.undefined;
+    // single-version template, unchanged on disk
+    expect(readFileSync(templatePath, 'utf8')).to.equal(before);
+    expect(readTemplate().templateVersions).to.have.length(1);
   });
 });
 
