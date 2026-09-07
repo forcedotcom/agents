@@ -16,8 +16,9 @@ yarn-error.log
 lib
 dist
 
-# generated at build time from the ScorerSpec type (see scripts/gen-scorer-schema.mjs)
-src/scorerSpecSchema.generated.ts
+# generated at build time from the ScorerSpec / SessionView types (see scripts/gen-scorer-schema.mjs)
+src/agentScorers/scorerSpecSchema.generated.ts
+src/agentScorers/sessionViewSchema.generated.ts
 # test artifacts
 *xunit.xml
 *checkstyle.xml

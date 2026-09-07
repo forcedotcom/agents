@@ -15,7 +15,7 @@
  */
 
 // The schema object is generated from the `ScorerSpec` type at build time (see scripts/gen-scorer-schema.mjs)
-// and is git-ignored. Editing scorer fields happens in `ScorerSpec` (src/agentScorer.ts) — the single source
+// and is git-ignored. Editing scorer fields happens in `ScorerSpec` (src/agentScorers/types.ts) — the single source
 // of truth — never here or in the generated file.
 import { SCORER_SPEC_JSON_SCHEMA } from './scorerSpecSchema.generated';
 

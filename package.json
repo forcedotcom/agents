@@ -112,13 +112,14 @@
     "gen:scorer-schema": {
       "command": "node scripts/gen-scorer-schema.mjs",
       "files": [
-        "src/agentScorer.ts",
+        "src/agentScorers/types.ts",
         "scripts/gen-scorer-schema.mjs",
         "tsconfig.json",
         "package.json"
       ],
       "output": [
-        "src/scorerSpecSchema.generated.ts"
+        "src/agentScorers/scorerSpecSchema.generated.ts",
+        "src/agentScorers/sessionViewSchema.generated.ts"
       ]
     },
     "format": {
