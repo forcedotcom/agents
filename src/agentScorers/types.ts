@@ -179,6 +179,12 @@ export type ScorerSpec = {
    * omit for fully free-form output. When provided, at most one value may have isFallback: true.
    */
   outputEnumValues?: OutputEnumValue[];
+  /**
+   * The version number this spec was resolved from. Populated by `parseScorerXml`/`loadScorerSpec` when a
+   * stored definition is read (so callers can report which version actually ran); it is not part of authoring
+   * and is ignored by `buildScorerXml`/`addVersionToScorerXml`.
+   */
+  scorerVersion?: number;
 };
 
 export type ScorerCreateResult = {

@@ -478,7 +478,8 @@ describe('parseScorerXml', () => {
 
   it('round-trips a full spec through buildScorerXml', () => {
     const parsed = parseScorerXml(buildScorerXml(spec), spec.apiName);
-    expect(parsed).to.deep.equal(spec);
+    // buildScorerXml always emits version 1, which parse records back onto the spec.
+    expect(parsed).to.deep.equal({ ...spec, scorerVersion: 1 });
   });
 
   it('coerces boolean and numeric fields to their JS types', () => {
@@ -585,6 +586,15 @@ describe('scorer versioning', () => {
     it('runs a requested Draft version explicitly (the refine inner loop)', () => {
       const parsed = parseScorerXml(twoVersionXml(), 'Resolution', { scorerVersion: 2 });
       expect(parsed.label).to.equal('Resolution v2');
+    });
+
+    it('records the resolved version number on the spec (default selection)', () => {
+      // v1 Available, v2 Draft → v1 is served by default.
+      expect(parseScorerXml(twoVersionXml(), 'Resolution').scorerVersion).to.equal(1);
+    });
+
+    it('records the resolved version number when a version is requested explicitly', () => {
+      expect(parseScorerXml(twoVersionXml(), 'Resolution', { scorerVersion: 2 }).scorerVersion).to.equal(2);
     });
 
     it('throws when no version is Available and none is requested', () => {

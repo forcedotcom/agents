@@ -261,6 +261,11 @@ export function parseScorerXml(xml: string, apiName: string, options: { scorerVe
     }));
   }
 
+  // Record which version this spec was resolved from, so callers (e.g. `run`) can report the served version.
+  // Skip a malformed/legacy document with no numbered version (toVersionNumber → 0).
+  const resolvedVersion = toVersionNumber(version.versionNumber);
+  if (resolvedVersion > 0) spec.scorerVersion = resolvedVersion;
+
   return spec;
 }
 
