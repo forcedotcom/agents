@@ -1,3 +1,12 @@
+# [2.3.0](https://github.com/forcedotcom/agents/compare/2.2.0...2.3.0) (2026-09-08)
+
+
+### Features
+
+* align preview ContextVariable with typed API schema @W-24014400@ ([#356](https://github.com/forcedotcom/agents/issues/356)) ([bb2ef52](https://github.com/forcedotcom/agents/commit/bb2ef52ec2b39e369e2e908e1d6c29d8c20f8a96))
+
+
+
 # [2.2.0](https://github.com/forcedotcom/agents/compare/2.1.1...2.2.0) (2026-09-01)
 
 
