@@ -5,6 +5,7 @@
     "outDir": "lib",
     "rootDir": "src",
     "skipLibCheck": true,
+    "types": ["node", "mocha"],
     "plugins": [{ "transform": "@salesforce/core/messageTransformer", "import": "messageTransformer" }]
   },
   "include": ["./src/**/*.ts"]
