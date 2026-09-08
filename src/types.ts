@@ -49,11 +49,29 @@ export type AgentPreviewInterface = {
   setApexDebugging: (apexDebugging: boolean) => void;
 };
 
-export type ContextVariable = {
-  name: string;
-  type: 'Object' | 'Boolean' | 'DateTime' | 'Money' | 'Number' | 'Text' | 'Ref' | 'List';
-  value: string;
-};
+// The `type` discriminator for a ContextVariable, matching the preview API's
+// `Variable.type` enum (agent-api v1.1 OpenAPI schema `Variable`).
+export type ContextVariableType = 'Text' | 'Date' | 'DateTime' | 'Money' | 'Ref' | 'Boolean' | 'Number' | 'Object' | 'List' | 'Json';
+
+/**
+ * A context/custom variable sent when starting a preview session or a message.
+ *
+ * This mirrors the preview API's polymorphic `Variable` schema: the JSON type of
+ * `value` is determined by `type`. Boolean values are booleans, Number values are
+ * numbers, Object/List values are arrays, and Json is any JSON object. Sending a
+ * boolean as the string "True" (the old behavior) leaves a boolean-gated route
+ * closed, because the runtime compares "True" (Text) against True (Boolean).
+ *
+ * `value` is optional and nullable to match the API, where only `name` and `type`
+ * are required.
+ */
+export type ContextVariable =
+  | { name: string; type: 'Boolean'; value?: boolean | null }
+  | { name: string; type: 'Number'; value?: number | null }
+  | { name: string; type: 'Text' | 'Date' | 'DateTime' | 'Money' | 'Ref'; value?: string | null }
+  | { name: string; type: 'Object'; value?: ContextVariable[] | null }
+  | { name: string; type: 'List'; value?: Array<Record<string, unknown>> | null }
+  | { name: string; type: 'Json'; value?: Record<string, unknown> | null };
 
 export type AgentPreviewStartOptions = {
   contextVariables?: ContextVariable[];
