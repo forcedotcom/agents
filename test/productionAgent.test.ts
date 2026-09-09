@@ -808,13 +808,36 @@ describe('ProductionAgent', () => {
 
       const contextVariables: ContextVariable[] = [
         { name: 'CustomerId', type: 'Text', value: '001xx000003DGb2' },
-        { name: 'IsVip', type: 'Boolean', value: 'true' },
+        { name: 'IsVip', type: 'Boolean', value: true },
       ];
 
       const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: 'TestAgent' });
       await agent.preview.start({ contextVariables });
 
       expect(getStartRequestBody().variables).to.deep.equal(contextVariables);
+    });
+
+    it('carries typed values through to the `variables` array as native JSON (not strings)', async () => {
+      $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves(buildBotMetadata('EinsteinServiceAgent'));
+
+      const contextVariables: ContextVariable[] = [
+        { name: 'ProbeGate', type: 'Boolean', value: true },
+        { name: 'RetryCount', type: 'Number', value: 3 },
+        { name: 'Greeting', type: 'Text', value: 'hi' },
+        { name: 'Nested', type: 'Object', value: [{ name: 'Inner', type: 'Boolean', value: false }] },
+        { name: 'Items', type: 'List', value: [{ type: 'ref', value: '1M5xx000000000BCAQ' }] },
+        { name: 'Blob', type: 'Json', value: { a: 1, b: [true, 'x'] } },
+      ];
+
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: 'TestAgent' });
+      await agent.preview.start({ contextVariables });
+
+      // The request body is JSON.stringify'd, so a boolean/number reaches the wire as
+      // native JSON, not the string "true"/"3" that closed boolean-gated routes before.
+      const sent = getStartRequestBody().variables as ContextVariable[];
+      expect(sent).to.deep.equal(contextVariables);
+      expect(sent[0].value).to.equal(true);
+      expect(sent[1].value).to.equal(3);
     });
 
     it('defaults `variables` to an empty array when no context variables are provided', async () => {
