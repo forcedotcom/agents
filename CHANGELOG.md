@@ -1,3 +1,12 @@
+## [2.3.1](https://github.com/forcedotcom/agents/compare/2.3.0...2.3.1) (2026-09-09)
+
+
+### Bug Fixes
+
+* @W-24143688 add stage.api.salesforce.com to Agent API endpoint fallback ([#365](https://github.com/forcedotcom/agents/issues/365)) ([03746e2](https://github.com/forcedotcom/agents/commit/03746e20848abe59876b76f84efb915ca30bb1ed))
+
+
+
 # [2.3.0](https://github.com/forcedotcom/agents/compare/2.2.0...2.3.0) (2026-09-08)
 
 
