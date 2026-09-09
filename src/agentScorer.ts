@@ -28,7 +28,6 @@ import {
   type ScorerSpec,
   type ScorerCreateResult,
   type ScorerResult,
-  type ScorerVersionStatus,
   type SessionView,
 } from './agentScorers/types';
 import { validateScorerSpec } from './agentScorers/validate';
@@ -37,9 +36,6 @@ import {
   buildScorerXml,
   buildPromptTemplateXml,
   parseScorerXml,
-  addVersionToScorerXml,
-  addVersionToPromptTemplateXml,
-  setVersionStatusInScorerXml,
 } from './agentScorers/xml';
 import { normalizeSession } from './agentScorers/session';
 import { getEngine, supportedEngineTypes } from './agentScorers/engines/registry';
@@ -53,10 +49,6 @@ export {
   buildPromptTemplateXml,
   parseScorerXml,
   parseScorerVersions,
-  addVersionToScorerXml,
-  addVersionToPromptTemplateXml,
-  setVersionStatusInScorerXml,
-  setVersionAssociationActiveInScorerXml,
   type ScorerVersionInfo,
 } from './agentScorers/xml';
 export { normalizeSession } from './agentScorers/session';
@@ -113,106 +105,6 @@ export async function createScorerDefinition(
   };
 }
 
-/**
- * Add a new version to a scorer already authored in local metadata.
- *
- * Reads `<apiName>.aiAgentScorerDefinition-meta.xml` under `outputDir`, appends a `<scorerVersion>` numbered one
- * higher than the current max (content from `spec`), and — for a scorer that owns a generated prompt template and
- * supplies fresh `promptContent` — appends a new template version and repoints its active version so the refined
- * rubric is served on the next run.
- *
- * @throws if no scorer with that API name is authored under `outputDir`.
- */
-export async function addScorerVersion(
-  spec: ScorerSpec,
-  options: { outputDir: string; write?: boolean }
-): Promise<ScorerCreateResult & { versionNumber: number }> {
-  validateScorerSpec(spec);
-
-  const scorerDir = join(options.outputDir, 'aiAgentScorerDefinitions');
-  const scorerPath = join(scorerDir, `${spec.apiName}.aiAgentScorerDefinition-meta.xml`);
-
-  let existingXml: string;
-  try {
-    existingXml = await readFile(scorerPath, 'utf8');
-  } catch {
-    throw new Error(
-      `No scorer '${spec.apiName}' found at ${scorerPath} to add a version to. Create it first with \`sf agent scorer create\`.`
-    );
-  }
-
-  const { xml: scorerXml, versionNumber } = addVersionToScorerXml(existingXml, spec);
-
-  // Refine the rubric: only when this scorer owns a generated template and the caller supplied new prompt
-  // content. A metadata-only version bump (no promptContent) leaves the template untouched.
-  let promptTemplatePath: string | undefined;
-  let promptTemplateXml: string | undefined;
-  if (spec.engineType === 'PromptTemplate' && !spec.promptTemplateName && spec.promptContent) {
-    const promptDir = join(options.outputDir, 'genAiPromptTemplates');
-    promptTemplatePath = join(promptDir, `${spec.apiName}.genAiPromptTemplate-meta.xml`);
-    try {
-      const existingTemplate = await readFile(promptTemplatePath, 'utf8');
-      ({ xml: promptTemplateXml } = addVersionToPromptTemplateXml(existingTemplate, spec.promptContent));
-    } catch {
-      // No existing template on disk — generate a fresh one at v1.
-      promptTemplateXml = buildPromptTemplateXml(spec.apiName, spec.promptContent);
-    }
-  }
-
-  if (options.write !== false) {
-    await writeFile(scorerPath, scorerXml);
-    if (promptTemplateXml && promptTemplatePath) {
-      await mkdir(join(options.outputDir, 'genAiPromptTemplates'), { recursive: true });
-      await writeFile(promptTemplatePath, promptTemplateXml);
-    }
-  }
-
-  return {
-    path: scorerPath,
-    apiName: spec.apiName,
-    contents: scorerXml,
-    promptTemplatePath,
-    promptTemplateContents: promptTemplateXml,
-    versionNumber,
-  };
-}
-
-/**
- * Transition the status of one version of a scorer authored in local metadata (e.g. promote Draft → Available,
- * or archive a superseded version). Within a version, status is the only field that may change.
- *
- * @throws if no scorer with that API name is authored under `outputDir`, or it has no matching version.
- */
-export async function setScorerVersionStatus(options: {
-  apiName: string;
-  outputDir: string;
-  versionNumber: number;
-  status: ScorerVersionStatus;
-  write?: boolean;
-}): Promise<{ path: string; contents: string; versionNumber: number; status: ScorerVersionStatus }> {
-  const scorerPath = join(
-    options.outputDir,
-    'aiAgentScorerDefinitions',
-    `${options.apiName}.aiAgentScorerDefinition-meta.xml`
-  );
-
-  let existingXml: string;
-  try {
-    existingXml = await readFile(scorerPath, 'utf8');
-  } catch {
-    throw new Error(
-      `No scorer '${options.apiName}' found at ${scorerPath}. Create it first with \`sf agent scorer create\`.`
-    );
-  }
-
-  const contents = setVersionStatusInScorerXml(existingXml, options.apiName, options.versionNumber, options.status);
-  if (options.write !== false) {
-    await writeFile(scorerPath, contents);
-  }
-
-  return { path: scorerPath, contents, versionNumber: options.versionNumber, status: options.status };
-}
-
 /** Recursively look for a file named `fileName` under `dir`, returning its full path or undefined. */
 async function findScorerFile(dir: string, fileName: string): Promise<string | undefined> {
   let entries;
@@ -261,7 +153,7 @@ export async function loadScorerSpec(options: {
   throw new Error(
     `No scorer named '${apiName}' was found in this project. Expected a '${fileName}' file under one of: ${directories.join(
       ', '
-    )}. Author it first with \`sf agent scorer create\`.`
+    )}. Author it first with \`sf agent scorer generate-metadata-file\`.`
   );
 }
 

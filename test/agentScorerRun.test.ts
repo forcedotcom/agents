@@ -188,6 +188,25 @@ describe('generate output extraction', () => {
     expect(res.output).to.deep.equal(['Yes', '2']);
   });
 
+  it('prefers the enum label over a free-form value when preferLabel is set', async () => {
+    // A text scorer's `value` often just echoes the value's JSON schema; the chosen label is the real score.
+    const text = JSON.stringify({ outputs: [{ label: 'Low', value: '{"type":"string"}' }], explanation: 'smooth' });
+    const res = await generate(fakeConnection({ generations: [{ text }] }), 'T', valueMap, { preferLabel: true });
+    expect(res).to.deep.include({ ok: true, output: 'Low', explanation: 'smooth' });
+  });
+
+  it('falls back to the value when preferLabel is set but the label is blank/absent', async () => {
+    const text = JSON.stringify({ outputs: [{ label: '   ', value: '7' }] });
+    const res = await generate(fakeConnection({ generations: [{ text }] }), 'T', valueMap, { preferLabel: true });
+    expect(res.output).to.equal('7');
+  });
+
+  it('maps a multi-entry outputs[] to the labels when preferLabel is set', async () => {
+    const text = JSON.stringify({ outputs: [{ label: 'Low', value: 'x' }, { label: 'High', value: 'y' }] });
+    const res = await generate(fakeConnection({ generations: [{ text }] }), 'T', valueMap, { preferLabel: true });
+    expect(res.output).to.deep.equal(['Low', 'High']);
+  });
+
   it('reads the legacy top-level output field', async () => {
     const text = JSON.stringify({ output: 7, explanation: 'legacy' });
     const res = await generate(fakeConnection({ generations: [{ text }] }), 'T', valueMap);
@@ -257,6 +276,123 @@ describe('generate output extraction', () => {
   });
 });
 
+describe('generate error disambiguation (R1)', () => {
+  const valueMap = { 'Input:Session': { value: {} } };
+
+  /** A connection whose request rejects with an error carrying the given extra props (e.g. statusCode). */
+  function rejectingConnection(error: Error): Connection {
+    return { version: '64.0', request: () => Promise.reject(error) } as unknown as Connection;
+  }
+
+  // maxAttempts: 1 keeps these focused on the *message* (retry behavior is covered by the R2 suite below).
+  const noRetry = { retry: { maxAttempts: 1 } };
+
+  it('flags an HTTP 429 as a gateway throttle (transient), not a template problem', async () => {
+    const res = await generate(rejectingConnection(Object.assign(new Error('rate limited'), { statusCode: 429 })), 'T', valueMap, noRetry);
+    expect(res.ok).to.equal(false);
+    expect(res.error).to.match(/throttled/i);
+    expect(res.error).to.include('429');
+    expect(res.error).to.not.match(/deployed & published/i);
+  });
+
+  it('flags an HTTP 503 as the gateway being unavailable (transient)', async () => {
+    const res = await generate(rejectingConnection(Object.assign(new Error('service down'), { statusCode: 503 })), 'T', valueMap, noRetry);
+    expect(res.ok).to.equal(false);
+    expect(res.error).to.match(/unavailable/i);
+    expect(res.error).to.include('503');
+  });
+
+  it('reads ERROR_HTTP_429 from the error name/errorCode (the sf-core error shape)', async () => {
+    const res = await generate(rejectingConnection(Object.assign(new Error('too many'), { name: 'ERROR_HTTP_429' })), 'T', valueMap, noRetry);
+    expect(res.error).to.match(/throttled/i);
+  });
+
+  it('recognizes a semantic REQUEST_LIMIT_EXCEEDED error code in an API error array as a throttle', async () => {
+    const res = await generate(
+      fakeConnection([{ errorCode: 'REQUEST_LIMIT_EXCEEDED', message: 'TotalRequests Limit exceeded.' }]),
+      'T',
+      valueMap,
+      noRetry
+    );
+    expect(res.error).to.match(/throttled/i);
+  });
+
+  it('names the template and enumerates the causes when a 200 returns no completion', async () => {
+    const res = await generate(fakeConnection({ generations: [] }), 'My_Scorer', valueMap);
+    expect(res.ok).to.equal(false);
+    expect(res.error).to.include("'My_Scorer'");
+    // The four historically-conflated causes are all named so the reader can tell them apart.
+    expect(res.error).to.match(/deployed & published/i);
+    expect(res.error).to.match(/model is not enabled/i);
+    expect(res.error).to.match(/same-content versions/i);
+    expect(res.error).to.match(/throttled/i);
+  });
+});
+
+describe('generate retry/backoff (R2)', () => {
+  const valueMap = { 'Input:Session': { value: {} } };
+  const OK_PAYLOAD = { generations: [{ text: JSON.stringify({ output: 'Good', explanation: 'ok' }) }] };
+  // baseDelayMs: 0 makes jittered backoff resolve immediately, so these run without real waits.
+  const fast = (maxAttempts: number) => ({ retry: { maxAttempts, baseDelayMs: 0 } });
+
+  type Step = '429' | '503' | 'boom' | { ok: unknown };
+
+  /** A connection that walks `steps` per call (repeating the last), so a test can script fail-then-succeed. */
+  function scriptedConnection(steps: Step[]): { connection: Connection; calls: () => number } {
+    let i = 0;
+    const connection = {
+      version: '64.0',
+      request: () => {
+        const step = steps[Math.min(i, steps.length - 1)];
+        i++;
+        if (step === '429') return Promise.reject(Object.assign(new Error('rate limited'), { statusCode: 429 }));
+        if (step === '503') return Promise.reject(Object.assign(new Error('gateway down'), { statusCode: 503 }));
+        if (step === 'boom') return Promise.reject(Object.assign(new Error('not found'), { statusCode: 404 }));
+        return Promise.resolve(step.ok);
+      },
+    } as unknown as Connection;
+    return { connection, calls: () => i };
+  }
+
+  it('retries a transient throttle and succeeds once the gateway recovers', async () => {
+    const { connection, calls } = scriptedConnection(['429', '429', { ok: OK_PAYLOAD }]);
+    const res = await generate(connection, 'T', valueMap, fast(3));
+    expect(res).to.deep.include({ ok: true, output: 'Good' });
+    expect(calls()).to.equal(3);
+  });
+
+  it('does not retry a non-transient error (fails fast on the first attempt)', async () => {
+    const { connection, calls } = scriptedConnection(['boom']);
+    const res = await generate(connection, 'T', valueMap, fast(3));
+    expect(res.ok).to.equal(false);
+    expect(calls()).to.equal(1);
+  });
+
+  it('gives up after maxAttempts on a persistent throttle and returns the throttled message', async () => {
+    const { connection, calls } = scriptedConnection(['429']);
+    const res = await generate(connection, 'T', valueMap, fast(3));
+    expect(res.ok).to.equal(false);
+    expect(res.error).to.match(/throttled/i);
+    expect(calls()).to.equal(3);
+  });
+
+  it('honors a lower maxAttempts cap for a persistent unavailable gateway', async () => {
+    const { connection, calls } = scriptedConnection(['503']);
+    const res = await generate(connection, 'T', valueMap, fast(2));
+    expect(res.ok).to.equal(false);
+    expect(res.error).to.match(/unavailable/i);
+    expect(calls()).to.equal(2);
+  });
+
+  it('does not retry an empty (200, no completion) response — that is a template problem, not transient', async () => {
+    const { connection, calls } = scriptedConnection([{ ok: { generations: [] } }]);
+    const res = await generate(connection, 'T', valueMap, fast(3));
+    expect(res.ok).to.equal(false);
+    expect(res.error).to.match(/no generations/i);
+    expect(calls()).to.equal(1);
+  });
+});
+
 describe('runScorer', () => {
   const baseSpec: ScorerSpec = {
     apiName: 'TestScorer',
@@ -277,6 +413,21 @@ describe('runScorer', () => {
     const spec: ScorerSpec = { ...baseSpec, engineType: 'PromptTemplate' };
     const result = await runScorer(spec, makeSession({}), fakeConnection({ generations: [{ text }] }));
     expect(result).to.deep.include({ ok: true, output: 'Good', explanation: 'looks fine' });
+  });
+
+  it("reports the chosen label (not the free-form value) for a scorer with predefined labels", async () => {
+    // The model classifies via `label`; its `value` echoes the value schema. Output must be the label.
+    const text = JSON.stringify({ outputs: [{ label: 'Low', value: '{"type":"string"}' }], explanation: 'smooth' });
+    const spec: ScorerSpec = {
+      ...baseSpec,
+      engineType: 'PromptTemplate',
+      outputEnumValues: [
+        { value: 'Low', outcomeType: 'Pass' },
+        { value: 'High', outcomeType: 'Fail', isFallback: true },
+      ],
+    };
+    const result = await runScorer(spec, makeSession({}), fakeConnection({ generations: [{ text }] }));
+    expect(result).to.deep.include({ ok: true, output: 'Low', explanation: 'smooth' });
   });
 });
 

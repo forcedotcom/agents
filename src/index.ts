@@ -239,13 +239,7 @@ export {
   parseScorerXml,
   parseScorerVersions,
   type ScorerVersionInfo,
-  addVersionToScorerXml,
-  addVersionToPromptTemplateXml,
-  setVersionStatusInScorerXml,
-  setVersionAssociationActiveInScorerXml,
   createScorerDefinition,
-  addScorerVersion,
-  setScorerVersionStatus,
   loadScorerSpec,
 
   // STDM session model scorer input (the `Input:Session` value shape)

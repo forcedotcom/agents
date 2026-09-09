@@ -19,7 +19,7 @@
 // public entry (../agentScorer) import their types from here.
 //
 // NOTE: The JSDoc on the authoring types below (OutputEnumValue, AgentAssociation, ScorerSpec) is the single
-// source of truth for the spec JSON Schema surfaced by `sf agent scorer create --spec-schema`. That schema is
+// source of truth for the spec JSON Schema surfaced by `sf agent scorer generate-metadata-file --spec-schema`. That schema is
 // generated from these types (scripts/gen-scorer-schema.mjs → src/scorerSpecSchema.generated.ts), so field
 // descriptions and constraints (@pattern, @minLength, @maxLength, @minimum, @maximum, @default) live here only.
 // To add or change a field, edit the type.
@@ -31,14 +31,20 @@ import { type Connection } from '@salesforce/core';
 // from them so the two never drift apart.
 export const SCORER_INPUT_SCOPES = ['Session', 'Intent'] as const;
 export const SCORER_ENGINE_TYPES = ['Manual', 'PromptTemplate'] as const;
-// Statuses a *new* scorer version may be authored with (via `create`). `Archived` is deliberately excluded:
-// it is a terminal state reached only by a later status transition, never an initial one.
+// Statuses a *new* scorer version may be authored with (via `create`):
+//   - Draft: the scorer is still being developed and tuned (the authoring inner loop); it cannot run against
+//     production sessions yet.
+//   - Available: the scorer is ready for use — it can be run ad-hoc to evaluate agents, and it becomes
+//     eligible for automatic production scoring once an agentAssociation sets isActive: true.
+// `Archived` (no longer in use) is deliberately excluded: it is a terminal state reached only by a later
+// status transition, never an initial one.
 export const SCORER_STATUSES = ['Draft', 'Available'] as const;
 export const SCORER_OUTCOME_TYPES = ['Pass', 'Fail', 'NotApplicable'] as const;
 
-// Full lifecycle status set a *stored* scorer version may carry. Authoring is limited to SCORER_STATUSES;
-// `Archived` is recognized when parsing/selecting an existing scorer's versions — an archived version cannot
-// be run, and a version can be moved to it via a status transition.
+// Full lifecycle status set a *stored* scorer version may carry: Draft (under development), Available (ready
+// to use), and Archived (no longer in use). Authoring is limited to SCORER_STATUSES; `Archived` is recognized
+// when parsing/selecting an existing scorer's versions — an archived version cannot be run, and a version can
+// be moved to it via a status transition.
 export const SCORER_VERSION_STATUSES = ['Draft', 'Available', 'Archived'] as const;
 
 export type ScorerInputScope = (typeof SCORER_INPUT_SCOPES)[number];
@@ -110,10 +116,20 @@ export type OutputEnumValue = {
 export type AgentAssociation = {
   /** API name of the agent to associate with this scorer. */
   agentApiName: string;
-  /** Whether scoring is active for this agent association. */
+  /**
+   * Whether this scorer runs automatically on the agent's production sessions.
+   *
+   * - false: the scorer never runs on its own. It can still be run ad-hoc against sessions on demand (as long as the scorer version's status is 'Available').
+   * - true: the platform automatically scores the agent's incoming production sessions — no ad-hoc trigger needed — sampling them per `samplingRate`. This requires the scorer version's status to be 'Available'.
+   *
+   * Set this to true only once the scorer is validated and you want continuous, hands-off scoring in
+   * production; keep it false while developing (status 'Draft') or when you only intend to score ad-hoc.
+   */
   isActive: boolean;
   /**
-   * Fraction of sessions to score (0.0 to 1.0). Only relevant when isActive is true.
+   * Fraction of production sessions to score automatically, from 0.0 (none) to 1.0 (every session) — e.g. 0.1
+   * scores roughly 10% of sessions. This is the sampling rate for automatic scoring only: it applies when
+   * `isActive` is true and is ignored for ad-hoc runs.
    *
    * @minimum 0
    * @maximum 1
@@ -124,7 +140,7 @@ export type AgentAssociation = {
   inputScope?: ScorerInputScope;
 };
 
-/** YAML spec file for creating an agent scorer definition via `sf agent scorer create --spec <file>`. */
+/** YAML spec file for creating an agent scorer definition via `sf agent scorer generate-metadata-file --spec <file>`. */
 export type ScorerSpec = {
   /**
    * API name of the scorer definition. Max 35 characters, must start with a letter, only alphanumerics and underscores.
@@ -168,7 +184,13 @@ export type ScorerSpec = {
    */
   instructions?: string;
   /**
-   * Initial status of the scorer version.
+   * Lifecycle status of this scorer version, which controls whether and how it can be used:
+   *
+   * - 'Draft' (default): the scorer is still being developed and tuned — the authoring inner loop. Use this while iterating on the prompt/instructions; a Draft version cannot run against production sessions.
+   * - 'Available': the scorer is ready for use. It can be run ad-hoc to evaluate agents, and it becomes eligible for automatic production scoring once its agentAssociation sets isActive: true.
+   *
+   * Authoring is limited to 'Draft' and 'Available'. 'Archived' (no longer in use) is a terminal state reached
+   * only by a later status transition on an existing version — it cannot be set when creating a version here.
    *
    * @default Draft
    */
@@ -182,7 +204,7 @@ export type ScorerSpec = {
   /**
    * The version number this spec was resolved from. Populated by `parseScorerXml`/`loadScorerSpec` when a
    * stored definition is read (so callers can report which version actually ran); it is not part of authoring
-   * and is ignored by `buildScorerXml`/`addVersionToScorerXml`.
+   * and is ignored by `buildScorerXml`.
    */
   scorerVersion?: number;
 };
@@ -210,12 +232,22 @@ export type ScorerCreateResult = {
 // per-field notes below give the STDM column for the fields with a direct mapping. NOTE: field names here are
 // camelCase and differ from the raw DMO columns — map into this shape rather than passing DMO rows verbatim.
 
+/**
+ * An ISO-8601 date-time string in UTC that MUST end with the literal '+0000' offset, e.g.
+ * '2026-09-09T12:34:56.000+0000'. The bare 'Z' zulu designator is NOT accepted, nor is a colon-separated
+ * offset ('+00:00') or any non-UTC offset — always write the UTC offset as exactly '+0000'. Every timestamp
+ * in the session view uses this format.
+ *
+ * @pattern ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?\+0000$
+ */
+export type IsoTimestamp = string;
+
 /** Top-level session metadata — `stdmSessionStateType` (Java: SessionStateView). */
 export type SessionStateView = {
   /** Unique ID of the session. STDM: `ssot__AiAgentSession__dlm.ssot__AiAgentSessionId__c`. */
   sessionId: string;
   /** ISO-8601 timestamp when the session started. STDM: session `ssot__StartTimestamp__c`. */
-  startTimestamp: string;
+  startTimestamp: IsoTimestamp;
   /** Channel the session ran on (e.g. web, messaging, voice). STDM: `ssot__AiAgentChannelType__c`. */
   channel: string;
   /** ID of the underlying Messaging session when the channel is messaging; omit otherwise. */
@@ -255,7 +287,7 @@ export type MessageView = {
   /** The message text: a user utterance or an agent response. */
   message: string;
   /** ISO-8601 timestamp when the message was sent. */
-  timestamp: string;
+  timestamp: IsoTimestamp;
   /** Role of the actor who sent the message; matches one of `actors[].role`. */
   actorRole: string;
   /** ID of the actor who sent the message; matches one of `actors[].id`. */
@@ -277,9 +309,9 @@ export type StepView = {
   /** Human-readable step name (e.g. the action or tool that ran). */
   name: string;
   /** ISO-8601 timestamp when the step started. */
-  startTimestamp: string;
+  startTimestamp: IsoTimestamp;
   /** ISO-8601 timestamp when the step ended. */
-  endTimestamp: string;
+  endTimestamp: IsoTimestamp;
   /** Step duration in milliseconds. */
   durationMs: number;
   /** Step input payload as text (may be JSON-encoded). Optional. */
@@ -304,9 +336,9 @@ export type RunView = {
   /** The topic the agent selected for this run. */
   topicName: string;
   /** ISO-8601 timestamp when the run started. STDM: interaction `ssot__StartTimestamp__c`. */
-  startTimestamp: string;
+  startTimestamp: IsoTimestamp;
   /** ISO-8601 timestamp when the run ended. STDM: interaction `ssot__EndTimestamp__c`. */
-  endTimestamp: string;
+  endTimestamp: IsoTimestamp;
   /** Run duration in milliseconds. */
   durationMs: number;
   /** The user/agent messages exchanged during this run. */

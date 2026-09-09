@@ -15,7 +15,7 @@
  */
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { expect } from 'chai';
 import { XMLParser } from 'fast-xml-parser';
 import {
@@ -26,12 +26,7 @@ import {
   buildPromptTemplateXml,
   parseScorerXml,
   parseScorerVersions,
-  addVersionToScorerXml,
-  addVersionToPromptTemplateXml,
-  setVersionStatusInScorerXml,
-  setVersionAssociationActiveInScorerXml,
   createScorerDefinition,
-  addScorerVersion,
   loadScorerSpec,
   MAX_ENUM_VALUES,
 } from '../src/agentScorer';
@@ -210,15 +205,24 @@ describe('buildDefaultPromptContent', () => {
     expect(content).to.not.include('additionalProperties');
   });
 
-  it('describes the "label" member and the "value" member when predefined labels exist', () => {
-    const content = buildDefaultPromptContent({ ...labeledSpec, lightningType: 'lightning__numberType' });
+  it('describes the "label" member and mirrors it into "value" when predefined labels exist', () => {
+    const content = buildDefaultPromptContent(labeledSpec);
     expect(content).to.include('set its "label" member to one of the allowed labels:');
     expect(content).to.include('{!$Input:AllowedLabels}');
     expect(content).to.include('{!$Input:FallbackLabel}');
-    expect(content).to.include('Set each item\'s "value" member to conform to this JSON schema:');
-    expect(content).to.include('{"type":"number"}');
+    // For an enum scorer the label IS the score; the value member just mirrors it.
+    expect(content).to.include('Set each item\'s "value" member to the same label you chose.');
     // Labels come from the input, never hardcoded.
     expect(content).to.not.include('Positive');
+  });
+
+  it('never hands an enum scorer the value JSON schema (the model would echo it into "value")', () => {
+    // Regression for the schema-echo bug: even a labeled scorer with a non-string lightning type must not be
+    // told to conform "value" to a JSON schema -- its value mirrors the chosen label instead.
+    const content = buildDefaultPromptContent({ ...labeledSpec, lightningType: 'lightning__numberType' });
+    expect(content).to.not.include('conform to this JSON schema');
+    expect(content).to.not.include('{"type":"number"}');
+    expect(content).to.include('Set each item\'s "value" member to the same label you chose.');
   });
 
   it('omits the label guidance but still describes the "value" member when no labels are defined', () => {
@@ -528,37 +532,49 @@ describe('scorer versioning', () => {
     agentAssociation: { agentApiName: 'Agent1', isActive: true },
   };
 
+  // Multi-version scorers are authored by hand in the XML (`create` only scaffolds v1), so the parse/selection
+  // paths below run against hand-authored fixtures: v1 Available + v2 at the given status, both associated.
+  const scorerXmlWithV2Status = (v2Status: 'Draft' | 'Available' | 'Archived'): string =>
+    [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<AiAgentScorerDefinition xmlns="http://soap.sforce.com/2006/04/metadata">',
+      '    <dataType>LightningType</dataType>',
+      '    <inputScope>Session</inputScope>',
+      '    <lightningType>lightning__numberType</lightningType>',
+      '    <scorerType>OpenEnded</scorerType>',
+      '    <scorerVersion>',
+      '        <agentAssociation>',
+      '            <agentApiName>Agent1</agentApiName>',
+      '            <isActive>true</isActive>',
+      '            <samplingRate>1</samplingRate>',
+      '        </agentAssociation>',
+      '        <engine>',
+      '            <engineRef>Resolution</engineRef>',
+      '            <engineType>PromptTemplate</engineType>',
+      '        </engine>',
+      '        <label>Resolution v1</label>',
+      '        <status>Available</status>',
+      '        <versionNumber>1</versionNumber>',
+      '    </scorerVersion>',
+      '    <scorerVersion>',
+      '        <agentAssociation>',
+      '            <agentApiName>Agent1</agentApiName>',
+      '            <isActive>true</isActive>',
+      '            <samplingRate>1</samplingRate>',
+      '        </agentAssociation>',
+      '        <engine>',
+      '            <engineRef>Resolution</engineRef>',
+      '            <engineType>PromptTemplate</engineType>',
+      '        </engine>',
+      '        <label>Resolution v2</label>',
+      `        <status>${v2Status}</status>`,
+      '        <versionNumber>2</versionNumber>',
+      '    </scorerVersion>',
+      '</AiAgentScorerDefinition>',
+    ].join('\n');
+
   // v1 Available, v2 Draft.
-  const twoVersionXml = (): string =>
-    addVersionToScorerXml(buildScorerXml(base), { ...base, label: 'Resolution v2', status: 'Draft' }).xml;
-
-  describe('addVersionToScorerXml', () => {
-    it('appends a version numbered one higher than the current max', () => {
-      const { xml, versionNumber } = addVersionToScorerXml(buildScorerXml(base), { ...base, label: 'Resolution v2' });
-      expect(versionNumber).to.equal(2);
-      const versions = parseScorerVersions(xml);
-      expect(versions.map((v) => v.versionNumber)).to.deep.equal([1, 2]);
-      expect(xml).to.include('<label>Resolution v1</label>');
-      expect(xml).to.include('<label>Resolution v2</label>');
-    });
-
-    it('keeps incrementing across successive bumps', () => {
-      const v2 = addVersionToScorerXml(buildScorerXml(base), { ...base, label: 'v2' }).xml;
-      const { versionNumber } = addVersionToScorerXml(v2, { ...base, label: 'v3' });
-      expect(versionNumber).to.equal(3);
-    });
-
-    it('preserves the definition-level lightningType', () => {
-      const { xml } = addVersionToScorerXml(buildScorerXml(base), { ...base, label: 'v2' });
-      expect(xml).to.include('<lightningType>lightning__numberType</lightningType>');
-    });
-
-    it('rejects changing lightningType across versions', () => {
-      expect(() =>
-        addVersionToScorerXml(buildScorerXml(base), { ...base, lightningType: 'lightning__textType' })
-      ).to.throw(/Cannot change lightningType across versions/);
-    });
-  });
+  const twoVersionXml = (): string => scorerXmlWithV2Status('Draft');
 
   describe('parseScorerVersions', () => {
     it('lists every version with its number, status, and active flag', () => {
@@ -578,8 +594,7 @@ describe('scorer versioning', () => {
     });
 
     it('prefers the higher Available version when several are Available', () => {
-      const promoted = setVersionStatusInScorerXml(twoVersionXml(), 'Resolution', 2, 'Available');
-      const parsed = parseScorerXml(promoted, 'Resolution');
+      const parsed = parseScorerXml(scorerXmlWithV2Status('Available'), 'Resolution');
       expect(parsed.label).to.equal('Resolution v2');
     });
 
@@ -607,151 +622,9 @@ describe('scorer versioning', () => {
     });
 
     it('throws when a requested version is archived', () => {
-      const archived = setVersionStatusInScorerXml(twoVersionXml(), 'Resolution', 2, 'Archived');
+      const archived = scorerXmlWithV2Status('Archived');
       expect(() => parseScorerXml(archived, 'Resolution', { scorerVersion: 2 })).to.throw(/is archived and can't be run/);
     });
-  });
-
-  describe('setVersionStatusInScorerXml', () => {
-    it('promotes a Draft version to Available', () => {
-      const promoted = setVersionStatusInScorerXml(twoVersionXml(), 'Resolution', 2, 'Available');
-      const v2 = parseScorerVersions(promoted).find((v) => v.versionNumber === 2);
-      expect(v2?.status).to.equal('Available');
-    });
-
-    it('archives a version', () => {
-      const archived = setVersionStatusInScorerXml(twoVersionXml(), 'Resolution', 1, 'Archived');
-      const v1 = parseScorerVersions(archived).find((v) => v.versionNumber === 1);
-      expect(v1?.status).to.equal('Archived');
-    });
-
-    it('throws when the version does not exist', () => {
-      expect(() => setVersionStatusInScorerXml(twoVersionXml(), 'Resolution', 5, 'Available')).to.throw(
-        /has no version 5/
-      );
-    });
-  });
-
-  describe('setVersionAssociationActiveInScorerXml', () => {
-    // v1 has an inactive association; v2 Draft, also inactive.
-    const inactiveXml = (): string =>
-      addVersionToScorerXml(buildScorerXml({ ...base, agentAssociation: { agentApiName: 'Agent1', isActive: false } }), {
-        ...base,
-        label: 'Resolution v2',
-        status: 'Draft',
-        agentAssociation: { agentApiName: 'Agent1', isActive: false },
-      }).xml;
-
-    it('activates the agent association on a version', () => {
-      const activated = setVersionAssociationActiveInScorerXml(inactiveXml(), 'Resolution', 1, true);
-      const v1 = parseScorerVersions(activated).find((v) => v.versionNumber === 1);
-      expect(v1?.isActive).to.equal(true);
-      // The other version is untouched.
-      const v2 = parseScorerVersions(activated).find((v) => v.versionNumber === 2);
-      expect(v2?.isActive).to.equal(false);
-    });
-
-    it('deactivates the agent association on a version', () => {
-      const deactivated = setVersionAssociationActiveInScorerXml(inactiveXml(), 'Resolution', 1, false);
-      const v1 = parseScorerVersions(deactivated).find((v) => v.versionNumber === 1);
-      expect(v1?.isActive).to.equal(false);
-    });
-
-    it('throws when the version does not exist', () => {
-      expect(() => setVersionAssociationActiveInScorerXml(inactiveXml(), 'Resolution', 5, true)).to.throw(
-        /has no version 5/
-      );
-    });
-  });
-
-  describe('addVersionToPromptTemplateXml', () => {
-    it('appends a template version and repoints activeVersionIdentifier at it', () => {
-      const v1 = buildPromptTemplateXml('Resolution', 'rubric content v1');
-      const { xml, versionIdentifier } = addVersionToPromptTemplateXml(v1, 'rubric content v2');
-
-      const parsed = new XMLParser({ ignoreAttributes: false }).parse(xml) as {
-        GenAiPromptTemplate: {
-          activeVersionIdentifier: string;
-          templateVersions: Array<{ content: string; versionIdentifier: string }>;
-        };
-      };
-      const versions = parsed.GenAiPromptTemplate.templateVersions;
-      expect(versions).to.have.length(2);
-      expect(versions[1].content).to.equal('rubric content v2');
-      // The active pointer now names the new version — that's what `run` serves.
-      expect(parsed.GenAiPromptTemplate.activeVersionIdentifier).to.equal(versionIdentifier);
-      expect(parsed.GenAiPromptTemplate.activeVersionIdentifier).to.equal(versions[1].versionIdentifier);
-    });
-  });
-});
-
-describe('addScorerVersion (PromptTemplate refine path)', () => {
-  const spec: ScorerSpec = {
-    apiName: 'RefineScorer',
-    label: 'Refine Scorer',
-    lightningType: 'lightning__numberType',
-    engineType: 'PromptTemplate',
-    status: 'Draft',
-    agentAssociation: { agentApiName: 'CopilotAgent', isActive: false },
-  };
-
-  let root: string;
-  let scorerPath: string;
-  let templatePath: string;
-
-  // Parse the GenAiPromptTemplate's version list + active pointer to prove the refine wiring end to end.
-  function readTemplate(): { activeVersionIdentifier: string; templateVersions: Array<{ content: string; versionIdentifier: string }> } {
-    const parsed = new XMLParser({ ignoreAttributes: false }).parse(readFileSync(templatePath, 'utf8')) as {
-      GenAiPromptTemplate: { activeVersionIdentifier: string; templateVersions: unknown };
-    };
-    const versions = parsed.GenAiPromptTemplate.templateVersions;
-    return {
-      activeVersionIdentifier: parsed.GenAiPromptTemplate.activeVersionIdentifier,
-      templateVersions: (Array.isArray(versions) ? versions : [versions]) as Array<{ content: string; versionIdentifier: string }>,
-    };
-  }
-
-  beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'scorer-refine-'));
-    // Seed an existing v1 scorer + its generated prompt template on disk.
-    scorerPath = join(root, 'aiAgentScorerDefinitions', `${spec.apiName}.aiAgentScorerDefinition-meta.xml`);
-    templatePath = join(root, 'genAiPromptTemplates', `${spec.apiName}.genAiPromptTemplate-meta.xml`);
-    mkdirSync(join(root, 'aiAgentScorerDefinitions'), { recursive: true });
-    mkdirSync(join(root, 'genAiPromptTemplates'), { recursive: true });
-    writeFileSync(scorerPath, buildScorerXml(spec));
-    writeFileSync(templatePath, buildPromptTemplateXml(spec.apiName, 'rubric content v1'));
-  });
-
-  afterEach(() => {
-    rmSync(root, { recursive: true, force: true });
-  });
-
-  it('appends a scorer version AND a prompt-template version, repointing the active version, when new promptContent is supplied', async () => {
-    const result = await addScorerVersion({ ...spec, promptContent: 'rubric content v2' }, { outputDir: root });
-
-    // scorer definition gained a second version
-    expect(result.versionNumber).to.equal(2);
-    expect(parseScorerVersions(readFileSync(scorerPath, 'utf8')).map((v) => v.versionNumber)).to.deep.equal([1, 2]);
-
-    // prompt template gained a second version and the active pointer moved to it (the risky repoint)
-    expect(result.promptTemplatePath).to.equal(templatePath);
-    const { templateVersions, activeVersionIdentifier } = readTemplate();
-    expect(templateVersions).to.have.length(2);
-    expect(String(templateVersions[1].content)).to.include('rubric content v2');
-    expect(activeVersionIdentifier).to.equal(templateVersions[1].versionIdentifier);
-    // the active version is NOT still pointing at v1 — a refined rubric must actually be served
-    expect(activeVersionIdentifier).to.not.equal(templateVersions[0].versionIdentifier);
-  });
-
-  it('leaves the prompt template untouched for a metadata-only version bump (no new promptContent)', async () => {
-    const before = readFileSync(templatePath, 'utf8');
-    const result = await addScorerVersion(spec, { outputDir: root });
-
-    expect(result.versionNumber).to.equal(2);
-    expect(result.promptTemplateContents).to.be.undefined;
-    // single-version template, unchanged on disk
-    expect(readFileSync(templatePath, 'utf8')).to.equal(before);
-    expect(readTemplate().templateVersions).to.have.length(1);
   });
 });
 
@@ -807,7 +680,7 @@ describe('loadScorerSpec', () => {
     } catch (e: unknown) {
       const message = (e as Error).message;
       expect(message).to.include("No scorer named 'Missing_Scorer'");
-      expect(message).to.include('sf agent scorer create');
+      expect(message).to.include('sf agent scorer generate-metadata-file');
     }
   });
 });

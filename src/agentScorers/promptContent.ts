@@ -21,8 +21,9 @@ import { type ScorerSpec } from './types';
  *
  *  - {!$Instructions}     the per-scorer evaluation guidance (or the DEFAULT_INSTRUCTIONS placeholder).
  *  - {!$ScoringGuidance}  mechanics the platform does NOT already know from the prompt template type: how to
- *                         pick a label and fall back (when the scorer defines predefined labels), and -- since
- *                         the value type is dynamic -- the JSON schema the scored value must conform to.
+ *                         pick a label and fall back (when the scorer defines predefined labels), and how to
+ *                         fill the value member -- mirror the chosen label for an enum scorer, or (for a typed
+ *                         scorer, whose value type is dynamic) conform to the value's JSON schema.
  *
  * We deliberately do NOT restate the output envelope: the open-ended prompt template type already fixes it on
  * the platform (see the GenAiPromptTemplateOutput Apex class), so embedding it here would only duplicate -- and
@@ -98,19 +99,27 @@ const OPEN_ENDED_LABEL_GUIDANCE = [
 
 /*
  * Scoring mechanics -- only what the open-ended prompt template type does NOT already fix. The output envelope
- * itself is defined by the template, so this adds just: the "label" member guidance when predefined labels
- * exist, plus the "value" member's JSON schema (its type is dynamic, so the template's fixed schema can't
- * capture it). Guidance names the output-schema members ("label", "value") so both humans and the model can
- * tell which field each instruction applies to. Always returns a non-empty block.
+ * itself is defined by the template, so this describes just the two members whose contents are scorer-specific:
+ *
+ *  - An enum scorer (predefined labels) is classified by its "label"; the "value" member is redundant, so we
+ *    tell the model to mirror the chosen label into it. Do NOT hand such a scorer the value's JSON schema:
+ *    the model (esp. GPT-4o-mini) copies a schema like {"type":"string"} into "value" verbatim, which then
+ *    surfaces as the run's output instead of the label.
+ *  - A typed scorer (no labels) carries its score in "value"; its type is dynamic, so we give the JSON schema
+ *    the value must conform to (the template's fixed schema can't capture it).
+ *
+ * Guidance names the members ("label", "value") so both humans and the model can tell which instruction
+ * applies to which field. Always returns a non-empty block.
  */
 function scoringGuidance(spec: PromptContentSpec): string {
-  const lines: string[] = [];
-  // Labels are optional; describe the "label" member only when the scorer defines them.
+  // Labels are optional; describe the "label" member (and mirror it into "value") only when defined.
   if (spec.outputEnumValues?.length) {
-    lines.push(...OPEN_ENDED_LABEL_GUIDANCE);
+    return [...OPEN_ENDED_LABEL_GUIDANCE, 'Set each item\'s "value" member to the same label you chose.'].join('\n');
   }
-  lines.push('Set each item\'s "value" member to conform to this JSON schema:', JSON.stringify(lightningTypeSchema(spec.lightningType)));
-  return lines.join('\n');
+  return [
+    'Set each item\'s "value" member to conform to this JSON schema:',
+    JSON.stringify(lightningTypeSchema(spec.lightningType)),
+  ].join('\n');
 }
 
 export function buildDefaultPromptContent(spec: PromptContentSpec): string {

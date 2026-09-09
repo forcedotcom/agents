@@ -41,6 +41,9 @@ export const promptTemplateEngine: ScorerEngine = {
     // Mirror buildScorerXml's engineRef: a referenced template if named, else the generated one (== apiName).
     const templateName = spec.promptTemplateName ?? spec.apiName;
     const valueMap: ValueMap = { 'Input:Session': { value: session }, ...deriveInputs(spec) };
-    return generate(connection, templateName, valueMap);
+    // A scorer with predefined labels is classified by the label the model chose; a typed scorer by its
+    // value. Tell the extractor which member holds the score so it doesn't surface the free-form value.
+    const preferLabel = (spec.outputEnumValues?.length ?? 0) > 0;
+    return generate(connection, templateName, valueMap, { preferLabel });
   },
 };

@@ -24,7 +24,7 @@ export { SCORER_SPEC_JSON_SCHEMA };
 /**
  * Returns the JSON Schema (draft-07) for the scorer YAML spec file, derived from the {@link ScorerSpec} type.
  *
- * Consumers (e.g. `sf agent scorer create --spec-schema`) can surface this to help authors write a valid spec.
+ * Consumers (e.g. `sf agent scorer generate-metadata-file --spec-schema`) can surface this to help authors write a valid spec.
  * Returns the same object reference on every call — treat it as read-only.
  */
 export function scorerSpecJsonSchema(): Record<string, unknown> {

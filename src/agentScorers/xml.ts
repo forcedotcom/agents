@@ -89,8 +89,8 @@ function buildScorerDocument(definition: Record<string, unknown>): string {
 }
 
 export function buildScorerXml(spec: ScorerSpec): string {
-  // A freshly-authored scorer always starts at version 1. Additional versions are appended later via
-  // addVersionToScorerXml (see `sf agent scorer create --new-version`).
+  // A freshly-authored scorer always starts at version 1. `create` only scaffolds this single version;
+  // any further change (new versions, status, activation) is authored by hand directly in the XML afterward.
   const scorerVersion = buildScorerVersionObject(spec, { versionNumber: 1 });
 
   // Every scorer is an open-ended LightningType scorer; the lightning type carries the value's shape.
@@ -269,116 +269,6 @@ export function parseScorerXml(xml: string, apiName: string, options: { scorerVe
   return spec;
 }
 
-// --- Versioning (append a version / change a version's status) ------------------------------------------
-//
-// These round-trip an existing scorer definition through parse → mutate → build so a new version can be added
-// or an existing version's status transitioned without regenerating (and clobbering) the whole file.
-
-/** Parser that preserves attributes (the xmlns) and keeps values as strings, for lossless round-tripping. */
-function roundTripParser(): XMLParser {
-  return new XMLParser({ ignoreAttributes: false, parseTagValue: false, trimValues: true });
-}
-
-/**
- * Append a new `<scorerVersion>` to an existing scorer definition, numbered one higher than the current max.
- * The definition-level fields (lightningType, inputScope) are preserved from the existing document; the new
- * version's content comes from `spec`.
- *
- * @throws if the document is not a scorer definition, or the spec's lightningType differs from the existing one
- * (a scorer's value shape is fixed across versions — author a new API name instead).
- */
-export function addVersionToScorerXml(existingXml: string, spec: ScorerSpec): { xml: string; versionNumber: number } {
-  const root = roundTripParser().parse(existingXml) as {
-    AiAgentScorerDefinition?: RawDefinition & Record<string, unknown>;
-  };
-  const def = root.AiAgentScorerDefinition;
-  if (!def) {
-    throw new Error(`The metadata for scorer '${spec.apiName}' is not a valid AiAgentScorerDefinition.`);
-  }
-  if (def.lightningType && def.lightningType !== spec.lightningType) {
-    throw new Error(
-      `Cannot change lightningType across versions of scorer '${spec.apiName}': ` +
-        `existing '${String(def.lightningType)}', new '${spec.lightningType}'. ` +
-        'Author a new scorer with a different API name instead.'
-    );
-  }
-
-  const existing = toArray(def.scorerVersion);
-  const versionNumber = existing.reduce((max, v) => Math.max(max, toVersionNumber(v.versionNumber)), 0) + 1;
-  const newVersion = buildScorerVersionObject(spec, { versionNumber });
-  def.scorerVersion = [...existing, newVersion];
-
-  const xml = xmlBuilder().build({ '?xml': XML_DECLARATION, AiAgentScorerDefinition: def });
-  return { xml, versionNumber };
-}
-
-/**
- * Set the status of one version of an existing scorer definition (e.g. promote Draft → Available, or archive).
- *
- * @throws if the document is not a scorer definition or has no version with `versionNumber`.
- */
-export function setVersionStatusInScorerXml(
-  existingXml: string,
-  apiName: string,
-  versionNumber: number,
-  status: ScorerVersionStatus
-): string {
-  const root = roundTripParser().parse(existingXml) as {
-    AiAgentScorerDefinition?: RawDefinition & Record<string, unknown>;
-  };
-  const def = root.AiAgentScorerDefinition;
-  if (!def) {
-    throw new Error(`The metadata for scorer '${apiName}' is not a valid AiAgentScorerDefinition.`);
-  }
-  const versions = toArray(def.scorerVersion);
-  const target = versions.find((v) => toVersionNumber(v.versionNumber) === versionNumber);
-  if (!target) {
-    throw new Error(`Scorer '${apiName}' has no version ${versionNumber}. Authored versions: ${listVersions(versions)}.`);
-  }
-  (target as Record<string, unknown>).status = status;
-
-  return xmlBuilder().build({ '?xml': XML_DECLARATION, AiAgentScorerDefinition: def });
-}
-
-/**
- * Activate or deactivate the agent association on one version of a scorer definition. This is the field that
- * turns automatic scoring of the associated agent's sessions on or off for a given version.
- *
- * The platform enforces (at deploy time) that an active association's version must be `Available`, and that at
- * most one version of a scorer holds an active association — this only edits the local XML, so deploy afterward.
- *
- * @throws if the document is not a scorer definition, has no version with `versionNumber`, or that version has
- * no `agentAssociation` to toggle.
- */
-export function setVersionAssociationActiveInScorerXml(
-  existingXml: string,
-  apiName: string,
-  versionNumber: number,
-  isActive: boolean
-): string {
-  const root = roundTripParser().parse(existingXml) as {
-    AiAgentScorerDefinition?: RawDefinition & Record<string, unknown>;
-  };
-  const def = root.AiAgentScorerDefinition;
-  if (!def) {
-    throw new Error(`The metadata for scorer '${apiName}' is not a valid AiAgentScorerDefinition.`);
-  }
-  const versions = toArray(def.scorerVersion);
-  const target = versions.find((v) => toVersionNumber(v.versionNumber) === versionNumber);
-  if (!target) {
-    throw new Error(`Scorer '${apiName}' has no version ${versionNumber}. Authored versions: ${listVersions(versions)}.`);
-  }
-  const association = (target as Record<string, unknown>).agentAssociation as Record<string, unknown> | undefined;
-  if (!association) {
-    throw new Error(
-      `Version ${versionNumber} of scorer '${apiName}' has no agent association to ${isActive ? 'activate' : 'deactivate'}.`
-    );
-  }
-  association.isActive = isActive;
-
-  return xmlBuilder().build({ '?xml': XML_DECLARATION, AiAgentScorerDefinition: def });
-}
-
 // --- Prompt template ------------------------------------------------------------------------------------
 
 /** The fixed input set every scorer prompt template declares. Kept identical across template versions. */
@@ -407,9 +297,12 @@ function promptTemplateInputs(): Array<{ apiName: string; definition: string; re
   ];
 }
 
+/** Base64 sha256 of a template version's content — the part of its identifier the serving layer keys on. */
+const contentHash = (content: string): string => createHash('sha256').update(content).digest('base64');
+
 /** Deterministic version identifier for a template version: a content hash suffixed with the version number. */
 const templateVersionIdentifier = (content: string, versionNumber: number): string =>
-  `${createHash('sha256').update(content).digest('base64')}_${versionNumber}`;
+  `${contentHash(content)}_${versionNumber}`;
 
 export function buildPromptTemplateXml(apiName: string, promptContent: string): string {
   const versionIdentifier = templateVersionIdentifier(promptContent, 1);
@@ -436,38 +329,4 @@ export function buildPromptTemplateXml(apiName: string, promptContent: string): 
   };
 
   return xmlBuilder().build(xmlObj);
-}
-
-/**
- * Append a new template version to an existing GenAiPromptTemplate and repoint `activeVersionIdentifier` at it,
- * so a scorer that refines its rubric serves the new prompt content on the next run. (`run` invokes the
- * template by name and the platform serves its active/published version.)
- *
- * @throws if the document is not a GenAiPromptTemplate.
- */
-export function addVersionToPromptTemplateXml(
-  existingXml: string,
-  newContent: string
-): { xml: string; versionIdentifier: string } {
-  const root = roundTripParser().parse(existingXml) as {
-    GenAiPromptTemplate?: Record<string, unknown> & { templateVersions?: unknown };
-  };
-  const tmpl = root.GenAiPromptTemplate;
-  if (!tmpl) {
-    throw new Error('The metadata is not a valid GenAiPromptTemplate.');
-  }
-  const existingVersions = toArray(tmpl.templateVersions);
-  const versionIdentifier = templateVersionIdentifier(newContent, existingVersions.length + 1);
-  const newVersion = {
-    content: newContent,
-    inputs: promptTemplateInputs(),
-    primaryModel: 'sfdc_ai__DefaultOpenAIGPT4OmniMini',
-    status: 'Published',
-    versionIdentifier,
-  };
-  tmpl.templateVersions = [...existingVersions, newVersion];
-  tmpl.activeVersionIdentifier = versionIdentifier;
-
-  const xml = xmlBuilder().build({ '?xml': XML_DECLARATION, GenAiPromptTemplate: tmpl });
-  return { xml, versionIdentifier };
 }
