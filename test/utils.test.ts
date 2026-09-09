@@ -126,6 +126,36 @@ describe('requestWithEndpointFallback', () => {
     );
   });
 
+  it('should retry with stage endpoint after dev endpoint 404', async () => {
+    const error404 = new Error('Not Found') as Error & { name: string };
+    error404.name = 'ERROR_HTTP_404';
+
+    const requestStub = $$.SANDBOX.stub(connection, 'request');
+    requestStub.onCall(0).rejects(error404);
+    requestStub.onCall(1).rejects(error404);
+    requestStub.onCall(2).rejects(error404);
+    requestStub.onCall(3).resolves({ success: true });
+
+    const result = await requestWithEndpointFallback(connection, {
+      method: 'POST',
+      url: 'https://api.salesforce.com/einstein/ai-agent/v1/test',
+      headers: { 'x-client-name': 'test' },
+      body: '{}',
+    });
+
+    expect(result).to.deep.equal({ success: true });
+    expect(requestStub.callCount).to.equal(4);
+    expect((requestStub.getCall(1).args[0] as RequestInfo).url).to.equal(
+      'https://test.api.salesforce.com/einstein/ai-agent/v1/test'
+    );
+    expect((requestStub.getCall(2).args[0] as RequestInfo).url).to.equal(
+      'https://dev.api.salesforce.com/einstein/ai-agent/v1/test'
+    );
+    expect((requestStub.getCall(3).args[0] as RequestInfo).url).to.equal(
+      'https://stage.api.salesforce.com/einstein/ai-agent/v1/test'
+    );
+  });
+
   it('should throw AgentApiNotFound after all endpoints fail with 404', async () => {
     const error404 = new Error('Not Found');
     error404.name = 'ERROR_HTTP_404';
@@ -146,7 +176,7 @@ describe('requestWithEndpointFallback', () => {
       expect((error as SfError).message).to.include('Unable to access the Salesforce Agent API');
     }
 
-    expect(requestStub.calledThrice).to.be.true;
+    expect(requestStub.callCount).to.equal(4);
   });
 
   it('should throw immediately on non-404 errors', async () => {
