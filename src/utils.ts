@@ -733,7 +733,7 @@ export type RequestInfo = {
 
 /**
  * Makes an API request with automatic endpoint fallback.
- * Tries api.salesforce.com first, then test.api.salesforce.com on 404, then dev.api.salesforce.com on 404.
+ * Tries api.salesforce.com first, then test., dev., and stage.api.salesforce.com on 404.
  *
  * @param connection - The Salesforce connection
  * @param requestInfo - The request information (url, method, headers, body, etc.)
@@ -746,7 +746,7 @@ export async function requestWithEndpointFallback<T>(
   requestInfo: RequestInfo,
   options?: { retry?: { maxRetries?: number } }
 ): Promise<T> {
-  const endpoints = ['', 'test.', 'dev.']; // Try production, test, dev in that order
+  const endpoints = ['', 'test.', 'dev.', 'stage.']; // Try production, test, dev, stage in that order
   const attemptedEndpoints: string[] = [];
   const logger = CtxLogger.child('AgentApiRequest');
 
@@ -755,7 +755,7 @@ export async function requestWithEndpointFallback<T>(
   for (const endpoint of endpoints) {
     // Replace the domain with the endpoint variant
     const modifiedUrl = requestInfo.url.replace(
-      /https:\/\/(?:test\.|dev\.)?api\.salesforce\.com/,
+      /https:\/\/(?:test\.|dev\.|stage\.)?api\.salesforce\.com/,
       `https://${endpoint}api.salesforce.com`
     );
     attemptedEndpoints.push(`${endpoint || 'production '}api.salesforce.com`);
