@@ -32,10 +32,10 @@ import { type Connection } from '@salesforce/core';
 export const SCORER_INPUT_SCOPES = ['Session', 'Intent'] as const;
 export const SCORER_ENGINE_TYPES = ['Manual', 'PromptTemplate'] as const;
 // Statuses a *new* scorer version may be authored with (via `create`):
-//   - Draft: the scorer is still being developed and tuned (the authoring inner loop); it cannot run against
-//     production sessions yet.
-//   - Available: the scorer is ready for use — it can be run ad-hoc to evaluate agents, and it becomes
-//     eligible for automatic production scoring once an agentAssociation sets isActive: true.
+//   - Draft: the scorer is still being developed and tuned (the authoring inner loop). It can be run ad-hoc to
+//     evaluate agents, but it cannot be activated for automatic production scoring.
+//   - Available: the scorer is validated and ready. Like Draft it can be run ad-hoc, and additionally it
+//     becomes eligible for automatic production scoring once an agentAssociation sets isActive: true.
 // `Archived` (no longer in use) is deliberately excluded: it is a terminal state reached only by a later
 // status transition, never an initial one.
 export const SCORER_STATUSES = ['Draft', 'Available'] as const;
@@ -119,8 +119,8 @@ export type AgentAssociation = {
   /**
    * Whether this scorer runs automatically on the agent's production sessions.
    *
-   * - false: the scorer never runs on its own. It can still be run ad-hoc against sessions on demand (as long as the scorer version's status is 'Available').
-   * - true: the platform automatically scores the agent's incoming production sessions — no ad-hoc trigger needed — sampling them per `samplingRate`. This requires the scorer version's status to be 'Available'.
+   * - false: the scorer never runs on its own. It can still be run ad-hoc against sessions on demand, regardless of whether the version's status is 'Draft' or 'Available'.
+   * - true: the platform automatically scores the agent's incoming production sessions — no ad-hoc trigger needed — sampling them per `samplingRate`. This activation requires the scorer version's status to be 'Available'.
    *
    * Set this to true only once the scorer is validated and you want continuous, hands-off scoring in
    * production; keep it false while developing (status 'Draft') or when you only intend to score ad-hoc.
@@ -186,8 +186,8 @@ export type ScorerSpec = {
   /**
    * Lifecycle status of this scorer version, which controls whether and how it can be used:
    *
-   * - 'Draft' (default): the scorer is still being developed and tuned — the authoring inner loop. Use this while iterating on the prompt/instructions; a Draft version cannot run against production sessions.
-   * - 'Available': the scorer is ready for use. It can be run ad-hoc to evaluate agents, and it becomes eligible for automatic production scoring once its agentAssociation sets isActive: true.
+   * - 'Draft' (default): the scorer is still being developed and tuned — the authoring inner loop. Use this while iterating on the prompt/instructions. A Draft version can be run ad-hoc to evaluate agents, but it cannot be activated for automatic production scoring.
+   * - 'Available': the scorer is validated and ready. It can be run ad-hoc, and it additionally becomes eligible for automatic production scoring once its agentAssociation sets isActive: true.
    *
    * Authoring is limited to 'Draft' and 'Available'. 'Archived' (no longer in use) is a terminal state reached
    * only by a later status transition on an existing version — it cannot be set when creating a version here.

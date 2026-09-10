@@ -256,6 +256,50 @@ describe('generate output extraction', () => {
     expect(res.error).to.match(/no generations/i);
   });
 
+  // A present-but-blank completion carries no score; it must fail rather than report a passing empty score
+  // (a scripted loop would otherwise mistake the failed evaluation for a pass).
+  it('fails when the completion text is an empty string', async () => {
+    const res = await generate(fakeConnection({ generations: [{ text: '' }] }), 'T', valueMap);
+    expect(res.ok).to.equal(false);
+    expect(res.error).to.match(/no generations/i);
+  });
+
+  it('fails when the generation has no text field', async () => {
+    const res = await generate(fakeConnection({ generations: [{}] }), 'T', valueMap);
+    expect(res.ok).to.equal(false);
+    expect(res.error).to.match(/no generations/i);
+  });
+
+  it('fails when the completion text is whitespace only', async () => {
+    const res = await generate(fakeConnection({ generations: [{ text: '   \n\t' }] }), 'T', valueMap);
+    expect(res.ok).to.equal(false);
+    expect(res.error).to.match(/no generations/i);
+  });
+
+  // A well-formed envelope that yields no score is a failed evaluation too — not a passing empty score that
+  // falls through to the undefined legacy `output`.
+  it('fails when a parseable outputs[] envelope is empty', async () => {
+    const text = JSON.stringify({ outputs: [], explanation: 'nothing to score' });
+    const res = await generate(fakeConnection({ generations: [{ text }] }), 'T', valueMap);
+    expect(res.ok).to.equal(false);
+    expect(res.error).to.match(/no usable score/i);
+    expect(res.output).to.be.undefined;
+  });
+
+  it('fails when every outputs[] entry has null label and value', async () => {
+    const text = JSON.stringify({ outputs: [{ label: null, value: null }], explanation: 'x' });
+    const res = await generate(fakeConnection({ generations: [{ text }] }), 'T', valueMap);
+    expect(res.ok).to.equal(false);
+    expect(res.error).to.match(/no usable score/i);
+  });
+
+  it('fails when the envelope carries neither an output nor an outputs field', async () => {
+    const text = JSON.stringify({ explanation: 'no score at all' });
+    const res = await generate(fakeConnection({ generations: [{ text }] }), 'T', valueMap);
+    expect(res.ok).to.equal(false);
+    expect(res.error).to.match(/no usable score/i);
+  });
+
   it('fails cleanly when the request itself rejects', async () => {
     const connection = {
       version: '64.0',

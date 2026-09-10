@@ -98,6 +98,38 @@ describe('validateScorerSpec', () => {
     expect(() => validateScorerSpec({ ...baseSpec, lightningType: 'lightning__numberType' })).to.not.throw();
   });
 
+  it('throws when engineType is missing', () => {
+    expect(() =>
+      validateScorerSpec({ ...baseSpec, engineType: undefined as unknown as ScorerSpec['engineType'] })
+    ).to.throw('engineType is required.');
+  });
+
+  it('throws when engineType is not a supported engine (e.g. mis-cased)', () => {
+    // A mis-cased engineType (prompttemplate) would otherwise scaffold a silently-broken definition: the
+    // case-sensitive `=== 'PromptTemplate'` branch is false, so no engineRef/template is emitted.
+    expect(() =>
+      validateScorerSpec({ ...baseSpec, engineType: 'prompttemplate' as unknown as ScorerSpec['engineType'] })
+    ).to.throw("Unsupported engineType 'prompttemplate'.");
+  });
+
+  it('does not throw for a valid engineType', () => {
+    expect(() => validateScorerSpec({ ...baseSpec, engineType: 'PromptTemplate' })).to.not.throw();
+  });
+
+  it('throws when agentAssociation is missing', () => {
+    // Guards the samplingRate dereference: an omitted (or misspelled) agentAssociation must produce a clear
+    // message, not a raw `TypeError: Cannot read properties of undefined (reading 'samplingRate')`.
+    expect(() =>
+      validateScorerSpec({ ...baseSpec, agentAssociation: undefined as unknown as ScorerSpec['agentAssociation'] })
+    ).to.throw('agentAssociation is required.');
+  });
+
+  it('throws when agentAssociation.agentApiName is empty', () => {
+    expect(() =>
+      validateScorerSpec({ ...baseSpec, agentAssociation: { agentApiName: '', isActive: false } })
+    ).to.throw('agentAssociation.agentApiName is required.');
+  });
+
   // Build an outputEnumValues array of the given length with exactly one fallback.
   const enumValues = (count: number): ScorerSpec['outputEnumValues'] =>
     Array.from({ length: count }, (_, i) => ({
@@ -576,6 +608,35 @@ describe('scorer versioning', () => {
   // v1 Available, v2 Draft.
   const twoVersionXml = (): string => scorerXmlWithV2Status('Draft');
 
+  // Build a definition with one <scorerVersion> per supplied status (v1, v2, …), for exercising the default
+  // selection gate across Draft/Available/Archived combinations that `create` never scaffolds by hand.
+  const versionsXml = (...statuses: string[]): string =>
+    [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<AiAgentScorerDefinition xmlns="http://soap.sforce.com/2006/04/metadata">',
+      '    <dataType>LightningType</dataType>',
+      '    <inputScope>Session</inputScope>',
+      '    <lightningType>lightning__numberType</lightningType>',
+      '    <scorerType>OpenEnded</scorerType>',
+      ...statuses.flatMap((status, i) => [
+        '    <scorerVersion>',
+        '        <agentAssociation>',
+        '            <agentApiName>Agent1</agentApiName>',
+        '            <isActive>true</isActive>',
+        '            <samplingRate>1</samplingRate>',
+        '        </agentAssociation>',
+        '        <engine>',
+        '            <engineRef>Resolution</engineRef>',
+        '            <engineType>PromptTemplate</engineType>',
+        '        </engine>',
+        `        <label>Resolution v${i + 1}</label>`,
+        `        <status>${status}</status>`,
+        `        <versionNumber>${i + 1}</versionNumber>`,
+        '    </scorerVersion>',
+      ]),
+      '</AiAgentScorerDefinition>',
+    ].join('\n');
+
   describe('parseScorerVersions', () => {
     it('lists every version with its number, status, and active flag', () => {
       const versions = parseScorerVersions(twoVersionXml());
@@ -612,9 +673,33 @@ describe('scorer versioning', () => {
       expect(parseScorerXml(twoVersionXml(), 'Resolution', { scorerVersion: 2 }).scorerVersion).to.equal(2);
     });
 
-    it('throws when no version is Available and none is requested', () => {
+    it('runs the highest-numbered Draft version by default when none is Available', () => {
+      // The authoring inner loop: a freshly-scaffolded, Draft-only scorer must run ad hoc without
+      // --scorer-version. Default selection falls back to the highest non-Archived (Draft) version.
       const draftOnly = buildScorerXml({ ...base, status: 'Draft' });
-      expect(() => parseScorerXml(draftOnly, 'Resolution')).to.throw(/no Available version/);
+      const parsed = parseScorerXml(draftOnly, 'Resolution');
+      expect(parsed.label).to.equal('Resolution v1');
+      expect(parsed.scorerVersion).to.equal(1);
+      expect(parsed.status).to.equal('Draft');
+    });
+
+    it('picks the highest-numbered Draft when several exist and none is Available', () => {
+      const parsed = parseScorerXml(versionsXml('Draft', 'Draft'), 'Resolution');
+      expect(parsed.label).to.equal('Resolution v2');
+      expect(parsed.scorerVersion).to.equal(2);
+    });
+
+    it('prefers an Available version over a higher-numbered Draft', () => {
+      // v1 Available, v2 Draft → the released v1 wins the default even though v2 is newer.
+      const parsed = parseScorerXml(versionsXml('Available', 'Draft'), 'Resolution');
+      expect(parsed.label).to.equal('Resolution v1');
+      expect(parsed.scorerVersion).to.equal(1);
+    });
+
+    it('throws only when every authored version is Archived', () => {
+      expect(() => parseScorerXml(versionsXml('Archived', 'Archived'), 'Resolution')).to.throw(
+        /no runnable version|every authored version is Archived/
+      );
     });
 
     it('throws when a requested version does not exist', () => {

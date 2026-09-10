@@ -19,6 +19,7 @@ import {
   MAX_ENUM_VALUES,
   SCORER_API_NAME_MAX_LENGTH,
   SCORER_API_NAME_PATTERN,
+  SCORER_ENGINE_TYPES,
   SUPPORTED_LIGHTNING_TYPES,
 } from './types';
 
@@ -32,8 +33,12 @@ export function labelToApiName(label: string): string {
 }
 
 export function validateScorerSpec(spec: ScorerSpec): void {
-  if (!isValidScorerApiName(spec.apiName)) {
-    throw new Error('API name must start with a letter, contain only alphanumerics/underscores, and be at most 35 characters.');
+  // Guard presence before pattern-checking: a spec that omits apiName (or gives a non-string) would otherwise
+  // throw a raw TypeError from `isValidScorerApiName` (`undefined.length`) instead of an actionable message.
+  if (typeof spec.apiName !== 'string' || !isValidScorerApiName(spec.apiName)) {
+    throw new Error(
+      'API name must start with a letter, contain only alphanumerics/underscores, and be at most 35 characters.'
+    );
   }
 
   if (!spec.lightningType) {
@@ -41,6 +46,16 @@ export function validateScorerSpec(spec: ScorerSpec): void {
   }
   if (!SUPPORTED_LIGHTNING_TYPES.includes(spec.lightningType)) {
     throw new Error(`Unsupported lightningType '${spec.lightningType}'. Must be one of: ${SUPPORTED_LIGHTNING_TYPES.join(', ')}`);
+  }
+
+  // engineType is required and case-sensitive downstream (xml.ts keys the `PromptTemplate` engineRef off an
+  // exact match, and agentScorer.ts only generates a template for it), so a missing or mis-cased value would
+  // otherwise scaffold a silently-broken definition that fails only at deploy. Mirror the lightningType check.
+  if (!spec.engineType) {
+    throw new Error('engineType is required.');
+  }
+  if (!(SCORER_ENGINE_TYPES as readonly string[]).includes(spec.engineType)) {
+    throw new Error(`Unsupported engineType '${spec.engineType}'. Must be one of: ${SCORER_ENGINE_TYPES.join(', ')}`);
   }
 
   if (spec.outputEnumValues) {
@@ -51,6 +66,16 @@ export function validateScorerSpec(spec: ScorerSpec): void {
     if (fallbackCount > 1) {
       throw new Error(`At most one outputEnumValue can be the fallback, but found ${fallbackCount}.`);
     }
+  }
+
+  // agentAssociation is schema-required; guard its presence (and a non-empty agentApiName) before dereferencing
+  // samplingRate, so a spec omitting or misspelling it (e.g. `agentAssociations`) fails with a clear message
+  // rather than a raw `TypeError: Cannot read properties of undefined (reading 'samplingRate')`.
+  if (spec.agentAssociation == null) {
+    throw new Error('agentAssociation is required.');
+  }
+  if (typeof spec.agentAssociation.agentApiName !== 'string' || spec.agentAssociation.agentApiName.length === 0) {
+    throw new Error('agentAssociation.agentApiName is required.');
   }
 
   if (spec.agentAssociation.samplingRate != null && (spec.agentAssociation.samplingRate < 0 || spec.agentAssociation.samplingRate > 1)) {

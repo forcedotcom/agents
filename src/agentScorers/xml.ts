@@ -150,10 +150,13 @@ const listVersions = (versions: RawVersion[]): string =>
 /**
  * Choose which scorer version to run.
  *
- * No explicit version → the highest-numbered `Available` version. If none is `Available`, throw and ask the
- * caller to pick one explicitly (a Draft version is never run implicitly — this keeps run behavior explicit).
- * Explicit version → that exact version, unless it is `Archived` (archived versions cannot be run). A Draft
- * version can be requested explicitly, which is how the refine inner-loop scores a not-yet-promoted version.
+ * No explicit version → the highest-numbered `Available` version if any exists; otherwise the highest-numbered
+ * non-`Archived` (i.e. `Draft`) version. A Draft version can be run ad hoc during authoring — that is the whole
+ * point of the inner loop — so the default run selects one when nothing has been promoted yet, rather than
+ * forcing `--scorer-version`. Only when *every* version is `Archived` (nothing runnable) does this throw.
+ * Note: this governs ad-hoc `run` selection only; *activation* (automatic production scoring via an
+ * agentAssociation with isActive: true) still requires `Available` and is enforced by the platform, not here.
+ * Explicit version → that exact version, unless it is `Archived` (archived versions cannot be run).
  */
 function selectScorerVersion(apiName: string, versions: RawVersion[], requested?: number): RawVersion {
   // A malformed/legacy document with no <scorerVersion> block: return an empty version so the caller's
@@ -174,17 +177,21 @@ function selectScorerVersion(apiName: string, versions: RawVersion[], requested?
     return match;
   }
 
-  const availableDescending = versions
-    .filter((v) => normalizeStatus(v.status) === 'Available')
+  // Prefer a released (`Available`) version for a stable default, but fall back to the highest-numbered
+  // runnable (non-`Archived`) version so a freshly-scaffolded, Draft-only scorer runs ad hoc without needing
+  // an explicit --scorer-version during authoring.
+  const runnableDescending = versions
+    .filter((v) => normalizeStatus(v.status) !== 'Archived')
     .sort((a, b) => toVersionNumber(b.versionNumber) - toVersionNumber(a.versionNumber));
-  if (availableDescending.length === 0) {
+  if (runnableDescending.length === 0) {
     throw new Error(
-      `Scorer '${apiName}' has no Available version to run. ` +
-        `Promote a version to Available, or choose one explicitly with --scorer-version. ` +
+      `Scorer '${apiName}' has no runnable version — every authored version is Archived. ` +
+        `Author or unarchive a version, or choose one explicitly with --scorer-version. ` +
         `Authored versions: ${listVersions(versions)}.`
     );
   }
-  return availableDescending[0];
+  const available = runnableDescending.filter((v) => normalizeStatus(v.status) === 'Available');
+  return available[0] ?? runnableDescending[0];
 }
 
 /** A version's identity + status, for callers that manage versions (create/promote/archive). */

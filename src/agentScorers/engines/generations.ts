@@ -161,7 +161,14 @@ async function attemptGenerate(connection: Connection, url: string, body: string
   if (!gens.length || firstGen === null || typeof firstGen !== 'object') {
     return { kind: 'empty' };
   }
-  return { kind: 'ok', text: firstGen.text ?? '' };
+  // A present-but-blank completion (no `text`, or whitespace only — e.g. a content-filtered / safety-refused
+  // response) carries no score. Treat it the same as an absent generation so the run fails, rather than letting
+  // `parseGeneration('')` fall through to a passing empty score.
+  const text = firstGen.text;
+  if (typeof text !== 'string' || text.trim() === '') {
+    return { kind: 'empty' };
+  }
+  return { kind: 'ok', text };
 }
 
 /**
@@ -172,6 +179,16 @@ async function attemptGenerate(connection: Connection, url: string, body: string
  */
 function emptyGenerationsMessage(apiName: string): string {
   return `no generations returned for template '${apiName}'. Likely causes: the template is not deployed & published; its configured model is not enabled in this org; the template has multiple same-content versions (which collide in the serving layer); or the org's shared LLM gateway is throttled. If other scorers are failing at the same time, it's the gateway — space out runs and retry.`;
+}
+
+/**
+ * A well-formed but score-less envelope: the request succeeded and the JSON parsed, but it carried an empty or
+ * all-null `outputs[]` and no legacy `output`. Distinct from a blank completion (see emptyGenerationsMessage) —
+ * here the model responded with structure but no score — so it points at the prompt/rubric rather than the
+ * template/gateway.
+ */
+function noUsableScoreMessage(): string {
+  return 'the model returned no usable score: the response had an empty or all-null "outputs" array and no "output" value. Check the scorer prompt/rubric so the model emits a label or value, then retry.';
 }
 
 /** Parse a successful generation's text into a ScorerResult, tolerating both envelope shapes and bare scalars. */
@@ -191,7 +208,14 @@ function parseGeneration(text: string, preferLabel: boolean): ScorerResult {
       outputs?: Array<{ label?: string | null; value?: number | string | null }>;
       explanation?: string;
     };
-    return { ok: true, output: extractOutput(obj, preferLabel), explanation: obj.explanation, raw: text };
+    const output = extractOutput(obj, preferLabel);
+    // A parseable envelope that carries no score (empty/all-null `outputs[]` and no legacy `output`) is a failed
+    // evaluation, not a passing empty one — mirror the empty-completion guard so `run` reports ok:false rather
+    // than "Outcome: ok" with no Output line, which a scripted loop would mistake for a pass.
+    if (output === undefined || output === null) {
+      return { ok: false, error: noUsableScoreMessage(), explanation: obj.explanation, raw: text };
+    }
+    return { ok: true, output, explanation: obj.explanation, raw: text };
   } catch {
     // Fall back to the raw text; the caller's coercion handles loose formats.
     return { ok: true, output: text, raw: text };
