@@ -272,7 +272,17 @@ export class ScriptAgent extends AgentBase {
         });
       }
 
-      await this.compile();
+      const compileResult = await this.compile();
+
+      if (compileResult.status === 'failure') {
+        this.agentJson = undefined;
+
+        throw SfError.create({
+          name: 'AgentCompilationError',
+          message: ['Agent compilation failed.', ...compileResult.errors.map((error) => error.description)].join('\n'),
+          data: compileResult,
+        });
+      }
     } finally {
       // Always restore original content after compilation
       this.agentScriptContent = originalContent;
