@@ -209,6 +209,15 @@ export {
   type StageArtifact,
   type FileListResponse,
 } from './dataLibraryTypes';
+export {
+  AgentOptimizer,
+  EinsteinLlmProvider,
+  type LLMProvider,
+  type TestUtterance,
+  type OptimizeConfig,
+  type OptimizeIteration,
+  type OptimizeResult,
+} from './agentOptimizer';
 export { ApiCatalog } from './apiCatalog';
 export {
   type McpServerType,
