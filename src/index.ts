@@ -209,6 +209,16 @@ export {
   type StageArtifact,
   type FileListResponse,
 } from './dataLibraryTypes';
+export { AgentExpressContext } from './agentExpressContext';
+export {
+  type ExpressContextLibrarySummary,
+  type ExpressContextFileRef,
+  type ExpressContextFileListResponse,
+  type ExpressContextStatusResponse,
+  type CreateExpressContextInput,
+  type ExpressContextUploadResult,
+  type ExpressContextRetrieverDetail,
+} from './expressContextTypes';
 export { ApiCatalog } from './apiCatalog';
 export {
   type McpServerType,
