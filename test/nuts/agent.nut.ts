@@ -23,6 +23,7 @@ import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { sleep } from '@salesforce/kit';
 import { Agent, ScriptAgent, type AgentJobSpec, type AgentJobSpecCreateConfig } from '../../src';
 import { supportsAiAgentDefinition } from '../../src/utils';
+import { managerFor } from '../../src/connectionManager';
 
 /* eslint-disable no-console */
 // Helper function to wait for Einstein AI services to be ready
@@ -813,11 +814,13 @@ describe('agent NUTs', () => {
       const sourceDir = join(session.project.dir, 'force-app', 'main', 'default');
       const apiName = generateApiName(agentName);
       // Branch on the same capability signal Agent.create uses to choose the retrieve format —
-      // not a raw API-version check. When the two disagree (e.g. the org stores agents as
-      // AiAgentDefinition but reports a lower API version), a version-based branch asserts the
-      // wrong layout and fails even though the create retrieved correctly. Assert the specific
+      // and crucially on the SAME connection it probes: the ConnectionManager's standard
+      // connection, which resolves to the org's latest API version. The raw test `connection`
+      // can sit at a lower API version, so metadata.describe() on it omits AiAgentDefinition and
+      // the branch disagrees with the layout Agent.create actually retrieved. Assert the specific
       // created agent is present rather than a fixed directory count coupled to earlier tests.
-      if (await supportsAiAgentDefinition(connection)) {
+      const standardConnection = (await managerFor(connection)).getStandardConnection();
+      if (await supportsAiAgentDefinition(standardConnection)) {
         // the new AiAgentDefinition / AiAgentDefinitionVersion layout
         expect(readdirSync(join(sourceDir, 'aiAgents')), 'aiAgents/ should contain the retrieved agent').to.not.be
           .empty;
@@ -839,8 +842,11 @@ describe('agent NUTs', () => {
       // GenAiPlanner fallback is therefore only reachable on an org that genuinely lacks that
       // type — it can no longer be forced on a new-capable org by pinning the API version down.
       // Skip where the org supports the new type; the sibling 'from a spec' test already covers
-      // the new-format layout there.
-      if (await supportsAiAgentDefinition(connection)) {
+      // the new-format layout there. Probe the ConnectionManager's standard connection — the
+      // same one Agent.create uses — since the raw test `connection` may report a lower API
+      // version whose metadata.describe() omits AiAgentDefinition.
+      const standardConnection = (await managerFor(connection)).getStandardConnection();
+      if (await supportsAiAgentDefinition(standardConnection)) {
         this.skip();
       }
 
