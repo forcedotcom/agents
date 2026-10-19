@@ -18,10 +18,11 @@ import { join } from 'node:path';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { expect } from 'chai';
 import { genUniqueString, TestSession } from '@salesforce/cli-plugins-testkit';
-import { AuthInfo, Connection, generateApiName, Org, SfProject, User } from '@salesforce/core';
+import { Connection, generateApiName, Org, SfProject, User } from '@salesforce/core';
 import { ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { sleep } from '@salesforce/kit';
 import { Agent, ScriptAgent, type AgentJobSpec, type AgentJobSpecCreateConfig } from '../../src';
+import { supportsAiAgentDefinition } from '../../src/utils';
 
 /* eslint-disable no-console */
 // Helper function to wait for Einstein AI services to be ready
@@ -810,94 +811,79 @@ describe('agent NUTs', () => {
 
       // verify agent metadata files are retrieved to the project
       const sourceDir = join(session.project.dir, 'force-app', 'main', 'default');
-      if (Number.parseInt(connection.getApiVersion(), 10) >= 68) {
-        // orgs at API 68+ retrieve the new AiAgentDefinition / AiAgentDefinitionVersion layout
-        const apiName = generateApiName(agentName);
-        // AiAgentDefinition lands under aiAgents/ (standard adapter)
+      const apiName = generateApiName(agentName);
+      // Branch on the same capability signal Agent.create uses to choose the retrieve format —
+      // not a raw API-version check. When the two disagree (e.g. the org stores agents as
+      // AiAgentDefinition but reports a lower API version), a version-based branch asserts the
+      // wrong layout and fails even though the create retrieved correctly. Assert the specific
+      // created agent is present rather than a fixed directory count coupled to earlier tests.
+      if (await supportsAiAgentDefinition(connection)) {
+        // the new AiAgentDefinition / AiAgentDefinitionVersion layout
         expect(readdirSync(join(sourceDir, 'aiAgents')), 'aiAgents/ should contain the retrieved agent').to.not.be
           .empty;
         // AiAgentDefinitionVersion lands under aiAgentDefinitionVersions/ as a versioned (#N) bundle
         const versionDirs = readdirSync(join(sourceDir, 'aiAgentDefinitionVersions'));
-        expect(versionDirs.some((dir) => dir.startsWith(`${apiName}#`)), 'a <apiName>#<n> version bundle should exist')
+        expect(versionDirs.some((dir) => dir.startsWith(`${apiName}#`)), `a ${apiName}#<n> version bundle should exist`)
           .to.be.true;
       } else {
-        // older orgs retrieve the legacy Bot / GenAiPlanner / GenAiPlugin layout
-        expect(readdirSync(join(sourceDir, 'bots'))).to.have.lengthOf(2);
-        expect(readdirSync(join(sourceDir, 'genAiPlannerBundles'))).to.have.lengthOf(2);
-        expect(readdirSync(join(sourceDir, 'genAiPlugins'))).to.have.lengthOf(6);
+        // the legacy Bot / GenAiPlanner / GenAiPlugin layout
+        expect(existsSync(join(sourceDir, 'bots', apiName)), `bots/${apiName} should exist`).to.be.true;
+        expect(existsSync(join(sourceDir, 'genAiPlannerBundles')), 'genAiPlannerBundles/ should exist').to.be.true;
+        expect(existsSync(join(sourceDir, 'genAiPlugins')), 'genAiPlugins/ should exist').to.be.true;
       }
     });
 
-    it('should retrieve the legacy Bot / GenAiPlanner layout when the org API version is below 68', async () => {
-      // The new AiAgentDefinition / AiAgentDefinitionVersion types only exist at API 68+, so
-      // Agent.create falls back to the legacy Bot / GenAiPlanner retrieval below that. Pin the
-      // API version so this branch is exercised deterministically, independent of the scratch
-      // org's actual (68+) API version.
-      //
-      // 67.0 threads two gates: it is >= the SDR `Agent:` pseudo-type gate (>63, needed for the
-      // legacy manifest to resolve) and < the new-type threshold (68). SF_ORG_API_VERSION is the
-      // lever because supportsAiAgentDefinition() checks the standard connection that
-      // ConnectionManager builds internally from the username — not the connection passed in — so
-      // connection.setApiVersion() would not reach it.
-      const priorApiVersion = process.env.SF_ORG_API_VERSION;
-      process.env.SF_ORG_API_VERSION = '67.0';
-      try {
-        const username = session.orgs.get('default')!.username as string;
-        // A distinct Connection object forces a fresh ConnectionManager whose standard connection
-        // is built while the env override is in effect. The earlier test cached a manager against
-        // the shared `connection` at the org's default API version.
-        const legacyConnection = await Connection.create({ authInfo: await AuthInfo.create({ username }) });
-        // Guard: fail loudly if the override didn't take effect (otherwise we'd silently test the
-        // wrong branch).
-        expect(Number.parseInt(legacyConnection.getApiVersion(), 10)).to.be.lessThan(68);
+    it('should retrieve the legacy Bot / GenAiPlanner layout on an org without AiAgentDefinition', async function (this: Mocha.Context) {
+      // Agent.create chooses the retrieve format by probing the org for the AiAgentDefinition
+      // metadata type (supportsAiAgentDefinition), not by API version. The legacy Bot /
+      // GenAiPlanner fallback is therefore only reachable on an org that genuinely lacks that
+      // type — it can no longer be forced on a new-capable org by pinning the API version down.
+      // Skip where the org supports the new type; the sibling 'from a spec' test already covers
+      // the new-format layout there.
+      if (await supportsAiAgentDefinition(connection)) {
+        this.skip();
+      }
 
-        const legacyAgentName = `${agentName} Legacy`;
-        const agentResponse = await Agent.create(legacyConnection, project, {
-          agentType: agentSpec.agentType,
-          saveAgent: true,
-          agentSettings: {
-            agentName: legacyAgentName,
-            // Reuse the Bot User already provisioned in the describe `before` (and committed via
-            // waitForPermSetAssignment) instead of letting core auto-create one in the same
-            // transaction, which intermittently races the pre-save validation trigger and fails
-            // with "User doesn't have access to agent". Mirrors the sibling spec-create test.
-            userId: botUserId,
+      const legacyAgentName = `${agentName} Legacy`;
+      const agentResponse = await Agent.create(connection, project, {
+        agentType: agentSpec.agentType,
+        saveAgent: true,
+        agentSettings: {
+          agentName: legacyAgentName,
+          // Reuse the Bot User already provisioned in the describe `before` (and committed via
+          // waitForPermSetAssignment) instead of letting core auto-create one in the same
+          // transaction, which intermittently races the pre-save validation trigger and fails
+          // with "User doesn't have access to agent". Mirrors the sibling spec-create test.
+          userId: botUserId,
+        },
+        generationInfo: {
+          defaultInfo: {
+            role: agentSpec.role,
+            companyName: agentSpec.companyName,
+            companyDescription: agentSpec.companyDescription,
+            preDefinedTopics: agentSpec.topics,
           },
-          generationInfo: {
-            defaultInfo: {
-              role: agentSpec.role,
-              companyName: agentSpec.companyName,
-              companyDescription: agentSpec.companyDescription,
-              preDefinedTopics: agentSpec.topics,
-            },
-          },
-          generationSettings: {
-            maxNumOfTopics: agentSpec.maxNumOfTopics,
-          },
-        });
-        expect(agentResponse.isSuccess, JSON.stringify(agentResponse)).to.equal(true);
+        },
+        generationSettings: {
+          maxNumOfTopics: agentSpec.maxNumOfTopics,
+        },
+      });
+      expect(agentResponse.isSuccess, JSON.stringify(agentResponse)).to.equal(true);
 
-        // The agent should land as legacy Bot + GenAiPlanner metadata, NOT the new
-        // aiAgents/ + aiAgentDefinitionVersions/ layout.
-        const sourceDir = join(session.project.dir, 'force-app', 'main', 'default');
-        const apiName = generateApiName(legacyAgentName);
-        expect(existsSync(join(sourceDir, 'bots', apiName)), `bots/${apiName} should exist`).to.be.true;
-        expect(existsSync(join(sourceDir, 'genAiPlannerBundles')), 'genAiPlannerBundles/ should exist').to.be.true;
+      // The agent should land as legacy Bot + GenAiPlanner metadata, NOT the new
+      // aiAgents/ + aiAgentDefinitionVersions/ layout.
+      const sourceDir = join(session.project.dir, 'force-app', 'main', 'default');
+      const apiName = generateApiName(legacyAgentName);
+      expect(existsSync(join(sourceDir, 'bots', apiName)), `bots/${apiName} should exist`).to.be.true;
+      expect(existsSync(join(sourceDir, 'genAiPlannerBundles')), 'genAiPlannerBundles/ should exist').to.be.true;
 
-        // and it must NOT be retrieved as an AiAgentDefinitionVersion (#N) bundle.
-        const versionsDir = join(sourceDir, 'aiAgentDefinitionVersions');
-        if (existsSync(versionsDir)) {
-          expect(
-            readdirSync(versionsDir).some((dir) => dir.startsWith(`${apiName}#`)),
-            `aiAgentDefinitionVersions/ should not contain a ${apiName}#<n> bundle`
-          ).to.be.false;
-        }
-      } finally {
-        if (priorApiVersion === undefined) {
-          delete process.env.SF_ORG_API_VERSION;
-        } else {
-          process.env.SF_ORG_API_VERSION = priorApiVersion;
-        }
+      // and it must NOT be retrieved as an AiAgentDefinitionVersion (#N) bundle.
+      const versionsDir = join(sourceDir, 'aiAgentDefinitionVersions');
+      if (existsSync(versionsDir)) {
+        expect(
+          readdirSync(versionsDir).some((dir) => dir.startsWith(`${apiName}#`)),
+          `aiAgentDefinitionVersions/ should not contain a ${apiName}#<n> bundle`
+        ).to.be.false;
       }
     });
   });

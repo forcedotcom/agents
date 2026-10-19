@@ -899,13 +899,15 @@ describe('Agents', () => {
     const pollingStub = $$.SANDBOX.stub(mdApiRetrieve, 'pollStatus').resolves({
       // @ts-expect-error Not the full response
       response: { success: true },
-      getFileResponses: () => [],
+      // @ts-expect-error Not the full FileResponse
+      getFileResponses: () => [{ type: 'AiAgentDefinition', fullName: 'My_First_Agent' }],
     });
     const compSet = new ComponentSet();
     const retrieveStub = $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
     const csbStub = $$.SANDBOX.stub(ComponentSetBuilder, 'build').resolves(compSet);
-    // org supports the new metadata types
-    $$.SANDBOX.stub(connection, 'getApiVersion').returns('68.0');
+    // org supports the new metadata types (AiAgentDefinition present in the describe)
+    // @ts-expect-error Not the full describe result
+    $$.SANDBOX.stub(connection.metadata, 'describe').resolves({ metadataObjects: [{ xmlName: 'AiAgentDefinition' }] });
     // Agent.create resolves the numeric version of the just-created agent for the
     // AiAgentDefinitionVersion full name.
     $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves({ VersionNumber: 1 });
@@ -943,7 +945,7 @@ describe('Agents', () => {
     expect(retrieveStub.firstCall.args[0]?.rootTypesWithDependencies).to.deep.equal(['AiAgentDefinitionVersion']);
   });
 
-  it('create save agent on org below min API version retrieves the legacy Agent manifest', async () => {
+  it('create save agent on org without AiAgentDefinition retrieves the legacy Agent manifest', async () => {
     process.env.SF_MOCK_DIR = join('test', 'mocks', 'createAgent-Save');
     const sfProject = SfProject.getInstance();
 
@@ -956,13 +958,15 @@ describe('Agents', () => {
     $$.SANDBOX.stub(mdApiRetrieve, 'pollStatus').resolves({
       // @ts-expect-error Not the full response
       response: { success: true },
-      getFileResponses: () => [],
+      // @ts-expect-error Not the full FileResponse
+      getFileResponses: () => [{ type: 'Agent', fullName: 'My_First_Agent' }],
     });
     const compSet = new ComponentSet();
     const retrieveStub = $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
     const csbStub = $$.SANDBOX.stub(ComponentSetBuilder, 'build').resolves(compSet);
-    // org does not support the new metadata types
-    $$.SANDBOX.stub(connection, 'getApiVersion').returns('62.0');
+    // org does not support the new metadata types (AiAgentDefinition absent from the describe)
+    // @ts-expect-error Not the full describe result
+    $$.SANDBOX.stub(connection.metadata, 'describe').resolves({ metadataObjects: [{ xmlName: 'Bot' }] });
     const singleRecordQueryStub = $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves({ VersionNumber: 1 });
 
     const config: AgentCreateConfig = {

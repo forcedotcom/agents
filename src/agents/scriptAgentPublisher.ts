@@ -193,7 +193,7 @@ export class ScriptAgentPublisher {
     const standardConn = (await managerFor(this.connection)).getStandardConnection();
     const defaultPackagePath = path.resolve(this.project.getDefaultPackage().path);
 
-    const useNewFormat = supportsAiAgentDefinition(standardConn);
+    const useNewFormat = await supportsAiAgentDefinition(standardConn);
     getLogger().debug('Retrieving agent metadata', {
       developerName: this.developerName,
       format: useNewFormat ? 'AiAgentDefinition' : 'Bot/GenAiPlanner',
