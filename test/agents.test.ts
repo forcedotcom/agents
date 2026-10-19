@@ -884,6 +884,26 @@ describe('Agents', () => {
       expect(body.enableSimulationMode).to.equal(true);
       expect(body.variables).to.deep.equal([{ name: '$Context.A', type: 'Text', value: '1' }]);
     });
+
+    it('starts preview when globalConfiguration has no defaultAgentUser (regression W-24581878)', async () => {
+      const agent = new ScriptAgent({ connection, project: sfProject, aabName: 'myAgent' });
+      const globalConfigurationWithoutUser = { ...minimalAgentJson.globalConfiguration };
+      // omit defaultAgentUser entirely, mirroring a bundle that doesn't configure one
+      delete (globalConfigurationWithoutUser as Partial<typeof globalConfigurationWithoutUser>).defaultAgentUser;
+      // @ts-expect-error private property — bypass compile
+      agent.agentJson = { ...minimalAgentJson, globalConfiguration: globalConfigurationWithoutUser };
+
+      // Must not throw "Cannot read properties of undefined (reading 'replace')"
+      await agent.preview.start();
+
+      // An absent defaultAgentUser is treated as INVALID -> bypassUser=false, with no user lookup
+      expect(getStartRequestBody().bypassUser).to.equal(false);
+      expect(
+        (connection.query as sinon.SinonStub)
+          .getCalls()
+          .some((c) => (c.args[0] as string).includes('SELECT Id FROM USER WHERE username'))
+      ).to.equal(false);
+    });
   });
 
   it('create save agent', async () => {

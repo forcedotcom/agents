@@ -941,7 +941,8 @@ export type AgentJson = {
     enableEnhancedEventLogs: boolean;
     agentType: string;
     templateName: string;
-    defaultAgentUser: string;
+    // Optional: a compiled authoring bundle may not configure a default agent user.
+    defaultAgentUser?: string;
     defaultOutboundRouting: string;
     contextVariables: [];
   };
