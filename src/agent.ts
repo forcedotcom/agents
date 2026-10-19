@@ -347,7 +347,7 @@ export class Agent {
     await Lifecycle.getInstance().emit(AgentCreateLifecycleStages.Retrieving, {});
     const defaultPackagePath = project.getDefaultPackage().path ?? 'force-app';
     try {
-      const useNewFormat = supportsAiAgentDefinition(standardConnection);
+      const useNewFormat = await supportsAiAgentDefinition(standardConnection);
       getLogger().debug('Retrieving created agent', {
         agentApiName: apiName,
         format: useNewFormat ? 'AiAgentDefinition' : 'Agent',
@@ -398,8 +398,10 @@ export class Agent {
         throw error;
       }
 
-      // A v68+ org with the AiAgentDefinition feature flag disabled resolves the new types to
-      // nothing, producing a success:true retrieve that wrote zero agent files. Surface that.
+      // A retrieve can report success:true yet resolve zero components — e.g. the chosen format
+      // does not match how the org actually stored the agent, or a feature flag resolved the new
+      // types to nothing. That leaves the create "successful" with no metadata written locally, a
+      // silent failure the caller cannot see. Fail loudly instead.
       const fileResponses = retrieveResult.getFileResponses();
       const resolvedTypes = [...new Set(fileResponses.map((f) => f.type))];
       getLogger().debug('Agent metadata retrieve resolved components', {
@@ -407,11 +409,17 @@ export class Agent {
         componentCount: fileResponses.length,
         types: resolvedTypes,
       });
-      if (useNewFormat && fileResponses.length === 0) {
-        getLogger().warn('New-format retrieve resolved zero components; org may have the AiAgentDefinition feature flag disabled', {
+      if (fileResponses.length === 0) {
+        getLogger().warn('Agent metadata retrieve resolved zero components', {
           agentApiName: apiName,
+          format: useNewFormat ? 'AiAgentDefinition' : 'Agent',
           orgApiVersion: standardConnection.getApiVersion(),
         });
+        const error = messages.createError('agentRetrievalError', [
+          `the retrieve of ${metadataEntries.join(', ')} resolved zero components — the agent was created but its metadata could not be retrieved into the project.`,
+        ]);
+        error.actions = [messages.getMessage('agentRetrievalErrorActions')];
+        throw error;
       }
     } catch (err) {
       const error = SfError.wrap(err);

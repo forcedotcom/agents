@@ -566,6 +566,9 @@ describe('AgentPublisher', () => {
       } as any);
       $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
       const buildStub = $$.SANDBOX.stub(ComponentSetBuilder, 'build').resolves(compSet);
+      // org supports the new metadata types (AiAgentDefinition present in the describe)
+      // @ts-expect-error Not the full describe result
+      $$.SANDBOX.stub(connection.metadata, 'describe').resolves({ metadataObjects: [{ xmlName: 'AiAgentDefinition' }] });
 
       const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
 
@@ -600,6 +603,8 @@ describe('AgentPublisher', () => {
       } as any);
       $$.SANDBOX.stub(compSet, 'retrieve').resolves(mdApiRetrieve);
       $$.SANDBOX.stub(ComponentSetBuilder, 'build').resolves(compSet);
+      // @ts-expect-error Not the full describe result
+      $$.SANDBOX.stub(connection.metadata, 'describe').resolves({ metadataObjects: [{ xmlName: 'AiAgentDefinition' }] });
 
       const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
 
@@ -620,8 +625,9 @@ describe('AgentPublisher', () => {
 
     it('should build the AiAgentDefinition / AiAgentDefinitionVersion manifest and spider dependencies', async () => {
       const validateStub = createValidateDeveloperNameStub();
-      // org supports the new metadata types
-      $$.SANDBOX.stub(connection, 'getApiVersion').returns('68.0');
+      // org supports the new metadata types (AiAgentDefinition present in the describe)
+      // @ts-expect-error Not the full describe result
+      $$.SANDBOX.stub(connection.metadata, 'describe').resolves({ metadataObjects: [{ xmlName: 'AiAgentDefinition' }] });
       const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
 
       // Setup successful metadata retrieval mock
@@ -675,9 +681,10 @@ describe('AgentPublisher', () => {
       validateStub.restore();
     });
 
-    it('should build the legacy Bot / GenAi / Agent manifest on orgs below the min API version', async () => {
+    it('should build the legacy Bot / GenAi / Agent manifest on orgs without AiAgentDefinition', async () => {
       // org does not support the new metadata types
-      $$.SANDBOX.stub(connection, 'getApiVersion').returns('62.0');
+      // @ts-expect-error Not the full describe result
+      $$.SANDBOX.stub(connection.metadata, 'describe').resolves({ metadataObjects: [{ xmlName: 'Bot' }] });
 
       // agent JSON with a node + tools to exercise the GenAiPlugin / GenAiFunction assembly
       const agentJsonWithNodes: AgentJson = {
@@ -772,8 +779,9 @@ describe('AgentPublisher', () => {
     });
 
     it('should not include GenAiFunction entries when nodes have no tools', async () => {
-      // Legacy path only: the GenAiPlugin / GenAiFunction assembly runs solely on orgs below the min API version.
-      $$.SANDBOX.stub(connection, 'getApiVersion').returns('62.0');
+      // Legacy path only: the GenAiPlugin / GenAiFunction assembly runs solely on orgs without AiAgentDefinition.
+      // @ts-expect-error Not the full describe result
+      $$.SANDBOX.stub(connection.metadata, 'describe').resolves({ metadataObjects: [{ xmlName: 'Bot' }] });
 
       // Create agent JSON with nodes that have no tools
       const agentJsonWithNodesNoTools: AgentJson = {
@@ -851,8 +859,9 @@ describe('AgentPublisher', () => {
     });
 
     it('should not crash when a node has no tools property (e.g. a related_agent delegation node)', async () => {
-      // Legacy path only: the tools assembly (and its `?? []` guard) runs solely on orgs below the min API version.
-      $$.SANDBOX.stub(connection, 'getApiVersion').returns('62.0');
+      // Legacy path only: the tools assembly (and its `?? []` guard) runs solely on orgs without AiAgentDefinition.
+      // @ts-expect-error Not the full describe result
+      $$.SANDBOX.stub(connection.metadata, 'describe').resolves({ metadataObjects: [{ xmlName: 'Bot' }] });
 
       // Regression test for the crash reported against `sf agent publish authoring-bundle`:
       // `related_agent` nodes (compiled from AgentScript `connected_subagent` blocks, which
@@ -935,8 +944,9 @@ describe('AgentPublisher', () => {
     });
 
     it('should not include GenAiPlugin and GenAiFunction entries when nodes array is empty', async () => {
-      // Legacy path only: the GenAiPlugin / GenAiFunction assembly runs solely on orgs below the min API version.
-      $$.SANDBOX.stub(connection, 'getApiVersion').returns('62.0');
+      // Legacy path only: the GenAiPlugin / GenAiFunction assembly runs solely on orgs without AiAgentDefinition.
+      // @ts-expect-error Not the full describe result
+      $$.SANDBOX.stub(connection.metadata, 'describe').resolves({ metadataObjects: [{ xmlName: 'Bot' }] });
 
       // Use the default agentJson which has empty nodes array
       const validateStub = createValidateDeveloperNameStub();

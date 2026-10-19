@@ -23,30 +23,31 @@ import { CtxLogger } from './ctxLogger';
 export const metric = ['completeness', 'coherence', 'conciseness', 'output_latency_milliseconds'] as const;
 
 /**
- * The minimum org API version that supports the `AiAgentDefinition` /
- * `AiAgentDefinitionVersion` metadata types. Orgs below this version are
- * retrieved as the legacy `Bot` / `GenAiPlanner` / `GenAiPlugin` metadata.
- *
- * TODO: remove this version gate and the legacy retrieval fallback once the old
- * metadata types are retired (v68/264) and every supported org has the feature
- * enabled — at that point always retrieve the new types (TD-0333078).
+ * The metadata type that backs an agent on orgs that support the simplified
+ * layout. Its presence in the org's metadata describe is what we key the
+ * retrieval format off of.
  */
-export const AI_AGENT_DEFINITION_MIN_API_VERSION = 68;
+const AI_AGENT_DEFINITION_METADATA_TYPE = 'AiAgentDefinition';
 
 /**
  * Whether the org behind the given connection supports retrieving agents as the
- * simplified `AiAgentDefinition` / `AiAgentDefinitionVersion` metadata types.
+ * simplified `AiAgentDefinition` / `AiAgentDefinitionVersion` metadata types
+ * (vs. the legacy `Bot` / `GenAiPlanner` / `GenAiPlugin` layout).
  *
- * Note: this keys off the connection's API version only. The server also gates
- * the feature behind a flag; an org at/above the min API version with the flag
- * still off would resolve the new types to nothing.
+ * This probes the org's metadata describe for the `AiAgentDefinition` type
+ * rather than gating on a hard-coded API version. A version gate (`>= 68`) went
+ * stale as orgs rolled forward: an org that already stores agents as
+ * `AiAgentDefinition` but still reports an API version below the gate was sent
+ * down the legacy retrieve, which no longer resolves the just-created agent —
+ * the create succeeded but nothing landed locally. Keying off the actual type
+ * availability tracks the server instead of guessing from the version number.
  *
- * @param connection the connection whose API version determines the format
+ * @param connection the connection whose org is probed for the type
  * @returns true if the new metadata format should be used
  */
-export const supportsAiAgentDefinition = (connection: Connection): boolean => {
-  const apiVersion = Number.parseInt(connection.getApiVersion(), 10);
-  return !Number.isNaN(apiVersion) && apiVersion >= AI_AGENT_DEFINITION_MIN_API_VERSION;
+export const supportsAiAgentDefinition = async (connection: Connection): Promise<boolean> => {
+  const { metadataObjects } = await connection.metadata.describe();
+  return metadataObjects.some((type) => type.xmlName === AI_AGENT_DEFINITION_METADATA_TYPE);
 };
 
 /**
