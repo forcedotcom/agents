@@ -1,3 +1,12 @@
+## [2.3.2](https://github.com/forcedotcom/agents/compare/2.3.1...2.3.2) (2026-10-22)
+
+
+### Bug Fixes
+
+* guard missing defaultAgentUser in authoring-bundle preview start @W-24581878 ([#377](https://github.com/forcedotcom/agents/issues/377)) ([031a705](https://github.com/forcedotcom/agents/commit/031a7053139cef74ef4bfc710405dda2a7ce7d64))
+
+
+
 ## [2.3.1](https://github.com/forcedotcom/agents/compare/2.3.0...2.3.1) (2026-09-09)
 
 
