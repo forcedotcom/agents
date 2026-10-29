@@ -1,3 +1,12 @@
+## [2.3.3](https://github.com/forcedotcom/agents/compare/2.3.2...2.3.3) (2026-10-29)
+
+
+### Bug Fixes
+
+* **eval:** route run-eval SFAP call through JWT connection ([#382](https://github.com/forcedotcom/agents/issues/382)) ([e7d0cdd](https://github.com/forcedotcom/agents/commit/e7d0cddae8a9b74edc9d8947795974ee061b6070))
+
+
+
 ## [2.3.2](https://github.com/forcedotcom/agents/compare/2.3.1...2.3.2) (2026-10-22)
 
 
