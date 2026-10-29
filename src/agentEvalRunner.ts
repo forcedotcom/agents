@@ -18,6 +18,7 @@
 
 import { Org, SfError } from '@salesforce/core';
 import { requestWithEndpointFallback } from './utils';
+import { managerFor } from './connectionManager';
 import type { EvalPayload } from './evalNormalizer.js';
 import type { EvalApiResponse, EvalResult, EvalOutput, TestError, TestResult } from './evalFormatter.js';
 
@@ -44,7 +45,12 @@ async function getApiHeaders(org: Org): Promise<ApiHeaders> {
 }
 
 async function callEvalApi(org: Org, payload: EvalPayload, headers: ApiHeaders): Promise<EvalApiResponse> {
-  const conn = org.getConnection();
+  // The evaluation endpoint is an SFAP (api.salesforce.com) call, so it must go through the
+  // JWT connection like every other Agent-API path (see agentBase.getJwtConnection). Using the
+  // raw org.getConnection() here authenticates with the refresh-token grant, which trips the
+  // per-IP "login rate exceeded" cap during the long eval request.
+  const manager = await managerFor(org.getConnection());
+  const conn = manager.getJwtConnection();
 
   return requestWithEndpointFallback<EvalApiResponse>(
     conn,

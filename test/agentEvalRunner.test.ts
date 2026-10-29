@@ -23,6 +23,7 @@ import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Org } from '@salesforce/core';
 import { resolveAgent, executeBatches, buildResultSummary } from '../src/agentEvalRunner';
 import type { EvalApiResponse } from '../src/evalFormatter';
+import { setManagerForTesting, type ConnectionManager } from '../src/connectionManager';
 
 describe('agentEvalRunner', () => {
   const $$ = new TestContext();
@@ -103,6 +104,16 @@ describe('agentEvalRunner', () => {
   // ─── executeBatches ────────────────────────────────────────────────────────
 
   describe('executeBatches', () => {
+    beforeEach(() => {
+      // callEvalApi now routes the SFAP request through the JWT connection
+      // (managerFor().getJwtConnection()). Inject a fake manager that returns the stubbed org
+      // connection so the test skips the real JWT bootstrap and the existing request stubs apply.
+      setManagerForTesting(org.getConnection(), {
+        getJwtConnection: () => org.getConnection(),
+        getStandardConnection: () => org.getConnection(),
+      } as unknown as ConnectionManager);
+    });
+
     function stubRequest(): sinon.SinonStub {
       const stub = $$.SANDBOX.stub(org.getConnection(), 'request');
       stub.withArgs(sinon.match(/userinfo/)).resolves({ user_id: 'user-001' });
