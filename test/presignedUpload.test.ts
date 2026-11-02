@@ -260,6 +260,23 @@ describe('presignedUpload', () => {
       expect((err.data as any).failedFiles[0].storageErrorCode).to.equal('SignatureDoesNotMatch');
     });
 
+    it('reads only a bounded prefix of a large storage error body', async () => {
+      let pulled = 0;
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller): void {
+          pulled++;
+          controller.enqueue(new Uint8Array(1024).fill(120)); // 'x' forever
+        },
+      });
+      fetchStub.resolves(new Response(body, { status: 500 }));
+      const err = await expectSfError(
+        () => uploadAllToStorage(pairsFor(['a.txt']), 'S3UploadFailed'),
+        'S3UploadFailed'
+      );
+      expect(err.message).to.include('a.txt (HTTP 500)');
+      expect(pulled).to.be.lessThan(10);
+    });
+
     it('reports a network error by error name', async () => {
       fetchStub.rejects(new TypeError('fetch failed'));
       const err = await expectSfError(
