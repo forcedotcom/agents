@@ -92,6 +92,16 @@ describe('presignedUpload', () => {
       const err = await expectSfError(() => prepareUploadFiles([small, big]), 'FileTooLarge');
       expect(err.message).to.include('big.bin');
     });
+
+    it('throws FileNotFound for a missing path', async () => {
+      await expectSfError(() => prepareUploadFiles([join(dir, 'nope.txt')]), 'FileNotFound');
+    });
+
+    it('throws NotAFile for a directory', async () => {
+      const { mkdirSync } = await import('node:fs');
+      mkdirSync(join(dir, 'folder'));
+      await expectSfError(() => prepareUploadFiles([writeFile('a.txt'), join(dir, 'folder')]), 'NotAFile');
+    });
   });
 
   describe('assertSafeUploadUrl', () => {
@@ -149,7 +159,9 @@ describe('presignedUpload', () => {
 
     it('throws UploadUrlMismatch when the service returns fewer entries than files', async () => {
       $$.fakeConnectionRequest = () =>
-        Promise.resolve({ uploadUrls: [{ uploadUrl: 'https://s3.example.com/1', filePath: '$p$/a.txt', headers: {} }] });
+        Promise.resolve({
+          uploadUrls: [{ uploadUrl: 'https://s3.example.com/1', filePath: '$p$/a.txt', headers: {} }],
+        });
       await expectSfError(() => requestUploadUrls(connection, '/lib', files), 'UploadUrlMismatch');
     });
 
@@ -215,7 +227,9 @@ describe('presignedUpload', () => {
     it('attempts every file and reports which landed when one PUT fails', async () => {
       fetchStub.callsFake((url: string) =>
         Promise.resolve(
-          url.endsWith('/1') ? new Response('<Error>secret detail</Error>', { status: 403 }) : new Response(null, { status: 200 })
+          url.endsWith('/1')
+            ? new Response('<Error>secret detail</Error>', { status: 403 })
+            : new Response(null, { status: 200 })
         )
       );
       const err = await expectSfError(
@@ -227,13 +241,31 @@ describe('presignedUpload', () => {
       expect(err.message).to.not.include('secret detail');
       expect(err.data).to.deep.equal({
         uploadedFilePaths: ['$p$/a.txt', '$p$/c.txt'],
-        failedFiles: [{ fileName: 'b.txt', errName: 'StoragePutFailed', statusCode: 403 }],
+        failedFiles: [{ fileName: 'b.txt', errName: 'StoragePutFailed', statusCode: 403, storageErrorCode: null }],
       });
+    });
+
+    it('reports the S3 error code from the storage body, not the body itself', async () => {
+      fetchStub.resolves(
+        new Response('<Error><Code>SignatureDoesNotMatch</Code><Message>secret detail</Message></Error>', {
+          status: 403,
+        })
+      );
+      const err = await expectSfError(
+        () => uploadAllToStorage(pairsFor(['a.txt']), 'S3UploadFailed'),
+        'S3UploadFailed'
+      );
+      expect(err.message).to.include('a.txt (HTTP 403 SignatureDoesNotMatch)');
+      expect(err.message).to.not.include('secret detail');
+      expect((err.data as any).failedFiles[0].storageErrorCode).to.equal('SignatureDoesNotMatch');
     });
 
     it('reports a network error by error name', async () => {
       fetchStub.rejects(new TypeError('fetch failed'));
-      const err = await expectSfError(() => uploadAllToStorage(pairsFor(['a.txt']), 'S3UploadFailed'), 'S3UploadFailed');
+      const err = await expectSfError(
+        () => uploadAllToStorage(pairsFor(['a.txt']), 'S3UploadFailed'),
+        'S3UploadFailed'
+      );
       expect(err.message).to.include('a.txt (TypeError)');
       expect((err.data as any).failedFiles[0].statusCode).to.equal(null);
     });
