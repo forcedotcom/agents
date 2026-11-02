@@ -104,5 +104,6 @@ export type ExpressContextUploadResult = {
   fileNames: string[];
   /** SFDrive paths of the uploaded files (`$agentforce_express_context$/<Lib>/<file>`), in input order. */
   filePaths: string[];
-  status: string;
+  /** Each input file paired with the SFDrive path it was uploaded to, in input order. */
+  files: Array<{ localPath: string; fileName: string; filePath: string }>;
 };
