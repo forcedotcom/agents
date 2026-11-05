@@ -1,3 +1,12 @@
+## [2.3.4](https://github.com/forcedotcom/agents/compare/2.3.3...2.3.4) (2026-11-05)
+
+
+### Bug Fixes
+
+* **deps:** bump zod from 4.4.3 to 4.6.7 ([#387](https://github.com/forcedotcom/agents/issues/387)) ([b589603](https://github.com/forcedotcom/agents/commit/b589603aaf99780e40c7c5d70039a122c053322a))
+
+
+
 ## [2.3.3](https://github.com/forcedotcom/agents/compare/2.3.2...2.3.3) (2026-10-29)
 
 
