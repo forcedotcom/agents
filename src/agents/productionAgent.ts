@@ -371,12 +371,15 @@ export class ProductionAgent extends AgentBase {
       this.apexDebugging = apexDebugging;
     }
 
-    // Employee agents (AgentforceEmployeeAgent / InternalCopilot) run as the logged-in user, so the
-    // Agent API requires a user context on session start and rejects `bypassUser: true` with a
-    // "400 Invalid user ID" error. Only bypass the user for non-employee agents. This mirrors the
-    // logic already present on the ScriptAgent (--authoring-bundle) preview path.
+    // Employee agents run as the logged-in user, so the Agent API requires a user context on session
+    // start and rejects `bypassUser: true` with a "400 Invalid user ID" error. This covers both the
+    // modern `AgentType = 'AgentforceEmployeeAgent'` and legacy Einstein Copilot agents, which predate
+    // the `AgentType` field (it is null) and are identified by `Type = 'InternalCopilot'`. Only bypass
+    // the user for non-employee agents. This mirrors the logic on the ScriptAgent (--authoring-bundle)
+    // preview path.
     const botMetadata = await this.getBotMetadata();
-    const bypassUser = botMetadata.AgentType !== 'AgentforceEmployeeAgent';
+    const bypassUser =
+      botMetadata.AgentType !== 'AgentforceEmployeeAgent' && botMetadata.Type !== 'InternalCopilot';
 
     const body = {
       externalSessionKey: randomUUID(),

@@ -732,7 +732,7 @@ describe('ProductionAgent', () => {
   });
 
   describe('preview.start bypassUser', () => {
-    const buildBotMetadata = (agentType: string): BotMetadata => ({
+    const buildBotMetadata = (agentType: string | null, type = 'AgentForce'): BotMetadata => ({
       Id: '0Xx123456789ABC',
       IsDeleted: false,
       DeveloperName: 'TestAgent',
@@ -744,8 +744,9 @@ describe('ProductionAgent', () => {
       SystemModstamp: '2025-01-02T00:00:00.000+0000',
       BotUserId: 'botUser123',
       Description: 'Test bot description',
-      Type: 'AgentForce',
-      AgentType: agentType,
+      Type: type,
+      // Legacy Einstein Copilot agents predate the AgentType field, so it is null in the org.
+      AgentType: agentType as string,
       AgentTemplate: null,
       BotVersions: {
         records: [
@@ -801,6 +802,15 @@ describe('ProductionAgent', () => {
       await agent.preview.start();
 
       expect(getStartRequestBody().bypassUser).to.equal(true);
+    });
+
+    it('sends bypassUser: false for a legacy Einstein Copilot (AgentType null, Type InternalCopilot)', async () => {
+      $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves(buildBotMetadata(null, 'InternalCopilot'));
+
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId: 'TestAgent' });
+      await agent.preview.start();
+
+      expect(getStartRequestBody().bypassUser).to.equal(false);
     });
 
     it('sends context variables as the `variables` array when provided', async () => {
