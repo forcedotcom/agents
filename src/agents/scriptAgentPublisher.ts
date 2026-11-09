@@ -64,6 +64,7 @@ export class ScriptAgentPublisher {
   private readonly bundleMetaPath: string;
   private bundleDir: string;
   private readonly skipRetrieve: boolean;
+  private readonly sourceType?: 'Bot';
   private readonly API_URL: string;
   private readonly API_HEADERS = {
     'x-client-name': 'afdx',
@@ -78,17 +79,20 @@ export class ScriptAgentPublisher {
    * @param project The Salesforce project
    * @param agentJson The compiled AgentJson to publish
    * @param skipMetadataRetrieve Whether to skip retrieving the agent metadata from the org
+   * @param sourceType Where the agent came from ("Bot" for a converted Einstein Bot). Sent on the first publish only.
    */
   public constructor(
     connection: Connection,
     project: SfProject,
     agentJson: AgentJson,
-    skipMetadataRetrieve: boolean = false
+    skipMetadataRetrieve: boolean = false,
+    sourceType?: 'Bot'
   ) {
     this.connection = connection;
     this.project = project;
     this.agentJson = agentJson;
     this.skipRetrieve = skipMetadataRetrieve;
+    this.sourceType = sourceType;
     this.API_URL = 'https://api.salesforce.com/einstein/ai-agent/v1.1/authoring/agents';
 
     // Validate and get developer name and bundle directory
@@ -108,14 +112,19 @@ export class ScriptAgentPublisher {
 
     const manager = await managerFor(this.connection);
 
+    const botId = await this.getPublishedBotId(this.developerName);
+    // Core only sets BotSource when it creates the agent, so send it on the first publish only.
+    const agentDefinition =
+      !botId && this.sourceType
+        ? { ...this.agentJson, globalConfiguration: { ...this.agentJson.globalConfiguration, botSource: this.sourceType } }
+        : this.agentJson;
     const body = {
-      agentDefinition: this.agentJson,
+      agentDefinition,
       instanceConfig: {
         endpoint: manager.getStandardConnection().instanceUrl,
       },
     };
 
-    const botId = await this.getPublishedBotId(this.developerName);
     // if we've found a botId in the org, then this agent has already been published before => ai-agent/v1.1/authoring/agents/<id>/versions
     // if we didn't find an Id in the org, then we're publishing for the first time         => ai-agent/v1.1/authoring/agents
     const url = botId ? `${this.API_URL}/${botId}/versions` : this.API_URL;

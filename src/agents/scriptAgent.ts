@@ -250,9 +250,11 @@ export class ScriptAgent extends AgentBase {
    * Publish an AgentJson representation to the org
    *
    * @beta
+   * @param skipMetadataRetrieve Whether to skip retrieving the agent metadata from the org
+   * @param options.sourceType Where the agent came from ("Bot" for a converted Einstein Bot). Sent on the first publish only.
    * @returns {Promise<PublishAgentJsonResponse>} The publish response
    */
-  public async publish(skipMetadataRetrieve?: boolean): Promise<PublishAgent> {
+  public async publish(skipMetadataRetrieve?: boolean, options?: { sourceType?: 'Bot' }): Promise<PublishAgent> {
     // Apply string replacements before compiling for publish
     const originalContent = this.agentScriptContent;
     try {
@@ -282,7 +284,8 @@ export class ScriptAgent extends AgentBase {
       this.options.connection,
       this.options.project,
       this.agentJson!,
-      skipMetadataRetrieve
+      skipMetadataRetrieve,
+      options?.sourceType
     );
     return publisher.publishAgentJson();
   }
