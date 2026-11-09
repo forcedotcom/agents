@@ -229,5 +229,7 @@ export {
   type McpServerAssetCollection,
   type McpServerAssetReplaceItem,
   type McpServerAssetReplaceInput,
+  type McpAgentScriptActionOutput,
+  type McpAgentScriptActionsOutput,
   type ListMcpServersOptions,
 } from './apiCatalogTypes';

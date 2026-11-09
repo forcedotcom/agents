@@ -27,6 +27,7 @@ import {
   type McpServerFetchOutput,
   type McpServerAssetCollection,
   type McpServerAssetReplaceInput,
+  type McpAgentScriptActionsOutput,
 } from './apiCatalogTypes.js';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
@@ -41,6 +42,15 @@ const getLogger = (): CtxLogger => {
 
 function base(connection: Connection): string {
   return `/services/data/v${String(connection.version)}/api-catalog`;
+}
+
+// The agent-script actions API needs API version 68.0 or later (task spec for W-24729191).
+const AGENT_SCRIPT_MIN_API_VERSION = 68;
+
+function agentScriptBase(connection: Connection): string {
+  const v = Number.parseFloat(String(connection.version));
+  const version = Number.isNaN(v) || v < AGENT_SCRIPT_MIN_API_VERSION ? AGENT_SCRIPT_MIN_API_VERSION : v;
+  return `/services/data/v${version.toFixed(1)}/connect/genai-mcp/agent-script`;
 }
 
 function encode(...segments: string[]): string {
@@ -129,6 +139,26 @@ export class ApiCatalog {
   ): Promise<McpServerAssetCollection> {
     const url = `${base(connection)}/mcp-servers/${encode(id)}/assets`;
     return ApiCatalog.request<McpServerAssetCollection>(connection, 'PUT', url, 'replaceMcpServerAssets', input);
+  }
+
+  // ── MCP agent script ────────────────────────────────────────
+
+  /**
+   * POST /connect/genai-mcp/agent-script/actions (not under /api-catalog).
+   * Returns the Agent Script action block and reasoning reference per MCP tool id, in request order.
+   * Uses the connection API version, or 68.0 when that is lower.
+   */
+  public static async generateMcpAgentScriptActions(
+    connection: Connection,
+    toolIds: string[]
+  ): Promise<McpAgentScriptActionsOutput> {
+    return ApiCatalog.request<McpAgentScriptActionsOutput>(
+      connection,
+      'POST',
+      `${agentScriptBase(connection)}/actions`,
+      'generateMcpAgentScriptActions',
+      { toolIds }
+    );
   }
 
   // ── Shared request helper ───────────────────────────────────
