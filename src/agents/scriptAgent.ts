@@ -32,6 +32,7 @@ import {
   PlannerResponse,
   PreviewMetadata,
   PublishAgent,
+  PublishOptions,
   ScriptAgentOptions,
 } from '../types';
 import {
@@ -252,9 +253,9 @@ export class ScriptAgent extends AgentBase {
    * @beta
    * @param skipMetadataRetrieve Whether to skip retrieving the agent metadata from the org
    * @param options.sourceType Where the agent came from ("Bot" for a converted Einstein Bot). Sent on the first publish only.
-   * @returns {Promise<PublishAgentJsonResponse>} The publish response
+   * @returns {Promise<PublishAgent>} The publish response
    */
-  public async publish(skipMetadataRetrieve?: boolean, options?: { sourceType?: 'Bot' }): Promise<PublishAgent> {
+  public async publish(skipMetadataRetrieve?: boolean, options?: PublishOptions): Promise<PublishAgent> {
     // Apply string replacements before compiling for publish
     const originalContent = this.agentScriptContent;
     try {
@@ -285,7 +286,7 @@ export class ScriptAgent extends AgentBase {
       this.options.project,
       this.agentJson!,
       skipMetadataRetrieve,
-      options?.sourceType
+      options
     );
     return publisher.publishAgentJson();
   }

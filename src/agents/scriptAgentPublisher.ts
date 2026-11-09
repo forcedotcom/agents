@@ -22,7 +22,7 @@ import { Connection, Lifecycle, Messages, SfError, SfProject } from '@salesforce
 import { Duration, env } from '@salesforce/kit';
 import { ComponentSet, ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { MaybeMock } from '../maybe-mock';
-import { type AgentJson, type PublishAgent, type PublishAgentJsonResponse } from '../types';
+import { type AgentJson, type PublishAgent, type PublishAgentJsonResponse, type PublishOptions } from '../types';
 import { findAuthoringBundle, getHttpStatusCode, supportsAiAgentDefinition } from '../utils';
 import { CtxLogger } from '../ctxLogger';
 import { managerFor } from '../connectionManager';
@@ -79,20 +79,20 @@ export class ScriptAgentPublisher {
    * @param project The Salesforce project
    * @param agentJson The compiled AgentJson to publish
    * @param skipMetadataRetrieve Whether to skip retrieving the agent metadata from the org
-   * @param sourceType Where the agent came from ("Bot" for a converted Einstein Bot). Sent on the first publish only.
+   * @param options.sourceType Where the agent came from ("Bot" for a converted Einstein Bot). Sent on the first publish only.
    */
   public constructor(
     connection: Connection,
     project: SfProject,
     agentJson: AgentJson,
     skipMetadataRetrieve: boolean = false,
-    sourceType?: 'Bot'
+    options?: PublishOptions
   ) {
     this.connection = connection;
     this.project = project;
     this.agentJson = agentJson;
     this.skipRetrieve = skipMetadataRetrieve;
-    this.sourceType = sourceType;
+    this.sourceType = options?.sourceType;
     this.API_URL = 'https://api.salesforce.com/einstein/ai-agent/v1.1/authoring/agents';
 
     // Validate and get developer name and bundle directory
@@ -114,10 +114,17 @@ export class ScriptAgentPublisher {
 
     const botId = await this.getPublishedBotId(this.developerName);
     // Core only sets BotSource when it creates the agent, so send it on the first publish only.
-    const agentDefinition =
-      !botId && this.sourceType
-        ? { ...this.agentJson, globalConfiguration: { ...this.agentJson.globalConfiguration, botSource: this.sourceType } }
-        : this.agentJson;
+    const botSource = !botId ? this.sourceType : undefined;
+    getLogger().debug('Resolved publish target', {
+      developerName: this.developerName,
+      firstPublish: !botId,
+      sourceTypeProvided: Boolean(this.sourceType),
+      botSourceSent: Boolean(botSource),
+      botSource,
+    });
+    const agentDefinition = botSource
+      ? { ...this.agentJson, globalConfiguration: { ...this.agentJson.globalConfiguration, botSource } }
+      : this.agentJson;
     const body = {
       agentDefinition,
       instanceConfig: {

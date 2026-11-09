@@ -931,6 +931,11 @@ export type PublishAgentJsonResponse = {
 
 export type PublishAgent = PublishAgentJsonResponse & { developerName: string };
 
+export type PublishOptions = {
+  /** Where the agent came from ("Bot" for a converted Einstein Bot). Sent on the first publish only. */
+  sourceType?: 'Bot';
+};
+
 // This is not accurate but good enough for now
 export type AgentJson = {
   schemaVersion: string;
