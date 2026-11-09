@@ -25,7 +25,7 @@ describe('ApiCatalog client', () => {
   const $$ = new TestContext();
   let testOrg: MockTestOrgData;
   let connection: Connection;
-  let requests: Array<{ method?: string; url?: string; body?: string }>;
+  let requests: Array<{ method?: string; url?: string; body?: string; headers?: Record<string, string> }>;
 
   beforeEach(async () => {
     testOrg = new MockTestOrgData();
@@ -95,6 +95,13 @@ describe('ApiCatalog client', () => {
       expect(requests[0].url).to.not.include('api-catalog');
       expect(Number(/\/v(\d+)\./.exec(requests[0].url as string)?.[1])).to.be.at.least(68);
       expect(JSON.parse(requests[0].body as string)).to.deep.equal({ toolIds: ['1XO1', '1XO2'] });
+    });
+
+    it('asks Connect not to HTML-encode the returned blocks', async () => {
+      mockRequest({ actions: [] });
+      await ApiCatalog.generateMcpAgentScriptActions(connection, ['1XO1']);
+      expect(requests[0].headers).to.deep.include({ 'X-Chatter-Entity-Encoding': 'false' });
+      expect(requests[0].headers?.['Content-Type']).to.match(/json/i);
     });
 
     it('uses 68.0 when the connection version is lower', async () => {

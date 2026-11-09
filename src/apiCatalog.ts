@@ -157,7 +157,9 @@ export class ApiCatalog {
       'POST',
       `${agentScriptBase(connection)}/actions`,
       'generateMcpAgentScriptActions',
-      { toolIds }
+      { toolIds },
+      // Connect REST HTML-encodes strings by default (" -> &quot;); the blocks must be pasted as returned.
+      { 'X-Chatter-Entity-Encoding': 'false' }
     );
   }
 
@@ -168,7 +170,8 @@ export class ApiCatalog {
     method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
     url: string,
     op: string,
-    body?: unknown
+    body?: unknown,
+    headers?: Record<string, string>
   ): Promise<T> {
     const req: { method: typeof method; url: string; body?: string; headers?: Record<string, string> } = {
       method,
@@ -178,6 +181,7 @@ export class ApiCatalog {
       req.body = JSON.stringify(body);
       req.headers = JSON_HEADERS;
     }
+    if (headers) req.headers = { ...req.headers, ...headers };
 
     let result: T;
     try {
