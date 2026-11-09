@@ -86,6 +86,32 @@ describe('ApiCatalog client', () => {
     });
   });
 
+  describe('generateMcpAgentScriptActions', () => {
+    it('POSTs {toolIds} to the connect agent-script path, not /api-catalog, at v68.0 or later', async () => {
+      mockRequest({ actions: [] });
+      await ApiCatalog.generateMcpAgentScriptActions(connection, ['1XO1', '1XO2']);
+      expect(requests[0].method).to.equal('POST');
+      expect(requests[0].url).to.match(/\/services\/data\/v\d+\.0\/connect\/genai-mcp\/agent-script\/actions$/);
+      expect(requests[0].url).to.not.include('api-catalog');
+      expect(Number(/\/v(\d+)\./.exec(requests[0].url as string)?.[1])).to.be.at.least(68);
+      expect(JSON.parse(requests[0].body as string)).to.deep.equal({ toolIds: ['1XO1', '1XO2'] });
+    });
+
+    it('uses 68.0 when the connection version is lower', async () => {
+      mockRequest({ actions: [] });
+      connection.setApiVersion('60.0');
+      await ApiCatalog.generateMcpAgentScriptActions(connection, ['1XO1']);
+      expect(requests[0].url).to.include('/services/data/v68.0/connect/genai-mcp/agent-script/actions');
+    });
+
+    it('keeps a higher connection version', async () => {
+      mockRequest({ actions: [] });
+      connection.setApiVersion('70.0');
+      await ApiCatalog.generateMcpAgentScriptActions(connection, ['1XO1']);
+      expect(requests[0].url).to.include('/services/data/v70.0/connect/');
+    });
+  });
+
   describe('createMcpServer', () => {
     it('POSTs the body with JSON content-type', async () => {
       mockRequest({ server: { id: '1', name: 'n', type: 'EXTERNAL', status: 'ACTIVE' }, assets: [] });
