@@ -1,3 +1,12 @@
+## [2.3.5](https://github.com/forcedotcom/agents/compare/2.3.4...2.3.5) (2026-11-09)
+
+
+### Bug Fixes
+
+* correct create-from-spec NUT to assert org's real retrieve layout @W-24530265@ ([#389](https://github.com/forcedotcom/agents/issues/389)) ([426dab2](https://github.com/forcedotcom/agents/commit/426dab20a8aaf0b5069b39368079c50956fb047d))
+
+
+
 ## [2.3.4](https://github.com/forcedotcom/agents/compare/2.3.3...2.3.4) (2026-11-05)
 
 
