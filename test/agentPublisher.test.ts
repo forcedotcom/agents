@@ -23,7 +23,9 @@ import { ComponentSetBuilder, ComponentSet, MetadataApiRetrieve } from '@salesfo
 import { type AgentJson } from '../src';
 import * as utils from '../src/utils';
 import { ScriptAgentPublisher } from '../src/agents/scriptAgentPublisher';
+import { MaybeMock } from '../src/maybe-mock';
 import { ConnectionManager, setManagerForTesting } from '../src/connectionManager';
+import { CtxLogger } from '../src/ctxLogger';
 import { testAgentJson } from './testData';
 
 describe('AgentPublisher', () => {
@@ -255,6 +257,94 @@ describe('AgentPublisher', () => {
       expect(result).to.have.property('developerName', 'test_agent');
       expect(retrieveAgentMetadataStub.calledOnce).to.be.true;
       expect(deployAuthoringBundleStub.calledOnce).to.be.true;
+    });
+
+    describe('sourceType', () => {
+      type PublishBody = { agentDefinition: AgentJson };
+      type PublishCapture = { body: PublishBody; logFields: Record<string, unknown> | undefined };
+
+      // Publishes with the given sourceType and returns the body sent to the publish API
+      // and the fields of the 'Resolved publish target' log line.
+      async function publishAndCaptureBody(
+        existingBotId: string | undefined,
+        sourceType?: 'Bot'
+      ): Promise<PublishCapture> {
+        const debugStub = $$.SANDBOX.stub(CtxLogger.prototype, 'debug');
+        const botQuery = $$.SANDBOX.stub(connection, 'singleRecordQuery');
+        if (existingBotId) {
+          botQuery
+            .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
+            .resolves({ Id: existingBotId });
+        } else {
+          botQuery
+            .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
+            .throws(new SfError('No record found', 'SingleRecordQuery_NoRecords'));
+        }
+        botQuery
+          .withArgs("SELECT DeveloperName, VersionNumber FROM BotVersion WHERE Id='0Bv000000000002'")
+          .resolves({ DeveloperName: 'v1', VersionNumber: 1 });
+        const requestStub = $$.SANDBOX.stub(MaybeMock.prototype, 'request').resolves({
+          botId: '0Xx000000000001',
+          botVersionId: '0Bv000000000002',
+        });
+
+        publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, true, { sourceType });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        $$.SANDBOX.stub(publisher as any, 'deployAuthoringBundle').resolves();
+
+        await publisher.publishAgentJson();
+
+        expect(requestStub.calledOnce).to.be.true;
+        const logCall = debugStub.getCalls().find((call) => call.args[0] === 'Resolved publish target');
+        return { body: requestStub.firstCall.args[2] as PublishBody, logFields: logCall?.args[1] };
+      }
+
+      it('should send botSource on the first publish when sourceType is set', async () => {
+        const { body, logFields } = await publishAndCaptureBody(undefined, 'Bot');
+
+        expect(body.agentDefinition.globalConfiguration.botSource).to.equal('Bot');
+        // The rest of the agent definition is sent unchanged, and the caller's AgentJson isn't mutated.
+        expect({ ...body.agentDefinition.globalConfiguration, botSource: undefined }).to.deep.equal({
+          ...agentJson.globalConfiguration,
+          botSource: undefined,
+        });
+        expect(agentJson.globalConfiguration).to.not.have.property('botSource');
+        expect(logFields).to.deep.equal({
+          developerName: 'test_agent',
+          firstPublish: true,
+          sourceTypeProvided: true,
+          botSourceSent: true,
+          botSource: 'Bot',
+        });
+      });
+
+      it('should not send botSource when the agent was already published', async () => {
+        const { body, logFields } = await publishAndCaptureBody('0Xx000000000001', 'Bot');
+
+        expect(body.agentDefinition).to.equal(agentJson);
+        expect(body.agentDefinition.globalConfiguration).to.not.have.property('botSource');
+        expect(logFields).to.deep.equal({
+          developerName: 'test_agent',
+          firstPublish: false,
+          sourceTypeProvided: true,
+          botSourceSent: false,
+          botSource: undefined,
+        });
+      });
+
+      it('should not send botSource when sourceType is not set', async () => {
+        const { body, logFields } = await publishAndCaptureBody(undefined);
+
+        expect(body.agentDefinition).to.equal(agentJson);
+        expect(body.agentDefinition.globalConfiguration).to.not.have.property('botSource');
+        expect(logFields).to.deep.equal({
+          developerName: 'test_agent',
+          firstPublish: true,
+          sourceTypeProvided: false,
+          botSourceSent: false,
+          botSource: undefined,
+        });
+      });
     });
 
     it('should handle API errors during publishing', async () => {

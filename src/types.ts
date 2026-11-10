@@ -931,6 +931,11 @@ export type PublishAgentJsonResponse = {
 
 export type PublishAgent = PublishAgentJsonResponse & { developerName: string };
 
+export type PublishOptions = {
+  /** Where the agent came from ("Bot" for a converted Einstein Bot). Sent on the first publish only. */
+  sourceType?: 'Bot';
+};
+
 // This is not accurate but good enough for now
 export type AgentJson = {
   schemaVersion: string;
@@ -943,6 +948,8 @@ export type AgentJson = {
     templateName: string;
     // Optional: a compiled authoring bundle may not configure a default agent user.
     defaultAgentUser?: string;
+    // Optional: "Bot" when the agent was converted from an Einstein Bot. Core sets BotDefinition.BotSource from it on create.
+    botSource?: 'Bot';
     defaultOutboundRouting: string;
     contextVariables: [];
   };
