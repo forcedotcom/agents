@@ -1,3 +1,12 @@
+## [2.4.1](https://github.com/forcedotcom/agents/compare/2.4.0...2.4.1) (2026-11-10)
+
+
+### Bug Fixes
+
+* send bypassUser:false for legacy InternalCopilot agents on --api-name preview @W-23526996@ ([#392](https://github.com/forcedotcom/agents/issues/392)) ([f085c7a](https://github.com/forcedotcom/agents/commit/f085c7abdc7a916209b7706f1c6761e68dfd7f0d))
+
+
+
 # [2.4.0](https://github.com/forcedotcom/agents/compare/2.3.5...2.4.0) (2026-11-10)
 
 
