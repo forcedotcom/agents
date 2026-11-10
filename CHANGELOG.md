@@ -1,3 +1,12 @@
+# [2.4.0](https://github.com/forcedotcom/agents/compare/2.3.5...2.4.0) (2026-11-10)
+
+
+### Features
+
+* send botSource on first publish of a converted agent @W-24692765@ ([#391](https://github.com/forcedotcom/agents/issues/391)) ([f8a742d](https://github.com/forcedotcom/agents/commit/f8a742d977038474e6a3c48df6ef4708489cf9a1))
+
+
+
 ## [2.3.5](https://github.com/forcedotcom/agents/compare/2.3.4...2.3.5) (2026-11-09)
 
 
