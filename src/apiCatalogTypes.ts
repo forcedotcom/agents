@@ -94,6 +94,12 @@ export type McpServerCreateOutput = {
 
 export type McpServerFetchOutput = {
   assets: McpFetchedAsset[];
+  /**
+   * Optimistic-concurrency token for the current server definition. Echo it back
+   * unchanged on `replaceMcpServerAssets` (PUT /assets) to detect and reject an
+   * intervening server change. Absent/null when no drift assessment.
+   */
+  serverFingerprint?: string;
 };
 
 export type McpServerAssetOutput = {
@@ -121,6 +127,12 @@ export type McpServerAssetReplaceItem = {
 
 export type McpServerAssetReplaceInput = {
   assets: McpServerAssetReplaceItem[];
+  /**
+   * Optional optimistic-concurrency token from a prior `fetchMcpServer` response.
+   * When supplied, the save is rejected (server-changed error) if the live server
+   * definition no longer matches. When omitted, no concurrency check is performed.
+   */
+  serverFingerprint?: string;
 };
 
 /**
