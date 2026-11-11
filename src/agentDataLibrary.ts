@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-import { readFileSync, statSync } from 'node:fs';
 import { basename } from 'node:path';
 import { Connection, Lifecycle, SfError } from '@salesforce/core';
 import { getHttpStatusCode } from './utils';
 import { CtxLogger } from './ctxLogger';
+import { prepareUploadFiles, requestUploadUrls, uploadAllToStorage } from './presignedUpload';
 import {
   type DataLibrarySummary,
   type DataLibraryDetail,
@@ -38,11 +38,18 @@ const getLogger = (): CtxLogger => {
   return logger;
 };
 
-export { type DataLibrarySummary, type DataLibraryDetail, type IndexingStatusResponse, type CreateLibraryInput, type UpdateLibraryInput, type UploadResult, type FileAddResult, type FileListResponse } from './dataLibraryTypes.js';
+export {
+  type DataLibrarySummary,
+  type DataLibraryDetail,
+  type IndexingStatusResponse,
+  type CreateLibraryInput,
+  type UpdateLibraryInput,
+  type UploadResult,
+  type FileAddResult,
+  type FileListResponse,
+} from './dataLibraryTypes.js';
 
 type UploadReadinessResponse = { ready: boolean };
-type FileUploadUrlEntry = { uploadUrl: string; filePath: string; headers: Record<string, string> };
-type FileUploadUrlsResponse = { uploadUrls: FileUploadUrlEntry[] };
 type IndexingResponse = { status: string; filesAccepted?: number };
 
 function baseUrl(connection: Connection, libraryId?: string): string {
@@ -106,23 +113,29 @@ export class AgentDataLibrary {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 10_000);
       try {
-        const response = await fetch(`${String(connection.instanceUrl)}${baseUrl(connection, result.libraryId)}/indexing`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${String(connection.accessToken)}`,
-            'Content-Type': 'application/json',
-          },
-          signal: controller.signal,
-        });
+        const response = await fetch(
+          `${String(connection.instanceUrl)}${baseUrl(connection, result.libraryId)}/indexing`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${String(connection.accessToken)}`,
+              'Content-Type': 'application/json',
+            },
+            signal: controller.signal,
+          }
+        );
         if (!response.ok) {
           // Native fetch resolves (does not reject) on a 4xx/5xx, so an HTTP error status —
           // the most common way indexing fails to start (expired auth, 5xx, quota 429) —
           // would otherwise slip through unlogged. Throw it into the catch below so HTTP and
           // network failures converge on one greppable warn + telemetry path, with statusCode
           // distinguishing them. getHttpStatusCode reads the statusCode we attach here.
-          throw Object.assign(new SfError('Data library indexing trigger returned an error status', 'IndexingTriggerHttpError'), {
-            statusCode: response.status,
-          });
+          throw Object.assign(
+            new SfError('Data library indexing trigger returned an error status', 'IndexingTriggerHttpError'),
+            {
+              statusCode: response.status,
+            }
+          );
         }
       } catch (error) {
         const wrapped = SfError.wrap(error);
@@ -171,7 +184,11 @@ export class AgentDataLibrary {
     }
   }
 
-  public static async update(connection: Connection, libraryId: string, input: UpdateLibraryInput): Promise<DataLibraryDetail> {
+  public static async update(
+    connection: Connection,
+    libraryId: string,
+    input: UpdateLibraryInput
+  ): Promise<DataLibraryDetail> {
     try {
       return await connection.request<DataLibraryDetail>({
         method: 'PATCH',
@@ -312,23 +329,12 @@ export class AgentDataLibrary {
     const url = baseUrl(connection, libraryId);
     const paths = Array.isArray(filePaths) ? filePaths : [filePaths];
 
-    if (paths.length === 0) {
-      throw new SfError('At least one file is required.', 'NoFilesProvided');
-    }
+    const files = prepareUploadFiles(paths);
 
     await AgentDataLibrary.checkUploadReadiness(connection, url);
 
-    const fileNames = paths.map((p) => ({ fileName: basename(p) }));
-    const uploadEntries = await AgentDataLibrary.getUploadUrls(connection, url, fileNames);
-
-    await Promise.all(
-      paths.map((path, i) => AgentDataLibrary.uploadToS3(uploadEntries[i], path))
-    );
-
-    const uploadedFiles = uploadEntries.map((entry, i) => ({
-      filePath: entry.filePath,
-      fileSize: statSync(paths[i]).size,
-    }));
+    const uploaded = await uploadAllToStorage(await requestUploadUrls(connection, url, files), 'S3UploadFailed');
+    const uploadedFiles = uploaded.map((f) => ({ filePath: f.filePath, fileSize: f.fileSize }));
     await AgentDataLibrary.triggerIndexing(connection, url, uploadedFiles);
 
     if (options?.waitMinutes) {
@@ -352,21 +358,9 @@ export class AgentDataLibrary {
     const url = baseUrl(connection, libraryId);
     const paths = Array.isArray(filePaths) ? filePaths : [filePaths];
 
-    if (paths.length === 0) {
-      throw new SfError('At least one file is required.', 'NoFilesProvided');
-    }
-
-    const fileInfos = paths.map((p) => ({ fileName: basename(p) }));
-    const uploadEntries = await AgentDataLibrary.getUploadUrls(connection, url, fileInfos);
-
-    await Promise.all(
-      paths.map((path, i) => AgentDataLibrary.uploadToS3(uploadEntries[i], path))
-    );
-
-    const uploadedFiles = uploadEntries.map((entry, i) => ({
-      filePath: entry.filePath,
-      fileSize: statSync(paths[i]).size,
-    }));
+    const files = prepareUploadFiles(paths);
+    const uploaded = await uploadAllToStorage(await requestUploadUrls(connection, url, files), 'S3UploadFailed');
+    const uploadedFiles = uploaded.map((f) => ({ filePath: f.filePath, fileSize: f.fileSize }));
     await connection.request({
       method: 'POST',
       url: `${url}/files`,
@@ -380,7 +374,11 @@ export class AgentDataLibrary {
     return { success: true, fileName, fileNames, libraryId };
   }
 
-  public static async waitForReady(connection: Connection, libraryId: string, waitSeconds: number): Promise<DataLibraryDetail> {
+  public static async waitForReady(
+    connection: Connection,
+    libraryId: string,
+    waitSeconds: number
+  ): Promise<DataLibraryDetail> {
     return AgentDataLibrary.pollForReadiness(connection, baseUrl(connection, libraryId), libraryId, waitSeconds);
   }
 
@@ -422,39 +420,6 @@ export class AgentDataLibrary {
     }
   }
 
-  private static async getUploadUrls(
-    connection: Connection,
-    url: string,
-    files: Array<{ fileName: string }>
-  ): Promise<FileUploadUrlEntry[]> {
-    const response = await connection.request<FileUploadUrlsResponse>({
-      method: 'POST',
-      url: `${url}/file-upload-urls`,
-      body: JSON.stringify({ files }),
-      headers: { 'Content-Type': 'application/json' },
-    });
-    return response.uploadUrls;
-  }
-
-  private static async uploadToS3(uploadEntry: FileUploadUrlEntry, filePath: string): Promise<void> {
-    const maxFileSize = 100 * 1024 * 1024; // 100 MB — SearchIndex limit for chunking/vectorization
-    const fileSize = statSync(filePath).size;
-    if (fileSize > maxFileSize) {
-      throw new SfError(`File size (${fileSize} bytes) exceeds maximum of ${maxFileSize} bytes.`, 'FileTooLarge');
-    }
-    const fileBuffer = readFileSync(filePath);
-    const response = await fetch(uploadEntry.uploadUrl, {
-      method: 'PUT',
-      headers: uploadEntry.headers,
-      body: fileBuffer,
-    });
-
-    if (!response.ok) {
-      const body = await response.text();
-      throw new SfError(`S3 upload failed: HTTP ${response.status}: ${body}`, 'S3UploadFailed');
-    }
-  }
-
   private static async triggerIndexing(
     connection: Connection,
     url: string,
@@ -477,7 +442,6 @@ export class AgentDataLibrary {
     const deadline = Date.now() + waitSeconds * 1000;
     const pollInterval = 10000;
 
-     
     while (Date.now() < deadline) {
       // eslint-disable-next-line no-await-in-loop
       const detail = await connection.request<DataLibraryDetail>({ method: 'GET', url });
