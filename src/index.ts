@@ -209,6 +209,40 @@ export {
   type StageArtifact,
   type FileListResponse,
 } from './dataLibraryTypes';
+export {
+  // Authoring model + shared vocabulary
+  type ScorerSpec,
+  type ScorerInputScope,
+  type ScorerEngineType,
+  type ScorerStatus,
+  type ScorerOutcomeType,
+  type OutputEnumValue,
+  type AgentAssociation,
+  type ScorerCreateResult,
+  type SupportedLightningType,
+  MAX_ENUM_VALUES,
+  SCORER_API_NAME_MAX_LENGTH,
+  SCORER_API_NAME_PATTERN,
+  SCORER_INPUT_SCOPES,
+  SCORER_ENGINE_TYPES,
+  SCORER_STATUSES,
+  SCORER_VERSION_STATUSES,
+  type ScorerVersionStatus,
+  SCORER_OUTCOME_TYPES,
+  SUPPORTED_LIGHTNING_TYPES,
+  isValidScorerApiName,
+  labelToApiName,
+  validateScorerSpec,
+  buildDefaultPromptContent,
+  buildScorerXml,
+  buildPromptTemplateXml,
+  parseScorerXml,
+  parseScorerVersions,
+  type ScorerVersionInfo,
+  createScorerDefinition,
+  loadScorerSpec,
+} from './agentScorer';
+export { SCORER_SPEC_JSON_SCHEMA, scorerSpecJsonSchema } from './agentScorers/scorerSpecSchema';
 export { ApiCatalog } from './apiCatalog';
 export {
   type McpServerType,
