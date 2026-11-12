@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-import { Connection, Lifecycle, SfError } from '@salesforce/core';
-import { getHttpStatusCode } from './utils';
+import { Connection, SfError } from '@salesforce/core';
+import { emitTelemetry, getHttpStatusCode } from './utils';
 import { CtxLogger } from './ctxLogger';
 import {
   type ListMcpServersOptions,
@@ -162,31 +162,14 @@ export class ApiCatalog {
         errName: wrapped.name,
         errMsg: wrapped.message,
       });
-      await ApiCatalog.emitTelemetry(`api_catalog_${op}_failed`, error);
+      await emitTelemetry(`api_catalog_${op}_failed`, error);
       throw wrapped;
     }
 
     // Emit a success event for mutating operations, mirroring AgentDataLibrary.
     if (method !== 'GET') {
-      await ApiCatalog.emitTelemetry(`api_catalog_${op}_success`);
+      await emitTelemetry(`api_catalog_${op}_success`);
     }
     return result;
-  }
-
-  /**
-   * Best-effort telemetry — never let a telemetry failure mask the real result or error. When an
-   * `error` is supplied (failure events), the low-cardinality cause dimensions a responder can
-   * slice by (HTTP status, error class) are attached; telemetry is the only signal present at the
-   * default log level, so a bare count could not distinguish an auth wall from a 5xx from a 404.
-   */
-  private static async emitTelemetry(eventName: string, error?: unknown): Promise<void> {
-    try {
-      await Lifecycle.getInstance().emitTelemetry({
-        eventName,
-        ...(error !== undefined && { statusCode: getHttpStatusCode(error) ?? null, errName: SfError.wrap(error).name }),
-      });
-    } catch {
-      // telemetry is best-effort
-    }
   }
 }

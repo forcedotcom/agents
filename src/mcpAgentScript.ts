@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-import { Connection, Lifecycle, SfError } from '@salesforce/core';
-import { getHttpStatusCode } from './utils';
+import { Connection, SfError } from '@salesforce/core';
+import { emitTelemetry, getHttpStatusCode } from './utils';
 import { CtxLogger } from './ctxLogger';
 
 // Shapes of POST /connect/genai-mcp/agent-script/actions, from Core genaimcp-openapi-spec.yaml
@@ -59,6 +59,7 @@ export class McpAgentScript {
   /**
    * POST /connect/genai-mcp/agent-script/actions.
    * Returns the Agent Script action block and reasoning reference per MCP tool id, in request order.
+   * Not read-only: like Agent Builder, the call also assigns the MCP runtime permissions for the tools.
    * Uses the connection API version, or 68.0 when that is lower.
    */
   public static async generateActions(connection: Connection, toolIds: string[]): Promise<McpAgentScriptActionsOutput> {
@@ -72,7 +73,7 @@ export class McpAgentScript {
         // Connect REST HTML-encodes strings by default (" -> &quot;); the blocks must be pasted as returned.
         headers: { 'Content-Type': 'application/json', 'X-Chatter-Entity-Encoding': 'false' },
       });
-      await McpAgentScript.emitTelemetry('mcp_agent_script_generate_actions_success');
+      await emitTelemetry('mcp_agent_script_generate_actions_success');
       return result;
     } catch (error) {
       const wrapped = SfError.wrap(error);
@@ -84,20 +85,8 @@ export class McpAgentScript {
         errName: wrapped.name,
         errMsg: wrapped.message,
       });
-      await McpAgentScript.emitTelemetry('mcp_agent_script_generate_actions_failed', error);
+      await emitTelemetry('mcp_agent_script_generate_actions_failed', error);
       throw wrapped;
-    }
-  }
-
-  /** Best-effort telemetry, same dimensions as ApiCatalog: a telemetry failure never masks the real result. */
-  private static async emitTelemetry(eventName: string, error?: unknown): Promise<void> {
-    try {
-      await Lifecycle.getInstance().emitTelemetry({
-        eventName,
-        ...(error !== undefined && { statusCode: getHttpStatusCode(error) ?? null, errName: SfError.wrap(error).name }),
-      });
-    } catch {
-      // telemetry is best-effort
     }
   }
 }
