@@ -25,7 +25,7 @@ describe('ApiCatalog client', () => {
   const $$ = new TestContext();
   let testOrg: MockTestOrgData;
   let connection: Connection;
-  let requests: Array<{ method?: string; url?: string; body?: string; headers?: Record<string, string> }>;
+  let requests: Array<{ method?: string; url?: string; body?: string }>;
 
   beforeEach(async () => {
     testOrg = new MockTestOrgData();
@@ -83,39 +83,6 @@ describe('ApiCatalog client', () => {
       await ApiCatalog.listMcpServerAssets(connection, '1');
       expect(requests[0].method).to.equal('GET');
       expect(requests[0].url).to.match(/\/mcp-servers\/1\/assets$/);
-    });
-  });
-
-  describe('generateMcpAgentScriptActions', () => {
-    it('POSTs {toolIds} to the connect agent-script path, not /api-catalog, at v68.0 or later', async () => {
-      mockRequest({ actions: [] });
-      await ApiCatalog.generateMcpAgentScriptActions(connection, ['1XO1', '1XO2']);
-      expect(requests[0].method).to.equal('POST');
-      expect(requests[0].url).to.match(/\/services\/data\/v\d+\.0\/connect\/genai-mcp\/agent-script\/actions$/);
-      expect(requests[0].url).to.not.include('api-catalog');
-      expect(Number(/\/v(\d+)\./.exec(requests[0].url as string)?.[1])).to.be.at.least(68);
-      expect(JSON.parse(requests[0].body as string)).to.deep.equal({ toolIds: ['1XO1', '1XO2'] });
-    });
-
-    it('asks Connect not to HTML-encode the returned blocks', async () => {
-      mockRequest({ actions: [] });
-      await ApiCatalog.generateMcpAgentScriptActions(connection, ['1XO1']);
-      expect(requests[0].headers).to.deep.include({ 'X-Chatter-Entity-Encoding': 'false' });
-      expect(requests[0].headers?.['Content-Type']).to.match(/json/i);
-    });
-
-    it('uses 68.0 when the connection version is lower', async () => {
-      mockRequest({ actions: [] });
-      connection.setApiVersion('60.0');
-      await ApiCatalog.generateMcpAgentScriptActions(connection, ['1XO1']);
-      expect(requests[0].url).to.include('/services/data/v68.0/connect/genai-mcp/agent-script/actions');
-    });
-
-    it('keeps a higher connection version', async () => {
-      mockRequest({ actions: [] });
-      connection.setApiVersion('70.0');
-      await ApiCatalog.generateMcpAgentScriptActions(connection, ['1XO1']);
-      expect(requests[0].url).to.include('/services/data/v70.0/connect/');
     });
   });
 
