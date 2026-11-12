@@ -16,7 +16,7 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { appendFile, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
-import { Connection, SfError, SfProject } from '@salesforce/core';
+import { Connection, Lifecycle, SfError, SfProject } from '@salesforce/core';
 import { AvailableDefinition, NamedUserJwtResponse, type PlannerResponse, PreviewMetadata } from './types';
 import { CtxLogger } from './ctxLogger';
 
@@ -694,6 +694,23 @@ export const logTurnToHistory = async (
  */
 export function getHttpStatusCode(err: unknown): number | undefined {
   return getHttpStatusCodeInternal(err, new Set());
+}
+
+/**
+ * Best-effort telemetry — never let a telemetry failure mask the real result or error. When an
+ * `error` is supplied (failure events), the low-cardinality cause dimensions a responder can
+ * slice by (HTTP status, error class) are attached; telemetry is the only signal present at the
+ * default log level, so a bare count could not distinguish an auth wall from a 5xx from a 404.
+ */
+export async function emitTelemetry(eventName: string, error?: unknown): Promise<void> {
+  try {
+    await Lifecycle.getInstance().emitTelemetry({
+      eventName,
+      ...(error !== undefined && { statusCode: getHttpStatusCode(error) ?? null, errName: SfError.wrap(error).name }),
+    });
+  } catch {
+    // telemetry is best-effort
+  }
 }
 
 /**
