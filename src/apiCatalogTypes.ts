@@ -123,22 +123,6 @@ export type McpServerAssetReplaceInput = {
   assets: McpServerAssetReplaceItem[];
 };
 
-// Shapes of POST /connect/genai-mcp/agent-script/actions, from Core genaimcp-openapi-spec.yaml
-// (McpAgentScriptActionRepresentation / McpAgentScriptActionsRepresentation).
-export type McpAgentScriptActionOutput = {
-  toolId: string;
-  genAiFunctionId: string;
-  name: string;
-  source: string;
-  target: string;
-  actionBlock: string;
-  reasoningReference: string;
-};
-
-export type McpAgentScriptActionsOutput = {
-  actions: McpAgentScriptActionOutput[];
-};
-
 /**
  * MCP connection status values the server may return on a server record.
  * NOTE: only `ACTIVE` and `DISCONNECTED` are accepted by the `status` query
