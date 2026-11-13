@@ -1,3 +1,12 @@
+# [2.5.0](https://github.com/forcedotcom/agents/compare/2.4.1...2.5.0) (2026-11-13)
+
+
+### Features
+
+* add McpAgentScript.generateActions (W-24729191) ([#395](https://github.com/forcedotcom/agents/issues/395)) ([4decfa1](https://github.com/forcedotcom/agents/commit/4decfa1dff1bc5ad96a4a8f88872ceb0b520801e))
+
+
+
 ## [2.4.1](https://github.com/forcedotcom/agents/compare/2.4.0...2.4.1) (2026-11-10)
 
 
