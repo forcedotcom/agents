@@ -42,6 +42,7 @@ import {
   SessionHistoryBuffer,
 } from '../utils';
 import { createTraceFlag, findTraceFlag, getDebugLog } from '../apexUtils';
+import { escapeSoqlString } from '../soqlEscape';
 import { AgentBase } from './agentBase';
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agents');
@@ -87,7 +88,9 @@ export class ProductionAgent extends AgentBase {
 
   public async getBotMetadata(): Promise<BotMetadata> {
     if (!this.botMetadata) {
-      const whereClause = this.id ? `Id = '${this.id}'` : `DeveloperName = '${this.apiName!}'`;
+      const whereClause = this.id
+        ? `Id = '${escapeSoqlString(this.id)}'`
+        : `DeveloperName = '${escapeSoqlString(this.apiName!)}'`;
       const botDefinitionFields =
         'Id, IsDeleted, DeveloperName, MasterLabel, CreatedDate, CreatedById, LastModifiedDate, LastModifiedById, SystemModstamp, BotUserId, Description, Type, AgentType, AgentTemplate';
       const botVersionFields =

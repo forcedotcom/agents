@@ -23,6 +23,7 @@ import { ProductionAgent } from '../src/agents/productionAgent';
 import { ConnectionManager, setManagerForTesting } from '../src/connectionManager';
 import { getHistoryDir } from '../src/utils';
 import type { BotMetadata, ContextVariable, PlannerResponse } from '../src/types';
+import { HOSTILE_VALUES, expectOnlyLiteral } from './soqlLiterals';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agents');
@@ -317,6 +318,42 @@ describe('ProductionAgent', () => {
         expect(error).to.be.instanceOf(SfError);
         expect((error as SfError).message).to.include(messages.getMessage('noVersionsFound', ['TestAgent']));
       }
+    });
+  });
+
+  describe('getBotMetadata query', () => {
+    const botMetadata = {
+      Id: '0Xx123456789ABC',
+      DeveloperName: 'TestAgent',
+      MasterLabel: 'Test Agent',
+      BotVersions: { records: [] },
+    } as unknown as BotMetadata;
+
+    const queryFor = async (apiNameOrId: string): Promise<string> => {
+      const queryStub = $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves(botMetadata);
+      const agent = new ProductionAgent({ connection, project: sfProject, apiNameOrId });
+      await agent.getBotMetadata();
+      return queryStub.firstCall.args[0];
+    };
+
+    it('filters on DeveloperName for an agent name', async () => {
+      expect(await queryFor('TestAgent')).to.include("WHERE DeveloperName = 'TestAgent' LIMIT 1");
+    });
+
+    it('filters on Id for a 15 or 18 character agent id', async () => {
+      expect(await queryFor('0Xx123456789ABC')).to.include("WHERE Id = '0Xx123456789ABC' LIMIT 1");
+    });
+
+    for (const value of HOSTILE_VALUES) {
+      it(`keeps the agent name ${JSON.stringify(value)} inside its string literal`, async () => {
+        expectOnlyLiteral(await queryFor(value), value);
+      });
+    }
+
+    it('keeps a value shaped like an id (0Xx prefix, 15 characters) inside its string literal', async () => {
+      const value = "0Xx' OR Id!='ab";
+      expect(value).to.have.length(15);
+      expectOnlyLiteral(await queryFor(value), value);
     });
   });
 

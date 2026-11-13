@@ -26,6 +26,7 @@ import { type AgentJson, type PublishAgent, type PublishAgentJsonResponse, type 
 import { findAuthoringBundle, getHttpStatusCode, supportsAiAgentDefinition } from '../utils';
 import { CtxLogger } from '../ctxLogger';
 import { managerFor } from '../connectionManager';
+import { escapeSoqlString } from '../soqlEscape';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agentPublisher');
@@ -350,9 +351,9 @@ export class ScriptAgentPublisher {
   private async getPublishedBotId(agentApiName: string): Promise<string | undefined> {
     try {
       const standardConn = (await managerFor(this.connection)).getStandardConnection();
-      // Escape single quotes so a developerName carrying one cannot break out of the SOQL
-      // string literal (CWE-89). Mirrors the repo's canonical pattern in agentEvalRunner.ts.
-      const escapedApiName = agentApiName.replace(/'/g, "''");
+      // Escape the value so a developerName carrying a quote or a backslash cannot break out of
+      // the SOQL string literal (CWE-89).
+      const escapedApiName = escapeSoqlString(agentApiName);
       const queryResult = await standardConn.singleRecordQuery<{ Id: string }>(
         `SELECT Id FROM BotDefinition WHERE DeveloperName='${escapedApiName}'`
       );
@@ -396,7 +397,7 @@ export class ScriptAgentPublisher {
   private async getBotVersion(botVersionId: string): Promise<{ developerName: string; versionNumber: number }> {
     try {
       const standardConn = (await managerFor(this.connection)).getStandardConnection();
-      const escapedBotVersionId = botVersionId.replace(/'/g, "''");
+      const escapedBotVersionId = escapeSoqlString(botVersionId);
       const queryResult = await standardConn.singleRecordQuery<{ DeveloperName: string; VersionNumber: number }>(
         `SELECT DeveloperName, VersionNumber FROM BotVersion WHERE Id='${escapedBotVersionId}'`
       );
