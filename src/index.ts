@@ -211,6 +211,11 @@ export {
 } from './dataLibraryTypes';
 export { ApiCatalog } from './apiCatalog';
 export {
+  McpAgentScript,
+  type McpAgentScriptActionOutput,
+  type McpAgentScriptActionsOutput,
+} from './mcpAgentScript';
+export {
   type McpServerType,
   type McpAuthType,
   type McpAssetKind,
