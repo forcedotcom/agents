@@ -24,6 +24,7 @@ import { Org } from '@salesforce/core';
 import { resolveAgent, executeBatches, buildResultSummary } from '../src/agentEvalRunner';
 import type { EvalApiResponse } from '../src/evalFormatter';
 import { setManagerForTesting, type ConnectionManager } from '../src/connectionManager';
+import { SITE_VALUES, expectOnlyLiteral } from './soqlLiterals';
 
 describe('agentEvalRunner', () => {
   const $$ = new TestContext();
@@ -96,9 +97,27 @@ describe('agentEvalRunner', () => {
       }
 
       const soql = queryStub.firstCall.args[0];
-      expect(soql).to.include("O''Malley_Agent");
+      expect(soql).to.include("O\\'Malley_Agent");
       expect(soql).to.not.include("O'Malley_Agent");
     });
+
+    for (const value of SITE_VALUES) {
+      it(`keeps ${JSON.stringify(value)} inside the agent-name string literal`, async () => {
+        const queryStub = $$.SANDBOX.stub(org.getConnection(), 'query').resolves({
+          records: [],
+          totalSize: 0,
+          done: true,
+        });
+
+        try {
+          await resolveAgent(org, value);
+        } catch {
+          // expected to throw (agent not found) — we only care about what was queried
+        }
+
+        expectOnlyLiteral(queryStub.firstCall.args[0], value);
+      });
+    }
   });
 
   // ─── executeBatches ────────────────────────────────────────────────────────

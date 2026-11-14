@@ -27,6 +27,7 @@ import { MaybeMock } from '../src/maybe-mock';
 import { ConnectionManager, setManagerForTesting } from '../src/connectionManager';
 import { CtxLogger } from '../src/ctxLogger';
 import { testAgentJson } from './testData';
+import { SITE_VALUES, expectOnlyLiteral } from './soqlLiterals';
 
 describe('AgentPublisher', () => {
   const $$ = new TestContext();
@@ -519,11 +520,27 @@ describe('AgentPublisher', () => {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       await getPublishedBotId("x' OR Id != null LIMIT 1--");
 
-      // The injected quote must be doubled so the WHERE clause semantics are preserved.
+      // The injected quote must be backslash-escaped so it stays inside the string literal.
       const soql = queryStub.firstCall.args[0];
-      expect(soql).to.equal("SELECT Id FROM BotDefinition WHERE DeveloperName='x'' OR Id != null LIMIT 1--'");
+      expect(soql).to.equal("SELECT Id FROM BotDefinition WHERE DeveloperName='x\\' OR Id != null LIMIT 1--'");
       validateStub.restore();
     });
+
+    for (const value of SITE_VALUES) {
+      it(`keeps ${JSON.stringify(value)} inside the developerName string literal`, async () => {
+        const validateStub = createValidateDeveloperNameStub();
+        const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
+        const queryStub = $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves({ Id: '0Xx000' });
+
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+        const getPublishedBotId = (publisher as any).getPublishedBotId.bind(publisher);
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+        await getPublishedBotId(value);
+
+        expectOnlyLiteral(queryStub.firstCall.args[0], value);
+        validateStub.restore();
+      });
+    }
   });
 
   describe('getBotVersion', () => {
@@ -566,6 +583,25 @@ describe('AgentPublisher', () => {
 
       validateStub.restore();
     });
+
+    for (const value of SITE_VALUES) {
+      it(`keeps ${JSON.stringify(value)} inside the bot version id string literal`, async () => {
+        const validateStub = createValidateDeveloperNameStub();
+        const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
+        const queryStub = $$.SANDBOX.stub(connection, 'singleRecordQuery').resolves({
+          DeveloperName: 'v1',
+          VersionNumber: 1,
+        });
+
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+        const getBotVersion = (publisher as any).getBotVersion.bind(publisher);
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+        await getBotVersion(value);
+
+        expectOnlyLiteral(queryStub.firstCall.args[0], value);
+        validateStub.restore();
+      });
+    }
   });
 
   describe('deployAuthoringBundle', () => {
