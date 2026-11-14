@@ -40,9 +40,9 @@ import {
   logTurnToHistory,
   recordTraceForTurn,
   SessionHistoryBuffer,
+  escapeSoqlString,
 } from '../utils';
 import { createTraceFlag, findTraceFlag, getDebugLog } from '../apexUtils';
-import { escapeSoqlString } from '../soqlEscape';
 import { AgentBase } from './agentBase';
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agents');

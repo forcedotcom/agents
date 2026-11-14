@@ -109,6 +109,22 @@ export const decodeHtmlEntities = (str: string = ''): string => {
 };
 
 /**
+ * Escape a value so it can be placed between single quotes in a SOQL string literal.
+ *
+ * The escape character in SOQL is the backslash: `\'` is a single quote and `\\` is a backslash
+ * (SOQL and SOSL Reference, "Quoted String Escape Sequences"). Doubling the quote, as ANSI SQL
+ * does, is not a SOQL escape. Backslashes are escaped in the same pass so that a value that
+ * already contains `\` cannot cancel the escape added in front of a quote, and so that a value
+ * ending in `\` cannot escape the closing quote.
+ *
+ * `%` and `_` are left alone on purpose: SOQL only accepts them escaped inside LIKE expressions.
+ *
+ * @param value - The text to place inside a quoted SOQL literal.
+ * @returns The escaped text, without the surrounding quotes.
+ */
+export const escapeSoqlString = (value: string): string => value.replace(/[\\']/g, '\\$&');
+
+/**
  * Find the authoring bundle directory for a given bot name by recursively searching from a starting directory or directories.
  *
  * @param dirOrDirs - The directory or array of directories to start searching from

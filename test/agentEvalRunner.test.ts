@@ -24,7 +24,7 @@ import { Org } from '@salesforce/core';
 import { resolveAgent, executeBatches, buildResultSummary } from '../src/agentEvalRunner';
 import type { EvalApiResponse } from '../src/evalFormatter';
 import { setManagerForTesting, type ConnectionManager } from '../src/connectionManager';
-import { HOSTILE_VALUES, expectOnlyLiteral } from './soqlLiterals';
+import { SITE_VALUES, expectOnlyLiteral } from './soqlLiterals';
 
 describe('agentEvalRunner', () => {
   const $$ = new TestContext();
@@ -101,7 +101,7 @@ describe('agentEvalRunner', () => {
       expect(soql).to.not.include("O'Malley_Agent");
     });
 
-    for (const value of HOSTILE_VALUES) {
+    for (const value of SITE_VALUES) {
       it(`keeps ${JSON.stringify(value)} inside the agent-name string literal`, async () => {
         const queryStub = $$.SANDBOX.stub(org.getConnection(), 'query').resolves({
           records: [],

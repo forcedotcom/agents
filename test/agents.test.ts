@@ -26,7 +26,7 @@ import { AgentSource, COMPILATION_API_EXIT_CODES } from '../src/types';
 import { ScriptAgent } from '../src';
 import { ScriptAgentPublisher } from '../src/agents/scriptAgentPublisher';
 import { ConnectionManager, setManagerForTesting } from '../src/connectionManager';
-import { HOSTILE_VALUES, expectOnlyLiteral } from './soqlLiterals';
+import { SITE_VALUES, expectOnlyLiteral } from './soqlLiterals';
 
 function createMockConnectionManager(conn: Connection): ConnectionManager {
   return {
@@ -906,7 +906,7 @@ describe('Agents', () => {
       ).to.equal(false);
     });
 
-    for (const value of HOSTILE_VALUES) {
+    for (const value of SITE_VALUES) {
       it(`keeps defaultAgentUser ${JSON.stringify(value)} inside the user lookup string literal`, async () => {
         const agent = new ScriptAgent({ connection, project: sfProject, aabName: 'myAgent' });
         const globalConfiguration = { ...minimalAgentJson.globalConfiguration, defaultAgentUser: value };

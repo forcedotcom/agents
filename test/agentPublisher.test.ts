@@ -27,7 +27,7 @@ import { MaybeMock } from '../src/maybe-mock';
 import { ConnectionManager, setManagerForTesting } from '../src/connectionManager';
 import { CtxLogger } from '../src/ctxLogger';
 import { testAgentJson } from './testData';
-import { HOSTILE_VALUES, expectOnlyLiteral } from './soqlLiterals';
+import { SITE_VALUES, expectOnlyLiteral } from './soqlLiterals';
 
 describe('AgentPublisher', () => {
   const $$ = new TestContext();
@@ -526,7 +526,7 @@ describe('AgentPublisher', () => {
       validateStub.restore();
     });
 
-    for (const value of HOSTILE_VALUES) {
+    for (const value of SITE_VALUES) {
       it(`keeps ${JSON.stringify(value)} inside the developerName string literal`, async () => {
         const validateStub = createValidateDeveloperNameStub();
         const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
@@ -584,7 +584,7 @@ describe('AgentPublisher', () => {
       validateStub.restore();
     });
 
-    for (const value of HOSTILE_VALUES) {
+    for (const value of SITE_VALUES) {
       it(`keeps ${JSON.stringify(value)} inside the bot version id string literal`, async () => {
         const validateStub = createValidateDeveloperNameStub();
         const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);

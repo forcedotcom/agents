@@ -17,9 +17,8 @@
  
 
 import { Org, SfError } from '@salesforce/core';
-import { requestWithEndpointFallback } from './utils';
+import { escapeSoqlString, requestWithEndpointFallback } from './utils';
 import { managerFor } from './connectionManager';
-import { escapeSoqlString } from './soqlEscape';
 import type { EvalPayload } from './evalNormalizer.js';
 import type { EvalApiResponse, EvalResult, EvalOutput, TestError, TestResult } from './evalFormatter.js';
 

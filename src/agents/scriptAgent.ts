@@ -47,11 +47,11 @@ import {
   logTurnToHistory,
   recordTraceForTurn,
   SessionHistoryBuffer,
+  escapeSoqlString,
 } from '../utils';
 import { getDebugLog } from '../apexUtils';
 import { generateAgentScript } from '../templates/agentScriptTemplate';
 import { applyStringReplacementsToAgent } from '../stringReplacements';
-import { escapeSoqlString } from '../soqlEscape';
 import { ScriptAgentPublisher } from './scriptAgentPublisher';
 import { AgentBase } from './agentBase';
 

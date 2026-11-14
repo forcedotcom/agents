@@ -23,7 +23,7 @@ import { ProductionAgent } from '../src/agents/productionAgent';
 import { ConnectionManager, setManagerForTesting } from '../src/connectionManager';
 import { getHistoryDir } from '../src/utils';
 import type { BotMetadata, ContextVariable, PlannerResponse } from '../src/types';
-import { HOSTILE_VALUES, expectOnlyLiteral } from './soqlLiterals';
+import { SITE_VALUES, expectOnlyLiteral } from './soqlLiterals';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agents');
@@ -344,7 +344,7 @@ describe('ProductionAgent', () => {
       expect(await queryFor('0Xx123456789ABC')).to.include("WHERE Id = '0Xx123456789ABC' LIMIT 1");
     });
 
-    for (const value of HOSTILE_VALUES) {
+    for (const value of SITE_VALUES) {
       it(`keeps the agent name ${JSON.stringify(value)} inside its string literal`, async () => {
         expectOnlyLiteral(await queryFor(value), value);
       });

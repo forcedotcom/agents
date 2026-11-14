@@ -22,6 +22,7 @@ import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
 import { Connection, SfError, SfProject } from '@salesforce/core';
 import {
+  escapeSoqlString,
   requestWithEndpointFallback,
   useNamedUserJwt,
   detectTestRunnerFromId,
@@ -42,6 +43,7 @@ import {
   type TraceFileInfo,
 } from '../src/utils';
 import type { PlannerResponse } from '../src/types';
+import { HOSTILE_VALUES, expectOnlyLiteral, lexSoql } from './soqlLiterals';
 
 describe('requestWithEndpointFallback', () => {
   const $$ = new TestContext();
@@ -1241,4 +1243,44 @@ describe('readTurnIndex', () => {
   });
 
   after(() => void ctx);
+});
+
+describe('escapeSoqlString', () => {
+  it('leaves text without quotes or backslashes unchanged', () => {
+    for (const value of ['', 'My_Agent', 'user@example.com', '100%_done', 'ünïcödé', 'line1\nline2']) {
+      expect(escapeSoqlString(value)).to.equal(value);
+    }
+  });
+
+  it('escapes a single quote with a backslash', () => {
+    expect(escapeSoqlString("O'Malley")).to.equal("O\\'Malley");
+  });
+
+  it('escapes a backslash with a backslash', () => {
+    expect(escapeSoqlString('a\\b')).to.equal('a\\\\b');
+  });
+
+  it('escapes a backslash that meets a quote, so it cannot cancel the escape added for the quote', () => {
+    expect(escapeSoqlString("\\'")).to.equal("\\\\\\'");
+  });
+
+  it('does not double the quote, which is the ANSI SQL form and not a SOQL escape', () => {
+    expect(escapeSoqlString("a'b")).to.not.include("''");
+  });
+
+  describe('as SOQL reads the result', () => {
+    for (const value of HOSTILE_VALUES) {
+      it(`keeps ${JSON.stringify(value)} inside one string literal and reads it back unchanged`, () => {
+        expectOnlyLiteral(`SELECT Id FROM BotDefinition WHERE DeveloperName = '${escapeSoqlString(value)}'`, value);
+      });
+    }
+
+    it('shows why doubling the quote does not work: SOQL reads it as two literals', () => {
+      expect(lexSoql("'it''s'").literals).to.deep.equal(['it', 's']);
+    });
+
+    it('rejects a backslash that is not part of a valid escape', () => {
+      expect(lexSoql("'a\\qb'").error).to.match(/invalid escape sequence/);
+    });
+  });
 });

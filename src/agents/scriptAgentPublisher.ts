@@ -23,10 +23,9 @@ import { Duration, env } from '@salesforce/kit';
 import { ComponentSet, ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
 import { MaybeMock } from '../maybe-mock';
 import { type AgentJson, type PublishAgent, type PublishAgentJsonResponse, type PublishOptions } from '../types';
-import { findAuthoringBundle, getHttpStatusCode, supportsAiAgentDefinition } from '../utils';
+import { escapeSoqlString, findAuthoringBundle, getHttpStatusCode, supportsAiAgentDefinition } from '../utils';
 import { CtxLogger } from '../ctxLogger';
 import { managerFor } from '../connectionManager';
-import { escapeSoqlString } from '../soqlEscape';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'agentPublisher');

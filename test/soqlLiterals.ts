@@ -111,3 +111,9 @@ export const HOSTILE_VALUES = [
   '100%_done',
   'ünïcödé',
 ];
+
+/**
+ * What each call site is checked with: one quote breakout and one trailing backslash. That is enough to show
+ * that the site goes through `escapeSoqlString`; the helper's own tests run all of HOSTILE_VALUES.
+ */
+export const SITE_VALUES = ["x' OR Type != '", 'abc\\'];
