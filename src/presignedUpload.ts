@@ -213,7 +213,7 @@ async function putFile(entry: PresignedUploadEntry, file: LocalUploadFile): Prom
   if (!response.ok) {
     // The storage body is remote content of unbounded size, so don't echo it. Keep only the short
     // S3-style error code (ExpiredToken, SignatureDoesNotMatch, ...), the part that says why a PUT failed.
-    const storageErrorCode = parseStorageErrorCode(await response.text().catch(() => ''));
+    const storageErrorCode = parseStorageErrorCode(await readBodyPrefix(response, 4096));
     throw SfError.create({
       message: `HTTP ${response.status}${storageErrorCode ? ` ${storageErrorCode}` : ''}`,
       name: 'StoragePutFailed',
@@ -222,6 +222,28 @@ async function putFile(entry: PresignedUploadEntry, file: LocalUploadFile): Prom
   }
 }
 
+/** Read at most `maxBytes` of a response body, then cancel the rest. Never throws. */
+async function readBodyPrefix(response: Response, maxBytes: number): Promise<string> {
+  const reader = (response.body as ReadableStream<Uint8Array> | null)?.getReader();
+  if (!reader) return '';
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (total < maxBytes) {
+      // eslint-disable-next-line no-await-in-loop
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      total += value.byteLength;
+    }
+  } catch {
+    // A body we can't read just means no error code.
+  } finally {
+    reader.cancel().catch(() => undefined);
+  }
+  return Buffer.concat(chunks).subarray(0, maxBytes).toString('utf8');
+}
+
 function parseStorageErrorCode(body: string): string | null {
-  return /<Code>([A-Za-z0-9._-]{1,64})<\/Code>/.exec(body.slice(0, 4096))?.[1] ?? null;
+  return /<Code>([A-Za-z0-9._-]{1,64})<\/Code>/.exec(body)?.[1] ?? null;
 }
