@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-import { readFileSync, statSync } from 'node:fs';
-import { basename } from 'node:path';
 import { Connection, Lifecycle, SfError } from '@salesforce/core';
 import { getHttpStatusCode } from './utils';
 import { CtxLogger } from './ctxLogger';
+import { prepareUploadFiles, requestUploadUrls, uploadAllToStorage } from './presignedUpload';
 import {
   type ExpressContextLibrarySummary,
   type ExpressContextFileListResponse,
@@ -44,18 +43,15 @@ export {
   type ExpressContextUploadResult,
 } from './expressContextTypes.js';
 
-type FileUploadUrlEntry = { uploadUrl: string; filePath: string; headers: Record<string, string> };
-type FileUploadUrlsResponse = { uploadUrls: FileUploadUrlEntry[] };
-
 function baseUrl(connection: Connection, libraryId?: string): string {
   const base = `/services/data/v${String(connection.version)}/einstein/aec-libraries`;
-  return libraryId ? `${base}/${libraryId}` : base;
+  return libraryId ? `${base}/${encodeURIComponent(libraryId)}` : base;
 }
 
 /**
  * Client for the Agentforce Express Context (AEC) Connect API.
  *
- * Mirrors {@link AgentDataLibrary} but targets `/einstein/aec-libraries`. AEC bypasses the
+ * Mirrors {@link AgentDataLibrary} (and shares its presigned-upload helpers) but targets `/einstein/aec-libraries`. AEC bypasses the
  * Data Cloud pipeline (realtime BM25 index), so it exposes a smaller surface: no upload
  * readiness gate, no multi-stage provisioning, no data-space scope.
  *
@@ -147,6 +143,13 @@ export class AgentExpressContext {
     return result;
   }
 
+  /**
+   * Delete an AEC library and its indexed files.
+   *
+   * The service does NOT delete the library's global retriever action (`GenAiFunctionDefinition`,
+   * `ExpressContextLibrarySummary.retrieverAction`). Callers that created or wired that action must
+   * remove it themselves, or it is left behind pointing at a library that no longer exists.
+   */
   public static async delete(connection: Connection, libraryId: string): Promise<void> {
     try {
       await connection.request({ method: 'DELETE', url: baseUrl(connection, libraryId) });
@@ -159,7 +162,7 @@ export class AgentExpressContext {
     try {
       await connection.request({
         method: 'DELETE',
-        url: `${baseUrl(connection, libraryId)}/files/${fileId}`,
+        url: `${baseUrl(connection, libraryId)}/files/${encodeURIComponent(fileId)}`,
       });
     } catch (error) {
       throw AgentExpressContext.wrapAndReport('aec_file_delete_failed', error, { libraryId, fileId });
@@ -169,10 +172,13 @@ export class AgentExpressContext {
   /**
    * Upload one or more files into an AEC library.
    *
-   * AEC has no upload-readiness gate and indexes in (near-)realtime, so the flow is a
-   * three-step: request presigned URLs → PUT the bytes → register the uploaded files so
-   * the service starts indexing. This mirrors {@link AgentDataLibrary.addFile}; the register
-   * step's contract is pending confirmation on a pre-GA AEC org.
+   * Three steps, all verified live on v68: request presigned URLs → PUT the bytes to storage →
+   * POST `{id}/indexing` to register the files and start indexing. All files are validated (unique
+   * names, size limit) before any network call. If any storage PUT fails, nothing is registered and
+   * the thrown `StorageUploadFailed` error's `data` lists which files landed in storage and which
+   * failed. Indexing completes asynchronously; poll {@link AgentExpressContext.status} for progress.
+   *
+   * `filePaths` are read from the local file system as given; pass only paths the caller trusts.
    */
   public static async upload(
     connection: Connection,
@@ -180,41 +186,43 @@ export class AgentExpressContext {
     filePaths: string | string[]
   ): Promise<ExpressContextUploadResult> {
     const url = baseUrl(connection, libraryId);
-    const paths = Array.isArray(filePaths) ? filePaths : [filePaths];
-    if (paths.length === 0) {
-      throw new SfError('At least one file is required.', 'NoFilesProvided');
+    const files = prepareUploadFiles(Array.isArray(filePaths) ? filePaths : [filePaths]);
+    const fields = { libraryId, fileCount: files.length };
+
+    let pairs: Awaited<ReturnType<typeof requestUploadUrls>>;
+    try {
+      pairs = await requestUploadUrls(connection, url, files);
+    } catch (error) {
+      throw AgentExpressContext.wrapAndReport('aec_upload_presign_failed', error, fields);
     }
 
-    const files = paths.map((p) => ({ fileName: basename(p) }));
-    const uploadEntries = await AgentExpressContext.getUploadUrls(connection, url, files);
-
-    await Promise.all(paths.map((path, i) => AgentExpressContext.uploadToStorage(uploadEntries[i], path)));
-
-    const uploadedFiles = uploadEntries.map((entry, i) => ({
-      filePath: entry.filePath,
-      fileSize: statSync(paths[i]).size,
-    }));
+    let uploaded: Awaited<ReturnType<typeof uploadAllToStorage>>;
+    try {
+      uploaded = await uploadAllToStorage(pairs, 'StorageUploadFailed');
+    } catch (error) {
+      throw AgentExpressContext.wrapAndReport('aec_upload_storage_failed', error, fields);
+    }
 
     try {
-      // AEC registers uploaded files and triggers (synchronous) indexing via the
-      // dedicated /indexing endpoint — NOT POST /files (which returns INVALID_REQUEST_STATE).
+      // AEC registers uploaded files and triggers indexing via the dedicated /indexing endpoint —
+      // NOT POST /files (which returns INVALID_REQUEST_STATE).
       // Body shape is strict: { uploadedFiles: [{ filePath, fileSize }] }. Verified live v68.
       await connection.request({
         method: 'POST',
         url: `${url}/indexing`,
-        body: JSON.stringify({ uploadedFiles }),
+        body: JSON.stringify({ uploadedFiles: uploaded.map((f) => ({ filePath: f.filePath, fileSize: f.fileSize })) }),
         headers: { 'Content-Type': 'application/json' },
       });
     } catch (error) {
-      throw AgentExpressContext.wrapAndReport('aec_upload_index_failed', error, { libraryId });
+      throw AgentExpressContext.wrapAndReport('aec_upload_index_failed', error, fields);
     }
 
     await Lifecycle.getInstance().emitTelemetry({ eventName: 'agent_aec_upload_success' });
     return {
       libraryId,
-      fileNames: paths.map((p) => basename(p)),
-      filePaths: uploadEntries.map((entry) => entry.filePath),
-      status: 'IN_PROGRESS',
+      fileNames: uploaded.map((f) => f.fileName),
+      filePaths: uploaded.map((f) => f.filePath),
+      files: uploaded.map((f) => ({ localPath: f.localPath, fileName: f.fileName, filePath: f.filePath })),
     };
   }
 
@@ -235,36 +243,5 @@ export class AgentExpressContext {
       errName: wrapped.name,
     });
     return wrapped;
-  }
-
-  private static async getUploadUrls(
-    connection: Connection,
-    url: string,
-    files: Array<{ fileName: string }>
-  ): Promise<FileUploadUrlEntry[]> {
-    const response = await connection.request<FileUploadUrlsResponse>({
-      method: 'POST',
-      url: `${url}/file-upload-urls`,
-      body: JSON.stringify({ files }),
-      headers: { 'Content-Type': 'application/json' },
-    });
-    return response.uploadUrls;
-  }
-
-  private static async uploadToStorage(uploadEntry: FileUploadUrlEntry, filePath: string): Promise<void> {
-    const maxFileSize = 100 * 1024 * 1024; // 100 MB
-    const fileSize = statSync(filePath).size;
-    if (fileSize > maxFileSize) {
-      throw new SfError(`File size (${fileSize} bytes) exceeds maximum of ${maxFileSize} bytes.`, 'FileTooLarge');
-    }
-    const response = await fetch(uploadEntry.uploadUrl, {
-      method: 'PUT',
-      headers: uploadEntry.headers,
-      body: readFileSync(filePath),
-    });
-    if (!response.ok) {
-      const body = await response.text();
-      throw new SfError(`File storage upload failed: HTTP ${response.status}: ${body}`, 'StorageUploadFailed');
-    }
   }
 }

@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-import { readFileSync, statSync } from 'node:fs';
 import { basename } from 'node:path';
 import { Connection, Lifecycle, SfError } from '@salesforce/core';
 import { getHttpStatusCode } from './utils';
 import { CtxLogger } from './ctxLogger';
+import { prepareUploadFiles, requestUploadUrls, uploadAllToStorage } from './presignedUpload';
 import {
   type DataLibrarySummary,
   type DataLibraryDetail,
@@ -41,8 +41,6 @@ const getLogger = (): CtxLogger => {
 export { type DataLibrarySummary, type DataLibraryDetail, type IndexingStatusResponse, type CreateLibraryInput, type UpdateLibraryInput, type UploadResult, type FileAddResult, type FileListResponse } from './dataLibraryTypes.js';
 
 type UploadReadinessResponse = { ready: boolean };
-type FileUploadUrlEntry = { uploadUrl: string; filePath: string; headers: Record<string, string> };
-type FileUploadUrlsResponse = { uploadUrls: FileUploadUrlEntry[] };
 type IndexingResponse = { status: string; filesAccepted?: number };
 
 function baseUrl(connection: Connection, libraryId?: string): string {
@@ -312,23 +310,12 @@ export class AgentDataLibrary {
     const url = baseUrl(connection, libraryId);
     const paths = Array.isArray(filePaths) ? filePaths : [filePaths];
 
-    if (paths.length === 0) {
-      throw new SfError('At least one file is required.', 'NoFilesProvided');
-    }
+    const files = prepareUploadFiles(paths);
 
     await AgentDataLibrary.checkUploadReadiness(connection, url);
 
-    const fileNames = paths.map((p) => ({ fileName: basename(p) }));
-    const uploadEntries = await AgentDataLibrary.getUploadUrls(connection, url, fileNames);
-
-    await Promise.all(
-      paths.map((path, i) => AgentDataLibrary.uploadToS3(uploadEntries[i], path))
-    );
-
-    const uploadedFiles = uploadEntries.map((entry, i) => ({
-      filePath: entry.filePath,
-      fileSize: statSync(paths[i]).size,
-    }));
+    const uploaded = await uploadAllToStorage(await requestUploadUrls(connection, url, files), 'S3UploadFailed');
+    const uploadedFiles = uploaded.map((f) => ({ filePath: f.filePath, fileSize: f.fileSize }));
     await AgentDataLibrary.triggerIndexing(connection, url, uploadedFiles);
 
     if (options?.waitMinutes) {
@@ -352,21 +339,9 @@ export class AgentDataLibrary {
     const url = baseUrl(connection, libraryId);
     const paths = Array.isArray(filePaths) ? filePaths : [filePaths];
 
-    if (paths.length === 0) {
-      throw new SfError('At least one file is required.', 'NoFilesProvided');
-    }
-
-    const fileInfos = paths.map((p) => ({ fileName: basename(p) }));
-    const uploadEntries = await AgentDataLibrary.getUploadUrls(connection, url, fileInfos);
-
-    await Promise.all(
-      paths.map((path, i) => AgentDataLibrary.uploadToS3(uploadEntries[i], path))
-    );
-
-    const uploadedFiles = uploadEntries.map((entry, i) => ({
-      filePath: entry.filePath,
-      fileSize: statSync(paths[i]).size,
-    }));
+    const files = prepareUploadFiles(paths);
+    const uploaded = await uploadAllToStorage(await requestUploadUrls(connection, url, files), 'S3UploadFailed');
+    const uploadedFiles = uploaded.map((f) => ({ filePath: f.filePath, fileSize: f.fileSize }));
     await connection.request({
       method: 'POST',
       url: `${url}/files`,
@@ -419,39 +394,6 @@ export class AgentDataLibrary {
       if (attempt === maxAttempts) {
         throw new SfError('Library not ready for upload after waiting.', 'UploadNotReady');
       }
-    }
-  }
-
-  private static async getUploadUrls(
-    connection: Connection,
-    url: string,
-    files: Array<{ fileName: string }>
-  ): Promise<FileUploadUrlEntry[]> {
-    const response = await connection.request<FileUploadUrlsResponse>({
-      method: 'POST',
-      url: `${url}/file-upload-urls`,
-      body: JSON.stringify({ files }),
-      headers: { 'Content-Type': 'application/json' },
-    });
-    return response.uploadUrls;
-  }
-
-  private static async uploadToS3(uploadEntry: FileUploadUrlEntry, filePath: string): Promise<void> {
-    const maxFileSize = 100 * 1024 * 1024; // 100 MB — SearchIndex limit for chunking/vectorization
-    const fileSize = statSync(filePath).size;
-    if (fileSize > maxFileSize) {
-      throw new SfError(`File size (${fileSize} bytes) exceeds maximum of ${maxFileSize} bytes.`, 'FileTooLarge');
-    }
-    const fileBuffer = readFileSync(filePath);
-    const response = await fetch(uploadEntry.uploadUrl, {
-      method: 'PUT',
-      headers: uploadEntry.headers,
-      body: fileBuffer,
-    });
-
-    if (!response.ok) {
-      const body = await response.text();
-      throw new SfError(`S3 upload failed: HTTP ${response.status}: ${body}`, 'S3UploadFailed');
     }
   }
 
