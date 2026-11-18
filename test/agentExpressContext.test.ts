@@ -70,7 +70,9 @@ describe('AgentExpressContext', () => {
 
   describe('read operations', () => {
     it('list GETs the collection', async () => {
-      respond(() => ({ libraries: [{ libraryId: '1JD1', masterLabel: 'L', developerName: 'L_abc', status: 'READY' }] }));
+      respond(() => ({
+        libraries: [{ libraryId: '1JD1', masterLabel: 'L', developerName: 'L_abc', status: 'READY' }],
+      }));
       const result = await AgentExpressContext.list(connection);
       expect(result.libraries).to.have.lengthOf(1);
       expect(requests[0]).to.include({ method: 'GET', url: base() });
@@ -90,7 +92,12 @@ describe('AgentExpressContext', () => {
 
     it('listFiles passes paging and filter options as query params', async () => {
       respond(() => ({ files: [] }));
-      await AgentExpressContext.listFiles(connection, '1JD1', { pageSize: 10, offset: 20, name: 'a b', status: 'INDEXED' });
+      await AgentExpressContext.listFiles(connection, '1JD1', {
+        pageSize: 10,
+        offset: 20,
+        name: 'a b',
+        status: 'INDEXED',
+      });
       expect(requests[0].url).to.equal(`${base()}/1JD1/files?pageSize=10&offset=20&name=a+b&status=INDEXED`);
     });
 
@@ -100,6 +107,13 @@ describe('AgentExpressContext', () => {
       await AgentExpressContext.deleteFile(connection, 'lib#1', 'file/2');
       expect(requests[0].url).to.equal(`${base()}/My%20Lib%2F..%2Fx%3Fy`);
       expect(requests[1].url).to.equal(`${base()}/lib%231/files/file%2F2`);
+    });
+
+    it('still throws the API error when failure telemetry rejects', async () => {
+      telemetryStub.rejects(new Error('telemetry down'));
+      fail(404);
+      const err = await expectThrows(() => AgentExpressContext.get(connection, '1JD1'));
+      expect(err.message).to.equal('boom');
     });
 
     for (const [name, call, event] of [
@@ -124,7 +138,11 @@ describe('AgentExpressContext', () => {
   describe('create', () => {
     it('POSTs the input as JSON and emits success telemetry', async () => {
       respond(() => ({ libraryId: '1JD1', masterLabel: 'L', developerName: 'L_abc', status: 'READY' }));
-      const result = await AgentExpressContext.create(connection, { masterLabel: 'L', developerName: 'L', description: 'd' });
+      const result = await AgentExpressContext.create(connection, {
+        masterLabel: 'L',
+        developerName: 'L',
+        description: 'd',
+      });
       expect(result.libraryId).to.equal('1JD1');
       expect(requests[0]).to.include({ method: 'POST', url: base() });
       expect(JSON.parse(requests[0].body!)).to.deep.equal({ masterLabel: 'L', developerName: 'L', description: 'd' });

@@ -75,10 +75,7 @@ export class AgentExpressContext {
     }
   }
 
-  public static async get(
-    connection: Connection,
-    libraryId: string
-  ): Promise<ExpressContextLibrarySummary> {
+  public static async get(connection: Connection, libraryId: string): Promise<ExpressContextLibrarySummary> {
     try {
       return await connection.request<ExpressContextLibrarySummary>({
         method: 'GET',
@@ -89,10 +86,7 @@ export class AgentExpressContext {
     }
   }
 
-  public static async status(
-    connection: Connection,
-    libraryId: string
-  ): Promise<ExpressContextStatusResponse> {
+  public static async status(connection: Connection, libraryId: string): Promise<ExpressContextStatusResponse> {
     try {
       return await connection.request<ExpressContextStatusResponse>({
         method: 'GET',
@@ -237,11 +231,10 @@ export class AgentExpressContext {
       errName: wrapped.name,
       errMsg: wrapped.message,
     });
-    void Lifecycle.getInstance().emitTelemetry({
-      eventName,
-      statusCode: getHttpStatusCode(error) ?? null,
-      errName: wrapped.name,
-    });
+    // Best-effort: a telemetry failure must never replace or add to the error being reported.
+    Lifecycle.getInstance()
+      .emitTelemetry({ eventName, statusCode: getHttpStatusCode(error) ?? null, errName: wrapped.name })
+      .catch(() => undefined);
     return wrapped;
   }
 }

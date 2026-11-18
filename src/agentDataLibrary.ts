@@ -38,7 +38,16 @@ const getLogger = (): CtxLogger => {
   return logger;
 };
 
-export { type DataLibrarySummary, type DataLibraryDetail, type IndexingStatusResponse, type CreateLibraryInput, type UpdateLibraryInput, type UploadResult, type FileAddResult, type FileListResponse } from './dataLibraryTypes.js';
+export {
+  type DataLibrarySummary,
+  type DataLibraryDetail,
+  type IndexingStatusResponse,
+  type CreateLibraryInput,
+  type UpdateLibraryInput,
+  type UploadResult,
+  type FileAddResult,
+  type FileListResponse,
+} from './dataLibraryTypes.js';
 
 type UploadReadinessResponse = { ready: boolean };
 type IndexingResponse = { status: string; filesAccepted?: number };
@@ -104,23 +113,29 @@ export class AgentDataLibrary {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 10_000);
       try {
-        const response = await fetch(`${String(connection.instanceUrl)}${baseUrl(connection, result.libraryId)}/indexing`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${String(connection.accessToken)}`,
-            'Content-Type': 'application/json',
-          },
-          signal: controller.signal,
-        });
+        const response = await fetch(
+          `${String(connection.instanceUrl)}${baseUrl(connection, result.libraryId)}/indexing`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${String(connection.accessToken)}`,
+              'Content-Type': 'application/json',
+            },
+            signal: controller.signal,
+          }
+        );
         if (!response.ok) {
           // Native fetch resolves (does not reject) on a 4xx/5xx, so an HTTP error status —
           // the most common way indexing fails to start (expired auth, 5xx, quota 429) —
           // would otherwise slip through unlogged. Throw it into the catch below so HTTP and
           // network failures converge on one greppable warn + telemetry path, with statusCode
           // distinguishing them. getHttpStatusCode reads the statusCode we attach here.
-          throw Object.assign(new SfError('Data library indexing trigger returned an error status', 'IndexingTriggerHttpError'), {
-            statusCode: response.status,
-          });
+          throw Object.assign(
+            new SfError('Data library indexing trigger returned an error status', 'IndexingTriggerHttpError'),
+            {
+              statusCode: response.status,
+            }
+          );
         }
       } catch (error) {
         const wrapped = SfError.wrap(error);
@@ -169,7 +184,11 @@ export class AgentDataLibrary {
     }
   }
 
-  public static async update(connection: Connection, libraryId: string, input: UpdateLibraryInput): Promise<DataLibraryDetail> {
+  public static async update(
+    connection: Connection,
+    libraryId: string,
+    input: UpdateLibraryInput
+  ): Promise<DataLibraryDetail> {
     try {
       return await connection.request<DataLibraryDetail>({
         method: 'PATCH',
@@ -355,7 +374,11 @@ export class AgentDataLibrary {
     return { success: true, fileName, fileNames, libraryId };
   }
 
-  public static async waitForReady(connection: Connection, libraryId: string, waitSeconds: number): Promise<DataLibraryDetail> {
+  public static async waitForReady(
+    connection: Connection,
+    libraryId: string,
+    waitSeconds: number
+  ): Promise<DataLibraryDetail> {
     return AgentDataLibrary.pollForReadiness(connection, baseUrl(connection, libraryId), libraryId, waitSeconds);
   }
 
@@ -419,7 +442,6 @@ export class AgentDataLibrary {
     const deadline = Date.now() + waitSeconds * 1000;
     const pollInterval = 10000;
 
-     
     while (Date.now() < deadline) {
       // eslint-disable-next-line no-await-in-loop
       const detail = await connection.request<DataLibraryDetail>({ method: 'GET', url });

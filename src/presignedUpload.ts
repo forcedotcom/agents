@@ -22,7 +22,7 @@
  * This module owns the first two steps; the register step differs per API and stays with the caller.
  */
 
-import { readFileSync, statSync } from 'node:fs';
+import { readFileSync, statSync, type Stats } from 'node:fs';
 import { basename } from 'node:path';
 import { isIP } from 'node:net';
 import { Connection, SfError } from '@salesforce/core';
@@ -44,8 +44,8 @@ export type UploadedFile = LocalUploadFile & { filePath: string };
 
 /**
  * Validate local files before any network call: at least one file, no two files sharing a basename
- * (the service keys uploads by file name, so they would collide), and every file within the size
- * limit. Stats each file once and returns the sizes for the register step.
+ * (the service keys uploads by file name, so they would collide), every path an existing regular
+ * file, and every file within the size limit. Stats each file once and returns the sizes for the register step.
  */
 export function prepareUploadFiles(paths: string[]): LocalUploadFile[] {
   if (paths.length === 0) {
@@ -61,7 +61,16 @@ export function prepareUploadFiles(paths: string[]): LocalUploadFile[] {
       );
     }
     seen.add(fileName);
-    const fileSize = statSync(localPath).size;
+    let stats: Stats;
+    try {
+      stats = statSync(localPath);
+    } catch {
+      throw new SfError(`File "${localPath}" doesn't exist or can't be read.`, 'FileNotFound');
+    }
+    if (!stats.isFile()) {
+      throw new SfError(`"${localPath}" isn't a regular file.`, 'NotAFile');
+    }
+    const fileSize = stats.size;
     if (fileSize > MAX_UPLOAD_FILE_SIZE) {
       throw new SfError(
         `File "${fileName}" (${fileSize} bytes) exceeds maximum of ${MAX_UPLOAD_FILE_SIZE} bytes.`,
@@ -123,7 +132,8 @@ export function assertSafeUploadUrl(uploadUrl: string): void {
 export type StorageUploadFailureData = {
   /** Storage `filePath`s that were PUT successfully but not registered with the service. */
   uploadedFilePaths: string[];
-  failedFiles: Array<{ fileName: string; errName: string; statusCode: number | null }>;
+  /** `storageErrorCode` is the S3-style `<Code>` from the storage error body (e.g. `SignatureDoesNotMatch`), if any. */
+  failedFiles: Array<{ fileName: string; errName: string; statusCode: number | null; storageErrorCode: string | null }>;
 };
 
 /**
@@ -139,7 +149,8 @@ export async function uploadAllToStorage(
   // Validate every URL before PUTting anything, so a bad response uploads nothing.
   pairs.forEach(({ entry }) => assertSafeUploadUrl(entry.uploadUrl));
 
-  const results: Array<{ ok: true } | { ok: false; error: SfError; statusCode: number | null }> = [];
+  type PutFailure = { ok: false; error: SfError; statusCode: number | null; storageErrorCode: string | null };
+  const results: Array<{ ok: true } | PutFailure> = [];
   let next = 0;
   const worker = async (): Promise<void> => {
     while (next < pairs.length) {
@@ -150,7 +161,13 @@ export async function uploadAllToStorage(
         results[i] = { ok: true };
       } catch (error) {
         const wrapped = SfError.wrap(error);
-        results[i] = { ok: false, error: wrapped, statusCode: (wrapped.data as { statusCode?: number } | undefined)?.statusCode ?? null };
+        const data = wrapped.data as { statusCode?: number; storageErrorCode?: string | null } | undefined;
+        results[i] = {
+          ok: false,
+          error: wrapped,
+          statusCode: data?.statusCode ?? null,
+          storageErrorCode: data?.storageErrorCode ?? null,
+        };
       }
     }
   };
@@ -162,12 +179,20 @@ export async function uploadAllToStorage(
     if (r.ok) {
       uploadedFilePaths.push(pairs[i].entry.filePath);
     } else {
-      failedFiles.push({ fileName: pairs[i].file.fileName, errName: r.error.name, statusCode: r.statusCode });
+      failedFiles.push({
+        fileName: pairs[i].file.fileName,
+        errName: r.error.name,
+        statusCode: r.statusCode,
+        storageErrorCode: r.storageErrorCode,
+      });
     }
   });
   if (failedFiles.length > 0) {
     const detail = failedFiles
-      .map((f) => (f.statusCode !== null ? `${f.fileName} (HTTP ${f.statusCode})` : `${f.fileName} (${f.errName})`))
+      .map((f) => {
+        if (f.statusCode === null) return `${f.fileName} (${f.errName})`;
+        return `${f.fileName} (HTTP ${f.statusCode}${f.storageErrorCode ? ` ${f.storageErrorCode}` : ''})`;
+      })
       .join(', ');
     const data: StorageUploadFailureData = { uploadedFilePaths, failedFiles };
     throw SfError.create<StorageUploadFailureData>({
@@ -186,11 +211,17 @@ async function putFile(entry: PresignedUploadEntry, file: LocalUploadFile): Prom
     body: readFileSync(file.localPath),
   });
   if (!response.ok) {
-    // The storage response body is remote content of unbounded size; report only the status.
+    // The storage body is remote content of unbounded size, so don't echo it. Keep only the short
+    // S3-style error code (ExpiredToken, SignatureDoesNotMatch, ...), the part that says why a PUT failed.
+    const storageErrorCode = parseStorageErrorCode(await response.text().catch(() => ''));
     throw SfError.create({
-      message: `HTTP ${response.status}`,
+      message: `HTTP ${response.status}${storageErrorCode ? ` ${storageErrorCode}` : ''}`,
       name: 'StoragePutFailed',
-      data: { statusCode: response.status },
+      data: { statusCode: response.status, storageErrorCode },
     });
   }
+}
+
+function parseStorageErrorCode(body: string): string | null {
+  return /<Code>([A-Za-z0-9._-]{1,64})<\/Code>/.exec(body.slice(0, 4096))?.[1] ?? null;
 }
