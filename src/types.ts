@@ -931,6 +931,19 @@ export type PublishAgentJsonResponse = {
 
 export type PublishAgent = PublishAgentJsonResponse & { developerName: string };
 
+/**
+ * Set as `data.publishedAgent` on an error thrown after the publish POST already committed a new
+ * BotVersion (for example, a failed metadata retrieve or authoring bundle deploy). Its presence
+ * means the version exists in the org, so the caller must not publish again.
+ */
+export type PublishedAgentInfo = {
+  developerName: string;
+  botId: string;
+  botVersionId: string;
+  /** Absent when the BotVersion lookup itself is the step that failed. */
+  versionNumber?: number;
+};
+
 export type PublishOptions = {
   /** Where the agent came from ("Bot" for a converted Einstein Bot). Sent on the first publish only. */
   sourceType?: 'Bot';

@@ -24,6 +24,7 @@ export {
   type ApiStatus,
   type AgentJson,
   type AgentCompilationSuccess,
+  type PublishedAgentInfo,
 
   // Agent Creation Types
   type AgentScriptContent,

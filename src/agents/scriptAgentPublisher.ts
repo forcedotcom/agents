@@ -20,9 +20,15 @@ import { existsSync } from 'node:fs';
 import { XMLBuilder, XMLParser } from 'fast-xml-parser';
 import { Connection, Lifecycle, Messages, SfError, SfProject } from '@salesforce/core';
 import { Duration, env } from '@salesforce/kit';
-import { ComponentSet, ComponentSetBuilder } from '@salesforce/source-deploy-retrieve';
+import { ComponentSet, ComponentSetBuilder, type DeployResult } from '@salesforce/source-deploy-retrieve';
 import { MaybeMock } from '../maybe-mock';
-import { type AgentJson, type PublishAgent, type PublishAgentJsonResponse, type PublishOptions } from '../types';
+import {
+  type AgentJson,
+  type PublishAgent,
+  type PublishAgentJsonResponse,
+  type PublishedAgentInfo,
+  type PublishOptions,
+} from '../types';
 import { findAuthoringBundle, getHttpStatusCode, supportsAiAgentDefinition } from '../utils';
 import { CtxLogger } from '../ctxLogger';
 import { managerFor } from '../connectionManager';
@@ -142,11 +148,18 @@ export class ScriptAgentPublisher {
       // we've published the AgentJson, now we need to:
       // 1. retrieve the new Agent metadata that's in the org
       // 2. deploy the AuthoringBundle's -meta.xml file with correct target attribute
-      const botVersion = await this.getBotVersion(response.botVersionId);
-      if (!this.skipRetrieve) {
-        await this.retrieveAgentMetadata(botVersion);
+      // The POST above already committed a new BotVersion, so a failure in any of these steps
+      // must say so. Otherwise the caller sees a failed publish, retries, and commits a duplicate.
+      let botVersion: { developerName: string; versionNumber: number } | undefined;
+      try {
+        botVersion = await this.getBotVersion(response.botVersionId);
+        if (!this.skipRetrieve) {
+          await this.retrieveAgentMetadata(botVersion);
+        }
+        await this.deployAuthoringBundle(botVersion.developerName);
+      } catch (error) {
+        throw await this.toPublishedAgentError(error, response, botVersion);
       }
-      await this.deployAuthoringBundle(botVersion.developerName);
 
       return { ...response, developerName: this.developerName };
     } else {
@@ -313,19 +326,23 @@ export class ScriptAgentPublisher {
     await writeFile(this.bundleMetaPath, xmlBuilder.build(authoringBundle));
 
     // 2. attempt to deploy the authoring bundle to the org
-    const standardConn = (await managerFor(this.connection)).getStandardConnection();
-    const deploy = await ComponentSet.fromSource(this.bundleDir).deploy({
-      usernameOrConnection: standardConn,
-    });
-    const deployTimeout = getMetadataPollTimeout();
-    const deployStart = Date.now();
-    getLogger().debug('Polling for authoring bundle deploy', { timeoutMinutes: deployTimeout.minutes });
-    const deployResult = await deploy.pollStatus({ timeout: deployTimeout });
-    getLogger().debug('Authoring bundle deploy poll completed', { durationMs: Date.now() - deployStart });
-
-    // 3.remove the target from the local authoring bundle meta.xml file
-    delete authoringBundle.AiAuthoringBundle.target;
-    await writeFile(this.bundleMetaPath, xmlBuilder.build(authoringBundle));
+    let deployResult: DeployResult;
+    try {
+      const standardConn = (await managerFor(this.connection)).getStandardConnection();
+      const deploy = await ComponentSet.fromSource(this.bundleDir).deploy({
+        usernameOrConnection: standardConn,
+      });
+      const deployTimeout = getMetadataPollTimeout();
+      const deployStart = Date.now();
+      getLogger().debug('Polling for authoring bundle deploy', { timeoutMinutes: deployTimeout.minutes });
+      deployResult = await deploy.pollStatus({ timeout: deployTimeout });
+      getLogger().debug('Authoring bundle deploy poll completed', { durationMs: Date.now() - deployStart });
+    } finally {
+      // 3.remove the target from the local authoring bundle meta.xml file, even if the deploy threw
+      // (poll timeout, a scopedPostDeploy listener), so it never lingers in local source
+      delete authoringBundle.AiAuthoringBundle.target;
+      await writeFile(this.bundleMetaPath, xmlBuilder.build(authoringBundle));
+    }
 
     if (!deployResult.response?.success) {
       const componentFailures = deployResult.response.details?.componentFailures;
@@ -339,6 +356,67 @@ export class ScriptAgentPublisher {
       error.actions = [messages.getMessage('authoringBundleDeploymentErrorActions')];
       throw error;
     }
+  }
+
+  /**
+   * Marks an error thrown after the publish POST committed a new BotVersion, so callers can tell
+   * the version exists in the org and must not publish again. Keeps the original error name,
+   * message, and actions; adds `data.publishedAgent` and a leading "don't republish" action.
+   *
+   * @param error The error thrown by a post-publish step
+   * @param response The successful publish response
+   * @param botVersion The committed bot version, when the lookup got that far
+   * @returns The annotated error to rethrow
+   */
+  private async toPublishedAgentError(
+    error: unknown,
+    response: PublishAgentJsonResponse,
+    botVersion?: { developerName: string; versionNumber: number }
+  ): Promise<SfError> {
+    const err = SfError.wrap(error);
+    const publishedAgent: PublishedAgentInfo = {
+      developerName: this.developerName,
+      botId: response.botId,
+      botVersionId: response.botVersionId,
+      ...(botVersion ? { versionNumber: botVersion.versionNumber } : {}),
+    };
+    const existingData: unknown = err.data;
+    const baseData =
+      existingData === undefined
+        ? {}
+        : typeof existingData === 'object' && existingData !== null && !Array.isArray(existingData)
+        ? existingData
+        : { originalData: existingData };
+    err.setData({ ...baseData, publishedAgent });
+    const publishedAs = botVersion
+      ? `version ${botVersion.versionNumber} (BotVersion ${response.botVersionId})`
+      : `BotVersion ${response.botVersionId}`;
+    err.actions = [messages.getMessage('publishedBeforeFailureActions', [publishedAs]), ...(err.actions ?? [])];
+
+    // Rethrown, so log at debug and pair with telemetry (see ai-docs/logging.md).
+    getLogger().debug('Post-publish step failed after the BotVersion was committed', {
+      developerName: this.developerName,
+      botId: response.botId,
+      botVersionId: response.botVersionId,
+      versionNumber: botVersion?.versionNumber,
+      retrieveSkipped: this.skipRetrieve,
+      errName: err.name,
+      errMsg: err.message,
+    });
+    try {
+      await Lifecycle.getInstance().emitTelemetry({
+        eventName: 'agent_publish_post_commit_failed',
+        errName: err.name,
+        retrieveSkipped: this.skipRetrieve,
+        botVersionResolved: Boolean(botVersion),
+      });
+    } catch (telemetryError) {
+      // A failing telemetry listener must not replace the annotated error, or callers lose the botVersionId.
+      getLogger().debug('Telemetry emit failed for a post-publish failure', {
+        errMsg: telemetryError instanceof Error ? telemetryError.message : String(telemetryError),
+      });
+    }
+    return err;
   }
 
   /**
