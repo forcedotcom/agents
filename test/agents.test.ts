@@ -26,6 +26,7 @@ import { AgentSource, COMPILATION_API_EXIT_CODES } from '../src/types';
 import { ScriptAgent } from '../src';
 import { ScriptAgentPublisher } from '../src/agents/scriptAgentPublisher';
 import { ConnectionManager, setManagerForTesting } from '../src/connectionManager';
+import { SITE_VALUES, expectOnlyLiteral } from './soqlLiterals';
 
 function createMockConnectionManager(conn: Connection): ConnectionManager {
   return {
@@ -904,6 +905,24 @@ describe('Agents', () => {
           .some((c) => (c.args[0] as string).includes('SELECT Id FROM USER WHERE username'))
       ).to.equal(false);
     });
+
+    for (const value of SITE_VALUES) {
+      it(`keeps defaultAgentUser ${JSON.stringify(value)} inside the user lookup string literal`, async () => {
+        const agent = new ScriptAgent({ connection, project: sfProject, aabName: 'myAgent' });
+        const globalConfiguration = { ...minimalAgentJson.globalConfiguration, defaultAgentUser: value };
+        // @ts-expect-error private property — bypass compile
+        agent.agentJson = { ...minimalAgentJson, globalConfiguration };
+
+        await agent.preview.start();
+
+        const userQuery = (connection.query as sinon.SinonStub)
+          .getCalls()
+          .map((c) => c.args[0] as string)
+          .find((soql) => soql.includes('SELECT Id FROM USER WHERE username'));
+        expect(userQuery, 'the user lookup was not issued').to.be.a('string');
+        expectOnlyLiteral(userQuery as string, value);
+      });
+    }
   });
 
   it('create save agent', async () => {

@@ -17,7 +17,7 @@
  
 
 import { Org, SfError } from '@salesforce/core';
-import { requestWithEndpointFallback } from './utils';
+import { escapeSoqlString, requestWithEndpointFallback } from './utils';
 import { managerFor } from './connectionManager';
 import type { EvalPayload } from './evalNormalizer.js';
 import type { EvalApiResponse, EvalResult, EvalOutput, TestError, TestResult } from './evalFormatter.js';
@@ -75,7 +75,7 @@ async function callEvalApi(org: Org, payload: EvalPayload, headers: ApiHeaders):
 export async function resolveAgent(org: Org, apiName: string): Promise<{ agentId: string; versionId: string }> {
   const conn = org.getConnection();
 
-  const escapedApiName = apiName.replace(/'/g, "''");
+  const escapedApiName = escapeSoqlString(apiName);
 
   const botResult = await conn.query<{ Id: string }>(
     `SELECT Id FROM BotDefinition WHERE DeveloperName = '${escapedApiName}'`
