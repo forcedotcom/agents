@@ -201,38 +201,107 @@ const DEFAULT_CLI_CLIENT_ID = 'PlatformCLI';
 
 const NAMED_USER_TOKEN_ERROR_PREFIX = 'Error obtaining API token';
 
-/**
- * Builds the actions for a failed /agentforce/bootstrap/nameduser call. That endpoint mints the named-user JWT
- * from a browser (UI) session, so it only works when the org accepts the CLI's access token as a `sid`.
- *
- * @param clientId client ID of the connected app or external client app the org was authorized with, if any
- */
-const getNamedUserJwtActions = (clientId?: string): string[] => [
-  ...(clientId && clientId !== DEFAULT_CLI_CLIENT_ID
-    ? [
-        `This org was authorized with your own connected app or external client app (client ID ${clientId}). Ensure it grants access to the SFAP APIs by providing these scopes, then authorize the org again:`,
-      ]
-    : [
-        'If using your own connected app or ECA, ensure it grants access to the SFAP APIs by providing these scopes:',
-      ]),
-  '   * Access chatbot services (chatbot_api)',
-  '   * Access the Salesforce API Platform (sfap_api)',
-  '   * Manage user data via Web browsers (web)',
-  'The access token must be usable as a browser session. Check that the org\'s session settings (for example "Lock sessions to the IP address from which they originated" or a required high-assurance session) don\'t reject it.',
-  'Authorize the org again with "sf org login web --alias <alias>", which uses the default CLI connected app, and retry.',
+// Longest server-provided value (error, error_description, message) echoed in an error message.
+const MAX_ECHOED_VALUE_LENGTH = 200;
+
+// Matches the small HTML page that redirects to the login page, which the login-protected nameduser endpoint
+// returns with a 200 when it doesn't accept the sid.
+const LOGIN_PAGE_PATTERN = /<html|<script|ec=30[12]/i;
+
+const REAUTHORIZE_ACTION = 'Authorize the org again with "sf org login web --alias <alias>" and retry.';
+
+const AGENTFORCE_ACCESS_ACTIONS = [
+  'Check that Agentforce is enabled in the org and that your user has a permission set that grants access to Agentforce.',
+  REAUTHORIZE_ACTION,
 ];
 
 /**
- * Lists the non-secret parts of an unexpected nameduser response: its field names, and the values of the
- * standard error fields. Never includes token values.
+ * Builds the actions for when the org didn't accept the CLI's access token as a browser session. The
+ * /agentforce/bootstrap/nameduser endpoint mints the named-user JWT from a UI session, so it only works when the
+ * access token is usable as a `sid`.
+ *
+ * @param clientId client ID of the connected app or external client app the org was authorized with, if any
+ */
+const getSessionRejectedActions = (clientId?: string): string[] => {
+  const sessionSettings =
+    'Check that the org\'s session settings (for example "Lock sessions to the IP address from which they originated" or a required high-assurance session) don\'t reject the access token as a browser session.';
+  if (clientId && clientId !== DEFAULT_CLI_CLIENT_ID) {
+    return [
+      `This org was authorized with your own connected app or external client app (client ID ${clientId}). Ensure it grants access to the SFAP APIs by providing these scopes, then authorize the org again:`,
+      '   * Access chatbot services (chatbot_api)',
+      '   * Access the Salesforce API Platform (sfap_api)',
+      '   * Manage user data via Web browsers (web)',
+      sessionSettings,
+      'Or authorize the org with "sf org login web --alias <alias>", which uses the default CLI connected app, and retry.',
+    ];
+  }
+  return [
+    `${sessionSettings} These are org settings, so authorizing again with the same connected app doesn't change them.`,
+    `If the access token was revoked or has expired: ${REAUTHORIZE_ACTION}`,
+  ];
+};
+
+const truncate = (value: string): string =>
+  value.length > MAX_ECHOED_VALUE_LENGTH ? `${value.slice(0, MAX_ECHOED_VALUE_LENGTH)}...` : value;
+
+/**
+ * Lists the non-secret parts of an unexpected nameduser response: its field names, and the (truncated) values of
+ * the standard error fields. Never includes token values.
  */
 const describeNamedUserResponse = (response: Record<string, unknown>): string => {
   const details = ['error', 'error_description', 'message']
     .filter((key) => typeof response[key] === 'string' && response[key] !== '')
-    .map((key) => `${key}: ${response[key] as string}`);
+    .map((key) => `${key}: ${truncate(response[key] as string)}`);
   const fields = Object.keys(response);
   details.push(fields.length ? `response fields: ${fields.join(', ')}` : 'response has no fields');
   return details.join('; ');
+};
+
+const namedUserTokenError = (message: string, actions: string[]): SfError =>
+  SfError.create({
+    name: 'ApiAccessError',
+    message: `${NAMED_USER_TOKEN_ERROR_PREFIX}: ${message}`,
+    actions,
+  });
+
+/**
+ * Returns the named-user JWT from a /agentforce/bootstrap/nameduser response, or throws an ApiAccessError that
+ * explains what the org returned instead.
+ */
+const getNamedUserToken = (response: unknown, url: string, clientId?: string): string => {
+  if (!response || (typeof response === 'string' && response.trim() === '')) {
+    throw namedUserTokenError('empty response.', [REAUTHORIZE_ACTION]);
+  }
+
+  // jsforce returns a non-JSON body as a string. Neither the login page nor any other body is included in the error.
+  if (typeof response === 'string') {
+    throw LOGIN_PAGE_PATTERN.test(response)
+      ? namedUserTokenError(
+          `the org returned a login page instead of a token, so it didn't accept the CLI's session for ${url}. This usually means the access token can't be used as a browser session.`,
+          getSessionRejectedActions(clientId)
+        )
+      : namedUserTokenError(`unexpected non-JSON response from ${url}.`, [REAUTHORIZE_ACTION]);
+  }
+
+  if (typeof response !== 'object' || Array.isArray(response)) {
+    throw namedUserTokenError(`unexpected response from ${url}.`, [REAUTHORIZE_ACTION]);
+  }
+
+  // Validate the response contains a valid access token
+  const { access_token: token } = response as NamedUserJwtResponse;
+  if (!token || typeof token !== 'string' || token.trim() === '') {
+    throw namedUserTokenError(
+      `invalid or missing access token (${describeNamedUserResponse(response as Record<string, unknown>)}).`,
+      getSessionRejectedActions(clientId)
+    );
+  }
+
+  // Validate token format is JWT (three parts separated by dots)
+  if (token.split('.').length !== 3) {
+    throw namedUserTokenError('access token does not have valid JWT format.', [REAUTHORIZE_ACTION]);
+  }
+
+  return token;
 };
 
 /**
@@ -271,12 +340,12 @@ export const useNamedUserJwt = async (connection: Connection): Promise<Connectio
     });
   }
 
-  const actions = getNamedUserJwtActions(authFields.clientId);
   const url = `${instanceUrl}/agentforce/bootstrap/nameduser`;
   // For the nameduser endpoint request to work we need to delete the access token
   delete connection.accessToken;
+  let response: unknown;
   try {
-    const response = await connection.request<NamedUserJwtResponse | string>(
+    response = await connection.request<NamedUserJwtResponse | string>(
       {
         method: 'GET',
         url,
@@ -287,60 +356,19 @@ export const useNamedUserJwt = async (connection: Connection): Promise<Connectio
       },
       { retry: { maxRetries: 3 } }
     );
-
-    // Validate the response contains a valid access token
-    if (!response) {
-      throw SfError.create({
-        name: 'ApiAccessError',
-        message: `${NAMED_USER_TOKEN_ERROR_PREFIX}: empty response.`,
-      });
-    }
-
-    // The endpoint is login protected. When the org doesn't accept the sid as a browser session, it returns
-    // 200 with a small HTML page that redirects to the login page, which jsforce hands back as a string.
-    // The page isn't included in the error.
-    if (typeof response !== 'object') {
-      throw SfError.create({
-        name: 'ApiAccessError',
-        message: `${NAMED_USER_TOKEN_ERROR_PREFIX}: the org returned a login page instead of a token, so it didn't accept the CLI's session for ${url}. This usually means the access token can't be used as a browser session.`,
-      });
-    }
-
-    if (!response.access_token || typeof response.access_token !== 'string' || response.access_token.trim() === '') {
-      throw SfError.create({
-        name: 'ApiAccessError',
-        message: `${NAMED_USER_TOKEN_ERROR_PREFIX}: invalid or missing access token (${describeNamedUserResponse(
-          response
-        )}).`,
-      });
-    }
-
-    // Validate token format is JWT (three parts separated by dots)
-    const tokenParts = response.access_token.split('.');
-    if (tokenParts.length !== 3) {
-      throw SfError.create({
-        name: 'ApiAccessError',
-        message: `${NAMED_USER_TOKEN_ERROR_PREFIX}: access token does not have valid JWT format.`,
-      });
-    }
-
-    connection.accessToken = response.access_token;
-    return connection;
   } catch (error) {
-    // If it's already an SfError with our specific message, re-throw it as-is
-    if (error instanceof SfError && error.name === 'ApiAccessError') {
-      error.actions = actions;
-      throw error;
-    }
-    // Otherwise wrap it, keeping the server's message (e.g. a 4xx from the endpoint) visible
+    // Wrap it, keeping the server's message (e.g. a 4xx from the endpoint) and any actions a lower layer set
     const causeMessage = error instanceof Error ? error.message : undefined;
     throw SfError.create({
       name: 'ApiAccessError',
       message: causeMessage ? `${NAMED_USER_TOKEN_ERROR_PREFIX}: ${causeMessage}` : NAMED_USER_TOKEN_ERROR_PREFIX,
       cause: error,
-      actions,
+      actions: error instanceof SfError && error.actions?.length ? error.actions : AGENTFORCE_ACCESS_ACTIONS,
     });
   }
+
+  connection.accessToken = getNamedUserToken(response, url, authFields.clientId);
+  return connection;
 };
 
 // ====================================================
