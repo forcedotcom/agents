@@ -344,6 +344,160 @@ describe('requestWithEndpointFallback', () => {
     expect(requestStub.calledOnce).to.be.true;
   });
 
+  it('should rethrow an HTTP error from a fallback host that has no statusCode', async () => {
+    const error404 = new Error('Not Found');
+    error404.name = 'ERROR_HTTP_404';
+    // jsforce names JSON-body errors by errorCode and sets no statusCode
+    const invalidSession = new Error('Session expired or invalid');
+    invalidSession.name = 'INVALID_SESSION_ID';
+
+    const requestStub = $$.SANDBOX.stub(connection, 'request');
+    requestStub.onCall(0).rejects(error404);
+    requestStub.onCall(1).rejects(invalidSession);
+
+    try {
+      await requestWithEndpointFallback(connection, {
+        method: 'POST',
+        url: 'https://api.salesforce.com/einstein/ai-agent/v1/test',
+        body: '{}',
+      });
+      expect.fail('Expected error was not thrown');
+    } catch (error) {
+      expect(error).to.equal(invalidSession);
+    }
+    expect(requestStub.calledTwice).to.be.true;
+  });
+
+  it('should rethrow a non-404 HTTP error from a fallback host', async () => {
+    const error404 = new Error('Not Found');
+    error404.name = 'ERROR_HTTP_404';
+    const error503 = Object.assign(new Error('Unavailable'), { statusCode: 503 });
+
+    const requestStub = $$.SANDBOX.stub(connection, 'request');
+    requestStub.onCall(0).rejects(error404);
+    requestStub.onCall(1).rejects(error503);
+
+    try {
+      await requestWithEndpointFallback(connection, {
+        method: 'POST',
+        url: 'https://api.salesforce.com/einstein/ai-agent/v1/test',
+        body: '{}',
+      });
+      expect.fail('Expected error was not thrown');
+    } catch (error) {
+      expect(error).to.equal(error503);
+    }
+  });
+
+  it('should report every fallback host as unreachable and keep the 404 message', async () => {
+    const error404 = new Error('Not Found');
+    error404.name = 'ERROR_HTTP_404';
+    const refused = new TypeError('fetch failed', { cause: { code: 'ECONNREFUSED' } });
+
+    const requestStub = $$.SANDBOX.stub(connection, 'request');
+    requestStub.onCall(0).rejects(error404);
+    requestStub.onCall(1).rejects(refused);
+    requestStub.onCall(2).rejects(refused);
+    requestStub.onCall(3).rejects(refused);
+
+    try {
+      await requestWithEndpointFallback(connection, {
+        method: 'POST',
+        url: 'https://api.salesforce.com/einstein/ai-agent/v1/test?a=b',
+        body: '{}',
+      });
+      expect.fail('Expected error was not thrown');
+    } catch (error) {
+      const sfError = error as SfError;
+      expect(sfError.message).to.equal(
+        "Unable to access the Salesforce Agent APIs: POST /einstein/ai-agent/v1/test returned 404 (Not Found) from api.salesforce.com. Couldn't connect to test.api.salesforce.com, dev.api.salesforce.com, stage.api.salesforce.com."
+      );
+      expect(sfError.actions?.join('\n')).to.include('GatewayHawkingInfo');
+    }
+  });
+
+  it('should give fallback hosts no retries', async () => {
+    const error404 = new Error('Not Found');
+    error404.name = 'ERROR_HTTP_404';
+    const requestStub = $$.SANDBOX.stub(connection, 'request');
+    requestStub.onCall(0).rejects(error404);
+    requestStub.onCall(1).resolves({ success: true });
+
+    await requestWithEndpointFallback(
+      connection,
+      { method: 'POST', url: 'https://api.salesforce.com/einstein/ai-agent/v1/test', body: '{}' },
+      { retry: { maxRetries: 3 } }
+    );
+
+    expect(requestStub.getCall(0).args[1]).to.deep.equal({ retry: { maxRetries: 3 } });
+    expect(requestStub.getCall(1).args[1]).to.deep.equal({ retry: { maxRetries: 0 } });
+  });
+
+  for (const instanceUrl of ['https://myorg.my.salesforce.com.stm.salesforce.com', 'https://abc.crm.dev']) {
+    it(`should use the fallback chain for internal instance ${instanceUrl}`, async () => {
+      connection.instanceUrl = instanceUrl;
+      const error404 = new Error('Not Found');
+      error404.name = 'ERROR_HTTP_404';
+      const requestStub = $$.SANDBOX.stub(connection, 'request');
+      requestStub.onCall(0).rejects(error404);
+      requestStub.onCall(1).resolves({ success: true });
+
+      await requestWithEndpointFallback(connection, {
+        method: 'POST',
+        url: 'https://api.salesforce.com/einstein/ai-agent/v1/test',
+        body: '{}',
+      });
+      expect(requestStub.calledTwice).to.be.true;
+    });
+  }
+
+  describe('SF_AGENT_API_ENDPOINTS', () => {
+    afterEach(() => {
+      delete process.env.SF_AGENT_API_ENDPOINTS;
+    });
+
+    it('should try only the listed gateways, even for a customer-domain org', async () => {
+      process.env.SF_AGENT_API_ENDPOINTS = 'stage.api.salesforce.com, test';
+      connection.instanceUrl = 'https://orgfarm-abc123.develop.my.salesforce.com';
+      const error404 = new Error('Not Found');
+      error404.name = 'ERROR_HTTP_404';
+      const requestStub = $$.SANDBOX.stub(connection, 'request').rejects(error404);
+
+      try {
+        await requestWithEndpointFallback(connection, {
+          method: 'POST',
+          url: 'https://api.salesforce.com/einstein/ai-agent/v1/test',
+          body: '{}',
+        });
+        expect.fail('Expected error was not thrown');
+      } catch (error) {
+        expect((error as SfError).data).to.deep.include({
+          attemptedEndpoints: ['api.salesforce.com', 'stage.api.salesforce.com', 'test.api.salesforce.com'],
+        });
+      }
+      expect(requestStub.callCount).to.equal(3);
+    });
+
+    it('should disable the fallback when set to "none"', async () => {
+      process.env.SF_AGENT_API_ENDPOINTS = 'none';
+      const error404 = new Error('Not Found');
+      error404.name = 'ERROR_HTTP_404';
+      const requestStub = $$.SANDBOX.stub(connection, 'request').rejects(error404);
+
+      try {
+        await requestWithEndpointFallback(connection, {
+          method: 'POST',
+          url: 'https://api.salesforce.com/einstein/ai-agent/v1/test',
+          body: '{}',
+        });
+        expect.fail('Expected error was not thrown');
+      } catch (error) {
+        expect((error as SfError).name).to.equal('AgentApiNotFound');
+      }
+      expect(requestStub.calledOnce).to.be.true;
+    });
+  });
+
   describe('production orgs', () => {
     beforeEach(() => {
       connection.instanceUrl = 'https://orgfarm-abc123.develop.my.salesforce.com';

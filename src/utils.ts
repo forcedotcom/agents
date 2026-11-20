@@ -761,6 +761,47 @@ const isInternalOrg = (connection: Connection): boolean => {
 };
 
 /**
+ * The fallback gateway prefixes to try after api.salesforce.com. SF_AGENT_API_ENDPOINTS (comma-separated,
+ * e.g. "stage.,test.") overrides the default for any org, for internal orgs whose domain isn't recognized
+ * as internal. Set it to "none" to never fall back.
+ */
+const getFallbackEndpoints = (connection: Connection): string[] => {
+  const override = process.env.SF_AGENT_API_ENDPOINTS?.trim();
+  if (override) {
+    return override
+      .split(',')
+      .map((e) => e.trim().replace(/api\.salesforce\.com$/, '').replace(/\.?$/, '.'))
+      .filter((e) => e !== '.' && e !== 'none.');
+  }
+  return isInternalOrg(connection) ? INTERNAL_API_ENDPOINTS : [];
+};
+
+const NETWORK_ERROR_CODES = /^(UND_ERR_|ECONN|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|EHOSTUNREACH|ENETUNREACH)/;
+
+/**
+ * True when the error means no HTTP response was received (DNS failure, refused/reset/timed-out connection),
+ * as opposed to an HTTP error from the server. Walks `cause` up to 5 levels.
+ */
+const isNetworkError = (error: unknown): boolean => {
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && current; depth++) {
+    const e = current as { code?: unknown; name?: unknown; message?: unknown; cause?: unknown };
+    if (typeof e.code === 'string' && NETWORK_ERROR_CODES.test(e.code)) return true;
+    if (e.name === 'TypeError' && e.message === 'fetch failed') return true;
+    current = e.cause;
+  }
+  return false;
+};
+
+const getRequestPath = (url: string): string => {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return url.replace(/^https:\/\/[^/]+/, '').split('?')[0];
+  }
+};
+
+/**
  * Makes an API request with automatic endpoint fallback.
  * Tries api.salesforce.com first. For orgs on internal instances only, then tries test., dev., and
  * stage.api.salesforce.com on 404. A fallback host that can't be reached is skipped, so its connection
@@ -777,7 +818,8 @@ export async function requestWithEndpointFallback<T>(
   requestInfo: RequestInfo,
   options?: { retry?: { maxRetries?: number } }
 ): Promise<T> {
-  const endpoints = isInternalOrg(connection) ? ['', ...INTERNAL_API_ENDPOINTS] : [''];
+  const fallbackEndpoints = getFallbackEndpoints(connection);
+  const endpoints = ['', ...fallbackEndpoints];
   const attemptedEndpoints: string[] = [];
   const unreachableEndpoints: string[] = [];
   const logger = CtxLogger.child('AgentApiRequest');
@@ -800,7 +842,8 @@ export async function requestWithEndpointFallback<T>(
           ...requestInfo,
           url: modifiedUrl,
         },
-        options
+        // Fallback hosts get no retries: an unreachable host should be skipped quickly
+        endpoint === '' ? options : { ...options, retry: { ...options?.retry, maxRetries: 0 } }
       );
     } catch (error) {
       const statusCode = getHttpStatusCode(error);
@@ -812,7 +855,7 @@ export async function requestWithEndpointFallback<T>(
         notFoundError ??= error;
         continue; // Try next endpoint
       }
-      if (endpoint !== '' && statusCode === undefined) {
+      if (endpoint !== '' && statusCode === undefined && isNetworkError(error)) {
         // A fallback host we couldn't reach (connect timeout, DNS failure). Skip it rather than
         // replacing the 404 from api.salesforce.com with a bare "fetch failed".
         unreachableEndpoints.push(host);
@@ -828,14 +871,19 @@ export async function requestWithEndpointFallback<T>(
     unreachableEndpoints,
   });
   const username = connection.getUsername() ?? '';
-  const requestPath = requestInfo.url.replace(/^https:\/\/[^/]+/, '');
+  const requestPath = getRequestPath(requestInfo.url);
   const actions = [
     'Make sure Agentforce is enabled in Setup and the org is licensed for it. Scratch orgs need the Einstein1AIPlatform feature in their definition file.',
     `Make sure the user '${username}' has the necessary permissions and authorization to use Agentforce.`,
   ];
   if (requestPath.includes('/authoring/agents')) {
     actions.push(
-      "'sf agent validate authoring-bundle' can pass on an org that can't publish: publishing uses a separate API that needs the org to be entitled to create agents."
+      "'sf agent validate authoring-bundle' can pass on an org that can't publish: publishing calls a different Agent API endpoint, which may require additional Agentforce entitlements on the org."
+    );
+  }
+  if (fallbackEndpoints.length) {
+    actions.push(
+      'Confirm which SFAP gateway the org uses (Setup > GatewayHawkingInfo). To try specific gateways, set SF_AGENT_API_ENDPOINTS, for example "stage.,test.".'
     );
   }
   const notFoundHosts = attemptedEndpoints.filter((host) => !unreachableEndpoints.includes(host));
