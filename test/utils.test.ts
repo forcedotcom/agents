@@ -424,7 +424,9 @@ describe('useNamedUserJwt', () => {
       expect((error as SfError).name).to.equal('ApiAccessError');
       expect((error as SfError).message).to.equal('Error obtaining API token: empty response.');
       expect((error as SfError).actions).to.exist;
-      expect((error as SfError).actions).to.have.lengthOf(4);
+      expect((error as SfError).actions).to.deep.equal([
+        'Authorize the org again with "sf org login web --alias <alias>" and retry.',
+      ]);
     }
   });
 
@@ -449,9 +451,11 @@ describe('useNamedUserJwt', () => {
     } catch (error) {
       expect(error).to.be.instanceOf(SfError);
       expect((error as SfError).name).to.equal('ApiAccessError');
-      expect((error as SfError).message).to.equal('Error obtaining API token: invalid or missing access token.');
+      expect((error as SfError).message).to.equal(
+        'Error obtaining API token: invalid or missing access token (response fields: token_type, scope).'
+      );
       expect((error as SfError).actions).to.exist;
-      expect((error as SfError).actions).to.have.lengthOf(4);
+      expect((error as SfError).actions?.join('\n')).to.include('session settings');
     }
   });
 
@@ -476,9 +480,11 @@ describe('useNamedUserJwt', () => {
     } catch (error) {
       expect(error).to.be.instanceOf(SfError);
       expect((error as SfError).name).to.equal('ApiAccessError');
-      expect((error as SfError).message).to.equal('Error obtaining API token: invalid or missing access token.');
+      expect((error as SfError).message).to.equal(
+        'Error obtaining API token: invalid or missing access token (response fields: access_token, token_type).'
+      );
       expect((error as SfError).actions).to.exist;
-      expect((error as SfError).actions).to.have.lengthOf(4);
+      expect((error as SfError).actions?.join('\n')).to.include('session settings');
     }
   });
 
@@ -503,9 +509,11 @@ describe('useNamedUserJwt', () => {
     } catch (error) {
       expect(error).to.be.instanceOf(SfError);
       expect((error as SfError).name).to.equal('ApiAccessError');
-      expect((error as SfError).message).to.equal('Error obtaining API token: invalid or missing access token.');
+      expect((error as SfError).message).to.equal(
+        'Error obtaining API token: invalid or missing access token (response fields: access_token, token_type).'
+      );
       expect((error as SfError).actions).to.exist;
-      expect((error as SfError).actions).to.have.lengthOf(4);
+      expect((error as SfError).actions?.join('\n')).to.include('session settings');
     }
   });
 
@@ -535,7 +543,9 @@ describe('useNamedUserJwt', () => {
         'Error obtaining API token: access token does not have valid JWT format.'
       );
       expect((error as SfError).actions).to.exist;
-      expect((error as SfError).actions).to.have.lengthOf(4);
+      expect((error as SfError).actions).to.deep.equal([
+        'Authorize the org again with "sf org login web --alias <alias>" and retry.',
+      ]);
     }
   });
 
@@ -565,7 +575,9 @@ describe('useNamedUserJwt', () => {
         'Error obtaining API token: access token does not have valid JWT format.'
       );
       expect((error as SfError).actions).to.exist;
-      expect((error as SfError).actions).to.have.lengthOf(4);
+      expect((error as SfError).actions).to.deep.equal([
+        'Authorize the org again with "sf org login web --alias <alias>" and retry.',
+      ]);
     }
   });
 
@@ -586,8 +598,254 @@ describe('useNamedUserJwt', () => {
     } catch (error) {
       expect(error).to.be.instanceOf(SfError);
       expect((error as SfError).name).to.equal('ApiAccessError');
-      expect((error as SfError).message).to.equal('Error obtaining API token');
+      expect((error as SfError).message).to.equal('Error obtaining API token: Network error');
       expect((error as SfError).cause).to.equal(networkError);
+      expect((error as SfError).actions?.join('\n')).to.include('Agentforce is enabled');
+    }
+  });
+
+  it('should explain a login page returned with 200 instead of a token', async () => {
+    $$.SANDBOX.stub(connection, 'getAuthInfoFields').returns({});
+    $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
+      accessToken: 'valid-access-token',
+      instanceUrl: 'https://test.my.salesforce.com',
+    });
+
+    // When the sid isn't accepted as a browser session, the login-protected endpoint returns 200 with an
+    // HTML redirect to the login page, which jsforce returns as a string.
+    const loginPage =
+      '<html><head><script>window.location.href="/?ec=302&startURL=%2Fagentforce%2Fbootstrap%2Fnameduser";</script></head></html>';
+    $$.SANDBOX.stub(connection, 'request').resolves(loginPage);
+
+    try {
+      await useNamedUserJwt(connection);
+      expect.fail('Expected error was not thrown');
+    } catch (error) {
+      expect(error).to.be.instanceOf(SfError);
+      const sfError = error as SfError;
+      expect(sfError.name).to.equal('ApiAccessError');
+      expect(sfError.message).to.include('the org returned a login page instead of a token');
+      expect(sfError.message).to.include('https://test.my.salesforce.com/agentforce/bootstrap/nameduser');
+      expect(sfError.message).to.not.include('<script>');
+      expect(sfError.message).to.not.include('valid-access-token');
+      expect(sfError.actions?.join('\n')).to.include('session settings');
+      expect(sfError.actions?.join('\n')).to.include('sf org login web');
+    }
+  });
+
+  it('should include error fields but not token values when access_token is missing', async () => {
+    $$.SANDBOX.stub(connection, 'getAuthInfoFields').returns({});
+    $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
+      accessToken: 'valid-access-token',
+      instanceUrl: 'https://test.my.salesforce.com',
+    });
+
+    $$.SANDBOX.stub(connection, 'request').resolves({
+      error: 'invalid_session',
+      // eslint-disable-next-line camelcase
+      error_description: 'Session is not a named user session',
+      // eslint-disable-next-line camelcase
+      refresh_token: 'secret-refresh-value',
+    });
+
+    try {
+      await useNamedUserJwt(connection);
+      expect.fail('Expected error was not thrown');
+    } catch (error) {
+      const sfError = error as SfError;
+      expect(sfError.name).to.equal('ApiAccessError');
+      expect(sfError.message).to.equal(
+        'Error obtaining API token: invalid or missing access token (error: invalid_session; error_description: Session is not a named user session; response fields: error, error_description, refresh_token).'
+      );
+      expect(sfError.message).to.not.include('secret-refresh-value');
+    }
+  });
+
+  it('should name the custom connected app in the actions', async () => {
+    $$.SANDBOX.stub(connection, 'getAuthInfoFields').returns({ clientId: 'MyCustomEcaClientId' });
+    $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
+      accessToken: 'valid-access-token',
+      instanceUrl: 'https://test.my.salesforce.com',
+    });
+    $$.SANDBOX.stub(connection, 'request').resolves('<html>login</html>');
+
+    try {
+      await useNamedUserJwt(connection);
+      expect.fail('Expected error was not thrown');
+    } catch (error) {
+      const actions = (error as SfError).actions ?? [];
+      expect(actions[0]).to.include('your own connected app or external client app (client ID MyCustomEcaClientId)');
+      expect(actions).to.include('   * Manage user data via Web browsers (web)');
+    }
+  });
+
+  it('should lead with session settings for the default CLI connected app', async () => {
+    $$.SANDBOX.stub(connection, 'getAuthInfoFields').returns({ clientId: 'PlatformCLI' });
+    $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
+      accessToken: 'valid-access-token',
+      instanceUrl: 'https://test.my.salesforce.com',
+    });
+    $$.SANDBOX.stub(connection, 'request').resolves('<html>login</html>');
+
+    try {
+      await useNamedUserJwt(connection);
+      expect.fail('Expected error was not thrown');
+    } catch (error) {
+      const actions = (error as SfError).actions ?? [];
+      expect(actions[0]).to.include("Check that the org's session settings");
+      expect(actions[0]).to.include("authorizing again with the same connected app doesn't change them");
+      expect(actions.join('\n')).to.not.include('your own connected app');
+    }
+  });
+
+  it('should keep the server message when the endpoint returns an HTTP error', async () => {
+    $$.SANDBOX.stub(connection, 'getAuthInfoFields').returns({});
+    $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
+      accessToken: 'valid-access-token',
+      instanceUrl: 'https://test.my.salesforce.com',
+    });
+
+    const httpError = new SfError('User does not have access to Agentforce', 'ERROR_HTTP_403');
+    $$.SANDBOX.stub(connection, 'request').rejects(httpError);
+
+    try {
+      await useNamedUserJwt(connection);
+      expect.fail('Expected error was not thrown');
+    } catch (error) {
+      const sfError = error as SfError;
+      expect(sfError.name).to.equal('ApiAccessError');
+      expect(sfError.message).to.equal('Error obtaining API token: User does not have access to Agentforce');
+      expect(sfError.cause).to.equal(httpError);
+      expect(sfError.actions?.join('\n')).to.include('Agentforce is enabled');
+      expect(sfError.actions?.join('\n')).to.not.include('(web)');
+    }
+  });
+
+  it('should cap and flatten a long multi-line HTTP error message, keeping the full text on the cause', async () => {
+    $$.SANDBOX.stub(connection, 'getAuthInfoFields').returns({});
+    $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
+      accessToken: 'valid-access-token',
+      instanceUrl: 'https://test.my.salesforce.com',
+    });
+
+    const httpError = new SfError(`Bad gateway\n\n   upstream:\n${'y'.repeat(500)}`, 'ERROR_HTTP_502');
+    $$.SANDBOX.stub(connection, 'request').rejects(httpError);
+
+    try {
+      await useNamedUserJwt(connection);
+      expect.fail('Expected error was not thrown');
+    } catch (error) {
+      const sfError = error as SfError;
+      expect(sfError.message).to.equal(
+        `Error obtaining API token: Bad gateway upstream: ${'y'.repeat(200 - 'Bad gateway upstream: '.length)}...`
+      );
+      expect(sfError.message).to.not.include('\n');
+      expect(sfError.cause).to.equal(httpError);
+    }
+  });
+
+  it('should keep the actions of a lower-layer ApiAccessError', async () => {
+    $$.SANDBOX.stub(connection, 'getAuthInfoFields').returns({});
+    $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
+      accessToken: 'valid-access-token',
+      instanceUrl: 'https://test.my.salesforce.com',
+    });
+
+    const lowerError = new SfError('Lower layer failed', 'ApiAccessError', ['Lower layer action']);
+    $$.SANDBOX.stub(connection, 'request').rejects(lowerError);
+
+    try {
+      await useNamedUserJwt(connection);
+      expect.fail('Expected error was not thrown');
+    } catch (error) {
+      const sfError = error as SfError;
+      expect(sfError.message).to.equal('Error obtaining API token: Lower layer failed');
+      expect(sfError.cause).to.equal(lowerError);
+      expect(sfError.actions).to.deep.equal(['Lower layer action']);
+    }
+  });
+
+  it('should treat a whitespace-only body as an empty response', async () => {
+    $$.SANDBOX.stub(connection, 'getAuthInfoFields').returns({});
+    $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
+      accessToken: 'valid-access-token',
+      instanceUrl: 'https://test.my.salesforce.com',
+    });
+    $$.SANDBOX.stub(connection, 'request').resolves('  \n ');
+
+    try {
+      await useNamedUserJwt(connection);
+      expect.fail('Expected error was not thrown');
+    } catch (error) {
+      expect((error as SfError).message).to.equal('Error obtaining API token: empty response.');
+    }
+  });
+
+  it('should not call a non-HTML text body a login page', async () => {
+    $$.SANDBOX.stub(connection, 'getAuthInfoFields').returns({});
+    $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
+      accessToken: 'valid-access-token',
+      instanceUrl: 'https://test.my.salesforce.com',
+    });
+    $$.SANDBOX.stub(connection, 'request').resolves('Upstream proxy error');
+
+    try {
+      await useNamedUserJwt(connection);
+      expect.fail('Expected error was not thrown');
+    } catch (error) {
+      const sfError = error as SfError;
+      expect(sfError.message).to.equal(
+        'Error obtaining API token: unexpected non-JSON response from https://test.my.salesforce.com/agentforce/bootstrap/nameduser.'
+      );
+      expect(sfError.actions?.join('\n')).to.not.include('(web)');
+    }
+  });
+
+  it('should reject an array response', async () => {
+    $$.SANDBOX.stub(connection, 'getAuthInfoFields').returns({});
+    $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
+      accessToken: 'valid-access-token',
+      instanceUrl: 'https://test.my.salesforce.com',
+    });
+    // eslint-disable-next-line camelcase
+    $$.SANDBOX.stub(connection, 'request').resolves([{ access_token: 'a.b.c' }]);
+
+    try {
+      await useNamedUserJwt(connection);
+      expect.fail('Expected error was not thrown');
+    } catch (error) {
+      expect((error as SfError).message).to.equal(
+        'Error obtaining API token: unexpected response from https://test.my.salesforce.com/agentforce/bootstrap/nameduser.'
+      );
+    }
+  });
+
+  it('should truncate long error values and never echo the token value', async () => {
+    $$.SANDBOX.stub(connection, 'getAuthInfoFields').returns({});
+    $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
+      accessToken: 'valid-access-token',
+      instanceUrl: 'https://test.my.salesforce.com',
+    });
+    $$.SANDBOX.stub(connection, 'request').resolves({
+      // eslint-disable-next-line camelcase
+      access_token: '   ',
+      error: 'invalid_session',
+      // eslint-disable-next-line camelcase
+      error_description: 'x'.repeat(500),
+      // eslint-disable-next-line camelcase
+      id_token: 'secret-id-token-value',
+    });
+
+    try {
+      await useNamedUserJwt(connection);
+      expect.fail('Expected error was not thrown');
+    } catch (error) {
+      const sfError = error as SfError;
+      expect(sfError.message).to.include(`error_description: ${'x'.repeat(200)}...;`);
+      expect(sfError.message).to.not.include('x'.repeat(201));
+      expect(sfError.message).to.include('response fields: access_token, error, error_description, id_token');
+      expect(sfError.message).to.not.include('secret-id-token-value');
+      expect(sfError.message).to.not.include('valid-access-token');
     }
   });
 });
