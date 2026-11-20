@@ -42,6 +42,10 @@ Conversation-level test spec names agent '%s', but no resolved agentId and agent
 
 Conversation-level test spec must define at least one test case under `testCases:`.
 
+# cltTooManyTestCases
+
+Conversation-level test spec has %s test cases. A spec can have at most %s. Split the cases across several specs.
+
 # cltMissingConversationGoal
 
 Conversation-level test case %s must define a non-blank `conversationGoal:`.
@@ -82,9 +86,9 @@ Conversation-level scorer '%s' on test case %s requires an `expected:` value.
 
 Conversation-level scorer '%s' on test case %s can't run without saving the suite. Running without saving supports only: %s. Save the suite to use '%s'.
 
-# cltUnknownScorerName
+# cltUnsupportedScorer
 
-Conversation-level test case %s: unknown scorer name '%s'. The server validates it when the test runs.
+Conversation-level scorer '%s' on test case %s isn't supported for conversation-level tests. Supported scorers: %s.
 
 # cltEvaluationModeIgnored
 

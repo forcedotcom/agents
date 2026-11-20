@@ -15,69 +15,51 @@
  */
 
 /**
- * Scorers accepted by conversation-level tests (CLT), keyed by the API key the CLI sends.
+ * Scorers offered for conversation-level tests (CLT), keyed by the API key the CLI sends.
  *
- * Mirrors Core's `AITestingOOTBEvaluations` entries that support `ColumnType.AGENT_TEST`:
- * - `needsExpected` is `requiresReferenceColumn()` (Core rejects the scorer without `expectedValue`).
+ * Matches the Testing Center wizard rather than everything Core's create-and-run accepts: the server
+ * list is `SFEvaluationServiceUtilImpl.getAllSelectableMetrics()` (Aura `getAllAvailableMetrics`), and the
+ * wizard keeps the conversation-only evaluations plus `conversationAssertions()` for CONVERSATION_LEVEL.
+ * Create-and-run also accepts the turn-level quality scorers (coherence, latency, ...), but the UI never
+ * offers them for CLT, so the CLI doesn't either.
+ *
+ * - `needsExpected` is Core's `requiresReferenceColumn()` (the scorer is rejected without `expectedValue`).
  * - `ephemeral` is membership in `RunEphemeralConversationTestResource.SUPPORTED_SCORERS`.
+ * - `uiLabel` is the wizard label, so users can map what they see in the UI to the YAML key.
  *
- * A run without saving accepts only those five; a saved suite (create-and-run) accepts all of them.
+ * Org gates still apply on the server: `acceptance_criteria` needs
+ * `com.salesforce.agentforce.testing.center.acceptanceCriteria`, and `displayed_actions_assertion` needs
+ * scoring for CLT enabled. The CLI can't read gates, so a closed gate surfaces as Core's error.
  *
- * The `(string & NonNullable<unknown>)` branch keeps the name type open so a scorer from a future Core
- * release still type-checks. `validateCltSpec` warns on unknown names; Core is the runtime gate.
- *
- * Update when Core adds an AGENT_TEST scorer.
+ * No Connect API returns this list today; update it when the wizard's CLT scorer list changes.
  */
-export type CltScorerName = KnownCltScorerName | (string & NonNullable<unknown>);
-
-/** The closed set used for catalog lookups and autocomplete. */
-export type KnownCltScorerName =
+export type CltScorerName =
   | 'task_resolution'
   | 'acceptance_criteria'
   | 'topic_sequence_match'
   | 'action_sequence_match'
   | 'agent_handoff_match'
-  | 'displayed_actions_assertion'
-  | 'response_match'
-  | 'bot_response_rating'
-  | 'custom_llm_evaluation'
-  | 'coherence'
-  | 'conciseness'
-  | 'factuality'
-  | 'completeness'
-  | 'instruction_following'
-  | 'instruction_adherence'
-  | 'expression_eval'
-  | 'output_latency_milliseconds';
+  | 'displayed_actions_assertion';
 
 /** Catalog row describing a single CLT scorer. */
 export type CltScorerEntry = {
   needsExpected: boolean;
   /** True when a run without saving (ephemeral-run) accepts the scorer. */
   ephemeral: boolean;
+  /** Label shown in the Testing Center wizard. */
+  uiLabel: string;
 };
 
 /* eslint-disable camelcase */
-export const CltScorerCatalog: Readonly<Record<KnownCltScorerName, CltScorerEntry>> = {
-  task_resolution: { needsExpected: false, ephemeral: true },
-  acceptance_criteria: { needsExpected: true, ephemeral: true },
-  topic_sequence_match: { needsExpected: true, ephemeral: true },
-  action_sequence_match: { needsExpected: true, ephemeral: true },
-  agent_handoff_match: { needsExpected: true, ephemeral: true },
-  displayed_actions_assertion: { needsExpected: true, ephemeral: false },
-  response_match: { needsExpected: true, ephemeral: false },
-  bot_response_rating: { needsExpected: true, ephemeral: false },
-  custom_llm_evaluation: { needsExpected: true, ephemeral: false },
-  coherence: { needsExpected: false, ephemeral: false },
-  conciseness: { needsExpected: false, ephemeral: false },
-  factuality: { needsExpected: false, ephemeral: false },
-  completeness: { needsExpected: false, ephemeral: false },
-  instruction_following: { needsExpected: false, ephemeral: false },
-  instruction_adherence: { needsExpected: false, ephemeral: false },
-  expression_eval: { needsExpected: false, ephemeral: false },
-  output_latency_milliseconds: { needsExpected: false, ephemeral: false },
+export const CltScorerCatalog: Readonly<Record<CltScorerName, CltScorerEntry>> = {
+  task_resolution: { needsExpected: false, ephemeral: true, uiLabel: 'Task Resolution' },
+  acceptance_criteria: { needsExpected: true, ephemeral: true, uiLabel: 'Success Criteria' },
+  topic_sequence_match: { needsExpected: true, ephemeral: true, uiLabel: 'Subagents Assertion' },
+  action_sequence_match: { needsExpected: true, ephemeral: true, uiLabel: 'Action Assertion' },
+  agent_handoff_match: { needsExpected: true, ephemeral: true, uiLabel: 'Agent Handoff' },
+  displayed_actions_assertion: { needsExpected: true, ephemeral: false, uiLabel: 'Displayed Actions' },
 } as const;
 /* eslint-enable camelcase */
 
-export const isCltScorerName = (s: string): s is KnownCltScorerName =>
+export const isCltScorerName = (s: string): s is CltScorerName =>
   Object.prototype.hasOwnProperty.call(CltScorerCatalog, s);

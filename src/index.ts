@@ -165,7 +165,6 @@ export {
 } from './ngtScorerCatalog';
 export {
   type CltScorerName,
-  type KnownCltScorerName,
   type CltScorerEntry,
   CltScorerCatalog,
   isCltScorerName,
@@ -174,6 +173,7 @@ export {
   type CltRunTarget,
   CLT_PERSONAS,
   CLT_MAX_TURNS,
+  CLT_MAX_TEST_CASES,
   isCltSpec,
   validateCltSpec,
   cltSpecToEphemeralInput,

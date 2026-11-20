@@ -20,6 +20,7 @@ import { expect } from 'chai';
 import { parse } from 'yaml';
 import { Lifecycle, SfError } from '@salesforce/core';
 import {
+  CLT_MAX_TEST_CASES,
   CLT_MAX_TURNS,
   CltScorerCatalog,
   cltSpecToCreateAndRunInput,
@@ -89,19 +90,23 @@ describe('cltSpec', () => {
   });
 
   describe('scorer catalog', () => {
-    it('allows exactly five scorers without saving', () => {
-      const ephemeral = Object.entries(CltScorerCatalog)
-        .filter(([, e]) => e.ephemeral)
-        .map(([n]) => n);
-      expect(ephemeral).to.have.members([
+    it('matches the Testing Center wizard scorers for conversation-level tests', () => {
+      expect(Object.keys(CltScorerCatalog)).to.have.members([
         'task_resolution',
         'acceptance_criteria',
         'topic_sequence_match',
         'action_sequence_match',
         'agent_handoff_match',
+        'displayed_actions_assertion',
       ]);
+      const savedOnly = Object.entries(CltScorerCatalog)
+        .filter(([, e]) => !e.ephemeral)
+        .map(([n]) => n);
+      expect(savedOnly).to.deep.equal(['displayed_actions_assertion']);
+      expect(CltScorerCatalog.acceptance_criteria.uiLabel).to.equal('Success Criteria');
+      expect(CltScorerCatalog.topic_sequence_match.uiLabel).to.equal('Subagents Assertion');
       expect(isCltScorerName('task_resolution')).to.be.true;
-      expect(isCltScorerName('made_up')).to.be.false;
+      expect(isCltScorerName('coherence')).to.be.false;
       expect(isCltScorerName('toString')).to.be.false;
     });
   });
@@ -124,11 +129,12 @@ describe('cltSpec', () => {
       expect(() => validateCltSpec({ ...minimal(), maxTurns: 30 }, { target: 'ephemeral' })).to.not.throw();
       expect(() => validateCltSpec({ ...minimal(), maxTurns: 100 }, { target: 'saved' })).to.not.throw();
       expect(CLT_MAX_TURNS).to.deep.equal({ ephemeral: 30, saved: 100 });
+      expect(CLT_MAX_TEST_CASES).to.equal(250);
     });
 
-    it('accepts scorers the ephemeral endpoint rejects when saving', () => {
+    it('accepts displayed_actions_assertion when saving', () => {
       const spec = edited((s) => {
-        firstCase(s).scorers = [{ name: 'coherence' }, { name: 'response_match', expected: 'A refund is issued.' }];
+        firstCase(s).scorers = [{ name: 'displayed_actions_assertion', expected: '["Card"]' }];
       });
       expect(() => validateCltSpec(spec, { target: 'saved' })).to.not.throw();
     });
@@ -153,14 +159,6 @@ describe('cltSpec', () => {
   });
 
   describe('validateCltSpec: warnings', () => {
-    it('warns (does not throw) on an unknown scorer name', () => {
-      const spec = edited((s) => {
-        firstCase(s).scorers = [{ name: 'made_up_scorer' }];
-      });
-      expect(() => validateCltSpec(spec, { target: 'ephemeral' })).to.not.throw();
-      expect(warnings().some((w) => w.includes('made_up_scorer') && w.includes('test case 1'))).to.be.true;
-    });
-
     it('warns that evaluationMode is ignored without saving', () => {
       validateCltSpec({ ...minimal(), evaluationMode: 'TEXT' }, { target: 'ephemeral' });
       expect(warnings().some((w) => w.includes('evaluationMode'))).to.be.true;
@@ -419,9 +417,31 @@ describe('cltSpec', () => {
       },
       {
         title: 'saved-only scorer without saving',
-        spec: () => edited((s) => (firstCase(s).scorers = [{ name: 'coherence' }])),
+        spec: () =>
+          edited((s) => (firstCase(s).scorers = [{ name: 'displayed_actions_assertion', expected: '["Card"]' }])),
         error: 'cltScorerNotEphemeral',
         contains: 'task_resolution',
+      },
+      {
+        title: 'a turn-level scorer the wizard does not offer for CLT',
+        spec: () => edited((s) => (firstCase(s).scorers = [{ name: 'coherence' }])),
+        error: 'cltUnsupportedScorer',
+        contains: 'Supported scorers: task_resolution',
+        target: 'saved',
+      },
+      {
+        title: 'an unknown scorer name',
+        spec: () => edited((s) => (firstCase(s).scorers = [{ name: 'made_up_scorer' }])),
+        error: 'cltUnsupportedScorer',
+        contains: "'made_up_scorer'",
+      },
+      {
+        title: 'more than 250 test cases',
+        spec: () =>
+          edited((s) => (s.testCases = Array.from({ length: 251 }, () => ({ conversationGoal: 'Return an item.' })))),
+        error: 'cltTooManyTestCases',
+        contains: '251',
+        target: 'saved',
       },
     ];
 

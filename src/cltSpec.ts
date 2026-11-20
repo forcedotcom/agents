@@ -49,6 +49,13 @@ export const CLT_PERSONAS: readonly ConversationPersona[] = ['DEFAULT', 'FRUSTRA
  */
 export const CLT_MAX_TURNS: Readonly<Record<CltRunTarget, number>> = { ephemeral: 30, saved: 100 };
 
+/**
+ * Most test cases in one spec. Core's saved-suite limit (`getMaxConversationGoalsPerSuite`) is 250. A run
+ * without saving allows 10, or 250 with the org's devagentenhancement gate; the CLI can't read the gate, so
+ * that lower limit is left to the server.
+ */
+export const CLT_MAX_TEST_CASES = 250;
+
 const EVALUATION_MODES = ['TEXT', 'TEXT_VOICE'];
 const CONTEXT_PREFIX = '$Context.';
 
@@ -84,7 +91,7 @@ export const isCltSpec = (spec: unknown): spec is CltTestSpec =>
  *
  * The rules mirror Core's create-and-run and ephemeral-run validation so users get a clear local
  * error instead of a server 400. Throws on the first failure. Unknown fields are errors, so a typo
- * can't be silently dropped. Unknown scorer names only warn: Core is the authoritative scorer gate.
+ * can't be silently dropped. Scorers are limited to the ones the Testing Center wizard offers for CLT.
  *
  * @param spec - The parsed YAML spec.
  * @param ctx.target - `ephemeral` (run without saving) or `saved` (create-and-run).
@@ -110,6 +117,9 @@ export const validateCltSpec = (spec: CltTestSpec, ctx: { target: CltRunTarget }
 
   if (!Array.isArray(raw.testCases) || raw.testCases.length === 0) {
     throw cltError('cltMissingTestCases');
+  }
+  if (raw.testCases.length > CLT_MAX_TEST_CASES) {
+    throw cltError('cltTooManyTestCases', [raw.testCases.length, CLT_MAX_TEST_CASES]);
   }
   raw.testCases.forEach((testCase: unknown, tcIdx) => validateTestCase(testCase, tcIdx + 1, ctx.target));
 };
@@ -318,8 +328,7 @@ const validateScorers = (scorers: unknown, caseNumber: number, target: CltRunTar
     }
     const name = scorer.name;
     if (!isCltScorerName(name)) {
-      void Lifecycle.getInstance().emitWarning(messages.getMessage('cltUnknownScorerName', [caseNumber, name]));
-      return;
+      throw cltError('cltUnsupportedScorer', [name, caseNumber, Object.keys(CltScorerCatalog).join(', ')]);
     }
     const entry = CltScorerCatalog[name];
     if (entry.needsExpected && !isNonBlankString(scorer.expected)) {
