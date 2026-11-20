@@ -19,6 +19,7 @@ import { FileProperties } from '@salesforce/source-deploy-retrieve';
 import { type ApexLog } from '@salesforce/types/tooling';
 import { metric } from './utils';
 import type { NgtScorerName } from './ngtScorerCatalog';
+import type { CltScorerName } from './cltScorerCatalog';
 
 // ====================================================
 //     Compilation API exit codes
@@ -635,6 +636,112 @@ export type NgtTestSpec =
       subjectVersion?: string;
       testCases: NgtPromptTestCase[];
     };
+
+// ====================================================
+//    Conversation-Level Test (CLT) Types
+// ====================================================
+
+// Authoring (YAML) types for CLT specs. A spec is CLT when `testScope` is `CONVERSATION_LEVEL`.
+
+export type AiTestScope = 'TURN_LEVEL' | 'CONVERSATION_LEVEL';
+
+/** Simulated-user persona (Core `ConversationPersonas`). */
+export type ConversationPersona = 'DEFAULT' | 'FRUSTRATED' | 'DISTRACTED_DAD' | 'ACCENT';
+
+/** Saved-suite evaluation mode. Not accepted when running without saving. */
+export type ConversationEvaluationMode = 'TEXT' | 'TEXT_VOICE';
+
+/** A draft (not yet published) agent, identified by its project and project version. */
+export type CltProject = {
+  projectId: string;
+  projectVersionId: string;
+};
+
+export type CltTestCaseScorer = {
+  name: CltScorerName;
+  expected?: string;
+};
+
+export type CltConnections = {
+  /** One of the agent's connection types, for example `Messaging`. */
+  surfaceType: string;
+};
+
+export type CltTestCase = {
+  conversationGoal: string;
+  contextVariables?: NgtContextVar[];
+  connections?: CltConnections;
+  /** Omit to score with `task_resolution` only (the server default). */
+  scorers?: CltTestCaseScorer[];
+};
+
+export type CltSimulation = {
+  enabled?: boolean;
+  excludedActions?: Array<{ subagent: string; actions: string[] }>;
+};
+
+export type CltTestSpec = {
+  name: string;
+  description?: string;
+  testScope: 'CONVERSATION_LEVEL';
+  subjectType?: 'AGENT';
+  /** Published agent API name. Exactly one of `subjectName` or `project`. */
+  subjectName?: string;
+  subjectVersion?: string;
+  /** Draft agent. Exactly one of `subjectName` or `project`. */
+  project?: CltProject;
+  persona?: ConversationPersona;
+  /** One limit for the whole suite. */
+  maxTurns?: number;
+  evaluationMode?: ConversationEvaluationMode;
+  simulation?: CltSimulation;
+  testCases: CltTestCase[];
+};
+
+// Request (API) types the CLT converters produce. Field names match the Connect API inputs.
+
+/** Agent identity sent to the conversation-test endpoints, after `subjectName` is resolved. */
+export type ConversationAgentTarget =
+  | { agentId: string; agentVersionId: string }
+  | { projectId: string; projectVersionId: string };
+
+export type ConversationTestScorerInput = {
+  name: string;
+  expectedValue?: string;
+};
+
+export type ConversationTestCaseInput = {
+  number: number;
+  maxTurns?: number;
+  conversationGoal: string;
+  contextVariables?: Array<{ variableName: string; variableValue: string }>;
+  connections?: { surfaceConfig: { surfaceType: string } };
+  scorers?: ConversationTestScorerInput[];
+};
+
+export type ConversationPreviewConfig = {
+  excludedActionsFromSimulate: Array<{ subagent: string; actions: Array<{ name: string }> }>;
+};
+
+/** Body for `POST conversation-tests/ephemeral-run` (run without saving). */
+export type EphemeralConversationTestInput = ConversationAgentTarget & {
+  testCases: ConversationTestCaseInput[];
+  persona?: ConversationPersona;
+  maxTurns?: number;
+  enableSimulationMode?: boolean;
+  previewConfig?: ConversationPreviewConfig;
+};
+
+/** Body for `POST conversation-test-suites/create-and-run` (save the suite, then run it). */
+export type CreateAndRunConversationTestSuiteInput = ConversationAgentTarget & {
+  name: string;
+  description?: string;
+  evaluationMode?: ConversationEvaluationMode;
+  persona?: ConversationPersona;
+  testCases: ConversationTestCaseInput[];
+  enableSimulationMode?: boolean;
+  previewConfig?: ConversationPreviewConfig;
+};
 
 // Metadata (XML) types for AiTestingDefinition.
 
