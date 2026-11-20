@@ -196,6 +196,45 @@ export const findLocalAgents = (dir: string): string[] => {
 
   return results;
 };
+// Client ID of the connected app `sf org login web` uses by default (DEFAULT_CONNECTED_APP_INFO in @salesforce/core).
+const DEFAULT_CLI_CLIENT_ID = 'PlatformCLI';
+
+const NAMED_USER_TOKEN_ERROR_PREFIX = 'Error obtaining API token';
+
+/**
+ * Builds the actions for a failed /agentforce/bootstrap/nameduser call. That endpoint mints the named-user JWT
+ * from a browser (UI) session, so it only works when the org accepts the CLI's access token as a `sid`.
+ *
+ * @param clientId client ID of the connected app or external client app the org was authorized with, if any
+ */
+const getNamedUserJwtActions = (clientId?: string): string[] => [
+  ...(clientId && clientId !== DEFAULT_CLI_CLIENT_ID
+    ? [
+        `This org was authorized with your own connected app or external client app (client ID ${clientId}). Ensure it grants access to the SFAP APIs by providing these scopes, then authorize the org again:`,
+      ]
+    : [
+        'If using your own connected app or ECA, ensure it grants access to the SFAP APIs by providing these scopes:',
+      ]),
+  '   * Access chatbot services (chatbot_api)',
+  '   * Access the Salesforce API Platform (sfap_api)',
+  '   * Manage user data via Web browsers (web)',
+  'The access token must be usable as a browser session. Check that the org\'s session settings (for example "Lock sessions to the IP address from which they originated" or a required high-assurance session) don\'t reject it.',
+  'Authorize the org again with "sf org login web --alias <alias>", which uses the default CLI connected app, and retry.',
+];
+
+/**
+ * Lists the non-secret parts of an unexpected nameduser response: its field names, and the values of the
+ * standard error fields. Never includes token values.
+ */
+const describeNamedUserResponse = (response: Record<string, unknown>): string => {
+  const details = ['error', 'error_description', 'message']
+    .filter((key) => typeof response[key] === 'string' && response[key] !== '')
+    .map((key) => `${key}: ${response[key] as string}`);
+  const fields = Object.keys(response);
+  details.push(fields.length ? `response fields: ${fields.join(', ')}` : 'response has no fields');
+  return details.join('; ');
+};
+
 /**
  * takes a connection and upgrades it to a NamedJWT connection
  *
@@ -232,11 +271,12 @@ export const useNamedUserJwt = async (connection: Connection): Promise<Connectio
     });
   }
 
+  const actions = getNamedUserJwtActions(authFields.clientId);
   const url = `${instanceUrl}/agentforce/bootstrap/nameduser`;
   // For the nameduser endpoint request to work we need to delete the access token
   delete connection.accessToken;
   try {
-    const response = await connection.request<NamedUserJwtResponse>(
+    const response = await connection.request<NamedUserJwtResponse | string>(
       {
         method: 'GET',
         url,
@@ -252,14 +292,26 @@ export const useNamedUserJwt = async (connection: Connection): Promise<Connectio
     if (!response) {
       throw SfError.create({
         name: 'ApiAccessError',
-        message: 'Error obtaining API token: empty response.',
+        message: `${NAMED_USER_TOKEN_ERROR_PREFIX}: empty response.`,
+      });
+    }
+
+    // The endpoint is login protected. When the org doesn't accept the sid as a browser session, it returns
+    // 200 with a small HTML page that redirects to the login page, which jsforce hands back as a string.
+    // The page isn't included in the error.
+    if (typeof response !== 'object') {
+      throw SfError.create({
+        name: 'ApiAccessError',
+        message: `${NAMED_USER_TOKEN_ERROR_PREFIX}: the org returned a login page instead of a token, so it didn't accept the CLI's session for ${url}. This usually means the access token can't be used as a browser session.`,
       });
     }
 
     if (!response.access_token || typeof response.access_token !== 'string' || response.access_token.trim() === '') {
       throw SfError.create({
         name: 'ApiAccessError',
-        message: 'Error obtaining API token: invalid or missing access token.',
+        message: `${NAMED_USER_TOKEN_ERROR_PREFIX}: invalid or missing access token (${describeNamedUserResponse(
+          response
+        )}).`,
       });
     }
 
@@ -268,7 +320,7 @@ export const useNamedUserJwt = async (connection: Connection): Promise<Connectio
     if (tokenParts.length !== 3) {
       throw SfError.create({
         name: 'ApiAccessError',
-        message: 'Error obtaining API token: access token does not have valid JWT format.',
+        message: `${NAMED_USER_TOKEN_ERROR_PREFIX}: access token does not have valid JWT format.`,
       });
     }
 
@@ -277,19 +329,16 @@ export const useNamedUserJwt = async (connection: Connection): Promise<Connectio
   } catch (error) {
     // If it's already an SfError with our specific message, re-throw it as-is
     if (error instanceof SfError && error.name === 'ApiAccessError') {
-      error.actions = [
-        'If using your own connected app or ECA, ensure it grants access to the SFAP APIs by providing these scopes:',
-        '   * Access chatbot services (chatbot_api)',
-        '   * Access the Salesforce API Platform (sfap_api)',
-        '   * Manage user data via Web browsers (web)',
-      ];
+      error.actions = actions;
       throw error;
     }
-    // Otherwise wrap it with a generic error
+    // Otherwise wrap it, keeping the server's message (e.g. a 4xx from the endpoint) visible
+    const causeMessage = error instanceof Error ? error.message : undefined;
     throw SfError.create({
       name: 'ApiAccessError',
-      message: 'Error obtaining API token',
+      message: causeMessage ? `${NAMED_USER_TOKEN_ERROR_PREFIX}: ${causeMessage}` : NAMED_USER_TOKEN_ERROR_PREFIX,
       cause: error,
+      actions,
     });
   }
 };
