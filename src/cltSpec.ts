@@ -91,7 +91,8 @@ export const isCltSpec = (spec: unknown): spec is CltTestSpec =>
  *
  * The rules mirror Core's create-and-run and ephemeral-run validation so users get a clear local
  * error instead of a server 400. Throws on the first failure. Unknown fields are errors, so a typo
- * can't be silently dropped. Scorers are limited to the ones the Testing Center wizard offers for CLT.
+ * can't be silently dropped. Scorers are limited to the ones the Testing Center wizard offers for CLT
+ * and the server scores correctly.
  *
  * @param spec - The parsed YAML spec.
  * @param ctx.target - `ephemeral` (run without saving) or `saved` (create-and-run).
@@ -328,11 +329,14 @@ const validateScorers = (scorers: unknown, caseNumber: number, target: CltRunTar
     }
     const name = scorer.name;
     if (!isCltScorerName(name)) {
-      throw cltError('cltUnsupportedScorer', [name, caseNumber, Object.keys(CltScorerCatalog).join(', ')]);
+      throw cltError('cltUnsupportedScorer', [name, caseNumber, availableScorerNames().join(', ')]);
     }
     const entry = CltScorerCatalog[name];
     if (entry.needsExpected && !isNonBlankString(scorer.expected)) {
       throw cltError('cltScorerMissingExpected', [name, caseNumber]);
+    }
+    if (!entry.ephemeral && !entry.saved) {
+      throw cltError('cltScorerNotAvailable', [name, caseNumber, entry.uiLabel]);
     }
     if (target === 'ephemeral' && !entry.ephemeral) {
       throw cltError('cltScorerNotEphemeral', [name, caseNumber, ephemeralScorerNames().join(', '), name]);
@@ -346,6 +350,11 @@ const rejectUnknownFields = (value: Record<string, unknown>, allowed: string[], 
     throw cltError('cltUnknownField', [unknownField, where, allowed.join(', ')]);
   }
 };
+
+const availableScorerNames = (): string[] =>
+  Object.entries(CltScorerCatalog)
+    .filter(([, entry]) => entry.ephemeral || entry.saved)
+    .map(([name]) => name);
 
 const ephemeralScorerNames = (): string[] =>
   Object.entries(CltScorerCatalog)

@@ -24,12 +24,18 @@
  * offers them for CLT, so the CLI doesn't either.
  *
  * - `needsExpected` is Core's `requiresReferenceColumn()` (the scorer is rejected without `expectedValue`).
- * - `ephemeral` is membership in `RunEphemeralConversationTestResource.SUPPORTED_SCORERS`.
+ * - `ephemeral` is true when a run without saving (`conversation-tests/ephemeral-run`) scores it correctly.
+ * - `saved` is true when a saved suite (`conversation-test-suites/create-and-run`) scores it correctly.
  * - `uiLabel` is the wizard label, so users can map what they see in the UI to the YAML key.
  *
  * Org gates still apply on the server: `acceptance_criteria` needs
  * `com.salesforce.agentforce.testing.center.acceptanceCriteria`, and `displayed_actions_assertion` needs
  * scoring for CLT enabled. The CLI can't read gates, so a closed gate surfaces as Core's error.
+ *
+ * `agent_handoff_match` is in the wizard but turned off on both targets: Core accepts it, but neither
+ * endpoint scores it correctly in 264. ephemeral-run reads a `handoffAgent` field that Platform Metabolism
+ * never writes, so it always fails, and create-and-run doesn't save the expected agent. Turn it on when
+ * Core fixes them.
  *
  * No Connect API returns this list today; update it when the wizard's CLT scorer list changes.
  */
@@ -44,20 +50,22 @@ export type CltScorerName =
 /** Catalog row describing a single CLT scorer. */
 export type CltScorerEntry = {
   needsExpected: boolean;
-  /** True when a run without saving (ephemeral-run) accepts the scorer. */
+  /** True when a run without saving (ephemeral-run) scores it correctly. */
   ephemeral: boolean;
+  /** True when a saved suite (create-and-run) scores it correctly. */
+  saved: boolean;
   /** Label shown in the Testing Center wizard. */
   uiLabel: string;
 };
 
 /* eslint-disable camelcase */
 export const CltScorerCatalog: Readonly<Record<CltScorerName, CltScorerEntry>> = {
-  task_resolution: { needsExpected: false, ephemeral: true, uiLabel: 'Task Resolution' },
-  acceptance_criteria: { needsExpected: true, ephemeral: true, uiLabel: 'Success Criteria' },
-  topic_sequence_match: { needsExpected: true, ephemeral: true, uiLabel: 'Subagents Assertion' },
-  action_sequence_match: { needsExpected: true, ephemeral: true, uiLabel: 'Action Assertion' },
-  agent_handoff_match: { needsExpected: true, ephemeral: true, uiLabel: 'Agent Handoff' },
-  displayed_actions_assertion: { needsExpected: true, ephemeral: false, uiLabel: 'Displayed Actions' },
+  task_resolution: { needsExpected: false, ephemeral: true, saved: true, uiLabel: 'Task Resolution' },
+  acceptance_criteria: { needsExpected: true, ephemeral: true, saved: true, uiLabel: 'Success Criteria' },
+  topic_sequence_match: { needsExpected: true, ephemeral: true, saved: true, uiLabel: 'Subagents Assertion' },
+  action_sequence_match: { needsExpected: true, ephemeral: true, saved: true, uiLabel: 'Action Assertion' },
+  agent_handoff_match: { needsExpected: true, ephemeral: false, saved: false, uiLabel: 'Agent Handoff' },
+  displayed_actions_assertion: { needsExpected: true, ephemeral: false, saved: true, uiLabel: 'Displayed Actions' },
 } as const;
 /* eslint-enable camelcase */
 

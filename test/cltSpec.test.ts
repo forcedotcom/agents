@@ -100,9 +100,13 @@ describe('cltSpec', () => {
         'displayed_actions_assertion',
       ]);
       const savedOnly = Object.entries(CltScorerCatalog)
-        .filter(([, e]) => !e.ephemeral)
+        .filter(([, e]) => e.saved && !e.ephemeral)
         .map(([n]) => n);
       expect(savedOnly).to.deep.equal(['displayed_actions_assertion']);
+      const unavailable = Object.entries(CltScorerCatalog)
+        .filter(([, e]) => !e.ephemeral && !e.saved)
+        .map(([n]) => n);
+      expect(unavailable).to.deep.equal(['agent_handoff_match']);
       expect(CltScorerCatalog.acceptance_criteria.uiLabel).to.equal('Success Criteria');
       expect(CltScorerCatalog.topic_sequence_match.uiLabel).to.equal('Subagents Assertion');
       expect(isCltScorerName('task_resolution')).to.be.true;
@@ -423,10 +427,26 @@ describe('cltSpec', () => {
         contains: 'task_resolution',
       },
       {
+        title: 'agent_handoff_match without saving (Core always fails it)',
+        spec: () =>
+          edited((s) => (firstCase(s).scorers = [{ name: 'agent_handoff_match', expected: 'CheckoutAgent' }])),
+        error: 'cltScorerNotAvailable',
+        contains: 'Agent Handoff',
+      },
+      {
+        title: 'agent_handoff_match in a saved suite (Core drops the expected agent)',
+        spec: () =>
+          edited((s) => (firstCase(s).scorers = [{ name: 'agent_handoff_match', expected: 'CheckoutAgent' }])),
+        error: 'cltScorerNotAvailable',
+        contains: "'agent_handoff_match'",
+        target: 'saved',
+      },
+      {
         title: 'a turn-level scorer the wizard does not offer for CLT',
         spec: () => edited((s) => (firstCase(s).scorers = [{ name: 'coherence' }])),
         error: 'cltUnsupportedScorer',
-        contains: 'Supported scorers: task_resolution',
+        contains:
+          'Supported scorers: task_resolution, acceptance_criteria, topic_sequence_match, action_sequence_match, displayed_actions_assertion.',
         target: 'saved',
       },
       {

@@ -86,6 +86,10 @@ Conversation-level scorer '%s' on test case %s requires an `expected:` value.
 
 Conversation-level scorer '%s' on test case %s can't run without saving the suite. Running without saving supports only: %s. Save the suite to use '%s'.
 
+# cltScorerNotAvailable
+
+Conversation-level scorer '%s' on test case %s (%s in Testing Center) isn't available from the CLI yet. The conversation-level test APIs don't score it correctly. Remove it, or run this check in Testing Center.
+
 # cltUnsupportedScorer
 
 Conversation-level scorer '%s' on test case %s isn't supported for conversation-level tests. Supported scorers: %s.
