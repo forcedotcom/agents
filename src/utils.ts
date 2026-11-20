@@ -241,8 +241,10 @@ const getSessionRejectedActions = (clientId?: string): string[] => {
   ];
 };
 
-const truncate = (value: string): string =>
-  value.length > MAX_ECHOED_VALUE_LENGTH ? `${value.slice(0, MAX_ECHOED_VALUE_LENGTH)}...` : value;
+const truncate = (raw: string): string => {
+  const value = raw.replace(/\s+/g, ' ').trim();
+  return value.length > MAX_ECHOED_VALUE_LENGTH ? `${value.slice(0, MAX_ECHOED_VALUE_LENGTH)}...` : value;
+};
 
 /**
  * Lists the non-secret parts of an unexpected nameduser response: its field names, and the (truncated) values of
@@ -358,7 +360,7 @@ export const useNamedUserJwt = async (connection: Connection): Promise<Connectio
     );
   } catch (error) {
     // Wrap it, keeping the server's message (e.g. a 4xx from the endpoint) and any actions a lower layer set
-    const causeMessage = error instanceof Error ? error.message : undefined;
+    const causeMessage = error instanceof Error ? truncate(error.message) : undefined;
     throw SfError.create({
       name: 'ApiAccessError',
       message: causeMessage ? `${NAMED_USER_TOKEN_ERROR_PREFIX}: ${causeMessage}` : NAMED_USER_TOKEN_ERROR_PREFIX,

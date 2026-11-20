@@ -721,6 +721,29 @@ describe('useNamedUserJwt', () => {
     }
   });
 
+  it('should cap and flatten a long multi-line HTTP error message, keeping the full text on the cause', async () => {
+    $$.SANDBOX.stub(connection, 'getAuthInfoFields').returns({});
+    $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
+      accessToken: 'valid-access-token',
+      instanceUrl: 'https://test.my.salesforce.com',
+    });
+
+    const httpError = new SfError(`Bad gateway\n\n   upstream:\n${'y'.repeat(500)}`, 'ERROR_HTTP_502');
+    $$.SANDBOX.stub(connection, 'request').rejects(httpError);
+
+    try {
+      await useNamedUserJwt(connection);
+      expect.fail('Expected error was not thrown');
+    } catch (error) {
+      const sfError = error as SfError;
+      expect(sfError.message).to.equal(
+        `Error obtaining API token: Bad gateway upstream: ${'y'.repeat(200 - 'Bad gateway upstream: '.length)}...`
+      );
+      expect(sfError.message).to.not.include('\n');
+      expect(sfError.cause).to.equal(httpError);
+    }
+  });
+
   it('should keep the actions of a lower-layer ApiAccessError', async () => {
     $$.SANDBOX.stub(connection, 'getAuthInfoFields').returns({});
     $$.SANDBOX.stub(connection, 'getConnectionOptions').returns({
