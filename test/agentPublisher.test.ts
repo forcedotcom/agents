@@ -306,17 +306,21 @@ describe('AgentPublisher', () => {
             botId: '0Xx000000000001',
             botVersionId: '0Bv000000000002',
             versionNumber: 2,
+            target: 'test_agent.v2',
+            failedStep: 'retrieve',
           },
         });
         expect(error.actions).to.have.length(2);
         expect(error.actions?.[0]).to.include('version 2 (BotVersion 0Bv000000000002)');
         expect(error.actions?.[0]).to.include("Don't run the publish command again");
+        expect(error.actions?.[0]).to.include('<target>test_agent.v2</target>');
         expect(error.actions?.[1]).to.include('project retrieve start');
         expect(deployAuthoringBundleStub.notCalled).to.be.true;
         expect(telemetryStub.calledOnce).to.be.true;
         expect(telemetryStub.firstCall.args[0]).to.deep.equal({
           eventName: 'agent_publish_post_commit_failed',
           errName: 'AgentRetrievalError',
+          failedStep: 'retrieve',
           retrieveSkipped: false,
           botVersionResolved: true,
         });
@@ -342,9 +346,11 @@ describe('AgentPublisher', () => {
             developerName: 'test_agent',
             botId: '0Xx000000000001',
             botVersionId: '0Bv000000000002',
+            failedStep: 'botVersionLookup',
           },
         });
         expect(error.actions?.[0]).to.include('as BotVersion 0Bv000000000002 before');
+        expect(error.actions?.[0]).to.not.include('<target>');
         expect(deployAuthoringBundleStub.notCalled).to.be.true;
       });
 
@@ -367,6 +373,7 @@ describe('AgentPublisher', () => {
         expect(error.name).to.equal('Deployment Failed');
         expect(error.data).to.deep.include({ componentFailures: 1 });
         expect(error.data).to.have.nested.property('publishedAgent.versionNumber', 2);
+        expect(error.data).to.have.nested.property('publishedAgent.failedStep', 'bundleDeploy');
         expect(error.actions).to.have.length(1);
       });
 
@@ -404,6 +411,23 @@ describe('AgentPublisher', () => {
 
         expect(error.name).to.equal('CreateAgentJsonError');
         expect(error.data).to.not.have.property('publishedAgent');
+        expect(telemetryStub.called).to.be.false;
+      });
+
+      it('should not annotate errors when the publish POST request rejects', async () => {
+        $$.SANDBOX.stub(connection, 'singleRecordQuery')
+          .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
+          .resolves({ Id: '0Xx000000000001' });
+        $$.SANDBOX.stub(MaybeMock.prototype, 'request').rejects(new SfError('Gateway Timeout', 'ServerError'));
+        const telemetryStub = $$.SANDBOX.stub(Lifecycle.getInstance(), 'emitTelemetry').resolves();
+
+        publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, true);
+
+        const error = await expectPublishError();
+
+        expect(error.name).to.equal('ServerError');
+        expect((error.data as { publishedAgent?: unknown } | undefined)?.publishedAgent).to.be.undefined;
+        expect(error.actions ?? []).to.have.length(0);
         expect(telemetryStub.called).to.be.false;
       });
     });

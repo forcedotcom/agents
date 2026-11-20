@@ -151,14 +151,17 @@ export class ScriptAgentPublisher {
       // The POST above already committed a new BotVersion, so a failure in any of these steps
       // must say so. Otherwise the caller sees a failed publish, retries, and commits a duplicate.
       let botVersion: { developerName: string; versionNumber: number } | undefined;
+      let step: PublishedAgentInfo['failedStep'] = 'botVersionLookup';
       try {
         botVersion = await this.getBotVersion(response.botVersionId);
         if (!this.skipRetrieve) {
+          step = 'retrieve';
           await this.retrieveAgentMetadata(botVersion);
         }
+        step = 'bundleDeploy';
         await this.deployAuthoringBundle(botVersion.developerName);
       } catch (error) {
-        throw await this.toPublishedAgentError(error, response, botVersion);
+        throw await this.toPublishedAgentError(error, response, step, botVersion);
       }
 
       return { ...response, developerName: this.developerName };
@@ -341,7 +344,15 @@ export class ScriptAgentPublisher {
       // 3.remove the target from the local authoring bundle meta.xml file, even if the deploy threw
       // (poll timeout, a scopedPostDeploy listener), so it never lingers in local source
       delete authoringBundle.AiAuthoringBundle.target;
-      await writeFile(this.bundleMetaPath, xmlBuilder.build(authoringBundle));
+      try {
+        await writeFile(this.bundleMetaPath, xmlBuilder.build(authoringBundle));
+      } catch (cleanupError) {
+        // Don't let a failed cleanup replace the deploy error. The target may linger in local source.
+        getLogger().debug('Failed to remove target from authoring bundle meta.xml', {
+          bundleMetaPath: this.bundleMetaPath,
+          errMsg: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+        });
+      }
     }
 
     if (!deployResult.response?.success) {
@@ -365,12 +376,14 @@ export class ScriptAgentPublisher {
    *
    * @param error The error thrown by a post-publish step
    * @param response The successful publish response
+   * @param step The post-commit step that threw
    * @param botVersion The committed bot version, when the lookup got that far
    * @returns The annotated error to rethrow
    */
   private async toPublishedAgentError(
     error: unknown,
     response: PublishAgentJsonResponse,
+    step: PublishedAgentInfo['failedStep'],
     botVersion?: { developerName: string; versionNumber: number }
   ): Promise<SfError> {
     const err = SfError.wrap(error);
@@ -378,7 +391,10 @@ export class ScriptAgentPublisher {
       developerName: this.developerName,
       botId: response.botId,
       botVersionId: response.botVersionId,
-      ...(botVersion ? { versionNumber: botVersion.versionNumber } : {}),
+      ...(botVersion
+        ? { versionNumber: botVersion.versionNumber, target: `${this.developerName}.${botVersion.developerName}` }
+        : {}),
+      failedStep: step,
     };
     const existingData: unknown = err.data;
     const baseData =
@@ -391,7 +407,10 @@ export class ScriptAgentPublisher {
     const publishedAs = botVersion
       ? `version ${botVersion.versionNumber} (BotVersion ${response.botVersionId})`
       : `BotVersion ${response.botVersionId}`;
-    err.actions = [messages.getMessage('publishedBeforeFailureActions', [publishedAs]), ...(err.actions ?? [])];
+    const publishedAction = publishedAgent.target
+      ? messages.getMessage('publishedBeforeFailureTargetActions', [publishedAs, publishedAgent.target])
+      : messages.getMessage('publishedBeforeFailureActions', [publishedAs]);
+    err.actions = [publishedAction, ...(err.actions ?? [])];
 
     // Rethrown, so log at debug and pair with telemetry (see ai-docs/logging.md).
     getLogger().debug('Post-publish step failed after the BotVersion was committed', {
@@ -399,6 +418,7 @@ export class ScriptAgentPublisher {
       botId: response.botId,
       botVersionId: response.botVersionId,
       versionNumber: botVersion?.versionNumber,
+      failedStep: step,
       retrieveSkipped: this.skipRetrieve,
       errName: err.name,
       errMsg: err.message,
@@ -407,6 +427,7 @@ export class ScriptAgentPublisher {
       await Lifecycle.getInstance().emitTelemetry({
         eventName: 'agent_publish_post_commit_failed',
         errName: err.name,
+        failedStep: step,
         retrieveSkipped: this.skipRetrieve,
         botVersionResolved: Boolean(botVersion),
       });
