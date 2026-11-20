@@ -25,3 +25,7 @@ The agent was already published to the org as %s before this step failed. Don't 
 # publishedBeforeFailureTargetActions
 
 The agent was already published to the org as %s before this step failed. Don't run the publish command again, because that creates another, duplicate version. Fix the cause of the error, then finish the remaining steps: retrieve the agent metadata if that step failed, then deploy the authoring bundle with `<target>%s</target>` set in its bundle-meta.xml. Without the target, the bundle isn't linked to the version that was already published.
+
+# publishedBeforeFailureTargetSkipRetrieveActions
+
+The agent was already published to the org as %s before this step failed. Don't run the publish command again, because that creates another, duplicate version. Fix the cause of the error, then deploy the authoring bundle with `<target>%s</target>` set in its bundle-meta.xml. Without the target, the bundle isn't linked to the version that was already published.

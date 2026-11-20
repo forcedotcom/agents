@@ -407,8 +407,11 @@ export class ScriptAgentPublisher {
     const publishedAs = botVersion
       ? `version ${botVersion.versionNumber} (BotVersion ${response.botVersionId})`
       : `BotVersion ${response.botVersionId}`;
+    const targetActionKey = this.skipRetrieve
+      ? 'publishedBeforeFailureTargetSkipRetrieveActions'
+      : 'publishedBeforeFailureTargetActions';
     const publishedAction = publishedAgent.target
-      ? messages.getMessage('publishedBeforeFailureTargetActions', [publishedAs, publishedAgent.target])
+      ? messages.getMessage(targetActionKey, [publishedAs, publishedAgent.target])
       : messages.getMessage('publishedBeforeFailureActions', [publishedAs]);
     err.actions = [publishedAction, ...(err.actions ?? [])];
 

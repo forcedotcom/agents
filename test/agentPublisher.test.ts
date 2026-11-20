@@ -375,6 +375,9 @@ describe('AgentPublisher', () => {
         expect(error.data).to.have.nested.property('publishedAgent.versionNumber', 2);
         expect(error.data).to.have.nested.property('publishedAgent.failedStep', 'bundleDeploy');
         expect(error.actions).to.have.length(1);
+        // skipRetrieve is true here, so the action doesn't mention the retrieve step
+        expect(error.actions?.[0]).to.include('<target>test_agent.v2</target>');
+        expect(error.actions?.[0]).to.not.include('retrieve the agent metadata');
       });
 
       it('should still throw the annotated error when a telemetry listener fails', async () => {
