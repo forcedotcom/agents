@@ -16,7 +16,7 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { appendFile, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
-import { Connection, Lifecycle, SfError, SfProject } from '@salesforce/core';
+import { Connection, Lifecycle, SfdcUrl, SfError, SfProject } from '@salesforce/core';
 import { AvailableDefinition, NamedUserJwtResponse, type PlannerResponse, PreviewMetadata } from './types';
 import { CtxLogger } from './ctxLogger';
 
@@ -748,26 +748,41 @@ export type RequestInfo = {
   body?: string;
 };
 
+// Internal SFAP gateways. They only accept connections from inside the Salesforce network, so they're
+// tried only for orgs on internal instances (test, dev, stage). Customer orgs use api.salesforce.com.
+const INTERNAL_API_ENDPOINTS = ['test.', 'dev.', 'stage.'];
+
+const isInternalOrg = (connection: Connection): boolean => {
+  try {
+    return new SfdcUrl(connection.instanceUrl).isInternalUrl();
+  } catch {
+    return false;
+  }
+};
+
 /**
  * Makes an API request with automatic endpoint fallback.
- * Tries api.salesforce.com first, then test., dev., and stage.api.salesforce.com on 404.
+ * Tries api.salesforce.com first. For orgs on internal instances only, then tries test., dev., and
+ * stage.api.salesforce.com on 404. A fallback host that can't be reached is skipped, so its connection
+ * error never hides the 404 from api.salesforce.com.
  *
  * @param connection - The Salesforce connection
  * @param requestInfo - The request information (url, method, headers, body, etc.)
  * @param options - Optional retry/timeout options
  * @returns The API response
- * @throws SfError if all endpoints return 404, or immediately on non-404 errors
+ * @throws SfError if all endpoints return 404 or are unreachable, or immediately on other errors
  */
 export async function requestWithEndpointFallback<T>(
   connection: Connection,
   requestInfo: RequestInfo,
   options?: { retry?: { maxRetries?: number } }
 ): Promise<T> {
-  const endpoints = ['', 'test.', 'dev.', 'stage.']; // Try production, test, dev, stage in that order
+  const endpoints = isInternalOrg(connection) ? ['', ...INTERNAL_API_ENDPOINTS] : [''];
   const attemptedEndpoints: string[] = [];
+  const unreachableEndpoints: string[] = [];
   const logger = CtxLogger.child('AgentApiRequest');
 
-  let lastError: unknown;
+  let notFoundError: unknown;
 
   for (const endpoint of endpoints) {
     // Replace the domain with the endpoint variant
@@ -775,7 +790,8 @@ export async function requestWithEndpointFallback<T>(
       /https:\/\/(?:test\.|dev\.|stage\.)?api\.salesforce\.com/,
       `https://${endpoint}api.salesforce.com`
     );
-    attemptedEndpoints.push(`${endpoint || 'production '}api.salesforce.com`);
+    const host = `${endpoint}api.salesforce.com`;
+    attemptedEndpoints.push(host);
 
     try {
       // eslint-disable-next-line no-await-in-loop
@@ -793,22 +809,45 @@ export async function requestWithEndpointFallback<T>(
         statusCode: statusCode ?? 'unknown',
       });
       if (statusCode === 404) {
-        lastError = error;
+        notFoundError ??= error;
         continue; // Try next endpoint
       }
-      // Not a 404, throw immediately
+      if (endpoint !== '' && statusCode === undefined) {
+        // A fallback host we couldn't reach (connect timeout, DNS failure). Skip it rather than
+        // replacing the 404 from api.salesforce.com with a bare "fetch failed".
+        unreachableEndpoints.push(host);
+        continue;
+      }
+      // Any other error is the real answer from the server, throw immediately
       throw error;
     }
   }
 
-  // All endpoints failed with 404
-  logger.debug('All Agent API endpoints returned 404', { attemptedEndpoints });
+  logger.debug('All Agent API endpoints returned 404 or were unreachable', {
+    attemptedEndpoints,
+    unreachableEndpoints,
+  });
+  const username = connection.getUsername() ?? '';
+  const requestPath = requestInfo.url.replace(/^https:\/\/[^/]+/, '');
+  const actions = [
+    'Make sure Agentforce is enabled in Setup and the org is licensed for it. Scratch orgs need the Einstein1AIPlatform feature in their definition file.',
+    `Make sure the user '${username}' has the necessary permissions and authorization to use Agentforce.`,
+  ];
+  if (requestPath.includes('/authoring/agents')) {
+    actions.push(
+      "'sf agent validate authoring-bundle' can pass on an org that can't publish: publishing uses a separate API that needs the org to be entitled to create agents."
+    );
+  }
+  const notFoundHosts = attemptedEndpoints.filter((host) => !unreachableEndpoints.includes(host));
+  const unreachable = unreachableEndpoints.length ? ` Couldn't connect to ${unreachableEndpoints.join(', ')}.` : '';
   throw SfError.create({
     name: 'AgentApiNotFound',
-    message: `Unable to access the Salesforce Agent APIs. Ensure the user '${
-      connection.getUsername() ?? ''
-    }' has the necessary permissions and authorization to perform this action.`,
-    cause: lastError,
+    message: `Unable to access the Salesforce Agent APIs: ${
+      requestInfo.method
+    } ${requestPath} returned 404 (Not Found) from ${notFoundHosts.join(', ')}.${unreachable}`,
+    actions,
+    data: { attemptedEndpoints, unreachableEndpoints },
+    cause: notFoundError,
   });
 }
 

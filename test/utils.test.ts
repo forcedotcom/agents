@@ -51,7 +51,8 @@ describe('requestWithEndpointFallback', () => {
   beforeEach(async () => {
     testOrg = new MockTestOrgData();
     connection = await testOrg.getConnection();
-    connection.instanceUrl = 'https://test.my.salesforce.com';
+    // Internal (test1) instance, so the test./dev./stage. fallback hosts are tried
+    connection.instanceUrl = 'https://orgfarm-abc123.test1.my.pc-rnd.salesforce.com';
     $$.SANDBOXES.CONNECTION.restore();
   });
 
@@ -260,6 +261,176 @@ describe('requestWithEndpointFallback', () => {
       // Should only be called once since non-404 errors throw immediately
       expect(requestStub.calledOnce).to.be.true;
     }
+  });
+  it('should skip an unreachable fallback host and keep trying', async () => {
+    const error404 = new Error('Not Found');
+    error404.name = 'ERROR_HTTP_404';
+    const fetchFailed = new TypeError('fetch failed');
+
+    const requestStub = $$.SANDBOX.stub(connection, 'request');
+    requestStub.onCall(0).rejects(error404);
+    requestStub.onCall(1).rejects(fetchFailed);
+    requestStub.onCall(2).resolves({ success: true });
+
+    const result = await requestWithEndpointFallback(connection, {
+      method: 'POST',
+      url: 'https://api.salesforce.com/einstein/ai-agent/v1/test',
+      body: '{}',
+    });
+
+    expect(result).to.deep.equal({ success: true });
+    expect(requestStub.callCount).to.equal(3);
+    expect((requestStub.getCall(2).args[0] as RequestInfo).url).to.equal(
+      'https://dev.api.salesforce.com/einstein/ai-agent/v1/test'
+    );
+  });
+
+  it('should not let an unreachable fallback host mask the 404 from api.salesforce.com', async () => {
+    const error404 = new Error('Not Found');
+    error404.name = 'ERROR_HTTP_404';
+    const fetchFailed = new TypeError('fetch failed', { cause: { code: 'UND_ERR_CONNECT_TIMEOUT' } });
+
+    const requestStub = $$.SANDBOX.stub(connection, 'request');
+    requestStub.onCall(0).rejects(error404);
+    requestStub.onCall(1).rejects(fetchFailed);
+    requestStub.onCall(2).rejects(fetchFailed);
+    requestStub.onCall(3).rejects(error404);
+
+    try {
+      await requestWithEndpointFallback(connection, {
+        method: 'POST',
+        url: 'https://api.salesforce.com/einstein/ai-agent/v1.1/authoring/agents',
+        body: '{}',
+      });
+      expect.fail('Expected error was not thrown');
+    } catch (error) {
+      const sfError = error as SfError;
+      expect(sfError.name).to.equal('AgentApiNotFound');
+      expect(sfError.cause).to.equal(error404);
+      expect(sfError.message).to.include(
+        'POST /einstein/ai-agent/v1.1/authoring/agents returned 404 (Not Found) from api.salesforce.com, stage.api.salesforce.com.'
+      );
+      expect(sfError.message).to.include("Couldn't connect to test.api.salesforce.com, dev.api.salesforce.com.");
+      expect(sfError.data).to.deep.equal({
+        attemptedEndpoints: [
+          'api.salesforce.com',
+          'test.api.salesforce.com',
+          'dev.api.salesforce.com',
+          'stage.api.salesforce.com',
+        ],
+        unreachableEndpoints: ['test.api.salesforce.com', 'dev.api.salesforce.com'],
+      });
+    }
+
+    expect(requestStub.callCount).to.equal(4);
+  });
+
+  it('should throw immediately when api.salesforce.com itself is unreachable', async () => {
+    const fetchFailed = new TypeError('fetch failed');
+
+    const requestStub = $$.SANDBOX.stub(connection, 'request').rejects(fetchFailed);
+
+    try {
+      await requestWithEndpointFallback(connection, {
+        method: 'POST',
+        url: 'https://api.salesforce.com/einstein/ai-agent/v1/test',
+        body: '{}',
+      });
+      expect.fail('Expected error was not thrown');
+    } catch (error) {
+      expect(error).to.equal(fetchFailed);
+    }
+
+    expect(requestStub.calledOnce).to.be.true;
+  });
+
+  describe('production orgs', () => {
+    beforeEach(() => {
+      connection.instanceUrl = 'https://orgfarm-abc123.develop.my.salesforce.com';
+    });
+
+    it('should not fall back to internal hosts on 404', async () => {
+      const error404 = new Error('Not Found');
+      error404.name = 'ERROR_HTTP_404';
+
+      const requestStub = $$.SANDBOX.stub(connection, 'request').rejects(error404);
+
+      try {
+        await requestWithEndpointFallback(connection, {
+          method: 'POST',
+          url: 'https://api.salesforce.com/einstein/ai-agent/v1.1/authoring/agents',
+          body: '{}',
+        });
+        expect.fail('Expected error was not thrown');
+      } catch (error) {
+        const sfError = error as SfError;
+        expect(sfError.name).to.equal('AgentApiNotFound');
+        expect(sfError.cause).to.equal(error404);
+        expect(sfError.message).to.equal(
+          'Unable to access the Salesforce Agent APIs: POST /einstein/ai-agent/v1.1/authoring/agents returned 404 (Not Found) from api.salesforce.com.'
+        );
+        expect(sfError.actions?.join('\n')).to.include('Einstein1AIPlatform');
+        expect(sfError.actions?.join('\n')).to.include("'sf agent validate authoring-bundle' can pass");
+      }
+
+      expect(requestStub.calledOnce).to.be.true;
+      expect((requestStub.firstCall.args[0] as RequestInfo).url).to.equal(
+        'https://api.salesforce.com/einstein/ai-agent/v1.1/authoring/agents'
+      );
+    });
+
+    it('should only add the publish hint for /authoring/agents', async () => {
+      const error404 = new Error('Not Found');
+      error404.name = 'ERROR_HTTP_404';
+      $$.SANDBOX.stub(connection, 'request').rejects(error404);
+
+      try {
+        await requestWithEndpointFallback(connection, {
+          method: 'POST',
+          url: 'https://api.salesforce.com/einstein/ai-agent/v1.1/authoring/scripts',
+          body: '{}',
+        });
+        expect.fail('Expected error was not thrown');
+      } catch (error) {
+        const sfError = error as SfError;
+        expect(sfError.name).to.equal('AgentApiNotFound');
+        expect(sfError.actions?.join('\n')).to.not.include('sf agent validate');
+      }
+    });
+
+    it('should use api.salesforce.com even when the URL has an internal prefix', async () => {
+      const requestStub = $$.SANDBOX.stub(connection, 'request').resolves({ success: true });
+
+      await requestWithEndpointFallback(connection, {
+        method: 'DELETE',
+        url: 'https://test.api.salesforce.com/einstein/ai-agent/v1/test',
+      });
+
+      expect(requestStub.calledOnce).to.be.true;
+      expect((requestStub.firstCall.args[0] as RequestInfo).url).to.equal(
+        'https://api.salesforce.com/einstein/ai-agent/v1/test'
+      );
+    });
+
+    it('should treat an org without an instance URL as a production org', async () => {
+      connection.instanceUrl = '';
+      const error404 = new Error('Not Found');
+      error404.name = 'ERROR_HTTP_404';
+      const requestStub = $$.SANDBOX.stub(connection, 'request').rejects(error404);
+
+      try {
+        await requestWithEndpointFallback(connection, {
+          method: 'POST',
+          url: 'https://api.salesforce.com/einstein/ai-agent/v1/test',
+          body: '{}',
+        });
+        expect.fail('Expected error was not thrown');
+      } catch (error) {
+        expect((error as SfError).name).to.equal('AgentApiNotFound');
+      }
+
+      expect(requestStub.calledOnce).to.be.true;
+    });
   });
 });
 
