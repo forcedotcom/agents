@@ -416,6 +416,26 @@ describe('requestWithEndpointFallback', () => {
     }
   });
 
+  it('should not treat non-connection undici errors as network errors', async () => {
+    const error404 = new Error('Not Found');
+    error404.name = 'ERROR_HTTP_404';
+    const invalidArg = Object.assign(new Error('bad arg'), { code: 'UND_ERR_INVALID_ARG' });
+    const requestStub = $$.SANDBOX.stub(connection, 'request');
+    requestStub.onCall(0).rejects(error404);
+    requestStub.onCall(1).rejects(invalidArg);
+
+    try {
+      await requestWithEndpointFallback(connection, {
+        method: 'POST',
+        url: 'https://api.salesforce.com/einstein/ai-agent/v1/test',
+        body: '{}',
+      });
+      expect.fail('Expected error was not thrown');
+    } catch (error) {
+      expect(error).to.equal(invalidArg);
+    }
+  });
+
   it('should give fallback hosts no retries', async () => {
     const error404 = new Error('Not Found');
     error404.name = 'ERROR_HTTP_404';
@@ -524,6 +544,7 @@ describe('requestWithEndpointFallback', () => {
           'Unable to access the Salesforce Agent APIs: POST /einstein/ai-agent/v1.1/authoring/agents returned 404 (Not Found) from api.salesforce.com.'
         );
         expect(sfError.actions?.join('\n')).to.include('Einstein1AIPlatform');
+        expect(sfError.actions?.join('\n')).to.include('SF_AGENT_API_ENDPOINTS');
         expect(sfError.actions?.join('\n')).to.include("'sf agent validate authoring-bundle' can pass");
       }
 

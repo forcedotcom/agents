@@ -763,7 +763,8 @@ const isInternalOrg = (connection: Connection): boolean => {
 /**
  * The fallback gateway prefixes to try after api.salesforce.com. SF_AGENT_API_ENDPOINTS (comma-separated,
  * e.g. "stage.,test.") overrides the default for any org, for internal orgs whose domain isn't recognized
- * as internal. Set it to "none" to never fall back.
+ * as internal (for example stage orgs on a customer-style domain). It applies to every org, not just
+ * internal ones. Set it to "none" to never fall back.
  */
 const getFallbackEndpoints = (connection: Connection): string[] => {
   const override = process.env.SF_AGENT_API_ENDPOINTS?.trim();
@@ -776,7 +777,8 @@ const getFallbackEndpoints = (connection: Connection): string[] => {
   return isInternalOrg(connection) ? INTERNAL_API_ENDPOINTS : [];
 };
 
-const NETWORK_ERROR_CODES = /^(UND_ERR_|ECONN|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|EHOSTUNREACH|ENETUNREACH)/;
+const NETWORK_ERROR_CODES =
+  /^(UND_ERR_(CONNECT_TIMEOUT|SOCKET|HEADERS_TIMEOUT|BODY_TIMEOUT)|ECONN|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|EHOSTUNREACH|ENETUNREACH)/;
 
 /**
  * True when the error means no HTTP response was received (DNS failure, refused/reset/timed-out connection),
@@ -881,11 +883,10 @@ export async function requestWithEndpointFallback<T>(
       "'sf agent validate authoring-bundle' can pass on an org that can't publish: publishing calls a different Agent API endpoint, which may require additional Agentforce entitlements on the org."
     );
   }
-  if (fallbackEndpoints.length) {
-    actions.push(
-      'Confirm which SFAP gateway the org uses (Setup > GatewayHawkingInfo). To try specific gateways, set SF_AGENT_API_ENDPOINTS, for example "stage.,test.".'
-    );
-  }
+  // Shown for every org: a stage org on a customer-style domain gets no fallback chain by default
+  actions.push(
+    'Confirm which SFAP gateway the org uses (Setup > GatewayHawkingInfo). To try specific gateways, set SF_AGENT_API_ENDPOINTS, for example "stage.,test.".'
+  );
   const notFoundHosts = attemptedEndpoints.filter((host) => !unreachableEndpoints.includes(host));
   const unreachable = unreachableEndpoints.length ? ` Couldn't connect to ${unreachableEndpoints.join(', ')}.` : '';
   throw SfError.create({
