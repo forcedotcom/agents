@@ -15,6 +15,16 @@
  */
 
 /**
+ * Where a CLT spec is headed. Limits and the allowed scorers differ:
+ * - `ephemeral`: `conversation-tests/ephemeral-run`, run without saving.
+ * - `saved`: `conversation-test-suites/create-and-run`, saved as a suite and then run.
+ *
+ * Add a value here for a new endpoint (for example generate-and-run), then add it to `targets` on each
+ * scorer it supports.
+ */
+export type CltRunTarget = 'ephemeral' | 'saved';
+
+/**
  * Scorers offered for conversation-level tests (CLT), keyed by the API key the CLI sends.
  *
  * Matches the Testing Center wizard rather than everything Core's create-and-run accepts: the server
@@ -24,15 +34,15 @@
  * offers them for CLT, so the CLI doesn't either.
  *
  * - `needsExpected` is Core's `requiresReferenceColumn()` (the scorer is rejected without `expectedValue`).
- * - `ephemeral` is true when a run without saving (`conversation-tests/ephemeral-run`) scores it correctly.
- * - `saved` is true when a saved suite (`conversation-test-suites/create-and-run`) scores it correctly.
+ * - `targets` lists the endpoints that score it correctly (see `CltRunTarget`). An empty list means
+ * the scorer is in the wizard but no endpoint scores it correctly yet, so the CLI rejects it everywhere.
  * - `uiLabel` is the wizard label, so users can map what they see in the UI to the YAML key.
  *
  * Org gates still apply on the server: `acceptance_criteria` needs
  * `com.salesforce.agentforce.testing.center.acceptanceCriteria`, and `displayed_actions_assertion` needs
  * scoring for CLT enabled. The CLI can't read gates, so a closed gate surfaces as Core's error.
  *
- * `agent_handoff_match` is in the wizard but turned off on both targets: Core accepts it, but neither
+ * `agent_handoff_match` is in the wizard but has no targets: Core accepts it, but neither
  * endpoint scores it correctly in 264. ephemeral-run reads a `handoffAgent` field that Platform Metabolism
  * never writes, so it always fails, and create-and-run doesn't save the expected agent. Turn it on when
  * Core fixes them.
@@ -50,24 +60,26 @@ export type CltScorerName =
 /** Catalog row describing a single CLT scorer. */
 export type CltScorerEntry = {
   needsExpected: boolean;
-  /** True when a run without saving (ephemeral-run) scores it correctly. */
-  ephemeral: boolean;
-  /** True when a saved suite (create-and-run) scores it correctly. */
-  saved: boolean;
+  /** Endpoints that score it correctly. Empty: not available from the CLI yet. */
+  targets: readonly CltRunTarget[];
   /** Label shown in the Testing Center wizard. */
   uiLabel: string;
 };
 
 /* eslint-disable camelcase */
 export const CltScorerCatalog: Readonly<Record<CltScorerName, CltScorerEntry>> = {
-  task_resolution: { needsExpected: false, ephemeral: true, saved: true, uiLabel: 'Task Resolution' },
-  acceptance_criteria: { needsExpected: true, ephemeral: true, saved: true, uiLabel: 'Success Criteria' },
-  topic_sequence_match: { needsExpected: true, ephemeral: true, saved: true, uiLabel: 'Subagents Assertion' },
-  action_sequence_match: { needsExpected: true, ephemeral: true, saved: true, uiLabel: 'Action Assertion' },
-  agent_handoff_match: { needsExpected: true, ephemeral: false, saved: false, uiLabel: 'Agent Handoff' },
-  displayed_actions_assertion: { needsExpected: true, ephemeral: false, saved: true, uiLabel: 'Displayed Actions' },
+  task_resolution: { needsExpected: false, targets: ['ephemeral', 'saved'], uiLabel: 'Task Resolution' },
+  acceptance_criteria: { needsExpected: true, targets: ['ephemeral', 'saved'], uiLabel: 'Success Criteria' },
+  topic_sequence_match: { needsExpected: true, targets: ['ephemeral', 'saved'], uiLabel: 'Subagents Assertion' },
+  action_sequence_match: { needsExpected: true, targets: ['ephemeral', 'saved'], uiLabel: 'Action Assertion' },
+  agent_handoff_match: { needsExpected: true, targets: [], uiLabel: 'Agent Handoff' },
+  displayed_actions_assertion: { needsExpected: true, targets: ['saved'], uiLabel: 'Displayed Actions' },
 } as const;
 /* eslint-enable camelcase */
 
 export const isCltScorerName = (s: string): s is CltScorerName =>
   Object.prototype.hasOwnProperty.call(CltScorerCatalog, s);
+
+/** Scorer names that `target` scores correctly, in catalog order. */
+export const cltScorersFor = (target: CltRunTarget): CltScorerName[] =>
+  (Object.keys(CltScorerCatalog) as CltScorerName[]).filter((name) => CltScorerCatalog[name].targets.includes(target));

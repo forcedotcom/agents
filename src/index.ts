@@ -167,10 +167,11 @@ export {
   type CltScorerName,
   type CltScorerEntry,
   CltScorerCatalog,
+  cltScorersFor,
   isCltScorerName,
+  type CltRunTarget,
 } from './cltScorerCatalog';
 export {
-  type CltRunTarget,
   CLT_PERSONAS,
   CLT_MAX_TURNS,
   CLT_MAX_TEST_CASES,
@@ -253,11 +254,7 @@ export {
   type ExpressContextRetrieverDetail,
 } from './expressContextTypes';
 export { ApiCatalog } from './apiCatalog';
-export {
-  McpAgentScript,
-  type McpAgentScriptActionOutput,
-  type McpAgentScriptActionsOutput,
-} from './mcpAgentScript';
+export { McpAgentScript, type McpAgentScriptActionOutput, type McpAgentScriptActionsOutput } from './mcpAgentScript';
 export {
   type McpServerType,
   type McpAuthType,

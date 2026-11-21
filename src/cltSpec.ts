@@ -25,17 +25,16 @@ import type {
   CreateAndRunConversationTestSuiteInput,
   EphemeralConversationTestInput,
 } from './types.js';
-import { CltScorerCatalog, isCltScorerName } from './cltScorerCatalog';
+import { type CltRunTarget, CltScorerCatalog, cltScorersFor, isCltScorerName } from './cltScorerCatalog';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'cltSpec');
 
-/**
- * Where a CLT spec is headed. Limits and the allowed scorers differ:
- * - `ephemeral`: `conversation-tests/ephemeral-run`, run without saving.
- * - `saved`: `conversation-test-suites/create-and-run`, saved as a suite and then run.
- */
-export type CltRunTarget = 'ephemeral' | 'saved';
+/** How each target reads in a user-facing message. */
+const TARGET_PHRASES: Readonly<Record<CltRunTarget, string>> = {
+  ephemeral: 'when running without saving',
+  saved: 'in a saved suite',
+};
 
 /** Personas Core accepts (`ConversationPersonas`). Matched case-insensitively, sent upper-case. */
 export const CLT_PERSONAS: readonly ConversationPersona[] = ['DEFAULT', 'FRUSTRATED', 'DISTRACTED_DAD', 'ACCENT'];
@@ -335,11 +334,20 @@ const validateScorers = (scorers: unknown, caseNumber: number, target: CltRunTar
     if (entry.needsExpected && !isNonBlankString(scorer.expected)) {
       throw cltError('cltScorerMissingExpected', [name, caseNumber]);
     }
-    if (!entry.ephemeral && !entry.saved) {
+    if (entry.targets.length === 0) {
       throw cltError('cltScorerNotAvailable', [name, caseNumber, entry.uiLabel]);
     }
-    if (target === 'ephemeral' && !entry.ephemeral) {
-      throw cltError('cltScorerNotEphemeral', [name, caseNumber, ephemeralScorerNames().join(', '), name]);
+    if (!entry.targets.includes(target)) {
+      const phrase = TARGET_PHRASES[target];
+      throw cltError('cltScorerWrongTarget', [
+        name,
+        caseNumber,
+        phrase,
+        phrase,
+        cltScorersFor(target).join(', '),
+        name,
+        entry.targets.map((t) => TARGET_PHRASES[t]).join(' or '),
+      ]);
     }
   });
 };
@@ -353,12 +361,7 @@ const rejectUnknownFields = (value: Record<string, unknown>, allowed: string[], 
 
 const availableScorerNames = (): string[] =>
   Object.entries(CltScorerCatalog)
-    .filter(([, entry]) => entry.ephemeral || entry.saved)
-    .map(([name]) => name);
-
-const ephemeralScorerNames = (): string[] =>
-  Object.entries(CltScorerCatalog)
-    .filter(([, entry]) => entry.ephemeral)
+    .filter(([, entry]) => entry.targets.length > 0)
     .map(([name]) => name);
 
 // ---------------------------------------------------------------------------

@@ -82,9 +82,9 @@ Conversation-level test case %s has a scorer without a non-blank `name:`.
 
 Conversation-level scorer '%s' on test case %s requires an `expected:` value.
 
-# cltScorerNotEphemeral
+# cltScorerWrongTarget
 
-Conversation-level scorer '%s' on test case %s can't run without saving the suite. Running without saving supports only: %s. Save the suite to use '%s'.
+Conversation-level scorer '%s' on test case %s isn't supported %s. Supported %s: %s. Use '%s' %s.
 
 # cltScorerNotAvailable
 

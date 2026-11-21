@@ -23,6 +23,7 @@ import {
   CLT_MAX_TEST_CASES,
   CLT_MAX_TURNS,
   CltScorerCatalog,
+  cltScorersFor,
   cltSpecToCreateAndRunInput,
   cltSpecToEphemeralInput,
   isCltScorerName,
@@ -99,14 +100,20 @@ describe('cltSpec', () => {
         'agent_handoff_match',
         'displayed_actions_assertion',
       ]);
-      const savedOnly = Object.entries(CltScorerCatalog)
-        .filter(([, e]) => e.saved && !e.ephemeral)
-        .map(([n]) => n);
-      expect(savedOnly).to.deep.equal(['displayed_actions_assertion']);
-      const unavailable = Object.entries(CltScorerCatalog)
-        .filter(([, e]) => !e.ephemeral && !e.saved)
-        .map(([n]) => n);
-      expect(unavailable).to.deep.equal(['agent_handoff_match']);
+      expect(cltScorersFor('ephemeral')).to.deep.equal([
+        'task_resolution',
+        'acceptance_criteria',
+        'topic_sequence_match',
+        'action_sequence_match',
+      ]);
+      expect(cltScorersFor('saved')).to.deep.equal([
+        'task_resolution',
+        'acceptance_criteria',
+        'topic_sequence_match',
+        'action_sequence_match',
+        'displayed_actions_assertion',
+      ]);
+      expect(CltScorerCatalog.agent_handoff_match.targets).to.be.empty;
       expect(CltScorerCatalog.acceptance_criteria.uiLabel).to.equal('Success Criteria');
       expect(CltScorerCatalog.topic_sequence_match.uiLabel).to.equal('Subagents Assertion');
       expect(isCltScorerName('task_resolution')).to.be.true;
@@ -423,8 +430,10 @@ describe('cltSpec', () => {
         title: 'saved-only scorer without saving',
         spec: () =>
           edited((s) => (firstCase(s).scorers = [{ name: 'displayed_actions_assertion', expected: '["Card"]' }])),
-        error: 'cltScorerNotEphemeral',
-        contains: 'task_resolution',
+        error: 'cltScorerWrongTarget',
+        contains:
+          "isn't supported when running without saving. Supported when running without saving: task_resolution, " +
+          "acceptance_criteria, topic_sequence_match, action_sequence_match. Use 'displayed_actions_assertion' in a saved suite.",
       },
       {
         title: 'agent_handoff_match without saving (Core always fails it)',
