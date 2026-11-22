@@ -179,7 +179,28 @@ describe('cltSpec', () => {
   describe('validateCltSpec: rejected specs', () => {
     type Case = { title: string; spec: () => CltTestSpec; error: string; contains?: string; target?: CltRunTarget };
     const cases: Case[] = [
-      { title: 'non-object spec', spec: () => null as unknown as CltTestSpec, error: 'cltMissingTestCases' },
+      { title: 'non-object spec', spec: () => null as unknown as CltTestSpec, error: 'cltSpecNotObject' },
+      {
+        title: 'non-string description',
+        spec: () => edited((s) => (s.description = 2026)),
+        error: 'cltFieldNotString',
+        contains: '`description`',
+      },
+      {
+        title: 'non-string subjectVersion',
+        spec: () => edited((s) => (s.subjectVersion = 2)),
+        error: 'cltFieldNotString',
+        contains: '`subjectVersion`',
+      },
+      {
+        title: 'non-string subjectName next to project',
+        spec: () =>
+          edited((s) => {
+            s.subjectName = 123;
+            s.project = { projectId: '1bY1', projectVersionId: '1bZ1' };
+          }),
+        error: 'cltAgentIdentity',
+      },
       {
         title: 'wrong testScope',
         spec: () => edited((s) => (s.testScope = 'TURN_LEVEL')),
@@ -256,6 +277,7 @@ describe('cltSpec', () => {
         title: 'invalid evaluationMode',
         spec: () => edited((s) => (s.evaluationMode = 'VOICE')),
         error: 'cltInvalidEvaluationMode',
+        contains: 'Must be one of: TEXT, TEXT_VOICE.',
       },
       {
         title: 'non-string evaluationMode',
@@ -386,6 +408,28 @@ describe('cltSpec', () => {
         contains: "'ChannelType'",
       },
       {
+        title: 'context variable with a number value',
+        spec: () => edited((s) => (firstCase(s).contextVariables = [{ name: 'Zip', value: 2134 }])),
+        error: 'cltContextVariableInvalidValue',
+        contains: "'Zip' must have a string `value:`, but it's 2134",
+      },
+      {
+        title: 'context variable with a boolean value',
+        spec: () => edited((s) => (firstCase(s).contextVariables = [{ name: 'Flag', value: true }])),
+        error: 'cltContextVariableInvalidValue',
+      },
+      {
+        title: 'context variable with a blank (null) value',
+        spec: () => edited((s) => (firstCase(s).contextVariables = [{ name: 'A', value: null }])),
+        error: 'cltContextVariableInvalidValue',
+      },
+      {
+        title: 'context variable without a value',
+        spec: () => edited((s) => (firstCase(s).contextVariables = [{ name: 'A' }])),
+        error: 'cltContextVariableInvalidValue',
+        contains: 'undefined',
+      },
+      {
         title: 'connections not an object',
         spec: () => edited((s) => (firstCase(s).connections = 'Messaging')),
         error: 'cltConnectionsMissingSurfaceType',
@@ -427,13 +471,42 @@ describe('cltSpec', () => {
         contains: 'acceptance_criteria',
       },
       {
+        title: 'a numeric expected on a scorer that needs one',
+        spec: () => edited((s) => (firstCase(s).scorers = [{ name: 'action_sequence_match', expected: 2 }])),
+        error: 'cltScorerExpectedNotString',
+        contains: "'action_sequence_match'",
+      },
+      {
+        title: 'a numeric expected on a scorer that takes none',
+        spec: () => edited((s) => (firstCase(s).scorers = [{ name: 'task_resolution', expected: 5 }])),
+        error: 'cltScorerExpectedNotString',
+      },
+      {
+        title: 'saved-only scorer without saving, before checking expected',
+        spec: () => edited((s) => (firstCase(s).scorers = [{ name: 'displayed_actions_assertion' }])),
+        error: 'cltScorerWrongTarget',
+      },
+      {
+        title: 'agent_handoff_match without expected, before checking expected',
+        spec: () => edited((s) => (firstCase(s).scorers = [{ name: 'agent_handoff_match' }])),
+        error: 'cltScorerNotAvailable',
+      },
+      {
+        title: 'agent_handoff_match without expected in a saved suite',
+        spec: () => edited((s) => (firstCase(s).scorers = [{ name: 'agent_handoff_match' }])),
+        error: 'cltScorerNotAvailable',
+        target: 'saved',
+      },
+      {
         title: 'saved-only scorer without saving',
         spec: () =>
           edited((s) => (firstCase(s).scorers = [{ name: 'displayed_actions_assertion', expected: '["Card"]' }])),
         error: 'cltScorerWrongTarget',
         contains:
-          "isn't supported when running without saving. Supported when running without saving: task_resolution, " +
-          "acceptance_criteria, topic_sequence_match, action_sequence_match. Use 'displayed_actions_assertion' in a saved suite.",
+          "isn't supported when running without saving. Supported when running without saving: " +
+          'task_resolution (Task Resolution), acceptance_criteria (Success Criteria), topic_sequence_match ' +
+          '(Subagents Assertion), action_sequence_match (Action Assertion). ' +
+          "Use 'displayed_actions_assertion' in a saved suite.",
       },
       {
         title: 'agent_handoff_match without saving (Core always fails it)',
@@ -455,8 +528,16 @@ describe('cltSpec', () => {
         spec: () => edited((s) => (firstCase(s).scorers = [{ name: 'coherence' }])),
         error: 'cltUnsupportedScorer',
         contains:
-          'Supported scorers: task_resolution, acceptance_criteria, topic_sequence_match, action_sequence_match, displayed_actions_assertion.',
+          'Supported scorers in a saved suite: task_resolution (Task Resolution), acceptance_criteria (Success Criteria), ' +
+          'topic_sequence_match (Subagents Assertion), action_sequence_match (Action Assertion), ' +
+          'displayed_actions_assertion (Displayed Actions).',
         target: 'saved',
+      },
+      {
+        title: 'an unknown scorer without saving (lists only scorers that work without saving)',
+        spec: () => edited((s) => (firstCase(s).scorers = [{ name: 'coherence' }])),
+        error: 'cltUnsupportedScorer',
+        contains: 'Supported scorers when running without saving: task_resolution (Task Resolution),',
       },
       {
         title: 'an unknown scorer name',
@@ -523,6 +604,26 @@ describe('cltSpec', () => {
         projectVersionId: '1bZ1',
         testCases: [{ number: 1, conversationGoal: 'Return an item.' }],
       });
+    });
+
+    it('trims context variable names and drops expected on scorers that take none', () => {
+      const spec = edited((s) => {
+        firstCase(s).contextVariables = [{ name: ' $Context.ChannelType ', value: 'Web' }];
+        firstCase(s).scorers = [{ name: 'task_resolution', expected: 'ignored' }];
+      });
+      validateCltSpec(spec, { target: 'ephemeral' });
+      expect(cltSpecToEphemeralInput(spec, AGENT).testCases[0]).to.deep.equal({
+        number: 1,
+        conversationGoal: 'Return an item.',
+        contextVariables: [{ variableName: '$Context.ChannelType', variableValue: 'Web' }],
+        scorers: [{ name: 'task_resolution' }],
+      });
+    });
+
+    it('narrows parsed YAML to CltTestSpec without a cast', () => {
+      const parsed: unknown = parse(readFileSync(join('test', 'fixtures', 'clt-spec-returns.yaml'), 'utf8'));
+      validateCltSpec(parsed, { target: 'ephemeral' });
+      expect(cltSpecToEphemeralInput(parsed, AGENT).persona).to.equal('FRUSTRATED');
     });
 
     it('throws cltAgentNotResolved when a published agent has no resolved IDs', () => {

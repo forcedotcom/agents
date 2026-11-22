@@ -10,6 +10,14 @@ Conversation-level test spec has an unrecognized field '%s' in `%s`. Allowed fie
 
 Conversation-level test case %s uses the turn-level field '%s'. Conversation-level tests are driven by a `conversationGoal`; remove '%s' or remove `testScope: CONVERSATION_LEVEL` to author a turn-level spec.
 
+# cltSpecNotObject
+
+Conversation-level test spec must be a YAML mapping with `name`, `testScope`, and `testCases`. Check that the file isn't empty and doesn't start with a list.
+
+# cltFieldNotString
+
+Conversation-level test spec field `%s` must be a string, but it's %s. Quote the value in the YAML (for example `"2026"`).
+
 # cltMissingName
 
 Conversation-level test spec must define a non-blank `name:`.
@@ -56,7 +64,7 @@ Conversation-level test spec has `persona` '%s'. Must be one of: %s.
 
 # cltInvalidEvaluationMode
 
-Conversation-level test spec has `evaluationMode` '%s'. Must be one of: TEXT, TEXT_VOICE.
+Conversation-level test spec has `evaluationMode` '%s'. Must be one of: %s.
 
 # cltInvalidMaxTurns
 
@@ -70,6 +78,10 @@ Conversation-level test case %s has a context variable without a non-blank `name
 
 Conversation-level test case %s defines context variable '%s' more than once. `X` and `$Context.X` name the same variable; keep one.
 
+# cltContextVariableInvalidValue
+
+Conversation-level test case %s context variable '%s' must have a string `value:`, but it's %s. Quote values that look like numbers or true/false (for example `value: "02134"`).
+
 # cltConnectionsMissingSurfaceType
 
 Conversation-level test case %s defines `connections:` without a non-blank `surfaceType:`. Set it to one of the agent's connection types (for example `Messaging`).
@@ -82,6 +94,10 @@ Conversation-level test case %s has a scorer without a non-blank `name:`.
 
 Conversation-level scorer '%s' on test case %s requires an `expected:` value.
 
+# cltScorerExpectedNotString
+
+Conversation-level scorer '%s' on test case %s has a non-string `expected:` (%s). Quote the value in the YAML.
+
 # cltScorerWrongTarget
 
 Conversation-level scorer '%s' on test case %s isn't supported %s. Supported %s: %s. Use '%s' %s.
@@ -92,7 +108,7 @@ Conversation-level scorer '%s' on test case %s (%s in Testing Center) isn't avai
 
 # cltUnsupportedScorer
 
-Conversation-level scorer '%s' on test case %s isn't supported for conversation-level tests. Supported scorers: %s.
+Conversation-level scorer '%s' on test case %s isn't supported for conversation-level tests. Supported scorers %s: %s.
 
 # cltEvaluationModeIgnored
 

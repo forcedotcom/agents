@@ -24,8 +24,14 @@ import type {
   ConversationTestCaseInput,
   CreateAndRunConversationTestSuiteInput,
   EphemeralConversationTestInput,
-} from './types.js';
-import { type CltRunTarget, CltScorerCatalog, cltScorersFor, isCltScorerName } from './cltScorerCatalog';
+} from './types';
+import {
+  type CltRunTarget,
+  CltScorerCatalog,
+  type CltScorerName,
+  cltScorersFor,
+  isCltScorerName,
+} from './cltScorerCatalog';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/agents', 'cltSpec');
@@ -35,6 +41,10 @@ const TARGET_PHRASES: Readonly<Record<CltRunTarget, string>> = {
   ephemeral: 'when running without saving',
   saved: 'in a saved suite',
 };
+
+/** Label each scorer key with its Testing Center name, for error messages. */
+const withUiLabels = (names: CltScorerName[]): string =>
+  names.map((name) => `${name} (${CltScorerCatalog[name].uiLabel})`).join(', ');
 
 /** Personas Core accepts (`ConversationPersonas`). Matched case-insensitively, sent upper-case. */
 export const CLT_PERSONAS: readonly ConversationPersona[] = ['DEFAULT', 'FRUSTRATED', 'DISTRACTED_DAD', 'ACCENT'];
@@ -93,13 +103,16 @@ export const isCltSpec = (spec: unknown): spec is CltTestSpec =>
  * can't be silently dropped. Scorers are limited to the ones the Testing Center wizard offers for CLT
  * and the server scores correctly.
  *
- * @param spec - The parsed YAML spec.
+ * @param spec - The parsed YAML spec. On success it's narrowed to `CltTestSpec`.
  * @param ctx.target - `ephemeral` (run without saving) or `saved` (create-and-run).
  */
-export const validateCltSpec = (spec: CltTestSpec, ctx: { target: CltRunTarget }): void => {
-  const raw: unknown = spec;
+export const validateCltSpec: (spec: unknown, ctx: { target: CltRunTarget }) => asserts spec is CltTestSpec = (
+  spec,
+  ctx
+) => {
+  const raw = spec;
   if (!isRecord(raw)) {
-    throw cltError('cltMissingTestCases');
+    throw cltError('cltSpecNotObject');
   }
   if (raw.testScope !== 'CONVERSATION_LEVEL') {
     throw cltError('cltWrongTestScope', [display(raw.testScope)]);
@@ -109,6 +122,8 @@ export const validateCltSpec = (spec: CltTestSpec, ctx: { target: CltRunTarget }
   if (!isNonBlankString(raw.name)) {
     throw cltError('cltMissingName');
   }
+  rejectNonString(raw, 'description');
+  rejectNonString(raw, 'subjectVersion');
   if (raw.subjectType !== undefined && raw.subjectType !== 'AGENT') {
     throw cltError('cltUnsupportedSubjectType', [display(raw.subjectType)]);
   }
@@ -176,9 +191,10 @@ export const cltSpecToCreateAndRunInput = (
 // ---------------------------------------------------------------------------
 
 const validateAgentIdentity = (raw: Record<string, unknown>): void => {
-  const hasSubject = isNonBlankString(raw.subjectName);
+  // A blank or non-string subjectName counts as set, so it isn't silently ignored next to `project`.
+  const hasSubject = raw.subjectName !== undefined;
   const hasProject = raw.project !== undefined;
-  if (hasSubject === hasProject) {
+  if (hasSubject === hasProject || (hasSubject && !isNonBlankString(raw.subjectName))) {
     throw cltError('cltAgentIdentity');
   }
   if (!hasProject) {
@@ -203,7 +219,7 @@ const validateSuiteSettings = (raw: Record<string, unknown>, target: CltRunTarge
 
   if (raw.evaluationMode !== undefined) {
     if (typeof raw.evaluationMode !== 'string' || !EVALUATION_MODES.includes(raw.evaluationMode)) {
-      throw cltError('cltInvalidEvaluationMode', [display(raw.evaluationMode)]);
+      throw cltError('cltInvalidEvaluationMode', [display(raw.evaluationMode), EVALUATION_MODES.join(', ')]);
     }
     if (target === 'ephemeral') {
       void Lifecycle.getInstance().emitWarning(messages.getMessage('cltEvaluationModeIgnored'));
@@ -294,6 +310,10 @@ const validateContextVariables = (contextVariables: unknown, caseNumber: number)
       throw cltError('cltContextVariableDuplicate', [caseNumber, bare]);
     }
     seen.add(bare);
+    // YAML reads unquoted numbers and booleans as non-strings (`02134` becomes 2134), so require a string.
+    if (typeof cv.value !== 'string') {
+      throw cltError('cltContextVariableInvalidValue', [caseNumber, bare, display(cv.value)]);
+    }
   });
 };
 
@@ -328,12 +348,15 @@ const validateScorers = (scorers: unknown, caseNumber: number, target: CltRunTar
     }
     const name = scorer.name;
     if (!isCltScorerName(name)) {
-      throw cltError('cltUnsupportedScorer', [name, caseNumber, availableScorerNames().join(', ')]);
+      throw cltError('cltUnsupportedScorer', [
+        name,
+        caseNumber,
+        TARGET_PHRASES[target],
+        withUiLabels(cltScorersFor(target)),
+      ]);
     }
+    // Check availability before `expected`, so an unusable scorer isn't first told to add a value.
     const entry = CltScorerCatalog[name];
-    if (entry.needsExpected && !isNonBlankString(scorer.expected)) {
-      throw cltError('cltScorerMissingExpected', [name, caseNumber]);
-    }
     if (entry.targets.length === 0) {
       throw cltError('cltScorerNotAvailable', [name, caseNumber, entry.uiLabel]);
     }
@@ -344,10 +367,16 @@ const validateScorers = (scorers: unknown, caseNumber: number, target: CltRunTar
         caseNumber,
         phrase,
         phrase,
-        cltScorersFor(target).join(', '),
+        withUiLabels(cltScorersFor(target)),
         name,
         entry.targets.map((t) => TARGET_PHRASES[t]).join(' or '),
       ]);
+    }
+    if (scorer.expected !== undefined && typeof scorer.expected !== 'string') {
+      throw cltError('cltScorerExpectedNotString', [name, caseNumber, display(scorer.expected)]);
+    }
+    if (entry.needsExpected && !isNonBlankString(scorer.expected)) {
+      throw cltError('cltScorerMissingExpected', [name, caseNumber]);
     }
   });
 };
@@ -359,10 +388,11 @@ const rejectUnknownFields = (value: Record<string, unknown>, allowed: string[], 
   }
 };
 
-const availableScorerNames = (): string[] =>
-  Object.entries(CltScorerCatalog)
-    .filter(([, entry]) => entry.targets.length > 0)
-    .map(([name]) => name);
+const rejectNonString = (value: Record<string, unknown>, field: string): void => {
+  if (value[field] !== undefined && typeof value[field] !== 'string') {
+    throw cltError('cltFieldNotString', [field, display(value[field])]);
+  }
+};
 
 // ---------------------------------------------------------------------------
 // Conversion helpers
@@ -387,8 +417,8 @@ const toTestCaseInput = (testCase: CltTestCase, idx: number): ConversationTestCa
   ...(testCase.contextVariables?.length
     ? {
         contextVariables: testCase.contextVariables.map((cv) => ({
-          variableName: cv.name,
-          variableValue: cv.value ?? '',
+          variableName: cv.name.trim(),
+          variableValue: cv.value,
         })),
       }
     : {}),
@@ -397,9 +427,12 @@ const toTestCaseInput = (testCase: CltTestCase, idx: number): ConversationTestCa
     : {}),
   ...(testCase.scorers?.length
     ? {
+        // Scorers that take no expected value omit it, as the NGT converter does.
         scorers: testCase.scorers.map((scorer) => ({
           name: scorer.name,
-          ...(scorer.expected !== undefined ? { expectedValue: scorer.expected } : {}),
+          ...(scorer.expected !== undefined && CltScorerCatalog[scorer.name].needsExpected
+            ? { expectedValue: scorer.expected }
+            : {}),
         })),
       }
     : {}),

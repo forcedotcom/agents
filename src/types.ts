@@ -690,7 +690,8 @@ export type CltTestSpec = {
   subjectVersion?: string;
   /** Draft agent. Exactly one of `subjectName` or `project`. */
   project?: CltProject;
-  persona?: ConversationPersona;
+  /** Case-insensitive; sent upper-case. */
+  persona?: ConversationPersona | Lowercase<ConversationPersona>;
   /** One limit for the whole suite. */
   maxTurns?: number;
   evaluationMode?: ConversationEvaluationMode;
