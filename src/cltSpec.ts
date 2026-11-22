@@ -117,7 +117,7 @@ export const validateCltSpec: (spec: unknown, ctx: { target: CltRunTarget }) => 
   if (raw.testScope !== 'CONVERSATION_LEVEL') {
     throw cltError('cltWrongTestScope', [display(raw.testScope)]);
   }
-  rejectUnknownFields(raw, SPEC_FIELDS, 'spec');
+  rejectUnknownFields(raw, SPEC_FIELDS, 'the spec');
 
   if (!isNonBlankString(raw.name)) {
     throw cltError('cltMissingName');
@@ -130,6 +130,9 @@ export const validateCltSpec: (spec: unknown, ctx: { target: CltRunTarget }) => 
   validateAgentIdentity(raw);
   validateSuiteSettings(raw, ctx.target);
 
+  if (raw.testCases !== undefined && !Array.isArray(raw.testCases)) {
+    throw shapeError('`testCases`', 'a list', raw.testCases, '- conversationGoal: Return an item.');
+  }
   if (!Array.isArray(raw.testCases) || raw.testCases.length === 0) {
     throw cltError('cltMissingTestCases');
   }
@@ -201,9 +204,9 @@ const validateAgentIdentity = (raw: Record<string, unknown>): void => {
     return;
   }
   if (!isRecord(raw.project)) {
-    throw cltError('cltProjectIncomplete');
+    throw shapeError('`project`', 'a mapping', raw.project, 'project: { projectId: 1bY..., projectVersionId: 1bZ... }');
   }
-  rejectUnknownFields(raw.project, PROJECT_FIELDS, 'project');
+  rejectUnknownFields(raw.project, PROJECT_FIELDS, '`project`');
   if (!isNonBlankString(raw.project.projectId) || !isNonBlankString(raw.project.projectVersionId)) {
     throw cltError('cltProjectIncomplete');
   }
@@ -229,8 +232,15 @@ const validateSuiteSettings = (raw: Record<string, unknown>, target: CltRunTarge
   if (raw.maxTurns !== undefined) {
     const max = CLT_MAX_TURNS[target];
     const turns = raw.maxTurns;
-    if (typeof turns !== 'number' || !Number.isInteger(turns) || turns < 1 || turns > max) {
-      throw cltError('cltInvalidMaxTurns', [display(turns), max]);
+    if (typeof turns === 'string' && /^\s*\d+\s*$/.test(turns)) {
+      throw cltError('cltMaxTurnsQuoted', [display(turns)]);
+    }
+    const isWholeNumber = typeof turns === 'number' && Number.isInteger(turns);
+    if (isWholeNumber && target === 'ephemeral' && turns > max && turns <= CLT_MAX_TURNS.saved) {
+      throw cltError('cltMaxTurnsSavedOnly', [turns, max, CLT_MAX_TURNS.saved]);
+    }
+    if (!isWholeNumber || turns < 1 || turns > max) {
+      throw cltError('cltInvalidMaxTurns', [display(turns), max, TARGET_PHRASES[target]]);
     }
   }
 
@@ -241,44 +251,52 @@ const validateSuiteSettings = (raw: Record<string, unknown>, target: CltRunTarge
 
 const validateSimulation = (simulation: unknown): void => {
   if (!isRecord(simulation)) {
-    throw cltError('cltInvalidSimulation');
+    throw shapeError('`simulation`', 'a mapping', simulation, 'enabled: true');
   }
-  rejectUnknownFields(simulation, SIMULATION_FIELDS, 'simulation');
+  rejectUnknownFields(simulation, SIMULATION_FIELDS, '`simulation`');
   if (simulation.enabled !== undefined && typeof simulation.enabled !== 'boolean') {
-    throw cltError('cltInvalidSimulation');
+    throw cltError('cltSimulationEnabledNotBoolean', [display(simulation.enabled)]);
   }
   if (simulation.excludedActions === undefined) {
     return;
   }
   if (!Array.isArray(simulation.excludedActions)) {
-    throw cltError('cltInvalidSimulation');
+    throw shapeError(
+      '`simulation.excludedActions`',
+      'a list',
+      simulation.excludedActions,
+      '- { subagent: Order_Management, actions: [Cancel_Order] }'
+    );
   }
-  simulation.excludedActions.forEach((entry: unknown) => {
+  simulation.excludedActions.forEach((entry: unknown, idx) => {
+    const where = `excluded action entry ${idx + 1} in \`simulation\``;
     if (!isRecord(entry)) {
-      throw cltError('cltInvalidSimulation');
+      throw shapeError(where, 'a mapping', entry, '- { subagent: Order_Management, actions: [Cancel_Order] }');
     }
-    rejectUnknownFields(entry, EXCLUDED_ACTION_FIELDS, 'simulation.excludedActions');
+    rejectUnknownFields(entry, EXCLUDED_ACTION_FIELDS, where);
+    if (!isNonBlankString(entry.subagent)) {
+      throw cltError('cltSimulationMissingSubagent', [idx + 1]);
+    }
     const actions: unknown = entry.actions;
-    if (
-      !isNonBlankString(entry.subagent) ||
-      !Array.isArray(actions) ||
-      actions.length === 0 ||
-      !actions.every(isNonBlankString)
-    ) {
-      throw cltError('cltInvalidSimulation');
+    if (!Array.isArray(actions) || actions.length === 0) {
+      throw cltError('cltSimulationMissingActions', [idx + 1, display(entry.subagent)]);
+    }
+    const badAction = actions.findIndex((action) => !isNonBlankString(action));
+    if (badAction !== -1) {
+      throw cltError('cltSimulationInvalidAction', [badAction + 1, idx + 1, display(actions[badAction])]);
     }
   });
 };
 
 const validateTestCase = (testCase: unknown, caseNumber: number, target: CltRunTarget): void => {
   if (!isRecord(testCase)) {
-    throw cltError('cltMissingConversationGoal', [caseNumber]);
+    throw shapeError(`test case ${caseNumber}`, 'a mapping', testCase, '- conversationGoal: Return an item.');
   }
   const turnLevelField = TURN_LEVEL_FIELDS.find((field) => field in testCase);
   if (turnLevelField) {
     throw cltError('cltTurnLevelField', [caseNumber, turnLevelField, turnLevelField]);
   }
-  rejectUnknownFields(testCase, TEST_CASE_FIELDS, `testCases[${caseNumber}]`);
+  rejectUnknownFields(testCase, TEST_CASE_FIELDS, `test case ${caseNumber}`);
 
   if (!isNonBlankString(testCase.conversationGoal)) {
     throw cltError('cltMissingConversationGoal', [caseNumber]);
@@ -293,26 +311,32 @@ const validateContextVariables = (contextVariables: unknown, caseNumber: number)
     return;
   }
   if (!Array.isArray(contextVariables)) {
-    throw cltError('cltContextVariableMissingName', [caseNumber]);
+    throw shapeError(
+      `\`contextVariables\` in test case ${caseNumber}`,
+      'a list',
+      contextVariables,
+      '- { name: ChannelType, value: Web }'
+    );
   }
   const seen = new Set<string>();
-  contextVariables.forEach((cv: unknown) => {
+  contextVariables.forEach((cv: unknown, idx) => {
+    const where = `context variable ${idx + 1} in test case ${caseNumber}`;
     if (!isRecord(cv)) {
-      throw cltError('cltContextVariableMissingName', [caseNumber]);
+      throw shapeError(where, 'a mapping', cv, '- { name: ChannelType, value: Web }');
     }
-    rejectUnknownFields(cv, CONTEXT_VARIABLE_FIELDS, `testCases[${caseNumber}].contextVariables`);
+    rejectUnknownFields(cv, CONTEXT_VARIABLE_FIELDS, where);
     const bare = bareContextVariableName(cv.name);
     if (bare === undefined) {
       throw cltError('cltContextVariableMissingName', [caseNumber]);
     }
     // "ChannelType" and "$Context.ChannelType" name the same variable (Core `ConversationContextVariables`).
     if (seen.has(bare)) {
-      throw cltError('cltContextVariableDuplicate', [caseNumber, bare]);
+      throw cltError('cltContextVariableDuplicate', [caseNumber, display(bare)]);
     }
     seen.add(bare);
     // YAML reads unquoted numbers and booleans as non-strings (`02134` becomes 2134), so require a string.
     if (typeof cv.value !== 'string') {
-      throw cltError('cltContextVariableInvalidValue', [caseNumber, bare, display(cv.value)]);
+      throw cltError('cltContextVariableInvalidValue', [caseNumber, display(bare), display(cv.value)]);
     }
   });
 };
@@ -321,10 +345,11 @@ const validateConnections = (connections: unknown, caseNumber: number): void => 
   if (connections === undefined) {
     return;
   }
+  const where = `\`connections\` in test case ${caseNumber}`;
   if (!isRecord(connections)) {
-    throw cltError('cltConnectionsMissingSurfaceType', [caseNumber]);
+    throw shapeError(where, 'a mapping', connections, 'surfaceType: Messaging');
   }
-  rejectUnknownFields(connections, CONNECTIONS_FIELDS, `testCases[${caseNumber}].connections`);
+  rejectUnknownFields(connections, CONNECTIONS_FIELDS, where);
   if (!isNonBlankString(connections.surfaceType)) {
     throw cltError('cltConnectionsMissingSurfaceType', [caseNumber]);
   }
@@ -336,20 +361,21 @@ const validateScorers = (scorers: unknown, caseNumber: number, target: CltRunTar
     return;
   }
   if (!Array.isArray(scorers)) {
-    throw cltError('cltScorerMissingName', [caseNumber]);
+    throw shapeError(`\`scorers\` in test case ${caseNumber}`, 'a list', scorers, '- name: task_resolution');
   }
-  scorers.forEach((scorer: unknown) => {
+  scorers.forEach((scorer: unknown, idx) => {
+    const where = `scorer ${idx + 1} in test case ${caseNumber}`;
     if (!isRecord(scorer)) {
-      throw cltError('cltScorerMissingName', [caseNumber]);
+      throw shapeError(where, 'a mapping', scorer, '- name: task_resolution');
     }
-    rejectUnknownFields(scorer, SCORER_FIELDS, `testCases[${caseNumber}].scorers`);
+    rejectUnknownFields(scorer, SCORER_FIELDS, where);
     if (!isNonBlankString(scorer.name)) {
       throw cltError('cltScorerMissingName', [caseNumber]);
     }
     const name = scorer.name;
     if (!isCltScorerName(name)) {
       throw cltError('cltUnsupportedScorer', [
-        name,
+        display(name),
         caseNumber,
         TARGET_PHRASES[target],
         withUiLabels(cltScorersFor(target)),
@@ -384,8 +410,25 @@ const validateScorers = (scorers: unknown, caseNumber: number, target: CltRunTar
 const rejectUnknownFields = (value: Record<string, unknown>, allowed: string[], where: string): void => {
   const unknownField = Object.keys(value).find((key) => !allowed.includes(key));
   if (unknownField !== undefined) {
-    throw cltError('cltUnknownField', [unknownField, where, allowed.join(', ')]);
+    throw cltError('cltUnknownField', [display(unknownField), where, allowed.join(', ')]);
   }
+};
+
+/** Error for a value with the wrong YAML shape, for example a bare string where a `- name: ...` entry belongs. */
+const shapeError = (where: string, expected: string, value: unknown, example: string): SfError =>
+  cltError('cltInvalidShape', [where, expected, describeShape(value), example]);
+
+const describeShape = (value: unknown): string => {
+  if (value === null || value === undefined) {
+    return 'empty';
+  }
+  if (Array.isArray(value)) {
+    return 'a list';
+  }
+  if (typeof value === 'object') {
+    return 'a mapping';
+  }
+  return `the ${typeof value === 'string' ? 'text' : typeof value} ${display(value)}`;
 };
 
 const rejectNonString = (value: Record<string, unknown>, field: string): void => {
@@ -406,7 +449,7 @@ const agentTarget = (
     return { projectId: spec.project.projectId, projectVersionId: spec.project.projectVersionId };
   }
   if (!agent) {
-    throw cltError('cltAgentNotResolved', [String(spec.subjectName)]);
+    throw cltError('cltAgentNotResolved', [display(spec.subjectName)]);
   }
   return { agentId: agent.agentId, agentVersionId: agent.agentVersionId };
 };
@@ -479,8 +522,20 @@ const bareContextVariableName = (name: unknown): string | undefined => {
   return bare === '' ? undefined : bare;
 };
 
-/** Renders a spec value for an error message. Non-strings (numbers, objects from bad YAML) are shown as JSON. */
-const display = (value: unknown): string => (typeof value === 'string' ? value : JSON.stringify(value) ?? 'undefined');
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f]/g;
+const MAX_DISPLAY_LENGTH = 200;
+
+/**
+ * Renders a spec value for an error message. Non-strings (numbers, objects from bad YAML) are shown as JSON.
+ * Control characters are escaped, so a spec can't hide terminal escape sequences in an error, and long values
+ * are cut short.
+ */
+const display = (value: unknown): string => {
+  const text = typeof value === 'string' ? value : JSON.stringify(value) ?? 'undefined';
+  const safe = text.replace(CONTROL_CHARS, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+  return safe.length > MAX_DISPLAY_LENGTH ? `${safe.slice(0, MAX_DISPLAY_LENGTH)}...` : safe;
+};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);

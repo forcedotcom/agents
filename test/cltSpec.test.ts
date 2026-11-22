@@ -236,7 +236,8 @@ describe('cltSpec', () => {
             delete s.subjectName;
             s.project = 'abc';
           }),
-        error: 'cltProjectIncomplete',
+        error: 'cltInvalidShape',
+        contains: "`project` must be a mapping, but it's the text abc.",
       },
       {
         title: 'project missing projectVersionId',
@@ -289,14 +290,27 @@ describe('cltSpec', () => {
       {
         title: 'maxTurns as string',
         spec: () => edited((s) => (s.maxTurns = '10')),
-        error: 'cltInvalidMaxTurns',
-        contains: "'10'",
+        error: 'cltMaxTurnsQuoted',
+        contains: 'Remove the quotes',
       },
       {
         title: 'maxTurns over the ephemeral limit',
         spec: () => edited((s) => (s.maxTurns = 31)),
+        error: 'cltMaxTurnsSavedOnly',
+        contains: 'over the limit of 30 when running without saving. Saved suites allow up to 100',
+      },
+      {
+        title: 'maxTurns over the saved limit',
+        spec: () => edited((s) => (s.maxTurns = 101)),
         error: 'cltInvalidMaxTurns',
-        contains: 'to 30',
+        contains: 'from 1 to 100 in a saved suite',
+        target: 'saved',
+      },
+      {
+        title: 'maxTurns over both limits without saving',
+        spec: () => edited((s) => (s.maxTurns = 101)),
+        error: 'cltInvalidMaxTurns',
+        contains: 'from 1 to 30 when running without saving',
       },
       {
         title: 'maxTurns over the saved limit',
@@ -308,7 +322,8 @@ describe('cltSpec', () => {
       {
         title: 'simulation not an object',
         spec: () => edited((s) => (s.simulation = true)),
-        error: 'cltInvalidSimulation',
+        error: 'cltInvalidShape',
+        contains: '`simulation` must be a mapping',
       },
       {
         title: 'unknown simulation field',
@@ -318,34 +333,67 @@ describe('cltSpec', () => {
       {
         title: 'non-boolean simulation.enabled',
         spec: () => edited((s) => (s.simulation = { enabled: 'yes' })),
-        error: 'cltInvalidSimulation',
+        error: 'cltSimulationEnabledNotBoolean',
+        contains: '`simulation.enabled` yes',
       },
       {
         title: 'excludedActions not a list',
         spec: () => edited((s) => (s.simulation = { excludedActions: 'Cancel_Order' })),
-        error: 'cltInvalidSimulation',
+        error: 'cltInvalidShape',
+        contains: '`simulation.excludedActions` must be a list',
       },
       {
         title: 'excludedActions entry not an object',
         spec: () => edited((s) => (s.simulation = { excludedActions: ['Cancel_Order'] })),
-        error: 'cltInvalidSimulation',
+        error: 'cltInvalidShape',
+        contains: 'excluded action entry 1 in `simulation` must be a mapping',
       },
       {
         title: 'excludedActions entry with empty actions',
         spec: () => edited((s) => (s.simulation = { excludedActions: [{ subagent: 'Orders', actions: [] }] })),
-        error: 'cltInvalidSimulation',
+        error: 'cltSimulationMissingActions',
+        contains: "entry 1 in `simulation` (subagent 'Orders')",
+      },
+      {
+        title: 'excludedActions entry without a subagent',
+        spec: () =>
+          edited(
+            (s) =>
+              (s.simulation = {
+                excludedActions: [
+                  { subagent: 'Orders', actions: ['A'] },
+                  { subagent: ' ', actions: ['B'] },
+                ],
+              })
+          ),
+        error: 'cltSimulationMissingSubagent',
+        contains: 'entry 2',
+      },
+      {
+        title: 'excludedActions entry with a blank action',
+        spec: () => edited((s) => (s.simulation = { excludedActions: [{ subagent: 'Orders', actions: ['A', ''] }] })),
+        error: 'cltSimulationInvalidAction',
+        contains: 'action 2 in excluded action entry 1',
       },
       {
         title: 'unknown excludedActions field',
         spec: () => edited((s) => (s.simulation = { excludedActions: [{ topic: 'Orders', actions: ['A'] }] })),
         error: 'cltUnknownField',
+        contains: "'topic' in excluded action entry 1 in `simulation`",
+      },
+      {
+        title: 'testCases not a list',
+        spec: () => edited((s) => (s.testCases = { conversationGoal: 'x' })),
+        error: 'cltInvalidShape',
+        contains: '`testCases` must be a list',
       },
       { title: 'missing testCases', spec: () => edited((s) => delete s.testCases), error: 'cltMissingTestCases' },
       { title: 'empty testCases', spec: () => edited((s) => (s.testCases = [])), error: 'cltMissingTestCases' },
       {
         title: 'test case not an object',
         spec: () => edited((s) => (s.testCases = ['Return an item.'])),
-        error: 'cltMissingConversationGoal',
+        error: 'cltInvalidShape',
+        contains: "test case 1 must be a mapping, but it's the text Return an item.",
       },
       {
         title: 'turn-level utterance in a test case',
@@ -362,7 +410,7 @@ describe('cltSpec', () => {
         title: 'unknown test case field',
         spec: () => edited((s) => (firstCase(s).goal = 'x')),
         error: 'cltUnknownField',
-        contains: 'testCases[1]',
+        contains: "'goal' in test case 1.",
       },
       {
         title: 'blank conversationGoal',
@@ -372,12 +420,14 @@ describe('cltSpec', () => {
       {
         title: 'contextVariables not a list',
         spec: () => edited((s) => (firstCase(s).contextVariables = { name: 'A' })),
-        error: 'cltContextVariableMissingName',
+        error: 'cltInvalidShape',
+        contains: "`contextVariables` in test case 1 must be a list, but it's a mapping",
       },
       {
         title: 'context variable not an object',
         spec: () => edited((s) => (firstCase(s).contextVariables = ['A'])),
-        error: 'cltContextVariableMissingName',
+        error: 'cltInvalidShape',
+        contains: 'context variable 1 in test case 1 must be a mapping',
       },
       {
         title: 'context variable without a name',
@@ -432,7 +482,20 @@ describe('cltSpec', () => {
       {
         title: 'connections not an object',
         spec: () => edited((s) => (firstCase(s).connections = 'Messaging')),
-        error: 'cltConnectionsMissingSurfaceType',
+        error: 'cltInvalidShape',
+        contains: 'For example: `surfaceType: Messaging`',
+      },
+      {
+        title: 'blank connections (YAML null)',
+        spec: () => edited((s) => (firstCase(s).connections = null)),
+        error: 'cltInvalidShape',
+        contains: "must be a mapping, but it's empty.",
+      },
+      {
+        title: 'a test case written as a list',
+        spec: () => edited((s) => (s.testCases = [['Return an item.']])),
+        error: 'cltInvalidShape',
+        contains: "test case 1 must be a mapping, but it's a list.",
       },
       {
         title: 'connections without surfaceType',
@@ -447,12 +510,36 @@ describe('cltSpec', () => {
       {
         title: 'scorers not a list',
         spec: () => edited((s) => (firstCase(s).scorers = 'task_resolution')),
-        error: 'cltScorerMissingName',
+        error: 'cltInvalidShape',
+        contains: '`scorers` in test case 1 must be a list',
       },
       {
         title: 'scorer not an object',
         spec: () => edited((s) => (firstCase(s).scorers = ['task_resolution'])),
-        error: 'cltScorerMissingName',
+        error: 'cltInvalidShape',
+        contains:
+          "scorer 1 in test case 1 must be a mapping, but it's the text task_resolution. For example: `- name: task_resolution`",
+      },
+      {
+        title: 'unknown field on the second scorer',
+        spec: () =>
+          edited(
+            (s) => (firstCase(s).scorers = [{ name: 'task_resolution' }, { name: 'task_resolution', expect: 'x' }])
+          ),
+        error: 'cltUnknownField',
+        contains: "'expect' in scorer 2 in test case 1.",
+      },
+      {
+        title: 'a scorer name with terminal escape sequences (escaped, not echoed)',
+        spec: () => edited((s) => (firstCase(s).scorers = [{ name: 'bad\u001b[31mname' }])),
+        error: 'cltUnsupportedScorer',
+        contains: "'bad\\u001b[31mname'",
+      },
+      {
+        title: 'an unknown field with control characters and a very long name',
+        spec: () => edited((s) => (s[`x\u0007${'y'.repeat(300)}`] = 1)),
+        error: 'cltUnknownField',
+        contains: `'x\\u0007${'y'.repeat(193)}...'`,
       },
       {
         title: 'scorer without a name',

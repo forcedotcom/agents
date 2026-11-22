@@ -4,7 +4,7 @@ Conversation-level test spec has `testScope` '%s'. Set `testScope: CONVERSATION_
 
 # cltUnknownField
 
-Conversation-level test spec has an unrecognized field '%s' in `%s`. Allowed fields there: %s. Check the spelling; field names are case-sensitive.
+Conversation-level test spec has an unrecognized field '%s' in %s. Allowed fields there: %s. Check the spelling; field names are case-sensitive.
 
 # cltTurnLevelField
 
@@ -38,9 +38,25 @@ Conversation-level test spec `project:` must define both a non-blank `projectId`
 
 Conversation-level test spec sets `subjectVersion:` together with `project:`. `subjectVersion` applies only to `subjectName`; the draft version comes from `project.projectVersionId`.
 
-# cltInvalidSimulation
+# cltInvalidShape
 
-Conversation-level test spec has an invalid `simulation:` block. `enabled` must be true or false, and each `excludedActions` entry needs a non-blank `subagent` and a non-empty `actions` list of action names.
+Conversation-level test spec: %s must be %s, but it's %s. For example: `%s`
+
+# cltSimulationEnabledNotBoolean
+
+Conversation-level test spec has `simulation.enabled` %s. It must be true or false, without quotes.
+
+# cltSimulationMissingSubagent
+
+Conversation-level test spec excluded action entry %s in `simulation` needs a non-blank `subagent:`.
+
+# cltSimulationMissingActions
+
+Conversation-level test spec excluded action entry %s in `simulation` (subagent '%s') needs a non-empty `actions:` list of action names.
+
+# cltSimulationInvalidAction
+
+Conversation-level test spec has a blank or non-text action %s in excluded action entry %s in `simulation` (%s). Each action must be an action name.
 
 # cltAgentNotResolved
 
@@ -68,7 +84,15 @@ Conversation-level test spec has `evaluationMode` '%s'. Must be one of: %s.
 
 # cltInvalidMaxTurns
 
-Conversation-level test spec has `maxTurns` '%s'. It must be a whole number from 1 to %s.
+Conversation-level test spec has `maxTurns` %s. It must be a whole number from 1 to %s %s.
+
+# cltMaxTurnsQuoted
+
+Conversation-level test spec has `maxTurns` as the text '%s'. Remove the quotes so it's a number.
+
+# cltMaxTurnsSavedOnly
+
+Conversation-level test spec has `maxTurns` %s, over the limit of %s when running without saving. Saved suites allow up to %s: save the suite, or lower `maxTurns`.
 
 # cltContextVariableMissingName
 
