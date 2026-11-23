@@ -1,0 +1,26 @@
+{
+  "status": "Completed",
+  "summary": { "totalNumberOfTestCases": 2, "taskResolutionPassPercent": 50 },
+  "testCases": [
+    {
+      "testNumber": 1,
+      "subjectResponse": "{&quot;status&quot;:&quot;COMPLETED&quot;,&quot;completionReason&quot;:&quot;GOAL_ACHIEVED&quot;}",
+      "testScorerResults": [
+        {
+          "scorerName": "task_resolution",
+          "scorerResponse": "{&quot;status&quot;:&quot;PASS&quot;,&quot;score&quot;:5,&quot;reasoning&quot;:&quot;The agent gave the order status.&quot;}"
+        }
+      ]
+    },
+    {
+      "testNumber": 2,
+      "subjectResponse": "{&quot;status&quot;:&quot;COMPLETED&quot;}",
+      "testScorerResults": [
+        {
+          "scorerName": "task_resolution",
+          "scorerResponse": "{&quot;content&quot;:{&quot;status&quot;:&quot;FAIL&quot;,&quot;score&quot;:1.5,&quot;explanation&quot;:&quot;No delivery date given.&quot;}}"
+        }
+      ]
+    }
+  ]
+}

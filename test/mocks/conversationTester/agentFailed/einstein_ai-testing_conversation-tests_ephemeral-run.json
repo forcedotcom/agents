@@ -1,0 +1,15 @@
+{
+  "status": "Failed",
+  "testCases": [
+    {
+      "testNumber": 1,
+      "subjectResponse": "{&quot;content&quot;:{&quot;status&quot;:&quot;FAILED&quot;,&quot;completionReason&quot;:&quot;AGENT_FAILURE&quot;,&quot;conversationTurns&quot;:[]}}",
+      "testScorerResults": [
+        {
+          "scorerName": "task_resolution",
+          "scorerResponse": "{&quot;status&quot;:&quot;ERROR&quot;,&quot;reasoning&quot;:&quot;The agent under test failed during the simulated conversation.&quot;}"
+        }
+      ]
+    }
+  ]
+}

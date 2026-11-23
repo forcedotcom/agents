@@ -1149,3 +1149,47 @@ export type NamedUserJwtResponse = {
   issued_at: number;
   api_instance_url: string;
 };
+
+// Response types for the conversation-test endpoints (`ConversationTester`).
+
+/** Body of a run's results: ephemeral-run, and `runs/{runId}/results` for a saved suite. */
+export type ConversationTestResultsResponse = {
+  /** ephemeral-run sends `Completed` or `Failed`; saved runs use the run status (`SUCCESS`, `FAILED`, ...). */
+  status: string;
+  errorRepresentation?: { errorCode?: string; errorMessage?: string; retryable?: boolean };
+  /** Omitted until the run is complete. */
+  summary?: {
+    totalNumberOfTestCases?: number;
+    taskResolutionPassPercent?: number;
+    acceptanceCriteriaPassPercent?: number;
+  } & Record<string, number | undefined>;
+  testCases: ConversationTestCaseResult[];
+};
+
+export type ConversationTestCaseResult = {
+  /** The 1-based `number` sent in the request. */
+  testNumber: number;
+  /** Saved suites only. */
+  testCaseId?: string;
+  /** JSON string: the simulated conversation (turns, topics, actions, completion reason). */
+  subjectResponse?: string;
+  testScorerResults?: Array<{ scorerName: string; scorerResponse?: string }>;
+};
+
+/** A scorer's result, read from its JSON-string `scorerResponse` by `parseConversationScorerResponse`. */
+export type ConversationScorerOutcome = {
+  /** For example `PASS`, `FAIL` or `ERROR`. */
+  status?: string;
+  score?: number | string;
+  reasoning?: string;
+};
+
+/** Body returned by `POST conversation-test-suites/create-and-run`. */
+export type CreateAndRunConversationTestSuiteResponse = {
+  status: string;
+  /** The saved suite (1W4). */
+  testSuiteId: string;
+  /** The run that was started (3A2). Poll it with `AgentforceStudioTester`. */
+  runId: string;
+  statusMessage?: string;
+};

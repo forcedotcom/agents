@@ -102,6 +102,10 @@ export {
   type ConversationPreviewConfig,
   type EphemeralConversationTestInput,
   type CreateAndRunConversationTestSuiteInput,
+  type ConversationTestResultsResponse,
+  type ConversationTestCaseResult,
+  type ConversationScorerOutcome,
+  type CreateAndRunConversationTestSuiteResponse,
 
   // Agentforce Studio Testing Types
   type AgentforceStudioTestStartResponse,
@@ -154,6 +158,11 @@ export {
 export { Agent, AgentCreateLifecycleStages, type AgentInstance } from './agent';
 export { AgentTester } from './agentTester';
 export { AgentforceStudioTester, normalizeAgentforceStudioResults } from './agentforceStudioTester';
+export {
+  ConversationTester,
+  normalizeConversationTestResults,
+  parseConversationScorerResponse,
+} from './conversationTester';
 export { createAgentTester, type CreateAgentTesterOptions, type CreateAgentTesterResult } from './agentTesterFactory';
 export {
   type NgtScorerName,
