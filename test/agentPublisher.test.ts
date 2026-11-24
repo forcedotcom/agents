@@ -18,7 +18,7 @@ import { join, resolve } from 'node:path';
 import { mkdir, rm, writeFile, readFile } from 'node:fs/promises';
 import { expect } from 'chai';
 import { MockTestOrgData, TestContext } from '@salesforce/core/testSetup';
-import { Connection, SfError, SfProject } from '@salesforce/core';
+import { Connection, Lifecycle, SfError, SfProject } from '@salesforce/core';
 import { ComponentSetBuilder, ComponentSet, MetadataApiRetrieve } from '@salesforce/source-deploy-retrieve';
 import { type AgentJson } from '../src';
 import * as utils from '../src/utils';
@@ -257,6 +257,182 @@ describe('AgentPublisher', () => {
       expect(result).to.have.property('developerName', 'test_agent');
       expect(retrieveAgentMetadataStub.calledOnce).to.be.true;
       expect(deployAuthoringBundleStub.calledOnce).to.be.true;
+    });
+
+    describe('when a step fails after the publish committed a BotVersion', () => {
+      const botVersionQuery = "SELECT DeveloperName, VersionNumber FROM BotVersion WHERE Id='0Bv000000000002'";
+
+      beforeEach(() => {
+        // Existing agent: the POST to .../0Xx000000000001/versions commits BotVersion 0Bv000000000002.
+        process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishNewAgentVersion-Success');
+        $$.SANDBOX.stub(utils, 'useNamedUserJwt').resolves(connection);
+        $$.SANDBOX.stub(connection, 'refreshAuth').resolves();
+      });
+
+      async function expectPublishError(): Promise<SfError> {
+        try {
+          await publisher.publishAgentJson();
+        } catch (error) {
+          expect(error).to.be.instanceOf(SfError);
+          return error as SfError;
+        }
+        return expect.fail('Expected error was not thrown');
+      }
+
+      it('should keep the original error and add the published version to data and actions', async () => {
+        $$.SANDBOX.stub(connection, 'singleRecordQuery')
+          .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
+          .resolves({ Id: '0Xx000000000001' })
+          .withArgs(botVersionQuery)
+          .resolves({ DeveloperName: 'v2', VersionNumber: 2 });
+        const telemetryStub = $$.SANDBOX.stub(Lifecycle.getInstance(), 'emitTelemetry').resolves();
+
+        publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
+        const retrieveError = new SfError('Unable to retrieve newly created Agent metadata.', 'AgentRetrievalError', [
+          'Retrieve the agent metadata using the "project retrieve start" command.',
+        ]);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        $$.SANDBOX.stub(publisher as any, 'retrieveAgentMetadata').rejects(retrieveError);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const deployAuthoringBundleStub = $$.SANDBOX.stub(publisher as any, 'deployAuthoringBundle').resolves();
+
+        const error = await expectPublishError();
+
+        expect(error.name).to.equal('AgentRetrievalError');
+        expect(error.message).to.equal('Unable to retrieve newly created Agent metadata.');
+        expect(error.data).to.deep.equal({
+          publishedAgent: {
+            developerName: 'test_agent',
+            botId: '0Xx000000000001',
+            botVersionId: '0Bv000000000002',
+            versionNumber: 2,
+            target: 'test_agent.v2',
+            failedStep: 'retrieve',
+          },
+        });
+        expect(error.actions).to.have.length(2);
+        expect(error.actions?.[0]).to.include('version 2 (BotVersion 0Bv000000000002)');
+        expect(error.actions?.[0]).to.include("Don't run the publish command again");
+        expect(error.actions?.[0]).to.include('<target>test_agent.v2</target>');
+        expect(error.actions?.[1]).to.include('project retrieve start');
+        expect(deployAuthoringBundleStub.notCalled).to.be.true;
+        expect(telemetryStub.calledOnce).to.be.true;
+        expect(telemetryStub.firstCall.args[0]).to.deep.equal({
+          eventName: 'agent_publish_post_commit_failed',
+          errName: 'AgentRetrievalError',
+          failedStep: 'retrieve',
+          retrieveSkipped: false,
+          botVersionResolved: true,
+        });
+      });
+
+      it('should report the BotVersion Id without a version number when the BotVersion lookup fails', async () => {
+        $$.SANDBOX.stub(connection, 'singleRecordQuery')
+          .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
+          .resolves({ Id: '0Xx000000000001' })
+          .withArgs(botVersionQuery)
+          .rejects(new Error('query failed'));
+        $$.SANDBOX.stub(Lifecycle.getInstance(), 'emitTelemetry').resolves();
+
+        publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, true);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const deployAuthoringBundleStub = $$.SANDBOX.stub(publisher as any, 'deployAuthoringBundle').resolves();
+
+        const error = await expectPublishError();
+
+        expect(error.message).to.include('Unable to find BotVersion with id 0Bv000000000002');
+        expect(error.data).to.deep.equal({
+          publishedAgent: {
+            developerName: 'test_agent',
+            botId: '0Xx000000000001',
+            botVersionId: '0Bv000000000002',
+            failedStep: 'botVersionLookup',
+          },
+        });
+        expect(error.actions?.[0]).to.include('as BotVersion 0Bv000000000002 before');
+        expect(error.actions?.[0]).to.not.include('<target>');
+        expect(deployAuthoringBundleStub.notCalled).to.be.true;
+      });
+
+      it('should merge into existing error data when the bundle deploy fails', async () => {
+        $$.SANDBOX.stub(connection, 'singleRecordQuery')
+          .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
+          .resolves({ Id: '0Xx000000000001' })
+          .withArgs(botVersionQuery)
+          .resolves({ DeveloperName: 'v2', VersionNumber: 2 });
+        $$.SANDBOX.stub(Lifecycle.getInstance(), 'emitTelemetry').resolves();
+
+        publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, true);
+        const deployError = new SfError('Deployment Failed', 'Deployment Failed');
+        deployError.setData({ componentFailures: 1 });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        $$.SANDBOX.stub(publisher as any, 'deployAuthoringBundle').rejects(deployError);
+
+        const error = await expectPublishError();
+
+        expect(error.name).to.equal('Deployment Failed');
+        expect(error.data).to.deep.include({ componentFailures: 1 });
+        expect(error.data).to.have.nested.property('publishedAgent.versionNumber', 2);
+        expect(error.data).to.have.nested.property('publishedAgent.failedStep', 'bundleDeploy');
+        expect(error.actions).to.have.length(1);
+        // skipRetrieve is true here, so the action doesn't mention the retrieve step
+        expect(error.actions?.[0]).to.include('<target>test_agent.v2</target>');
+        expect(error.actions?.[0]).to.not.include('retrieve the agent metadata');
+      });
+
+      it('should still throw the annotated error when a telemetry listener fails', async () => {
+        $$.SANDBOX.stub(connection, 'singleRecordQuery')
+          .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
+          .resolves({ Id: '0Xx000000000001' })
+          .withArgs(botVersionQuery)
+          .resolves({ DeveloperName: 'v2', VersionNumber: 2 });
+        $$.SANDBOX.stub(Lifecycle.getInstance(), 'emitTelemetry').rejects(new Error('telemetry sink down'));
+
+        publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, true);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        $$.SANDBOX.stub(publisher as any, 'deployAuthoringBundle').rejects(
+          new SfError('Deployment Failed', 'Deployment Failed')
+        );
+
+        const error = await expectPublishError();
+
+        expect(error.name).to.equal('Deployment Failed');
+        expect(error.data).to.have.nested.property('publishedAgent.botVersionId', '0Bv000000000002');
+        expect(error.actions?.[0]).to.include("Don't run the publish command again");
+      });
+
+      it('should not annotate errors when the publish POST itself fails', async () => {
+        process.env.SF_MOCK_DIR = join('test', 'mocks', 'publishAgentJson-Error');
+        $$.SANDBOX.stub(connection, 'singleRecordQuery')
+          .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
+          .throws(new SfError('No record found', 'SingleRecordQuery_NoRecords'));
+        const telemetryStub = $$.SANDBOX.stub(Lifecycle.getInstance(), 'emitTelemetry').resolves();
+
+        publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
+
+        const error = await expectPublishError();
+
+        expect(error.name).to.equal('CreateAgentJsonError');
+        expect(error.data).to.not.have.property('publishedAgent');
+        expect(telemetryStub.called).to.be.false;
+      });
+
+      it('should not annotate errors when the publish POST request rejects', async () => {
+        $$.SANDBOX.stub(connection, 'singleRecordQuery')
+          .withArgs("SELECT Id FROM BotDefinition WHERE DeveloperName='test_agent'")
+          .resolves({ Id: '0Xx000000000001' });
+        $$.SANDBOX.stub(MaybeMock.prototype, 'request').rejects(new SfError('Gateway Timeout', 'ServerError'));
+        const telemetryStub = $$.SANDBOX.stub(Lifecycle.getInstance(), 'emitTelemetry').resolves();
+
+        publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, true);
+
+        const error = await expectPublishError();
+
+        expect(error.name).to.equal('ServerError');
+        expect((error.data as { publishedAgent?: unknown } | undefined)?.publishedAgent).to.be.undefined;
+        expect(error.actions ?? []).to.have.length(0);
+        expect(telemetryStub.called).to.be.false;
+      });
     });
 
     describe('sourceType', () => {
@@ -628,6 +804,36 @@ describe('AgentPublisher', () => {
       expect(deployStub.firstCall.args[0]).to.deep.equal({ usernameOrConnection: connection });
 
       // Ensure the target was removed from the local file after deploy
+      const finalContent = await readFile(bundleMetaPath, 'utf-8');
+      expect(finalContent).to.not.include('<target>');
+
+      validateStub.restore();
+    });
+
+    it('should remove the target from the local file even when the deploy poll throws', async () => {
+      await createTestBundleStructure('test_agent');
+      const developerName = 'test_agent';
+      const bundleDir = join('force-app', 'main', 'default', 'aiAuthoringBundles', developerName);
+      const bundleMetaPath = join(bundleDir, `${developerName}.bundle-meta.xml`);
+
+      const validateStub = createValidateDeveloperNameStub(developerName, bundleDir, bundleMetaPath);
+      const publisher = new ScriptAgentPublisher(connection, sfProject, agentJson, false);
+
+      // e.g. a poll timeout, or a scopedPostDeploy listener throwing on a failed deploy
+      const pollStatusStub = $$.SANDBOX.stub().rejects(new SfError('Deployment Failed', 'Deployment Failed'));
+      const deployStub = $$.SANDBOX.stub().resolves({ pollStatus: pollStatusStub });
+      $$.SANDBOX.stub(ComponentSet, 'fromSource').returns({ deploy: deployStub } as never);
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      const deployAuthoringBundle = (publisher as any).deployAuthoringBundle.bind(publisher);
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+        await deployAuthoringBundle('v1');
+        expect.fail('Expected error was not thrown');
+      } catch (error) {
+        expect((error as SfError).name).to.equal('Deployment Failed');
+      }
+
       const finalContent = await readFile(bundleMetaPath, 'utf-8');
       expect(finalContent).to.not.include('<target>');
 
