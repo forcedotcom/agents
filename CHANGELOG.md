@@ -1,3 +1,30 @@
+## [2.5.3](https://github.com/forcedotcom/agents/compare/2.5.2...2.5.3) (2026-11-24)
+
+
+### Bug Fixes
+
+* explain why the nameduser token call failed (W-22799717) ([#402](https://github.com/forcedotcom/agents/issues/402)) ([c3593cb](https://github.com/forcedotcom/agents/commit/c3593cb5c75200f50e951d00cccaf6fa0c6a2253))
+
+
+
+## [2.5.2](https://github.com/forcedotcom/agents/compare/2.5.1...2.5.2) (2026-11-24)
+
+
+### Bug Fixes
+
+* W-24023175 don't fall back to internal Agent API hosts for customer orgs ([#404](https://github.com/forcedotcom/agents/issues/404)) ([1960efb](https://github.com/forcedotcom/agents/commit/1960efb09787c52729364812d6c14a7dbe4b24b6))
+
+
+
+## [2.5.1](https://github.com/forcedotcom/agents/compare/2.5.0...2.5.1) (2026-11-24)
+
+
+### Bug Fixes
+
+* return botVersionId when publish fails after the BotVersion commit @W-24949433@ ([#403](https://github.com/forcedotcom/agents/issues/403)) ([a2be9d9](https://github.com/forcedotcom/agents/commit/a2be9d9865d34f2be719cf1eb27c9234feebfd88))
+
+
+
 # [2.5.0](https://github.com/forcedotcom/agents/compare/2.4.1...2.5.0) (2026-11-13)
 
 

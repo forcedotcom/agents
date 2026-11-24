@@ -16,7 +16,7 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { appendFile, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
-import { Connection, Lifecycle, SfError, SfProject } from '@salesforce/core';
+import { Connection, Lifecycle, SfdcUrl, SfError, SfProject } from '@salesforce/core';
 import { AvailableDefinition, NamedUserJwtResponse, type PlannerResponse, PreviewMetadata } from './types';
 import { CtxLogger } from './ctxLogger';
 
@@ -196,6 +196,116 @@ export const findLocalAgents = (dir: string): string[] => {
 
   return results;
 };
+// Client ID of the connected app `sf org login web` uses by default (DEFAULT_CONNECTED_APP_INFO in @salesforce/core).
+const DEFAULT_CLI_CLIENT_ID = 'PlatformCLI';
+
+const NAMED_USER_TOKEN_ERROR_PREFIX = 'Error obtaining API token';
+
+// Longest server-provided value (error, error_description, message) echoed in an error message.
+const MAX_ECHOED_VALUE_LENGTH = 200;
+
+// Matches the small HTML page that redirects to the login page, which the login-protected nameduser endpoint
+// returns with a 200 when it doesn't accept the sid.
+const LOGIN_PAGE_PATTERN = /<html|<script|ec=30[12]/i;
+
+const REAUTHORIZE_ACTION = 'Authorize the org again with "sf org login web --alias <alias>" and retry.';
+
+const AGENTFORCE_ACCESS_ACTIONS = [
+  'Check that Agentforce is enabled in the org and that your user has a permission set that grants access to Agentforce.',
+  REAUTHORIZE_ACTION,
+];
+
+/**
+ * Builds the actions for when the org didn't accept the CLI's access token as a browser session. The
+ * /agentforce/bootstrap/nameduser endpoint mints the named-user JWT from a UI session, so it only works when the
+ * access token is usable as a `sid`.
+ *
+ * @param clientId client ID of the connected app or external client app the org was authorized with, if any
+ */
+const getSessionRejectedActions = (clientId?: string): string[] => {
+  const sessionSettings =
+    'Check that the org\'s session settings (for example "Lock sessions to the IP address from which they originated" or a required high-assurance session) don\'t reject the access token as a browser session.';
+  if (clientId && clientId !== DEFAULT_CLI_CLIENT_ID) {
+    return [
+      `This org was authorized with your own connected app or external client app (client ID ${clientId}). Ensure it grants access to the SFAP APIs by providing these scopes, then authorize the org again:`,
+      '   * Access chatbot services (chatbot_api)',
+      '   * Access the Salesforce API Platform (sfap_api)',
+      '   * Manage user data via Web browsers (web)',
+      sessionSettings,
+      'Or authorize the org with "sf org login web --alias <alias>", which uses the default CLI connected app, and retry.',
+    ];
+  }
+  return [
+    `${sessionSettings} These are org settings, so authorizing again with the same connected app doesn't change them.`,
+    `If the access token was revoked or has expired: ${REAUTHORIZE_ACTION}`,
+  ];
+};
+
+const truncate = (raw: string): string => {
+  const value = raw.replace(/\s+/g, ' ').trim();
+  return value.length > MAX_ECHOED_VALUE_LENGTH ? `${value.slice(0, MAX_ECHOED_VALUE_LENGTH)}...` : value;
+};
+
+/**
+ * Lists the non-secret parts of an unexpected nameduser response: its field names, and the (truncated) values of
+ * the standard error fields. Never includes token values.
+ */
+const describeNamedUserResponse = (response: Record<string, unknown>): string => {
+  const details = ['error', 'error_description', 'message']
+    .filter((key) => typeof response[key] === 'string' && response[key] !== '')
+    .map((key) => `${key}: ${truncate(response[key] as string)}`);
+  const fields = Object.keys(response);
+  details.push(fields.length ? `response fields: ${fields.join(', ')}` : 'response has no fields');
+  return details.join('; ');
+};
+
+const namedUserTokenError = (message: string, actions: string[]): SfError =>
+  SfError.create({
+    name: 'ApiAccessError',
+    message: `${NAMED_USER_TOKEN_ERROR_PREFIX}: ${message}`,
+    actions,
+  });
+
+/**
+ * Returns the named-user JWT from a /agentforce/bootstrap/nameduser response, or throws an ApiAccessError that
+ * explains what the org returned instead.
+ */
+const getNamedUserToken = (response: unknown, url: string, clientId?: string): string => {
+  if (!response || (typeof response === 'string' && response.trim() === '')) {
+    throw namedUserTokenError('empty response.', [REAUTHORIZE_ACTION]);
+  }
+
+  // jsforce returns a non-JSON body as a string. Neither the login page nor any other body is included in the error.
+  if (typeof response === 'string') {
+    throw LOGIN_PAGE_PATTERN.test(response)
+      ? namedUserTokenError(
+          `the org returned a login page instead of a token, so it didn't accept the CLI's session for ${url}. This usually means the access token can't be used as a browser session.`,
+          getSessionRejectedActions(clientId)
+        )
+      : namedUserTokenError(`unexpected non-JSON response from ${url}.`, [REAUTHORIZE_ACTION]);
+  }
+
+  if (typeof response !== 'object' || Array.isArray(response)) {
+    throw namedUserTokenError(`unexpected response from ${url}.`, [REAUTHORIZE_ACTION]);
+  }
+
+  // Validate the response contains a valid access token
+  const { access_token: token } = response as NamedUserJwtResponse;
+  if (!token || typeof token !== 'string' || token.trim() === '') {
+    throw namedUserTokenError(
+      `invalid or missing access token (${describeNamedUserResponse(response as Record<string, unknown>)}).`,
+      getSessionRejectedActions(clientId)
+    );
+  }
+
+  // Validate token format is JWT (three parts separated by dots)
+  if (token.split('.').length !== 3) {
+    throw namedUserTokenError('access token does not have valid JWT format.', [REAUTHORIZE_ACTION]);
+  }
+
+  return token;
+};
+
 /**
  * takes a connection and upgrades it to a NamedJWT connection
  *
@@ -235,8 +345,9 @@ export const useNamedUserJwt = async (connection: Connection): Promise<Connectio
   const url = `${instanceUrl}/agentforce/bootstrap/nameduser`;
   // For the nameduser endpoint request to work we need to delete the access token
   delete connection.accessToken;
+  let response: unknown;
   try {
-    const response = await connection.request<NamedUserJwtResponse>(
+    response = await connection.request<NamedUserJwtResponse | string>(
       {
         method: 'GET',
         url,
@@ -247,51 +358,19 @@ export const useNamedUserJwt = async (connection: Connection): Promise<Connectio
       },
       { retry: { maxRetries: 3 } }
     );
-
-    // Validate the response contains a valid access token
-    if (!response) {
-      throw SfError.create({
-        name: 'ApiAccessError',
-        message: 'Error obtaining API token: empty response.',
-      });
-    }
-
-    if (!response.access_token || typeof response.access_token !== 'string' || response.access_token.trim() === '') {
-      throw SfError.create({
-        name: 'ApiAccessError',
-        message: 'Error obtaining API token: invalid or missing access token.',
-      });
-    }
-
-    // Validate token format is JWT (three parts separated by dots)
-    const tokenParts = response.access_token.split('.');
-    if (tokenParts.length !== 3) {
-      throw SfError.create({
-        name: 'ApiAccessError',
-        message: 'Error obtaining API token: access token does not have valid JWT format.',
-      });
-    }
-
-    connection.accessToken = response.access_token;
-    return connection;
   } catch (error) {
-    // If it's already an SfError with our specific message, re-throw it as-is
-    if (error instanceof SfError && error.name === 'ApiAccessError') {
-      error.actions = [
-        'If using your own connected app or ECA, ensure it grants access to the SFAP APIs by providing these scopes:',
-        '   * Access chatbot services (chatbot_api)',
-        '   * Access the Salesforce API Platform (sfap_api)',
-        '   * Manage user data via Web browsers (web)',
-      ];
-      throw error;
-    }
-    // Otherwise wrap it with a generic error
+    // Wrap it, keeping the server's message (e.g. a 4xx from the endpoint) and any actions a lower layer set
+    const causeMessage = error instanceof Error ? truncate(error.message) : undefined;
     throw SfError.create({
       name: 'ApiAccessError',
-      message: 'Error obtaining API token',
+      message: causeMessage ? `${NAMED_USER_TOKEN_ERROR_PREFIX}: ${causeMessage}` : NAMED_USER_TOKEN_ERROR_PREFIX,
       cause: error,
+      actions: error instanceof SfError && error.actions?.length ? error.actions : AGENTFORCE_ACCESS_ACTIONS,
     });
   }
+
+  connection.accessToken = getNamedUserToken(response, url, authFields.clientId);
+  return connection;
 };
 
 // ====================================================
@@ -748,26 +827,85 @@ export type RequestInfo = {
   body?: string;
 };
 
+// Internal SFAP gateways. They only accept connections from inside the Salesforce network, so they're
+// tried only for orgs on internal instances (test, dev, stage). Customer orgs use api.salesforce.com.
+const INTERNAL_API_ENDPOINTS = ['test.', 'dev.', 'stage.'];
+
+const isInternalOrg = (connection: Connection): boolean => {
+  try {
+    return new SfdcUrl(connection.instanceUrl).isInternalUrl();
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * The fallback gateway prefixes to try after api.salesforce.com. SF_AGENT_API_ENDPOINTS (comma-separated,
+ * e.g. "stage.,test.") overrides the default for any org, for internal orgs whose domain isn't recognized
+ * as internal (for example stage orgs on a customer-style domain). It applies to every org, not just
+ * internal ones. Set it to "none" to never fall back.
+ */
+const getFallbackEndpoints = (connection: Connection): string[] => {
+  const override = process.env.SF_AGENT_API_ENDPOINTS?.trim();
+  if (override) {
+    return override
+      .split(',')
+      .map((e) => e.trim().replace(/api\.salesforce\.com$/, '').replace(/\.?$/, '.'))
+      .filter((e) => e !== '.' && e !== 'none.');
+  }
+  return isInternalOrg(connection) ? INTERNAL_API_ENDPOINTS : [];
+};
+
+const NETWORK_ERROR_CODES =
+  /^(UND_ERR_(CONNECT_TIMEOUT|SOCKET|HEADERS_TIMEOUT|BODY_TIMEOUT)|ECONN|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|EHOSTUNREACH|ENETUNREACH)/;
+
+/**
+ * True when the error means no HTTP response was received (DNS failure, refused/reset/timed-out connection),
+ * as opposed to an HTTP error from the server. Walks `cause` up to 5 levels.
+ */
+const isNetworkError = (error: unknown): boolean => {
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && current; depth++) {
+    const e = current as { code?: unknown; name?: unknown; message?: unknown; cause?: unknown };
+    if (typeof e.code === 'string' && NETWORK_ERROR_CODES.test(e.code)) return true;
+    if (e.name === 'TypeError' && e.message === 'fetch failed') return true;
+    current = e.cause;
+  }
+  return false;
+};
+
+const getRequestPath = (url: string): string => {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return url.replace(/^https:\/\/[^/]+/, '').split('?')[0];
+  }
+};
+
 /**
  * Makes an API request with automatic endpoint fallback.
- * Tries api.salesforce.com first, then test., dev., and stage.api.salesforce.com on 404.
+ * Tries api.salesforce.com first. For orgs on internal instances only, then tries test., dev., and
+ * stage.api.salesforce.com on 404. A fallback host that can't be reached is skipped, so its connection
+ * error never hides the 404 from api.salesforce.com.
  *
  * @param connection - The Salesforce connection
  * @param requestInfo - The request information (url, method, headers, body, etc.)
  * @param options - Optional retry/timeout options
  * @returns The API response
- * @throws SfError if all endpoints return 404, or immediately on non-404 errors
+ * @throws SfError if all endpoints return 404 or are unreachable, or immediately on other errors
  */
 export async function requestWithEndpointFallback<T>(
   connection: Connection,
   requestInfo: RequestInfo,
   options?: { retry?: { maxRetries?: number } }
 ): Promise<T> {
-  const endpoints = ['', 'test.', 'dev.', 'stage.']; // Try production, test, dev, stage in that order
+  const fallbackEndpoints = getFallbackEndpoints(connection);
+  const endpoints = ['', ...fallbackEndpoints];
   const attemptedEndpoints: string[] = [];
+  const unreachableEndpoints: string[] = [];
   const logger = CtxLogger.child('AgentApiRequest');
 
-  let lastError: unknown;
+  let notFoundError: unknown;
 
   for (const endpoint of endpoints) {
     // Replace the domain with the endpoint variant
@@ -775,7 +913,8 @@ export async function requestWithEndpointFallback<T>(
       /https:\/\/(?:test\.|dev\.|stage\.)?api\.salesforce\.com/,
       `https://${endpoint}api.salesforce.com`
     );
-    attemptedEndpoints.push(`${endpoint || 'production '}api.salesforce.com`);
+    const host = `${endpoint}api.salesforce.com`;
+    attemptedEndpoints.push(host);
 
     try {
       // eslint-disable-next-line no-await-in-loop
@@ -784,7 +923,8 @@ export async function requestWithEndpointFallback<T>(
           ...requestInfo,
           url: modifiedUrl,
         },
-        options
+        // Fallback hosts get no retries: an unreachable host should be skipped quickly
+        endpoint === '' ? options : { ...options, retry: { ...options?.retry, maxRetries: 0 } }
       );
     } catch (error) {
       const statusCode = getHttpStatusCode(error);
@@ -793,22 +933,49 @@ export async function requestWithEndpointFallback<T>(
         statusCode: statusCode ?? 'unknown',
       });
       if (statusCode === 404) {
-        lastError = error;
+        notFoundError ??= error;
         continue; // Try next endpoint
       }
-      // Not a 404, throw immediately
+      if (endpoint !== '' && statusCode === undefined && isNetworkError(error)) {
+        // A fallback host we couldn't reach (connect timeout, DNS failure). Skip it rather than
+        // replacing the 404 from api.salesforce.com with a bare "fetch failed".
+        unreachableEndpoints.push(host);
+        continue;
+      }
+      // Any other error is the real answer from the server, throw immediately
       throw error;
     }
   }
 
-  // All endpoints failed with 404
-  logger.debug('All Agent API endpoints returned 404', { attemptedEndpoints });
+  logger.debug('All Agent API endpoints returned 404 or were unreachable', {
+    attemptedEndpoints,
+    unreachableEndpoints,
+  });
+  const username = connection.getUsername() ?? '';
+  const requestPath = getRequestPath(requestInfo.url);
+  const actions = [
+    'Make sure Agentforce is enabled in Setup and the org is licensed for it. Scratch orgs need the Einstein1AIPlatform feature in their definition file.',
+    `Make sure the user '${username}' has the necessary permissions and authorization to use Agentforce.`,
+  ];
+  if (requestPath.includes('/authoring/agents')) {
+    actions.push(
+      "'sf agent validate authoring-bundle' can pass on an org that can't publish: publishing calls a different Agent API endpoint, which may require additional Agentforce entitlements on the org."
+    );
+  }
+  // Shown for every org: a stage org on a customer-style domain gets no fallback chain by default
+  actions.push(
+    'Confirm which SFAP gateway the org uses (Setup > GatewayHawkingInfo). To try specific gateways, set SF_AGENT_API_ENDPOINTS, for example "stage.,test.".'
+  );
+  const notFoundHosts = attemptedEndpoints.filter((host) => !unreachableEndpoints.includes(host));
+  const unreachable = unreachableEndpoints.length ? ` Couldn't connect to ${unreachableEndpoints.join(', ')}.` : '';
   throw SfError.create({
     name: 'AgentApiNotFound',
-    message: `Unable to access the Salesforce Agent APIs. Ensure the user '${
-      connection.getUsername() ?? ''
-    }' has the necessary permissions and authorization to perform this action.`,
-    cause: lastError,
+    message: `Unable to access the Salesforce Agent APIs: ${
+      requestInfo.method
+    } ${requestPath} returned 404 (Not Found) from ${notFoundHosts.join(', ')}.${unreachable}`,
+    actions,
+    data: { attemptedEndpoints, unreachableEndpoints },
+    cause: notFoundError,
   });
 }
 
