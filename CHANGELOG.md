@@ -1,3 +1,12 @@
+## [2.5.2](https://github.com/forcedotcom/agents/compare/2.5.1...2.5.2) (2026-11-24)
+
+
+### Bug Fixes
+
+* W-24023175 don't fall back to internal Agent API hosts for customer orgs ([#404](https://github.com/forcedotcom/agents/issues/404)) ([1960efb](https://github.com/forcedotcom/agents/commit/1960efb09787c52729364812d6c14a7dbe4b24b6))
+
+
+
 ## [2.5.1](https://github.com/forcedotcom/agents/compare/2.5.0...2.5.1) (2026-11-24)
 
 
