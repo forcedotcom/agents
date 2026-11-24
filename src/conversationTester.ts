@@ -64,7 +64,7 @@ export class ConversationTester {
    * Runs conversation tests without saving a suite, and waits for the results.
    *
    * The endpoint reports rejected input as HTTP 200 with `status: "Failed"` and no test cases;
-   * that case throws `ConversationTestRejected` with the server's message. A `Failed` run that
+   * that case, and an empty response body, throw `ConversationTestRejected` with the server's message. A `Failed` run that
    * has test cases (for example, the agent failed mid-conversation) is returned so the caller
    * can report each case.
    *
@@ -76,9 +76,9 @@ export class ConversationTester {
     const response = await this.maybeMock.request<ConversationTestResultsResponse>('POST', url, input);
     const testCases = response?.testCases ?? [];
 
-    if (response?.status?.toLowerCase() === 'failed' && testCases.length === 0) {
-      const errorCode = response.errorRepresentation?.errorCode;
-      const errorMessage = response.errorRepresentation?.errorMessage;
+    if (!response || (response.status?.toLowerCase() === 'failed' && testCases.length === 0)) {
+      const errorCode = response?.errorRepresentation?.errorCode;
+      const errorMessage = response?.errorRepresentation?.errorMessage;
       getLogger().debug('Ephemeral conversation test run rejected', { errorCode, errorMessage });
       throw messages.createError('conversationTestRejected', [errorMessage ?? messages.getMessage('noServerMessage')]);
     }
@@ -133,11 +133,15 @@ export function normalizeConversationTestResults(
  * fields either at the top level or under `content`; both are read. Values are passed through
  * as sent (for example `score` may be an integer or a decimal).
  *
+ * Expects a `scorerResponse` that's already decoded, as returned by `runEphemeral` or
+ * `normalizeConversationTestResults`. It isn't decoded again, so literal entity text in the
+ * reasoning (for example `&amp;quot;`) is kept.
+ *
  * @returns The outcome, or `undefined` when the response is missing or isn't a JSON object.
  */
 export function parseConversationScorerResponse(scorerResponse?: string): ConversationScorerOutcome | undefined {
   if (!scorerResponse) return undefined;
-  const parsed = parseJson(decodeHtmlEntities(scorerResponse));
+  const parsed = parseJson(scorerResponse);
   if (!isRecord(parsed)) return undefined;
   const content = isRecord(parsed.content) ? parsed.content : {};
   const pick = (key: string): unknown => content[key] ?? parsed[key];

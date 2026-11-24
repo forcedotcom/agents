@@ -21,6 +21,7 @@ import {
   normalizeConversationTestResults,
   parseConversationScorerResponse,
 } from '../src/conversationTester';
+import { MaybeMock } from '../src/maybe-mock';
 import type { CreateAndRunConversationTestSuiteInput, EphemeralConversationTestInput } from '../src/types';
 
 const MOCKS = 'test/mocks/conversationTester';
@@ -116,6 +117,16 @@ describe('ConversationTester', () => {
         "The conversation-level test run was rejected: The server didn't return a reason."
       );
     });
+
+    it('throws a generic reason when the response body is empty', async () => {
+      $$.SANDBOX.stub(MaybeMock.prototype, 'request').resolves(undefined);
+      const error = await expectError(new ConversationTester(connection).runEphemeral(ephemeralInput));
+
+      expect(error.name).to.equal('ConversationTestRejectedError');
+      expect(error.message).to.equal(
+        "The conversation-level test run was rejected: The server didn't return a reason."
+      );
+    });
   });
 
   describe('createAndRun', () => {
@@ -189,12 +200,34 @@ describe('parseConversationScorerResponse', () => {
     ).to.deep.equal({ status: 'FAIL', score: 1.5, reasoning: 'no' });
   });
 
-  it('decodes HTML entities before parsing', () => {
+  it('does not decode HTML entities again, so literal entity text in the reasoning is kept', () => {
     expect(
-      parseConversationScorerResponse('{&quot;status&quot;:&quot;PASS&quot;,&quot;score&quot;:&quot;4&quot;}')
+      parseConversationScorerResponse('{"status":"PASS","reasoning":"Said &amp;quot;done&amp;quot;."}')
     ).to.deep.equal({
       status: 'PASS',
-      score: '4',
+      reasoning: 'Said &amp;quot;done&amp;quot;.',
+    });
+  });
+
+  it('parses a response that runEphemeral decoded once, when the reasoning has encoded entity text', () => {
+    const [testCase] = normalizeConversationTestResults({
+      status: 'Completed',
+      testCases: [
+        {
+          testNumber: 1,
+          testScorerResults: [
+            {
+              scorerName: 'task_resolution',
+              scorerResponse:
+                '{&quot;status&quot;:&quot;PASS&quot;,&quot;reasoning&quot;:&quot;Said &amp;amp;quot;done&amp;amp;quot;.&quot;}',
+            },
+          ],
+        },
+      ],
+    }).testCases;
+    expect(parseConversationScorerResponse(testCase.testScorerResults![0].scorerResponse)).to.deep.equal({
+      status: 'PASS',
+      reasoning: 'Said &amp;quot;done&amp;quot;.',
     });
   });
 

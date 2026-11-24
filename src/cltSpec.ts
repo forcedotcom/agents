@@ -150,7 +150,8 @@ export const validateCltSpec: (spec: unknown, ctx: { target: CltRunTarget }) => 
  *
  * @param spec - The validated spec.
  * @param agent - The resolved `agentId` and `agentVersionId` when the spec names a published agent
- * (`subjectName`). Ignored when the spec has `project`.
+ * (`subjectName`). Ignored when the spec has `project`. The converter doesn't read `subjectName` or
+ * `subjectVersion`; the caller resolves them to these IDs.
  */
 export const cltSpecToEphemeralInput = (
   spec: CltTestSpec,
@@ -171,7 +172,8 @@ export const cltSpecToEphemeralInput = (
  *
  * @param spec - The validated spec.
  * @param agent - The resolved `agentId` and `agentVersionId` when the spec names a published agent
- * (`subjectName`). Ignored when the spec has `project`.
+ * (`subjectName`). Ignored when the spec has `project`. The converter doesn't read `subjectName` or
+ * `subjectVersion`; the caller resolves them to these IDs.
  */
 export const cltSpecToCreateAndRunInput = (
   spec: CltTestSpec,
