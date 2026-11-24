@@ -1,3 +1,12 @@
+## [2.5.1](https://github.com/forcedotcom/agents/compare/2.5.0...2.5.1) (2026-11-24)
+
+
+### Bug Fixes
+
+* return botVersionId when publish fails after the BotVersion commit @W-24949433@ ([#403](https://github.com/forcedotcom/agents/issues/403)) ([a2be9d9](https://github.com/forcedotcom/agents/commit/a2be9d9865d34f2be719cf1eb27c9234feebfd88))
+
+
+
 # [2.5.0](https://github.com/forcedotcom/agents/compare/2.4.1...2.5.0) (2026-11-13)
 
 
