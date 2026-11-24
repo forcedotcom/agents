@@ -1,3 +1,12 @@
+## [2.5.3](https://github.com/forcedotcom/agents/compare/2.5.2...2.5.3) (2026-11-24)
+
+
+### Bug Fixes
+
+* explain why the nameduser token call failed (W-22799717) ([#402](https://github.com/forcedotcom/agents/issues/402)) ([c3593cb](https://github.com/forcedotcom/agents/commit/c3593cb5c75200f50e951d00cccaf6fa0c6a2253))
+
+
+
 ## [2.5.2](https://github.com/forcedotcom/agents/compare/2.5.1...2.5.2) (2026-11-24)
 
 
