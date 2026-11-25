@@ -24,7 +24,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: salesforcecli/github-workflows/.github/actions/setupNodeAndInstall@main
+      - uses: salesforcecli/github-workflows/.github/actions/setupNodeAndInstall@7a73e06604a17eb64a77792d30386f3357335d01 # main
         with:
           node-version: lts/*
           package-manager: yarn
@@ -33,7 +33,7 @@ jobs:
       - name: Build
         run: yarn build
       - name: Test
-        uses: salesforcecli/github-workflows/.github/actions/retry@main
+        uses: salesforcecli/github-workflows/.github/actions/retry@7a73e06604a17eb64a77792d30386f3357335d01 # main
         with:
           command: yarn test
         env:
