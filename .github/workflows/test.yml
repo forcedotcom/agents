@@ -1,9 +1,13 @@
 name: tests
 on:
   push:
-    branches-ignore: [main]
+    # Merge queue branches are tested by `merge_group`; don't run them twice.
+    branches-ignore: [main, 'gh-readonly-queue/**']
   # Pushes to a fork never fire `push` here, so fork PRs need this trigger to get unit tests.
   pull_request:
+  # The merge queue runs everything, NUTs included, on the PR merged into main, with secrets,
+  # after a maintainer queues it.
+  merge_group:
   workflow_dispatch:
 
 jobs:
