@@ -1,0 +1,25 @@
+name: Returns_CLT
+description: Conversation-level tests for the returns flow
+testScope: CONVERSATION_LEVEL
+subjectType: AGENT
+subjectName: Returns_Agent
+persona: frustrated
+maxTurns: 10
+simulation:
+  enabled: true
+  excludedActions:
+    - subagent: Order_Management
+      actions:
+        - Cancel_Order
+testCases:
+  - conversationGoal: Return a damaged blender bought last week and get a refund to the original card.
+    contextVariables:
+      - name: $Context.ChannelType
+        value: Web
+    connections:
+      surfaceType: Messaging
+    scorers:
+      - name: task_resolution
+      - name: acceptance_criteria
+        expected: The agent confirms the refund amount and the card it goes to.
+  - conversationGoal: Ask whether an opened item can be returned after 45 days.
