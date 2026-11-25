@@ -660,6 +660,42 @@ describe('requestWithEndpointFallback', () => {
       expect((requestStub.secondCall.args[0] as RequestInfo).headers).to.deep.equal(govHeaders);
     });
 
+    it('keeps a region header the caller already set', async () => {
+      connection.accessToken = jwtWithRoutingHints('bot-svc-api:aws-giastage1-usgoveast1/uengage1');
+      const requestStub = $$.SANDBOX.stub(connection, 'request').resolves({ success: true });
+
+      await requestWithEndpointFallback(connection, {
+        ...request,
+        headers: { ...request.headers, 'x-salesforce-region': 'us-gov-west-1' },
+      });
+
+      expect((requestStub.firstCall.args[0] as RequestInfo).headers).to.deep.equal({
+        'x-client-name': 'test',
+        'x-salesforce-region': 'us-gov-west-1',
+      });
+    });
+
+    it('skips an unreachable .com fallback and reports the .mil 404', async () => {
+      connection.accessToken = jwtWithRoutingHints('bot-svc-api:aws-giastage1-usgoveast1/uengage1');
+      const requestStub = $$.SANDBOX.stub(connection, 'request');
+      requestStub.onFirstCall().rejects(error404);
+      requestStub.onSecondCall().rejects(new TypeError('fetch failed'));
+
+      try {
+        await requestWithEndpointFallback(connection, request);
+        expect.fail('Expected error was not thrown');
+      } catch (error) {
+        const sfError = error as SfError;
+        expect(sfError.name).to.equal('AgentApiNotFound');
+        expect(sfError.data).to.deep.include({
+          attemptedEndpoints: ['stage.api.gov.salesforce.mil', 'stage.api.gov.salesforce.com'],
+          unreachableEndpoints: ['stage.api.gov.salesforce.com'],
+        });
+      }
+
+      expect(requestStub.callCount).to.equal(2);
+    });
+
     it('only tries the prod GovCloud hosts for prod GovCloud orgs', async () => {
       connection.accessToken = jwtWithRoutingHints('bot-svc-api:aws-giaprod1-usgoveast1/uengage1');
       const requestStub = $$.SANDBOX.stub(connection, 'request').rejects(error404);

@@ -900,7 +900,9 @@ const GOVCLOUD_FALCON_INSTANCE_PATTERN = /\baws-gia(dev|stage|prod)\d+-usgoveast
 /**
  * Finds the GovCloud environment an org runs in from its JWT's sfap_rh (SFAP routing hints) claim.
  * Each hint names the falcon instance serving a service for the org, e.g.
- * bot-svc-api:aws-giastage1-usgoveast1/uengage1. Returns undefined for orgs outside GovCloud.
+ * bot-svc-api:aws-giastage1-usgoveast1/uengage1. The first GovCloud hint wins: an org's GovCloud hints all
+ * name instances in its one environment, and the environment is all the host choice needs.
+ * Returns undefined for orgs outside GovCloud.
  */
 const getGovCloudFalconInstance = (
   jwt: string | undefined
