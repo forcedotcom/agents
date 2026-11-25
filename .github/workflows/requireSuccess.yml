@@ -1,0 +1,25 @@
+name: require-success
+# Reports one check, `<caller job> / passed`, that fails unless every job the caller needs succeeded.
+# Required status checks can point at it instead of check names that embed a Node version.
+on:
+  workflow_call:
+    inputs:
+      results:
+        description: Space-separated job results, e.g. `join(needs.*.result, ' ')`
+        type: string
+        required: true
+
+jobs:
+  passed:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail unless every needed job succeeded
+        env:
+          RESULTS: ${{ inputs.results }}
+        run: |
+          for result in $RESULTS; do
+            if [ "$result" != "success" ]; then
+              echo "::error::A required job did not succeed (job results: $RESULTS)"
+              exit 1
+            fi
+          done

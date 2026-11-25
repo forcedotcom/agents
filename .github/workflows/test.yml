@@ -2,35 +2,71 @@ name: tests
 on:
   push:
     branches-ignore: [main]
+  # Pushes to a fork never fire `push` here, so fork PRs need this trigger to get unit tests.
+  pull_request:
   workflow_dispatch:
 
 jobs:
   yarn-lockfile-check:
+    # Branches in this repo already run on `push`; only fork PRs run on `pull_request`.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork
     uses: salesforcecli/github-workflows/.github/workflows/lockFileCheck.yml@main
-  # Since the Windows unit tests take much longer, we run the linux unit tests first and then run the windows unit tests in parallel with NUTs
+  # Since the Windows and macOS unit tests take much longer, we run the linux unit tests first and then run the windows and macOS unit tests in parallel with NUTs
   linux-unit-tests:
     needs: yarn-lockfile-check
     uses: salesforcecli/github-workflows/.github/workflows/unitTestsLinux.yml@main
   windows-unit-tests:
     needs: linux-unit-tests
     uses: salesforcecli/github-workflows/.github/workflows/unitTestsWindows.yml@main
+  # The shared workflows have no macOS unit tests, so run them here on the current Node LTS.
+  macos-unit-tests:
+    needs: linux-unit-tests
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: salesforcecli/github-workflows/.github/actions/setupNodeAndInstall@main
+        with:
+          node-version: lts/*
+          package-manager: yarn
+          cache-dependency-path: yarn.lock
+          install-command: yarn install --network-timeout 600000
+      - name: Build
+        run: yarn build
+      - name: Test
+        uses: salesforcecli/github-workflows/.github/actions/retry@main
+        with:
+          command: yarn test
+        env:
+          SF_DISABLE_TELEMETRY: true
+  # One check name for branch protection to require: `unit-tests / passed`. The per-job
+  # unit-test checks embed the Node version, so their names change with each Node release.
+  unit-tests:
+    needs: [yarn-lockfile-check, linux-unit-tests, windows-unit-tests, macos-unit-tests]
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork) }}
+    uses: ./.github/workflows/requireSuccess.yml
+    with:
+      results: ${{ join(needs.*.result, ' ') }}
   nuts:
     needs: linux-unit-tests
+    # NUTs need org secrets, which GitHub doesn't pass to fork PRs.
+    if: github.event_name != 'pull_request'
     uses: salesforcecli/github-workflows/.github/workflows/nut.yml@main
     secrets: inherit
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
       fail-fast: false
     with:
       os: ${{ matrix.os }}
 
   xNuts-plugin-agent:
     needs: linux-unit-tests
+    # NUTs need org secrets, which GitHub doesn't pass to fork PRs.
+    if: github.event_name != 'pull_request'
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
         command:
           - 'yarn test:nuts'
     uses: salesforcecli/github-workflows/.github/workflows/externalNut.yml@main
