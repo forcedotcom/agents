@@ -1,30 +1,28 @@
 name: tests
 on:
-  push:
-    # Merge queue branches are tested by `merge_group`; don't run them twice.
-    branches-ignore: [main, 'gh-readonly-queue/**']
-  # Pushes to a fork never fire `push` here, so fork PRs need this trigger to get unit tests.
+  # One run per PR commit, fork PRs included. Fork PRs get no secrets, so they skip the NUTs.
   pull_request:
   # The merge queue runs everything, NUTs included, on the PR merged into main, with secrets,
   # after a maintainer queues it.
   merge_group:
+  # After each merge, main reruns the unit tests and checks, but not the NUTs.
+  push:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   yarn-lockfile-check:
-    # Branches in this repo already run on `push`; only fork PRs run on `pull_request`.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork
     uses: salesforcecli/github-workflows/.github/workflows/lockFileCheck.yml@main
-  # Since the Windows and macOS unit tests take much longer, we run the linux unit tests first and then run the windows and macOS unit tests in parallel with NUTs
+  # The Linux, Windows and macOS unit tests run in parallel.
   linux-unit-tests:
     needs: yarn-lockfile-check
     uses: salesforcecli/github-workflows/.github/workflows/unitTestsLinux.yml@main
   windows-unit-tests:
-    needs: linux-unit-tests
+    needs: yarn-lockfile-check
     uses: salesforcecli/github-workflows/.github/workflows/unitTestsWindows.yml@main
   # The shared workflows have no macOS unit tests, so run them here on the current Node LTS.
   macos-unit-tests:
-    needs: linux-unit-tests
+    needs: yarn-lockfile-check
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -42,18 +40,25 @@ jobs:
           command: yarn test
         env:
           SF_DISABLE_TELEMETRY: true
-  # One check name for branch protection to require: `unit-tests / passed`. The per-job
-  # unit-test checks embed the Node version, so their names change with each Node release.
+  # One check name for branch protection to require: `unit-tests`. The per-job unit-test checks
+  # embed the Node version, so their names change with each Node release.
   unit-tests:
     needs: [yarn-lockfile-check, linux-unit-tests, windows-unit-tests, macos-unit-tests]
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork) }}
-    uses: ./.github/workflows/requireSuccess.yml
-    with:
-      results: ${{ join(needs.*.result, ' ') }}
+    # GitHub counts a skipped job as passing, so run even when a needed job failed or was cancelled.
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if a needed job didn't succeed
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          jq -r 'to_entries[] | select(.value.result != "success") | "::error::\(.key): \(.value.result)"' <<< "$NEEDS"
+          exit 1
   nuts:
     needs: linux-unit-tests
-    # NUTs need org secrets, which GitHub doesn't pass to fork PRs.
-    if: github.event_name != 'pull_request'
+    # NUTs need org secrets, which GitHub doesn't pass to fork PRs. main doesn't rerun them.
+    if: github.event_name != 'push' && !github.event.pull_request.head.repo.fork
     uses: salesforcecli/github-workflows/.github/workflows/nut.yml@main
     secrets: inherit
     strategy:
@@ -65,8 +70,8 @@ jobs:
 
   xNuts-plugin-agent:
     needs: linux-unit-tests
-    # NUTs need org secrets, which GitHub doesn't pass to fork PRs.
-    if: github.event_name != 'pull_request'
+    # NUTs need org secrets, which GitHub doesn't pass to fork PRs. main doesn't rerun them.
+    if: github.event_name != 'push' && !github.event.pull_request.head.repo.fork
     strategy:
       fail-fast: false
       matrix:
@@ -81,11 +86,17 @@ jobs:
       os: ${{matrix.os}}
       useCache: false
     secrets: inherit
-  # One NUT check for branch protection and the merge queue to require: `nut-tests / passed`.
-  # Fork PRs can't run NUTs, so there it passes without them; the merge queue runs them before merge.
+  # One NUT check for branch protection and the merge queue to require: `nut-tests`. It's skipped
+  # on fork PRs, which GitHub counts as passing; the merge queue runs their NUTs before merge.
   nut-tests:
     needs: [nuts, xNuts-plugin-agent]
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork) }}
-    uses: ./.github/workflows/requireSuccess.yml
-    with:
-      results: ${{ github.event_name == 'pull_request' && 'success' || join(needs.*.result, ' ') }}
+    if: always() && github.event_name != 'push' && !github.event.pull_request.head.repo.fork
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if a needed job didn't succeed
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          jq -r 'to_entries[] | select(.value.result != "success") | "::error::\(.key): \(.value.result)"' <<< "$NEEDS"
+          exit 1
