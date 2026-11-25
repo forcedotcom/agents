@@ -81,3 +81,11 @@ jobs:
       os: ${{matrix.os}}
       useCache: false
     secrets: inherit
+  # One NUT check for branch protection and the merge queue to require: `nut-tests / passed`.
+  # Fork PRs can't run NUTs, so there it passes without them; the merge queue runs them before merge.
+  nut-tests:
+    needs: [nuts, xNuts-plugin-agent]
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork) }}
+    uses: ./.github/workflows/requireSuccess.yml
+    with:
+      results: ${{ github.event_name == 'pull_request' && 'success' || join(needs.*.result, ' ') }}

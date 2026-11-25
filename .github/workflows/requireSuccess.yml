@@ -1,6 +1,6 @@
 name: require-success
 # Reports one check, `<caller job> / passed`, that fails unless every job the caller needs succeeded.
-# Required status checks can point at it instead of check names that embed a Node version.
+# Required status checks can point at it instead of per-job checks, whose names embed matrix values.
 on:
   workflow_call:
     inputs:
