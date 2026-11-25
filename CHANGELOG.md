@@ -1,3 +1,12 @@
+## [2.5.4](https://github.com/forcedotcom/agents/compare/2.5.3...2.5.4) (2026-11-25)
+
+
+### Bug Fixes
+
+* route Agent API requests to GovCloud SFAP hosts @W-25013945@ ([#407](https://github.com/forcedotcom/agents/issues/407)) ([cc2afa3](https://github.com/forcedotcom/agents/commit/cc2afa32781c9b6eae6029d138c01391e9568725))
+
+
+
 ## [2.5.3](https://github.com/forcedotcom/agents/compare/2.5.2...2.5.3) (2026-11-24)
 
 
