@@ -10,6 +10,12 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# A new push to a PR cancels that PR's previous run. Every other run gets its own group, so runs on
+# main or in the merge queue never cancel each other or wait behind each other.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   yarn-lockfile-check:
     uses: salesforcecli/github-workflows/.github/workflows/lockFileCheck.yml@main
@@ -60,7 +66,13 @@ jobs:
     # NUTs need org secrets, which GitHub doesn't pass to fork PRs.
     if: ${{ !github.event.pull_request.head.repo.fork }}
     uses: salesforcecli/github-workflows/.github/workflows/nut.yml@main
-    secrets: inherit
+    # Only the test-org secrets the NUTs use, not every secret the repo can see.
+    secrets:
+      TESTKIT_AUTH_URL: ${{ secrets.TESTKIT_AUTH_URL }}
+      TESTKIT_HUB_USERNAME: ${{ secrets.TESTKIT_HUB_USERNAME }}
+      TESTKIT_HUB_INSTANCE: ${{ secrets.TESTKIT_HUB_INSTANCE }}
+      TESTKIT_JWT_CLIENT_ID: ${{ secrets.TESTKIT_JWT_CLIENT_ID }}
+      TESTKIT_JWT_KEY: ${{ secrets.TESTKIT_JWT_KEY }}
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
@@ -85,7 +97,13 @@ jobs:
       command: ${{matrix.command}}
       os: ${{matrix.os}}
       useCache: false
-    secrets: inherit
+    # Only the test-org secrets the NUTs use, not every secret the repo can see.
+    secrets:
+      TESTKIT_AUTH_URL: ${{ secrets.TESTKIT_AUTH_URL }}
+      TESTKIT_HUB_USERNAME: ${{ secrets.TESTKIT_HUB_USERNAME }}
+      TESTKIT_HUB_INSTANCE: ${{ secrets.TESTKIT_HUB_INSTANCE }}
+      TESTKIT_JWT_CLIENT_ID: ${{ secrets.TESTKIT_JWT_CLIENT_ID }}
+      TESTKIT_JWT_KEY: ${{ secrets.TESTKIT_JWT_KEY }}
   # One NUT check for branch protection and the merge queue to require: `nut-tests`. It's skipped
   # on fork PRs, which GitHub counts as passing; the merge queue runs their NUTs before merge.
   nut-tests:
