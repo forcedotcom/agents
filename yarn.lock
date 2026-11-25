@@ -5512,9 +5512,9 @@ undici-types@~8.3.0:
   integrity sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ==
 
 undici@^8.5.0:
-  version "8.10.0"
-  resolved "https://registry.yarnpkg.com/undici/-/undici-8.10.0.tgz#67ed7c4087f0f40fba7bef3a46f2be80572f2473"
-  integrity sha512-HvltHd7avK13QIw/oLe4qoOLyoVSoafqJ2jYOrtMRBkbYT31eiBQ8O0ehRKZiEZCMEyLFQNIADpgCWC5fALvYQ==
+  version "8.13.1"
+  resolved "https://registry.yarnpkg.com/undici/-/undici-8.13.1.tgz#2bcd614161e93a4e33b25e792514a70c67d927cc"
+  integrity sha512-Kt7EaPjh0s93lJH/PmW3d5rhkcpUa6fS3jqZ7+YGxNd9L7Xy/i827xe4C2uhhq+pJebM4tQOl5AgHmW11G5Skg==
 
 universalify@^2.0.0:
   version "2.0.1"
