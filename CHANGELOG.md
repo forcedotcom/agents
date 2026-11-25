@@ -1,3 +1,12 @@
+# [2.6.0](https://github.com/forcedotcom/agents/compare/2.5.4...2.6.0) (2026-11-25)
+
+
+### Features
+
+* add conversation-level test spec model and validation @W-24861403@ ([#401](https://github.com/forcedotcom/agents/issues/401)) ([e03563c](https://github.com/forcedotcom/agents/commit/e03563cb85fd6bfa04ff4b2a206aba7b5e7543cb)), closes [plugin-agent#520](https://github.com/plugin-agent/issues/520) [#406](https://github.com/forcedotcom/agents/issues/406) [plugin-agent#520](https://github.com/plugin-agent/issues/520) [#520](https://github.com/forcedotcom/agents/issues/520)
+
+
+
 ## [2.5.4](https://github.com/forcedotcom/agents/compare/2.5.3...2.5.4) (2026-11-25)
 
 
