@@ -643,13 +643,19 @@ export type NgtTestSpec =
 
 // Authoring (YAML) types for CLT specs. A spec is CLT when `testScope` is `CONVERSATION_LEVEL`.
 
-export type AiTestScope = 'TURN_LEVEL' | 'CONVERSATION_LEVEL';
+/**
+ * Simulated-user persona: Core `ConversationPersonas` in 264. Open, like `CltScorerName`, so a persona from a
+ * newer Core release type-checks; `validateCltSpec` warns about values it doesn't know.
+ */
+export type ConversationPersona =
+  | 'DEFAULT'
+  | 'FRUSTRATED'
+  | 'DISTRACTED_DAD'
+  | 'ACCENT'
+  | (string & NonNullable<unknown>);
 
-/** Simulated-user persona (Core `ConversationPersonas`). */
-export type ConversationPersona = 'DEFAULT' | 'FRUSTRATED' | 'DISTRACTED_DAD' | 'ACCENT';
-
-/** Saved-suite evaluation mode. Not accepted when running without saving. */
-export type ConversationEvaluationMode = 'TEXT' | 'TEXT_VOICE';
+/** Saved-suite evaluation mode (`TEXT` or `TEXT_VOICE` in 264). Not accepted when running without saving. */
+export type ConversationEvaluationMode = 'TEXT' | 'TEXT_VOICE' | (string & NonNullable<unknown>);
 
 /** A draft (not yet published) agent, identified by its project and project version. */
 export type CltProject = {
@@ -691,7 +697,7 @@ export type CltTestSpec = {
   /** Draft agent. Exactly one of `subjectName` or `project`. */
   project?: CltProject;
   /** Case-insensitive; sent upper-case. */
-  persona?: ConversationPersona | Lowercase<ConversationPersona>;
+  persona?: ConversationPersona;
   /** One limit for the whole suite. */
   maxTurns?: number;
   evaluationMode?: ConversationEvaluationMode;
@@ -713,7 +719,6 @@ export type ConversationTestScorerInput = {
 
 export type ConversationTestCaseInput = {
   number: number;
-  maxTurns?: number;
   conversationGoal: string;
   contextVariables?: Array<{ variableName: string; variableValue: string }>;
   connections?: { surfaceConfig: { surfaceType: string } };
@@ -729,17 +734,6 @@ export type EphemeralConversationTestInput = ConversationAgentTarget & {
   testCases: ConversationTestCaseInput[];
   persona?: ConversationPersona;
   maxTurns?: number;
-  enableSimulationMode?: boolean;
-  previewConfig?: ConversationPreviewConfig;
-};
-
-/** Body for `POST conversation-test-suites/create-and-run` (save the suite, then run it). */
-export type CreateAndRunConversationTestSuiteInput = ConversationAgentTarget & {
-  name: string;
-  description?: string;
-  evaluationMode?: ConversationEvaluationMode;
-  persona?: ConversationPersona;
-  testCases: ConversationTestCaseInput[];
   enableSimulationMode?: boolean;
   previewConfig?: ConversationPreviewConfig;
 };
@@ -1176,9 +1170,9 @@ export type NamedUserJwtResponse = {
 
 // Response types for the conversation-test endpoints (`ConversationTester`).
 
-/** Body of a run's results: ephemeral-run, and `runs/{runId}/results` for a saved suite. */
+/** Body returned by `POST conversation-tests/ephemeral-run`. */
 export type ConversationTestResultsResponse = {
-  /** ephemeral-run sends `Completed` or `Failed`; saved runs use the run status (`SUCCESS`, `FAILED`, ...). */
+  /** `Completed` or `Failed`. */
   status: string;
   errorRepresentation?: { errorCode?: string; errorMessage?: string; retryable?: boolean };
   /** Omitted until the run is complete. */
@@ -1193,8 +1187,6 @@ export type ConversationTestResultsResponse = {
 export type ConversationTestCaseResult = {
   /** The 1-based `number` sent in the request. */
   testNumber: number;
-  /** Saved suites only. */
-  testCaseId?: string;
   /** JSON string: the simulated conversation (turns, topics, actions, completion reason). */
   subjectResponse?: string;
   testScorerResults?: Array<{ scorerName: string; scorerResponse?: string }>;
@@ -1206,14 +1198,4 @@ export type ConversationScorerOutcome = {
   status?: string;
   score?: number | string;
   reasoning?: string;
-};
-
-/** Body returned by `POST conversation-test-suites/create-and-run`. */
-export type CreateAndRunConversationTestSuiteResponse = {
-  status: string;
-  /** The saved suite (1W4). */
-  testSuiteId: string;
-  /** The run that was started (3A2). Poll it with `AgentforceStudioTester`. */
-  runId: string;
-  statusMessage?: string;
 };

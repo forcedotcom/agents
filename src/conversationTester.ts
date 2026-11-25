@@ -21,8 +21,6 @@ import { decodeHtmlEntities } from './utils';
 import type {
   ConversationScorerOutcome,
   ConversationTestResultsResponse,
-  CreateAndRunConversationTestSuiteInput,
-  CreateAndRunConversationTestSuiteResponse,
   EphemeralConversationTestInput,
 } from './types';
 
@@ -40,18 +38,14 @@ const getLogger = (): CtxLogger => {
 const BASE_URL = '/einstein/ai-testing';
 
 /**
- * A client for conversation-level tests (Testing Center). Build the request bodies with
- * `cltSpecToEphemeralInput` / `cltSpecToCreateAndRunInput`.
+ * A client for conversation-level tests (Testing Center). Build the request body with
+ * `cltSpecToEphemeralInput`.
  *
- * **Examples**
+ * **Example**
  *
  * Run without saving (synchronous):
  *
  * `const results = await new ConversationTester(connection).runEphemeral(cltSpecToEphemeralInput(spec, agent));`
- *
- * Save the suite and start a run, then poll it with `AgentforceStudioTester.poll(runId)`:
- *
- * `const { testSuiteId, runId } = await new ConversationTester(connection).createAndRun(input);`
  */
 export class ConversationTester {
   private maybeMock: MaybeMock;
@@ -84,30 +78,6 @@ export class ConversationTester {
     }
 
     return normalizeConversationTestResults({ ...response, testCases });
-  }
-
-  /**
-   * Saves a conversation-level test suite and starts a run.
-   *
-   * @param input - The request body, usually from `cltSpecToCreateAndRunInput`.
-   * @returns The new suite ID (1W4) and run ID (3A2).
-   */
-  public async createAndRun(
-    input: CreateAndRunConversationTestSuiteInput
-  ): Promise<CreateAndRunConversationTestSuiteResponse> {
-    const url = `${BASE_URL}/conversation-test-suites/create-and-run`;
-    const response = await this.maybeMock.request<CreateAndRunConversationTestSuiteResponse>('POST', url, input);
-
-    if (!response?.testSuiteId || !response.runId) {
-      getLogger().debug('Conversation test suite create-and-run returned no IDs', {
-        status: response?.status,
-        statusMessage: response?.statusMessage,
-      });
-      throw messages.createError('conversationSuiteNotStarted', [
-        response?.statusMessage ?? messages.getMessage('noServerMessage'),
-      ]);
-    }
-    return response;
   }
 }
 

@@ -88,7 +88,6 @@ export {
   type AiTestCasePromptInputXml,
 
   // Conversation-level test (CLT) authoring + API input types
-  type AiTestScope,
   type ConversationPersona,
   type ConversationEvaluationMode,
   type CltTestSpec,
@@ -102,11 +101,9 @@ export {
   type ConversationTestCaseInput,
   type ConversationPreviewConfig,
   type EphemeralConversationTestInput,
-  type CreateAndRunConversationTestSuiteInput,
   type ConversationTestResultsResponse,
   type ConversationTestCaseResult,
   type ConversationScorerOutcome,
-  type CreateAndRunConversationTestSuiteResponse,
 
   // Agentforce Studio Testing Types
   type AgentforceStudioTestStartResponse,
@@ -175,6 +172,7 @@ export {
 } from './ngtScorerCatalog';
 export {
   type CltScorerName,
+  type KnownCltScorerName,
   type CltScorerEntry,
   CltScorerCatalog,
   cltScorersFor,
@@ -188,7 +186,6 @@ export {
   isCltSpec,
   validateCltSpec,
   cltSpecToEphemeralInput,
-  cltSpecToCreateAndRunInput,
 } from './cltSpec';
 export {
   AgentTest,

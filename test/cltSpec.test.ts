@@ -24,7 +24,6 @@ import {
   CLT_MAX_TURNS,
   CltScorerCatalog,
   cltScorersFor,
-  cltSpecToCreateAndRunInput,
   cltSpecToEphemeralInput,
   isCltScorerName,
   isCltSpec,
@@ -170,9 +169,101 @@ describe('cltSpec', () => {
   });
 
   describe('validateCltSpec: warnings', () => {
-    it('warns that evaluationMode is ignored without saving', () => {
-      validateCltSpec({ ...minimal(), evaluationMode: 'TEXT' }, { target: 'ephemeral' });
-      expect(warnings().some((w) => w.includes('evaluationMode'))).to.be.true;
+    // Values Core owns: the spec is accepted with a warning and sent as written, so Core decides.
+    type Case = { title: string; spec: () => CltTestSpec; contains: string; target?: CltRunTarget };
+    const cases: Case[] = [
+      {
+        title: 'evaluationMode without saving (ignored)',
+        spec: () => edited((s) => (s.evaluationMode = 'TEXT')),
+        contains: '`evaluationMode` applies only to saved conversation-level suites.',
+      },
+      {
+        title: 'an unknown persona',
+        spec: () => edited((s) => (s.persona = 'ANGRY')),
+        contains: "`persona` 'ANGRY', which this CLI doesn't know (known: DEFAULT, FRUSTRATED, DISTRACTED_DAD, ACCENT)",
+      },
+      {
+        title: 'an unknown evaluationMode in a saved suite',
+        spec: () => edited((s) => (s.evaluationMode = 'VOICE')),
+        contains: "`evaluationMode` 'VOICE', which this CLI doesn't know (known: TEXT, TEXT_VOICE)",
+        target: 'saved',
+      },
+      {
+        title: 'maxTurns over the limit without saving',
+        spec: () => edited((s) => (s.maxTurns = 31)),
+        contains:
+          '`maxTurns` 31, over the limit of 30 when running without saving. Sending it anyway; if Core rejects it, ' +
+          'lower `maxTurns` or save the suite',
+      },
+      {
+        title: 'maxTurns over both limits without saving',
+        spec: () => edited((s) => (s.maxTurns = 101)),
+        contains: '`maxTurns` 101, over the limit of 30 when running without saving that this CLI knows.',
+      },
+      {
+        title: 'maxTurns over the saved limit',
+        spec: () => edited((s) => (s.maxTurns = 101)),
+        contains: '`maxTurns` 101, over the limit of 100 in a saved suite that this CLI knows.',
+        target: 'saved',
+      },
+      {
+        title: 'more than 250 test cases',
+        spec: () =>
+          edited((s) => (s.testCases = Array.from({ length: 251 }, () => ({ conversationGoal: 'Return an item.' })))),
+        contains: '251 test cases, more than the 250',
+        target: 'saved',
+      },
+      {
+        title: 'a saved-only scorer without saving',
+        spec: () =>
+          edited((s) => (firstCase(s).scorers = [{ name: 'displayed_actions_assertion', expected: '["Card"]' }])),
+        contains:
+          "scorer 'displayed_actions_assertion' on test case 1 isn't known to work when running without saving; " +
+          "it's supported in a saved suite.",
+      },
+      {
+        title: 'a turn-level scorer the wizard does not offer for CLT',
+        spec: () => edited((s) => (firstCase(s).scorers = [{ name: 'coherence' }])),
+        contains:
+          'Known scorers in a saved suite: task_resolution (Task Resolution), acceptance_criteria (Success Criteria), ' +
+          'topic_sequence_match (Subagents Assertion), action_sequence_match (Action Assertion), ' +
+          'displayed_actions_assertion (Displayed Actions).',
+        target: 'saved',
+      },
+      {
+        title: 'an unknown scorer without saving (lists only scorers known to work without saving)',
+        spec: () => edited((s) => (firstCase(s).scorers = [{ name: 'made_up_scorer' }])),
+        contains:
+          "scorer 'made_up_scorer' on test case 1 isn't one this CLI knows. Sending it anyway; Core validates it. " +
+          'Known scorers when running without saving: task_resolution (Task Resolution),',
+      },
+      {
+        title: 'a scorer name with terminal escape sequences (escaped, not echoed)',
+        spec: () => edited((s) => (firstCase(s).scorers = [{ name: 'bad\u001b[31mname' }])),
+        contains: "'bad\\u001b[31mname'",
+      },
+    ];
+
+    for (const c of cases) {
+      it(`warns about ${c.title}`, () => {
+        expect(() => validateCltSpec(c.spec(), { target: c.target ?? 'ephemeral' })).to.not.throw();
+        expect(warnings()).to.have.length(1);
+        expect(warnings()[0]).to.include(c.contains);
+      });
+    }
+
+    it('sends an unknown scorer and persona as written, with expected', () => {
+      const spec = edited((s) => {
+        s.persona = 'angry';
+        firstCase(s).scorers = [{ name: 'new_core_scorer', expected: 'x' }, { name: 'other_scorer' }];
+      });
+      validateCltSpec(spec, { target: 'ephemeral' });
+      const input = cltSpecToEphemeralInput(spec, AGENT);
+      expect(input.persona).to.equal('ANGRY');
+      expect(input.testCases[0].scorers).to.deep.equal([
+        { name: 'new_core_scorer', expectedValue: 'x' },
+        { name: 'other_scorer' },
+      ]);
     });
   });
 
@@ -269,21 +360,16 @@ describe('cltSpec', () => {
         error: 'cltSubjectVersionWithProject',
       },
       {
-        title: 'invalid persona',
-        spec: () => edited((s) => (s.persona = 'ANGRY')),
-        error: 'cltInvalidPersona',
-        contains: 'DISTRACTED_DAD',
-      },
-      {
-        title: 'invalid evaluationMode',
-        spec: () => edited((s) => (s.evaluationMode = 'VOICE')),
-        error: 'cltInvalidEvaluationMode',
-        contains: 'Must be one of: TEXT, TEXT_VOICE.',
+        title: 'non-string persona',
+        spec: () => edited((s) => (s.persona = 5)),
+        error: 'cltFieldNotString',
+        contains: '`persona`',
       },
       {
         title: 'non-string evaluationMode',
         spec: () => edited((s) => (s.evaluationMode = 1)),
-        error: 'cltInvalidEvaluationMode',
+        error: 'cltFieldNotString',
+        contains: '`evaluationMode`',
       },
       { title: 'maxTurns 0', spec: () => edited((s) => (s.maxTurns = 0)), error: 'cltInvalidMaxTurns' },
       { title: 'maxTurns fraction', spec: () => edited((s) => (s.maxTurns = 2.5)), error: 'cltInvalidMaxTurns' },
@@ -292,32 +378,6 @@ describe('cltSpec', () => {
         spec: () => edited((s) => (s.maxTurns = '10')),
         error: 'cltMaxTurnsQuoted',
         contains: 'Remove the quotes',
-      },
-      {
-        title: 'maxTurns over the ephemeral limit',
-        spec: () => edited((s) => (s.maxTurns = 31)),
-        error: 'cltMaxTurnsSavedOnly',
-        contains: 'over the limit of 30 when running without saving. Saved suites allow up to 100',
-      },
-      {
-        title: 'maxTurns over the saved limit',
-        spec: () => edited((s) => (s.maxTurns = 101)),
-        error: 'cltInvalidMaxTurns',
-        contains: 'from 1 to 100 in a saved suite',
-        target: 'saved',
-      },
-      {
-        title: 'maxTurns over both limits without saving',
-        spec: () => edited((s) => (s.maxTurns = 101)),
-        error: 'cltInvalidMaxTurns',
-        contains: 'from 1 to 30 when running without saving',
-      },
-      {
-        title: 'maxTurns over the saved limit',
-        spec: () => edited((s) => (s.maxTurns = 101)),
-        error: 'cltInvalidMaxTurns',
-        contains: 'to 100',
-        target: 'saved',
       },
       {
         title: 'simulation not an object',
@@ -530,12 +590,6 @@ describe('cltSpec', () => {
         contains: "'expect' in scorer 2 in test case 1.",
       },
       {
-        title: 'a scorer name with terminal escape sequences (escaped, not echoed)',
-        spec: () => edited((s) => (firstCase(s).scorers = [{ name: 'bad\u001b[31mname' }])),
-        error: 'cltUnsupportedScorer',
-        contains: "'bad\\u001b[31mname'",
-      },
-      {
         title: 'an unknown field with control characters and a very long name',
         spec: () => edited((s) => (s[`x\u0007${'y'.repeat(300)}`] = 1)),
         error: 'cltUnknownField',
@@ -569,9 +623,9 @@ describe('cltSpec', () => {
         error: 'cltScorerExpectedNotString',
       },
       {
-        title: 'saved-only scorer without saving, before checking expected',
+        title: 'saved-only scorer without expected (warns, then needs expected)',
         spec: () => edited((s) => (firstCase(s).scorers = [{ name: 'displayed_actions_assertion' }])),
-        error: 'cltScorerWrongTarget',
+        error: 'cltScorerMissingExpected',
       },
       {
         title: 'agent_handoff_match without expected, before checking expected',
@@ -583,17 +637,6 @@ describe('cltSpec', () => {
         spec: () => edited((s) => (firstCase(s).scorers = [{ name: 'agent_handoff_match' }])),
         error: 'cltScorerNotAvailable',
         target: 'saved',
-      },
-      {
-        title: 'saved-only scorer without saving',
-        spec: () =>
-          edited((s) => (firstCase(s).scorers = [{ name: 'displayed_actions_assertion', expected: '["Card"]' }])),
-        error: 'cltScorerWrongTarget',
-        contains:
-          "isn't supported when running without saving. Supported when running without saving: " +
-          'task_resolution (Task Resolution), acceptance_criteria (Success Criteria), topic_sequence_match ' +
-          '(Subagents Assertion), action_sequence_match (Action Assertion). ' +
-          "Use 'displayed_actions_assertion' in a saved suite.",
       },
       {
         title: 'agent_handoff_match without saving (Core always fails it)',
@@ -611,34 +654,10 @@ describe('cltSpec', () => {
         target: 'saved',
       },
       {
-        title: 'a turn-level scorer the wizard does not offer for CLT',
-        spec: () => edited((s) => (firstCase(s).scorers = [{ name: 'coherence' }])),
-        error: 'cltUnsupportedScorer',
-        contains:
-          'Supported scorers in a saved suite: task_resolution (Task Resolution), acceptance_criteria (Success Criteria), ' +
-          'topic_sequence_match (Subagents Assertion), action_sequence_match (Action Assertion), ' +
-          'displayed_actions_assertion (Displayed Actions).',
-        target: 'saved',
-      },
-      {
-        title: 'an unknown scorer without saving (lists only scorers that work without saving)',
-        spec: () => edited((s) => (firstCase(s).scorers = [{ name: 'coherence' }])),
-        error: 'cltUnsupportedScorer',
-        contains: 'Supported scorers when running without saving: task_resolution (Task Resolution),',
-      },
-      {
-        title: 'an unknown scorer name',
-        spec: () => edited((s) => (firstCase(s).scorers = [{ name: 'made_up_scorer' }])),
-        error: 'cltUnsupportedScorer',
-        contains: "'made_up_scorer'",
-      },
-      {
-        title: 'more than 250 test cases',
-        spec: () =>
-          edited((s) => (s.testCases = Array.from({ length: 251 }, () => ({ conversationGoal: 'Return an item.' })))),
-        error: 'cltTooManyTestCases',
-        contains: '251',
-        target: 'saved',
+        title: 'a numeric expected on an unknown scorer',
+        spec: () => edited((s) => (firstCase(s).scorers = [{ name: 'coherence', expected: 5 }])),
+        error: 'cltScorerExpectedNotString',
+        contains: "'coherence'",
       },
     ];
 
@@ -721,37 +740,6 @@ describe('cltSpec', () => {
         expect((err as SfError).name).to.equal('cltAgentNotResolved');
         expect((err as SfError).message).to.include('Returns_Agent');
       }
-    });
-  });
-
-  describe('cltSpecToCreateAndRunInput', () => {
-    it('maps the fixture and copies maxTurns to every test case', () => {
-      const spec = { ...fixture(), evaluationMode: 'TEXT' as const };
-      validateCltSpec(spec, { target: 'saved' });
-      const input = cltSpecToCreateAndRunInput(spec, AGENT);
-      expect(input).to.include({
-        ...AGENT,
-        name: 'Returns_CLT',
-        description: 'Conversation-level tests for the returns flow',
-        evaluationMode: 'TEXT',
-        persona: 'FRUSTRATED',
-        enableSimulationMode: true,
-      });
-      expect(input).to.not.have.property('maxTurns');
-      expect(input.testCases.map((tc) => tc.maxTurns)).to.deep.equal([10, 10]);
-      expect(input.testCases[1]).to.deep.equal({
-        number: 2,
-        conversationGoal: 'Ask whether an opened item can be returned after 45 days.',
-        maxTurns: 10,
-      });
-    });
-
-    it('omits unset optional fields', () => {
-      expect(cltSpecToCreateAndRunInput(minimal(), AGENT)).to.deep.equal({
-        ...AGENT,
-        name: 'Min',
-        testCases: [{ number: 1, conversationGoal: 'Return an item.' }],
-      });
     });
   });
 });

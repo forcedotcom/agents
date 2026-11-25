@@ -25,31 +25,41 @@
 export type CltRunTarget = 'ephemeral' | 'saved';
 
 /**
- * Scorers offered for conversation-level tests (CLT), keyed by the API key the CLI sends.
+ * Scorer name in a conversation-level test (CLT) spec.
+ *
+ * The `(string & NonNullable<unknown>)` branch keeps this open, as `NgtScorerName` does: a scorer from a
+ * newer Core release type-checks and is sent as written. `validateCltSpec` warns about names it doesn't
+ * know, and Core is the gate.
+ */
+export type CltScorerName = KnownCltScorerName | (string & NonNullable<unknown>);
+
+/**
+ * Scorers the CLI knows for conversation-level tests (CLT), keyed by the API key the CLI sends.
  *
  * Matches the Testing Center wizard rather than everything Core's create-and-run accepts: the server
  * list is `SFEvaluationServiceUtilImpl.getAllSelectableMetrics()` (Aura `getAllAvailableMetrics`), and the
  * wizard keeps the conversation-only evaluations plus `conversationAssertions()` for CONVERSATION_LEVEL.
  * Create-and-run also accepts the turn-level quality scorers (coherence, latency, ...), but the UI never
- * offers them for CLT, so the CLI doesn't either.
+ * offers them for CLT, so the CLI warns about them.
  *
  * - `needsExpected` is Core's `requiresReferenceColumn()` (the scorer is rejected without `expectedValue`).
  * - `targets` lists the endpoints that score it correctly (see `CltRunTarget`). An empty list means
  * the scorer is in the wizard but no endpoint scores it correctly yet, so the CLI rejects it everywhere.
+ * A scorer whose `targets` don't include the run's target gets a warning.
  * - `uiLabel` is the wizard label, so users can map what they see in the UI to the YAML key.
  *
  * Org gates still apply on the server: `acceptance_criteria` needs
  * `com.salesforce.agentforce.testing.center.acceptanceCriteria`, and `displayed_actions_assertion` needs
  * scoring for CLT enabled. The CLI can't read gates, so a closed gate surfaces as Core's error.
  *
- * `agent_handoff_match` is in the wizard but has no targets: Core accepts it, but neither
- * endpoint scores it correctly in 264. ephemeral-run reads a `handoffAgent` field that Platform Metabolism
- * never writes, so it always fails, and create-and-run doesn't save the expected agent. Turn it on when
- * Core fixes them.
+ * `agent_handoff_match` is in the wizard but has no targets: Core accepts it, but neither endpoint scores
+ * it correctly in 264. ephemeral-run reads a `handoffAgent` field that Platform Metabolism never writes, so
+ * it always fails, and create-and-run doesn't save the expected agent. Because the verdict is quietly wrong,
+ * it's the one scorer the CLI rejects. Turn it on when Core fixes them.
  *
  * No Connect API returns this list today; update it when the wizard's CLT scorer list changes.
  */
-export type CltScorerName =
+export type KnownCltScorerName =
   | 'task_resolution'
   | 'acceptance_criteria'
   | 'topic_sequence_match'
@@ -67,7 +77,7 @@ export type CltScorerEntry = {
 };
 
 /* eslint-disable camelcase */
-export const CltScorerCatalog: Readonly<Record<CltScorerName, CltScorerEntry>> = {
+export const CltScorerCatalog: Readonly<Record<KnownCltScorerName, CltScorerEntry>> = {
   task_resolution: { needsExpected: false, targets: ['ephemeral', 'saved'], uiLabel: 'Task Resolution' },
   acceptance_criteria: { needsExpected: true, targets: ['ephemeral', 'saved'], uiLabel: 'Success Criteria' },
   topic_sequence_match: { needsExpected: true, targets: ['ephemeral', 'saved'], uiLabel: 'Subagents Assertion' },
@@ -77,9 +87,10 @@ export const CltScorerCatalog: Readonly<Record<CltScorerName, CltScorerEntry>> =
 } as const;
 /* eslint-enable camelcase */
 
-export const isCltScorerName = (s: string): s is CltScorerName =>
+/** True when the CLI knows `s` (it's in `CltScorerCatalog`). */
+export const isCltScorerName = (s: string): s is KnownCltScorerName =>
   Object.prototype.hasOwnProperty.call(CltScorerCatalog, s);
 
 /** Scorer names that `target` scores correctly, in catalog order. */
-export const cltScorersFor = (target: CltRunTarget): CltScorerName[] =>
-  (Object.keys(CltScorerCatalog) as CltScorerName[]).filter((name) => CltScorerCatalog[name].targets.includes(target));
+export const cltScorersFor = (target: CltRunTarget): KnownCltScorerName[] =>
+  (Object.keys(CltScorerCatalog) as KnownCltScorerName[]).filter((name) => CltScorerCatalog[name].targets.includes(target));

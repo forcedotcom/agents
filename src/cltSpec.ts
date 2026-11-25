@@ -22,14 +22,13 @@ import type {
   ConversationPersona,
   ConversationPreviewConfig,
   ConversationTestCaseInput,
-  CreateAndRunConversationTestSuiteInput,
   EphemeralConversationTestInput,
 } from './types';
 import {
   type CltRunTarget,
   CltScorerCatalog,
-  type CltScorerName,
   cltScorersFor,
+  type KnownCltScorerName,
   isCltScorerName,
 } from './cltScorerCatalog';
 
@@ -43,10 +42,13 @@ const TARGET_PHRASES: Readonly<Record<CltRunTarget, string>> = {
 };
 
 /** Label each scorer key with its Testing Center name, for error messages. */
-const withUiLabels = (names: CltScorerName[]): string =>
+const withUiLabels = (names: KnownCltScorerName[]): string =>
   names.map((name) => `${name} (${CltScorerCatalog[name].uiLabel})`).join(', ');
 
-/** Personas Core accepts (`ConversationPersonas`). Matched case-insensitively, sent upper-case. */
+/**
+ * Personas Core accepts in 264 (`ConversationPersonas`). Matched case-insensitively, sent upper-case.
+ * Other values get a warning and are sent as written (upper-cased), so Core decides.
+ */
 export const CLT_PERSONAS: readonly ConversationPersona[] = ['DEFAULT', 'FRUSTRATED', 'DISTRACTED_DAD', 'ACCENT'];
 
 /**
@@ -54,17 +56,19 @@ export const CLT_PERSONAS: readonly ConversationPersona[] = ['DEFAULT', 'FRUSTRA
  * - ephemeral: Core rejects values outside 1–30 (default 15).
  * - saved: Core rejects only values below 1; Platform Metabolism runs anything over 100 as 100.
  *
- * The CLI rejects values over 100 rather than run a different limit than the user wrote.
+ * A value over the target's limit gets a warning and is sent as written, so a raised Core limit works
+ * without a CLI release.
  */
 export const CLT_MAX_TURNS: Readonly<Record<CltRunTarget, number>> = { ephemeral: 30, saved: 100 };
 
 /**
  * Most test cases in one spec. Core's saved-suite limit (`getMaxConversationGoalsPerSuite`) is 250. A run
  * without saving allows 10, or 250 with the org's devagentenhancement gate; the CLI can't read the gate, so
- * that lower limit is left to the server.
+ * that lower limit is left to the server. More cases than this get a warning.
  */
 export const CLT_MAX_TEST_CASES = 250;
 
+/** Evaluation modes Core accepts in 264. Other values get a warning. */
 const EVALUATION_MODES = ['TEXT', 'TEXT_VOICE'];
 const CONTEXT_PREFIX = '$Context.';
 
@@ -98,13 +102,18 @@ export const isCltSpec = (spec: unknown): spec is CltTestSpec =>
 /**
  * Validate a conversation-level test spec before any API call.
  *
- * The rules mirror Core's create-and-run and ephemeral-run validation so users get a clear local
- * error instead of a server 400. Throws on the first failure. Unknown fields are errors, so a typo
- * can't be silently dropped. Scorers are limited to the ones the Testing Center wizard offers for CLT
- * and the server scores correctly.
+ * Strict about the spec's structure and non-strict about values Core owns, as `validateNgtSpec` is:
+ * - Errors (thrown, first failure wins): unknown fields, so a typo can't be silently dropped; wrong
+ * YAML shapes and types; missing required values; a missing `expected` on a known scorer that needs
+ * one; and `agent_handoff_match`, which Core accepts but scores wrongly.
+ * - Warnings (lifecycle `emitWarning`): values Core may change between releases. These are unknown
+ * scorers, scorers not supported for this target, unknown `persona` or `evaluationMode` values, `maxTurns`
+ * over the target's limit, and more than `CLT_MAX_TEST_CASES` test cases. The spec is sent as written
+ * and Core decides; its error comes back through `ConversationTestRejected`.
  *
  * @param spec - The parsed YAML spec. On success it's narrowed to `CltTestSpec`.
- * @param ctx.target - `ephemeral` (run without saving) or `saved` (create-and-run).
+ * @param ctx.target - `ephemeral` (run without saving) or `saved` (create-and-run). Only `ephemeral` has a
+ * converter today; `saved` keeps the saved-suite limits for the command that will save suites.
  */
 export const validateCltSpec: (spec: unknown, ctx: { target: CltRunTarget }) => asserts spec is CltTestSpec = (
   spec,
@@ -137,7 +146,7 @@ export const validateCltSpec: (spec: unknown, ctx: { target: CltRunTarget }) => 
     throw cltError('cltMissingTestCases');
   }
   if (raw.testCases.length > CLT_MAX_TEST_CASES) {
-    throw cltError('cltTooManyTestCases', [raw.testCases.length, CLT_MAX_TEST_CASES]);
+    cltWarning('cltTooManyTestCases', [raw.testCases.length, CLT_MAX_TEST_CASES]);
   }
   raw.testCases.forEach((testCase: unknown, tcIdx) => validateTestCase(testCase, tcIdx + 1, ctx.target));
 };
@@ -161,33 +170,6 @@ export const cltSpecToEphemeralInput = (
   testCases: spec.testCases.map((testCase, idx) => toTestCaseInput(testCase, idx)),
   ...(spec.persona ? { persona: normalizePersona(spec.persona) } : {}),
   ...(spec.maxTurns !== undefined ? { maxTurns: spec.maxTurns } : {}),
-  ...simulationFields(spec),
-});
-
-/**
- * Convert a validated CLT spec to the `conversation-test-suites/create-and-run` body (save, then run).
- *
- * Must be called after `validateCltSpec` with `target: 'saved'`. The suite-level `maxTurns` is copied
- * to every test case, because Core reads it per case and requires the same value on all of them.
- *
- * @param spec - The validated spec.
- * @param agent - The resolved `agentId` and `agentVersionId` when the spec names a published agent
- * (`subjectName`). Ignored when the spec has `project`. The converter doesn't read `subjectName` or
- * `subjectVersion`; the caller resolves them to these IDs.
- */
-export const cltSpecToCreateAndRunInput = (
-  spec: CltTestSpec,
-  agent?: { agentId: string; agentVersionId: string }
-): CreateAndRunConversationTestSuiteInput => ({
-  ...agentTarget(spec, agent),
-  name: spec.name,
-  ...(spec.description ? { description: spec.description } : {}),
-  ...(spec.evaluationMode ? { evaluationMode: spec.evaluationMode } : {}),
-  ...(spec.persona ? { persona: normalizePersona(spec.persona) } : {}),
-  testCases: spec.testCases.map((testCase, idx) => ({
-    ...toTestCaseInput(testCase, idx),
-    ...(spec.maxTurns !== undefined ? { maxTurns: spec.maxTurns } : {}),
-  })),
   ...simulationFields(spec),
 });
 
@@ -218,31 +200,35 @@ const validateAgentIdentity = (raw: Record<string, unknown>): void => {
 };
 
 const validateSuiteSettings = (raw: Record<string, unknown>, target: CltRunTarget): void => {
+  rejectNonString(raw, 'persona');
   if (raw.persona !== undefined && !CLT_PERSONAS.includes(normalizePersona(raw.persona))) {
-    throw cltError('cltInvalidPersona', [display(raw.persona), CLT_PERSONAS.join(', ')]);
+    cltWarning('cltUnknownPersona', [display(raw.persona), CLT_PERSONAS.join(', ')]);
   }
 
+  rejectNonString(raw, 'evaluationMode');
   if (raw.evaluationMode !== undefined) {
-    if (typeof raw.evaluationMode !== 'string' || !EVALUATION_MODES.includes(raw.evaluationMode)) {
-      throw cltError('cltInvalidEvaluationMode', [display(raw.evaluationMode), EVALUATION_MODES.join(', ')]);
-    }
     if (target === 'ephemeral') {
-      void Lifecycle.getInstance().emitWarning(messages.getMessage('cltEvaluationModeIgnored'));
+      cltWarning('cltEvaluationModeIgnored');
+    } else if (!EVALUATION_MODES.includes(raw.evaluationMode as string)) {
+      cltWarning('cltUnknownEvaluationMode', [display(raw.evaluationMode), EVALUATION_MODES.join(', ')]);
     }
   }
 
   if (raw.maxTurns !== undefined) {
-    const max = CLT_MAX_TURNS[target];
     const turns = raw.maxTurns;
     if (typeof turns === 'string' && /^\s*\d+\s*$/.test(turns)) {
       throw cltError('cltMaxTurnsQuoted', [display(turns)]);
     }
-    const isWholeNumber = typeof turns === 'number' && Number.isInteger(turns);
-    if (isWholeNumber && target === 'ephemeral' && turns > max && turns <= CLT_MAX_TURNS.saved) {
-      throw cltError('cltMaxTurnsSavedOnly', [turns, max, CLT_MAX_TURNS.saved]);
+    if (typeof turns !== 'number' || !Number.isInteger(turns) || turns < 1) {
+      throw cltError('cltInvalidMaxTurns', [display(turns)]);
     }
-    if (!isWholeNumber || turns < 1 || turns > max) {
-      throw cltError('cltInvalidMaxTurns', [display(turns), max, TARGET_PHRASES[target]]);
+    const max = CLT_MAX_TURNS[target];
+    if (turns > max) {
+      cltWarning(target === 'ephemeral' && turns <= CLT_MAX_TURNS.saved ? 'cltMaxTurnsSavedOnly' : 'cltMaxTurnsOverLimit', [
+        turns,
+        max,
+        TARGET_PHRASES[target],
+      ]);
     }
   }
 
@@ -375,13 +361,17 @@ const validateScorers = (scorers: unknown, caseNumber: number, target: CltRunTar
       throw cltError('cltScorerMissingName', [caseNumber]);
     }
     const name = scorer.name;
+    if (scorer.expected !== undefined && typeof scorer.expected !== 'string') {
+      throw cltError('cltScorerExpectedNotString', [display(name), caseNumber, display(scorer.expected)]);
+    }
     if (!isCltScorerName(name)) {
-      throw cltError('cltUnsupportedScorer', [
+      cltWarning('cltUnknownScorer', [
         display(name),
         caseNumber,
         TARGET_PHRASES[target],
         withUiLabels(cltScorersFor(target)),
       ]);
+      return;
     }
     // Check availability before `expected`, so an unusable scorer isn't first told to add a value.
     const entry = CltScorerCatalog[name];
@@ -389,19 +379,12 @@ const validateScorers = (scorers: unknown, caseNumber: number, target: CltRunTar
       throw cltError('cltScorerNotAvailable', [name, caseNumber, entry.uiLabel]);
     }
     if (!entry.targets.includes(target)) {
-      const phrase = TARGET_PHRASES[target];
-      throw cltError('cltScorerWrongTarget', [
+      cltWarning('cltScorerWrongTarget', [
         name,
         caseNumber,
-        phrase,
-        phrase,
-        withUiLabels(cltScorersFor(target)),
-        name,
+        TARGET_PHRASES[target],
         entry.targets.map((t) => TARGET_PHRASES[t]).join(' or '),
       ]);
-    }
-    if (scorer.expected !== undefined && typeof scorer.expected !== 'string') {
-      throw cltError('cltScorerExpectedNotString', [name, caseNumber, display(scorer.expected)]);
     }
     if (entry.needsExpected && !isNonBlankString(scorer.expected)) {
       throw cltError('cltScorerMissingExpected', [name, caseNumber]);
@@ -472,10 +455,11 @@ const toTestCaseInput = (testCase: CltTestCase, idx: number): ConversationTestCa
     : {}),
   ...(testCase.scorers?.length
     ? {
-        // Scorers that take no expected value omit it, as the NGT converter does.
+        // Known scorers that take no expected value omit it, as the NGT converter does. An unknown
+        // scorer gets `expected` as written, so Core decides.
         scorers: testCase.scorers.map((scorer) => ({
           name: scorer.name,
-          ...(scorer.expected !== undefined && CltScorerCatalog[scorer.name].needsExpected
+          ...(scorer.expected !== undefined && (!isCltScorerName(scorer.name) || CltScorerCatalog[scorer.name].needsExpected)
             ? { expectedValue: scorer.expected }
             : {}),
         })),
@@ -510,7 +494,7 @@ const simulationFields = (
 // ---------------------------------------------------------------------------
 
 const normalizePersona = (persona: unknown): ConversationPersona =>
-  String(persona).trim().toUpperCase() as ConversationPersona;
+  String(persona).trim().toUpperCase();
 
 /** Strips surrounding whitespace and a leading `$Context.`. Returns undefined for a blank name. */
 const bareContextVariableName = (name: unknown): string | undefined => {
@@ -546,3 +530,7 @@ const isNonBlankString = (value: unknown): value is string => typeof value === '
 
 const cltError = (key: string, tokens: Array<string | number> = []): SfError =>
   new SfError(messages.getMessage(key, tokens), key);
+
+const cltWarning = (key: string, tokens: Array<string | number> = []): void => {
+  void Lifecycle.getInstance().emitWarning(messages.getMessage(key, tokens));
+};

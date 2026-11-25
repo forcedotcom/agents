@@ -68,23 +68,23 @@ Conversation-level test spec must define at least one test case under `testCases
 
 # cltTooManyTestCases
 
-Conversation-level test spec has %s test cases. A spec can have at most %s. Split the cases across several specs.
+Conversation-level test spec has %s test cases, more than the %s that Core allowed when this CLI was released. Sending it anyway; if Core rejects it, split the cases across several specs.
 
 # cltMissingConversationGoal
 
 Conversation-level test case %s must define a non-blank `conversationGoal:`.
 
-# cltInvalidPersona
+# cltUnknownPersona
 
-Conversation-level test spec has `persona` '%s'. Must be one of: %s.
+Conversation-level test spec has `persona` '%s', which this CLI doesn't know (known: %s). Sending it anyway; Core validates it.
 
-# cltInvalidEvaluationMode
+# cltUnknownEvaluationMode
 
-Conversation-level test spec has `evaluationMode` '%s'. Must be one of: %s.
+Conversation-level test spec has `evaluationMode` '%s', which this CLI doesn't know (known: %s). Sending it anyway; Core validates it.
 
 # cltInvalidMaxTurns
 
-Conversation-level test spec has `maxTurns` %s. It must be a whole number from 1 to %s %s.
+Conversation-level test spec has `maxTurns` %s. It must be a whole number of at least 1.
 
 # cltMaxTurnsQuoted
 
@@ -92,7 +92,11 @@ Conversation-level test spec has `maxTurns` as the text '%s'. Remove the quotes 
 
 # cltMaxTurnsSavedOnly
 
-Conversation-level test spec has `maxTurns` %s, over the limit of %s when running without saving. Saved suites allow up to %s: save the suite, or lower `maxTurns`.
+Conversation-level test spec has `maxTurns` %s, over the limit of %s %s. Sending it anyway; if Core rejects it, lower `maxTurns` or save the suite, which allows more turns.
+
+# cltMaxTurnsOverLimit
+
+Conversation-level test spec has `maxTurns` %s, over the limit of %s %s that this CLI knows. Sending it anyway; Core validates it.
 
 # cltContextVariableMissingName
 
@@ -124,15 +128,15 @@ Conversation-level scorer '%s' on test case %s has a non-string `expected:` (%s)
 
 # cltScorerWrongTarget
 
-Conversation-level scorer '%s' on test case %s isn't supported %s. Supported %s: %s. Use '%s' %s.
+Conversation-level scorer '%s' on test case %s isn't known to work %s; it's supported %s. Sending it anyway; Core validates it.
 
 # cltScorerNotAvailable
 
 Conversation-level scorer '%s' on test case %s (%s in Testing Center) isn't available from the CLI yet. The conversation-level test APIs don't score it correctly. Remove it, or run this check in Testing Center.
 
-# cltUnsupportedScorer
+# cltUnknownScorer
 
-Conversation-level scorer '%s' on test case %s isn't supported for conversation-level tests. Supported scorers %s: %s.
+Conversation-level scorer '%s' on test case %s isn't one this CLI knows. Sending it anyway; Core validates it. Known scorers %s: %s.
 
 # cltEvaluationModeIgnored
 

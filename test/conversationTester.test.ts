@@ -22,7 +22,7 @@ import {
   parseConversationScorerResponse,
 } from '../src/conversationTester';
 import { MaybeMock } from '../src/maybe-mock';
-import type { CreateAndRunConversationTestSuiteInput, EphemeralConversationTestInput } from '../src/types';
+import type { EphemeralConversationTestInput } from '../src/types';
 
 const MOCKS = 'test/mocks/conversationTester';
 
@@ -31,12 +31,6 @@ const ephemeralInput: EphemeralConversationTestInput = {
   agentVersionId: '0X9RZ0000000001',
   maxTurns: 5,
   testCases: [{ number: 1, conversationGoal: 'Check the status of my order' }],
-};
-
-const createAndRunInput: CreateAndRunConversationTestSuiteInput = {
-  ...ephemeralInput,
-  name: 'Order status',
-  testCases: [{ number: 1, maxTurns: 5, conversationGoal: 'Check the status of my order' }],
 };
 
 describe('ConversationTester', () => {
@@ -125,39 +119,6 @@ describe('ConversationTester', () => {
       expect(error.name).to.equal('ConversationTestRejectedError');
       expect(error.message).to.equal(
         "The conversation-level test run was rejected: The server didn't return a reason."
-      );
-    });
-  });
-
-  describe('createAndRun', () => {
-    it('returns the saved suite and run IDs', async () => {
-      useMocks('created');
-      const response = await new ConversationTester(connection).createAndRun(createAndRunInput);
-
-      expect(response).to.deep.equal({
-        runId: '3A2RZ000000d7zJ0AQ',
-        status: 'SUCCESS',
-        statusMessage: 'Test suite created and run started.',
-        testSuiteId: '1W4RZ000000FfXV0A0',
-      });
-    });
-
-    it('throws with the status message when no IDs come back', async () => {
-      useMocks('notStarted');
-      const error = await expectError(new ConversationTester(connection).createAndRun(createAndRunInput));
-
-      expect(error.name).to.equal('ConversationSuiteNotStartedError');
-      expect(error.message).to.equal(
-        "The conversation-level test suite wasn't saved and run: A test run is already in progress for this suite."
-      );
-    });
-
-    it('throws a generic reason when no IDs or status message come back', async () => {
-      useMocks('notStartedNoMessage');
-      const error = await expectError(new ConversationTester(connection).createAndRun(createAndRunInput));
-
-      expect(error.message).to.equal(
-        "The conversation-level test suite wasn't saved and run: The server didn't return a reason."
       );
     });
   });
