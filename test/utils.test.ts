@@ -607,6 +607,125 @@ describe('requestWithEndpointFallback', () => {
       expect(requestStub.calledOnce).to.be.true;
     });
   });
+
+  describe('GovCloud orgs', () => {
+    const request: RequestInfo = {
+      method: 'POST',
+      url: 'https://api.salesforce.com/einstein/ai-agent/v1/test',
+      headers: { 'x-client-name': 'test' },
+      body: '{}',
+    };
+    const path = '/einstein/ai-agent/v1/test';
+    const govHeaders = { 'x-salesforce-region': 'us-gov-east-1', 'x-client-name': 'test' };
+    const jwtWithRoutingHints = (routingHints: string): string => {
+      const b64 = (obj: unknown): string => Buffer.from(JSON.stringify(obj)).toString('base64url');
+      // eslint-disable-next-line camelcase
+      return `${b64({ alg: 'RS256' })}.${b64({ sub: 'user', sfap_rh: routingHints })}.signature`;
+    };
+    let error404: Error;
+
+    beforeEach(() => {
+      error404 = new Error('Not Found');
+      error404.name = 'ERROR_HTTP_404';
+    });
+
+    it('sends stage GovCloud orgs to stage.api.gov.salesforce.mil with the region header', async () => {
+      connection.accessToken = jwtWithRoutingHints(
+        'bot-svc-llm:aws-giastage1-usgoveast1/einstein2,bot-svc-api:aws-giastage1-usgoveast1/uengage1,dx-workspaces-proxy/dx-workspaces:aws-stage1-useast2/gid'
+      );
+      const requestStub = $$.SANDBOX.stub(connection, 'request').resolves({ success: true });
+
+      const result = await requestWithEndpointFallback(connection, request);
+
+      expect(result).to.deep.equal({ success: true });
+      expect(requestStub.calledOnce).to.be.true;
+      const sent = requestStub.firstCall.args[0] as RequestInfo;
+      expect(sent.url).to.equal(`https://stage.api.gov.salesforce.mil${path}`);
+      expect(sent.headers).to.deep.equal(govHeaders);
+    });
+
+    it('falls back to the .com host of the same environment on 404', async () => {
+      connection.accessToken = jwtWithRoutingHints('bot-svc-api:aws-giastage1-usgoveast1/uengage1');
+      const requestStub = $$.SANDBOX.stub(connection, 'request');
+      requestStub.onFirstCall().rejects(error404);
+      requestStub.onSecondCall().resolves({ success: true });
+
+      const result = await requestWithEndpointFallback(connection, request);
+
+      expect(result).to.deep.equal({ success: true });
+      expect(requestStub.getCalls().map((call) => (call.args[0] as RequestInfo).url)).to.deep.equal([
+        `https://stage.api.gov.salesforce.mil${path}`,
+        `https://stage.api.gov.salesforce.com${path}`,
+      ]);
+      expect((requestStub.secondCall.args[0] as RequestInfo).headers).to.deep.equal(govHeaders);
+    });
+
+    it('only tries the prod GovCloud hosts for prod GovCloud orgs', async () => {
+      connection.accessToken = jwtWithRoutingHints('bot-svc-api:aws-giaprod1-usgoveast1/uengage1');
+      const requestStub = $$.SANDBOX.stub(connection, 'request').rejects(error404);
+
+      try {
+        await requestWithEndpointFallback(connection, request);
+        expect.fail('Expected error was not thrown');
+      } catch (error) {
+        const sfError = error as SfError;
+        expect(sfError.name).to.equal('AgentApiNotFound');
+        expect(sfError.message).to.include('api.gov.salesforce.mil, api.gov.salesforce.com');
+        expect(sfError.actions?.join('\n')).to.not.include('SF_AGENT_API_ENDPOINTS');
+      }
+
+      expect(requestStub.getCalls().map((call) => (call.args[0] as RequestInfo).url)).to.deep.equal([
+        `https://api.gov.salesforce.mil${path}`,
+        `https://api.gov.salesforce.com${path}`,
+      ]);
+    });
+
+    it('sends dev GovCloud orgs to dev.api.gov.salesforce.com', async () => {
+      connection.accessToken = jwtWithRoutingHints('bot-svc-api:aws-giadev1-usgoveast1/core1');
+      const requestStub = $$.SANDBOX.stub(connection, 'request').resolves({ success: true });
+
+      await requestWithEndpointFallback(connection, request);
+
+      expect(requestStub.calledOnce).to.be.true;
+      expect((requestStub.firstCall.args[0] as RequestInfo).url).to.equal(`https://dev.api.gov.salesforce.com${path}`);
+    });
+
+    it('ignores SF_AGENT_API_ENDPOINTS for GovCloud orgs', async () => {
+      process.env.SF_AGENT_API_ENDPOINTS = 'stage.';
+      connection.accessToken = jwtWithRoutingHints('bot-svc-api:aws-giastage1-usgoveast1/uengage1');
+      const requestStub = $$.SANDBOX.stub(connection, 'request').resolves({ success: true });
+
+      try {
+        await requestWithEndpointFallback(connection, request);
+      } finally {
+        delete process.env.SF_AGENT_API_ENDPOINTS;
+      }
+
+      expect((requestStub.firstCall.args[0] as RequestInfo).url).to.equal(
+        `https://stage.api.gov.salesforce.mil${path}`
+      );
+    });
+
+    it('keeps the commercial hosts and headers for orgs outside GovCloud', async () => {
+      connection.accessToken = jwtWithRoutingHints('bot-svc-api:aws-prod5-uswest2/core1');
+      const requestStub = $$.SANDBOX.stub(connection, 'request').rejects(error404);
+
+      try {
+        await requestWithEndpointFallback(connection, request);
+        expect.fail('Expected error was not thrown');
+      } catch (error) {
+        expect((error as SfError).name).to.equal('AgentApiNotFound');
+      }
+
+      expect(requestStub.getCalls().map((call) => (call.args[0] as RequestInfo).url)).to.deep.equal([
+        `https://api.salesforce.com${path}`,
+        `https://test.api.salesforce.com${path}`,
+        `https://dev.api.salesforce.com${path}`,
+        `https://stage.api.salesforce.com${path}`,
+      ]);
+      expect((requestStub.firstCall.args[0] as RequestInfo).headers).to.deep.equal({ 'x-client-name': 'test' });
+    });
+  });
 });
 
 describe('useNamedUserJwt', () => {

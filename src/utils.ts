@@ -843,7 +843,7 @@ const isInternalOrg = (connection: Connection): boolean => {
  * The fallback gateway prefixes to try after api.salesforce.com. SF_AGENT_API_ENDPOINTS (comma-separated,
  * e.g. "stage.,test.") overrides the default for any org, for internal orgs whose domain isn't recognized
  * as internal (for example stage orgs on a customer-style domain). It applies to every org, not just
- * internal ones. Set it to "none" to never fall back.
+ * internal ones, except GovCloud orgs, which use their own hosts. Set it to "none" to never fall back.
  */
 const getFallbackEndpoints = (connection: Connection): string[] => {
   const override = process.env.SF_AGENT_API_ENDPOINTS?.trim();
@@ -882,11 +882,47 @@ const getRequestPath = (url: string): string => {
   }
 };
 
+type GovCloudEnvironment = 'dev' | 'stage' | 'prod';
+
+// GovCloud SFAP hosts by environment. An org is served from either the .mil or the .com host of its
+// environment; the other one returns 404. There is no dev.api.gov.salesforce.mil.
+const GOVCLOUD_API_HOSTS: Record<GovCloudEnvironment, string[]> = {
+  dev: ['dev.api.gov.salesforce.com'],
+  stage: ['stage.api.gov.salesforce.mil', 'stage.api.gov.salesforce.com'],
+  prod: ['api.gov.salesforce.mil', 'api.gov.salesforce.com'],
+};
+// SFAP routes GovCloud requests on this header and returns 404 without it. Every GovCloud falcon
+// instance runs in us-gov-east-1.
+const GOVCLOUD_SFAP_REGION = 'us-gov-east-1';
+// A GovCloud falcon instance name, e.g. aws-giastage1-usgoveast1.
+const GOVCLOUD_FALCON_INSTANCE_PATTERN = /\baws-gia(dev|stage|prod)\d+-usgoveast1\b/;
+
+/**
+ * Finds the GovCloud environment an org runs in from its JWT's sfap_rh (SFAP routing hints) claim.
+ * Each hint names the falcon instance serving a service for the org, e.g.
+ * bot-svc-api:aws-giastage1-usgoveast1/uengage1. Returns undefined for orgs outside GovCloud.
+ */
+const getGovCloudFalconInstance = (
+  jwt: string | undefined
+): { environment: GovCloudEnvironment; falconInstance: string } | undefined => {
+  try {
+    const claims = JSON.parse(Buffer.from(jwt?.split('.')[1] ?? '', 'base64url').toString()) as Record<string, unknown>;
+    const match = typeof claims.sfap_rh === 'string' ? GOVCLOUD_FALCON_INSTANCE_PATTERN.exec(claims.sfap_rh) : null;
+    return match ? { environment: match[1] as GovCloudEnvironment, falconInstance: match[0] } : undefined;
+  } catch {
+    // Not a JWT (e.g. a plain access token): not a GovCloud org as far as we can tell.
+    return undefined;
+  }
+};
+
 /**
  * Makes an API request with automatic endpoint fallback.
  * Tries api.salesforce.com first. For orgs on internal instances only, then tries test., dev., and
  * stage.api.salesforce.com on 404. A fallback host that can't be reached is skipped, so its connection
  * error never hides the 404 from api.salesforce.com.
+ *
+ * GovCloud orgs, identified by the sfap_rh claim of the connection's JWT, are sent to the GovCloud
+ * hosts of their environment instead, with the x-salesforce-region header SFAP routes them on.
  *
  * @param connection - The Salesforce connection
  * @param requestInfo - The request information (url, method, headers, body, etc.)
@@ -899,32 +935,43 @@ export async function requestWithEndpointFallback<T>(
   requestInfo: RequestInfo,
   options?: { retry?: { maxRetries?: number } }
 ): Promise<T> {
-  const fallbackEndpoints = getFallbackEndpoints(connection);
-  const endpoints = ['', ...fallbackEndpoints];
+  const logger = CtxLogger.child('AgentApiRequest');
+  const govCloud = getGovCloudFalconInstance(connection.accessToken ?? undefined);
+  let hosts: string[];
+  let request = requestInfo;
+  if (govCloud) {
+    hosts = GOVCLOUD_API_HOSTS[govCloud.environment];
+    request = { ...requestInfo, headers: { 'x-salesforce-region': GOVCLOUD_SFAP_REGION, ...requestInfo.headers } };
+    logger.debug('Org JWT routes to a GovCloud falcon instance; using GovCloud Agent API hosts', {
+      falconInstance: govCloud.falconInstance,
+      hosts,
+    });
+  } else {
+    hosts = ['', ...getFallbackEndpoints(connection)].map((endpoint) => `${endpoint}api.salesforce.com`);
+  }
   const attemptedEndpoints: string[] = [];
   const unreachableEndpoints: string[] = [];
-  const logger = CtxLogger.child('AgentApiRequest');
 
   let notFoundError: unknown;
 
-  for (const endpoint of endpoints) {
-    // Replace the domain with the endpoint variant
-    const modifiedUrl = requestInfo.url.replace(
+  for (const [index, host] of hosts.entries()) {
+    const isFallback = index > 0;
+    // Replace the domain with the host variant
+    const modifiedUrl = request.url.replace(
       /https:\/\/(?:test\.|dev\.|stage\.)?api\.salesforce\.com/,
-      `https://${endpoint}api.salesforce.com`
+      `https://${host}`
     );
-    const host = `${endpoint}api.salesforce.com`;
     attemptedEndpoints.push(host);
 
     try {
       // eslint-disable-next-line no-await-in-loop
       return await connection.request<T>(
         {
-          ...requestInfo,
+          ...request,
           url: modifiedUrl,
         },
         // Fallback hosts get no retries: an unreachable host should be skipped quickly
-        endpoint === '' ? options : { ...options, retry: { ...options?.retry, maxRetries: 0 } }
+        isFallback ? { ...options, retry: { ...options?.retry, maxRetries: 0 } } : options
       );
     } catch (error) {
       const statusCode = getHttpStatusCode(error);
@@ -936,7 +983,7 @@ export async function requestWithEndpointFallback<T>(
         notFoundError ??= error;
         continue; // Try next endpoint
       }
-      if (endpoint !== '' && statusCode === undefined && isNetworkError(error)) {
+      if (isFallback && statusCode === undefined && isNetworkError(error)) {
         // A fallback host we couldn't reach (connect timeout, DNS failure). Skip it rather than
         // replacing the 404 from api.salesforce.com with a bare "fetch failed".
         unreachableEndpoints.push(host);
@@ -962,10 +1009,13 @@ export async function requestWithEndpointFallback<T>(
       "'sf agent validate authoring-bundle' can pass on an org that can't publish: publishing calls a different Agent API endpoint, which may require additional Agentforce entitlements on the org."
     );
   }
-  // Shown for every org: a stage org on a customer-style domain gets no fallback chain by default
-  actions.push(
-    'Confirm which SFAP gateway the org uses (Setup > GatewayHawkingInfo). To try specific gateways, set SF_AGENT_API_ENDPOINTS, for example "stage.,test.".'
-  );
+  // Shown for every non-GovCloud org: a stage org on a customer-style domain gets no fallback chain by default.
+  // SF_AGENT_API_ENDPOINTS doesn't apply to GovCloud orgs, so don't suggest it there.
+  if (!govCloud) {
+    actions.push(
+      'Confirm which SFAP gateway the org uses (Setup > GatewayHawkingInfo). To try specific gateways, set SF_AGENT_API_ENDPOINTS, for example "stage.,test.".'
+    );
+  }
   const notFoundHosts = attemptedEndpoints.filter((host) => !unreachableEndpoints.includes(host));
   const unreachable = unreachableEndpoints.length ? ` Couldn't connect to ${unreachableEndpoints.join(', ')}.` : '';
   throw SfError.create({
