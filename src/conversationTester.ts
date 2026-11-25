@@ -1,0 +1,137 @@
+/*
+ * Copyright 2026, Salesforce, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+import { Connection, Messages } from '@salesforce/core';
+import { MaybeMock } from './maybe-mock';
+import { CtxLogger } from './ctxLogger';
+import { decodeHtmlEntities } from './utils';
+import type {
+  ConversationScorerOutcome,
+  ConversationTestResultsResponse,
+  EphemeralConversationTestInput,
+} from './types';
+
+Messages.importMessagesDirectory(__dirname);
+const messages = Messages.loadMessages('@salesforce/agents', 'conversationTester');
+
+let logger: CtxLogger;
+const getLogger = (): CtxLogger => {
+  if (!logger) {
+    logger = CtxLogger.child('ConversationTester');
+  }
+  return logger;
+};
+
+const BASE_URL = '/einstein/ai-testing';
+
+/**
+ * A client for conversation-level tests (Testing Center). Build the request body with
+ * `cltSpecToEphemeralInput`.
+ *
+ * **Example**
+ *
+ * Run without saving (synchronous):
+ *
+ * `const results = await new ConversationTester(connection).runEphemeral(cltSpecToEphemeralInput(spec, agent));`
+ */
+export class ConversationTester {
+  private maybeMock: MaybeMock;
+
+  public constructor(connection: Connection) {
+    this.maybeMock = new MaybeMock(connection);
+  }
+
+  /**
+   * Runs conversation tests without saving a suite, and waits for the results.
+   *
+   * The endpoint reports rejected input as HTTP 200 with `status: "Failed"` and no test cases;
+   * that case, and an empty response body, throw `ConversationTestRejected` with the server's message. A `Failed` run that
+   * has test cases (for example, the agent failed mid-conversation) is returned so the caller
+   * can report each case.
+   *
+   * @param input - The request body, usually from `cltSpecToEphemeralInput`.
+   * @returns The run results, with HTML entities decoded in the JSON-string fields.
+   */
+  public async runEphemeral(input: EphemeralConversationTestInput): Promise<ConversationTestResultsResponse> {
+    const url = `${BASE_URL}/conversation-tests/ephemeral-run`;
+    const response = await this.maybeMock.request<ConversationTestResultsResponse>('POST', url, input);
+    const testCases = response?.testCases ?? [];
+
+    if (!response || (response.status?.toLowerCase() === 'failed' && testCases.length === 0)) {
+      const errorCode = response?.errorRepresentation?.errorCode;
+      const errorMessage = response?.errorRepresentation?.errorMessage;
+      getLogger().debug('Ephemeral conversation test run rejected', { errorCode, errorMessage });
+      throw messages.createError('conversationTestRejected', [errorMessage ?? messages.getMessage('noServerMessage')]);
+    }
+
+    return normalizeConversationTestResults({ ...response, testCases });
+  }
+}
+
+/** Decodes HTML entities in the JSON-string `subjectResponse` and `scorerResponse` fields. */
+export function normalizeConversationTestResults(
+  results: ConversationTestResultsResponse
+): ConversationTestResultsResponse {
+  return {
+    ...results,
+    testCases: results.testCases.map((tc) => ({
+      ...tc,
+      subjectResponse: tc.subjectResponse === undefined ? undefined : decodeHtmlEntities(tc.subjectResponse),
+      testScorerResults: tc.testScorerResults?.map((scorer) => ({
+        ...scorer,
+        scorerResponse: scorer.scorerResponse === undefined ? undefined : decodeHtmlEntities(scorer.scorerResponse),
+      })),
+    })),
+  };
+}
+
+/**
+ * Reads a scorer's outcome from its JSON-string `scorerResponse`. Task Resolution puts the
+ * fields either at the top level or under `content`; both are read. Values are passed through
+ * as sent (for example `score` may be an integer or a decimal).
+ *
+ * Expects a `scorerResponse` that's already decoded, as returned by `runEphemeral` or
+ * `normalizeConversationTestResults`. It isn't decoded again, so literal entity text in the
+ * reasoning (for example `&amp;quot;`) is kept.
+ *
+ * @returns The outcome, or `undefined` when the response is missing or isn't a JSON object.
+ */
+export function parseConversationScorerResponse(scorerResponse?: string): ConversationScorerOutcome | undefined {
+  if (!scorerResponse) return undefined;
+  const parsed = parseJson(scorerResponse);
+  if (!isRecord(parsed)) return undefined;
+  const content = isRecord(parsed.content) ? parsed.content : {};
+  const pick = (key: string): unknown => content[key] ?? parsed[key];
+  const status = pick('status');
+  const score = pick('score');
+  const reasoning = pick('reasoning') ?? pick('explanation');
+  return {
+    ...(typeof status === 'string' ? { status } : {}),
+    ...(typeof score === 'number' || typeof score === 'string' ? { score } : {}),
+    ...(typeof reasoning === 'string' ? { reasoning } : {}),
+  };
+}
+
+const parseJson = (text: string): unknown => {
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return undefined;
+  }
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);

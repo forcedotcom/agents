@@ -1,0 +1,5 @@
+{
+  "status": "Failed",
+  "errorRepresentation": { "errorCode": "BAD_REQUEST", "errorMessage": "'maxTurns' must be in the range [1, 30]" },
+  "testCases": []
+}

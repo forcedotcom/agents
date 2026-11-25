@@ -19,6 +19,7 @@ import { FileProperties } from '@salesforce/source-deploy-retrieve';
 import { type ApexLog } from '@salesforce/types/tooling';
 import { metric } from './utils';
 import type { NgtScorerName } from './ngtScorerCatalog';
+import type { CltScorerName } from './cltScorerCatalog';
 
 // ====================================================
 //     Compilation API exit codes
@@ -636,6 +637,107 @@ export type NgtTestSpec =
       testCases: NgtPromptTestCase[];
     };
 
+// ====================================================
+//    Conversation-Level Test (CLT) Types
+// ====================================================
+
+// Authoring (YAML) types for CLT specs. A spec is CLT when `testScope` is `CONVERSATION_LEVEL`.
+
+/**
+ * Simulated-user persona: Core `ConversationPersonas` in 264. Open, like `CltScorerName`, so a persona from a
+ * newer Core release type-checks; `validateCltSpec` warns about values it doesn't know.
+ */
+export type ConversationPersona =
+  | 'DEFAULT'
+  | 'FRUSTRATED'
+  | 'DISTRACTED_DAD'
+  | 'ACCENT'
+  | (string & NonNullable<unknown>);
+
+/** Saved-suite evaluation mode (`TEXT` or `TEXT_VOICE` in 264). Not accepted when running without saving. */
+export type ConversationEvaluationMode = 'TEXT' | 'TEXT_VOICE' | (string & NonNullable<unknown>);
+
+/** A draft (not yet published) agent, identified by its project and project version. */
+export type CltProject = {
+  projectId: string;
+  projectVersionId: string;
+};
+
+export type CltTestCaseScorer = {
+  name: CltScorerName;
+  expected?: string;
+};
+
+export type CltConnections = {
+  /** One of the agent's connection types, for example `Messaging`. */
+  surfaceType: string;
+};
+
+export type CltTestCase = {
+  conversationGoal: string;
+  contextVariables?: NgtContextVar[];
+  connections?: CltConnections;
+  /** Omit to score with `task_resolution` only (the server default). */
+  scorers?: CltTestCaseScorer[];
+};
+
+export type CltSimulation = {
+  enabled?: boolean;
+  excludedActions?: Array<{ subagent: string; actions: string[] }>;
+};
+
+export type CltTestSpec = {
+  name: string;
+  description?: string;
+  testScope: 'CONVERSATION_LEVEL';
+  subjectType?: 'AGENT';
+  /** Published agent API name. Exactly one of `subjectName` or `project`. */
+  subjectName?: string;
+  subjectVersion?: string;
+  /** Draft agent. Exactly one of `subjectName` or `project`. */
+  project?: CltProject;
+  /** Case-insensitive; sent upper-case. */
+  persona?: ConversationPersona;
+  /** One limit for the whole suite. */
+  maxTurns?: number;
+  evaluationMode?: ConversationEvaluationMode;
+  simulation?: CltSimulation;
+  testCases: CltTestCase[];
+};
+
+// Request (API) types the CLT converters produce. Field names match the Connect API inputs.
+
+/** Agent identity sent to the conversation-test endpoints, after `subjectName` is resolved. */
+export type ConversationAgentTarget =
+  | { agentId: string; agentVersionId: string }
+  | { projectId: string; projectVersionId: string };
+
+export type ConversationTestScorerInput = {
+  name: string;
+  expectedValue?: string;
+};
+
+export type ConversationTestCaseInput = {
+  number: number;
+  conversationGoal: string;
+  contextVariables?: Array<{ variableName: string; variableValue: string }>;
+  connections?: { surfaceConfig: { surfaceType: string } };
+  scorers?: ConversationTestScorerInput[];
+};
+
+export type ConversationPreviewConfig = {
+  excludedActionsFromSimulate: Array<{ subagent: string; actions: Array<{ name: string }> }>;
+};
+
+/** Body for `POST conversation-tests/ephemeral-run` (run without saving). */
+export type EphemeralConversationTestInput = ConversationAgentTarget & {
+  testCases: ConversationTestCaseInput[];
+  persona?: ConversationPersona;
+  maxTurns?: number;
+  enableSimulationMode?: boolean;
+  previewConfig?: ConversationPreviewConfig;
+};
+
 // Metadata (XML) types for AiTestingDefinition.
 
 export type AiConversationTurnXml =
@@ -1064,4 +1166,36 @@ export type NamedUserJwtResponse = {
   token_type: 'Bearer';
   issued_at: number;
   api_instance_url: string;
+};
+
+// Response types for the conversation-test endpoints (`ConversationTester`).
+
+/** Body returned by `POST conversation-tests/ephemeral-run`. */
+export type ConversationTestResultsResponse = {
+  /** `Completed` or `Failed`. */
+  status: string;
+  errorRepresentation?: { errorCode?: string; errorMessage?: string; retryable?: boolean };
+  /** Omitted until the run is complete. */
+  summary?: {
+    totalNumberOfTestCases?: number;
+    taskResolutionPassPercent?: number;
+    acceptanceCriteriaPassPercent?: number;
+  } & Record<string, number | undefined>;
+  testCases: ConversationTestCaseResult[];
+};
+
+export type ConversationTestCaseResult = {
+  /** The 1-based `number` sent in the request. */
+  testNumber: number;
+  /** JSON string: the simulated conversation (turns, topics, actions, completion reason). */
+  subjectResponse?: string;
+  testScorerResults?: Array<{ scorerName: string; scorerResponse?: string }>;
+};
+
+/** A scorer's result, read from its JSON-string `scorerResponse` by `parseConversationScorerResponse`. */
+export type ConversationScorerOutcome = {
+  /** For example `PASS`, `FAIL` or `ERROR`. */
+  status?: string;
+  score?: number | string;
+  reasoning?: string;
 };
